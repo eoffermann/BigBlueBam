@@ -10,6 +10,7 @@ import { enqueueBastionEvent, enqueueOutbox } from './outbox.js';
 import { checkLedgerIdentity, sealObjectKey, type SealIdentity, StorageUnavailableError, writeRestoreObject } from './restore.js';
 import { loadReadinessNumbers } from './numbers.js';
 import { orphanedCompileRuns, reapCompileRuns } from '../services/compile-ai.service.js';
+import { orphanedQuestionnaires, reapQuestionnaires } from '../services/questionnaire-autofill.service.js';
 
 interface OrgRow {
   organization_id: string;
@@ -101,8 +102,16 @@ export async function evaluateTick(deps: EngineDeps, opts: { organization_id?: s
     ...r,
     generation,
   }));
-  deps.log.info({ enqueue: out.length, compile: compileRuns.length }, `bastion-evaluate-tick: ${out.length} runs and ${compileRuns.length} compile runs to drive`);
-  const result: BastionEvaluateTickResult = { runs: out, compile_runs: compileRuns };
+  // M8: answering questionnaires nobody is drafting go back to bastion-questionnaire-autofill.
+  const questionnaireRuns = (await orphanedQuestionnaires(deps, new Date(now.getTime() - ORPHAN_REQUEUE_AFTER_MS), opts.organization_id)).map((r) => ({
+    ...r,
+    generation,
+  }));
+  deps.log.info(
+    { enqueue: out.length, compile: compileRuns.length, questionnaires: questionnaireRuns.length },
+    `bastion-evaluate-tick: ${out.length} runs, ${compileRuns.length} compile runs and ${questionnaireRuns.length} questionnaires to drive`,
+  );
+  const result: BastionEvaluateTickResult = { runs: out, compile_runs: compileRuns, questionnaire_runs: questionnaireRuns };
   return result;
 }
 
@@ -140,9 +149,11 @@ export async function runReaper(deps: EngineDeps, opts: { organization_id?: stri
     RETURNING id`;
   // M7: worker-driven AI compile runs follow the evaluation rule (released, then parked).
   const compiles = await reapCompileRuns(deps, cutoff, opts.organization_id);
+  // M8: questionnaire autofill claims follow the same rule (released, then parked to review).
+  const questionnaires = await reapQuestionnaires(deps, cutoff, opts.organization_id);
   deps.log.info(
-    { released: released.length, parked: parked.length, inline_compiles_failed: inlineFailed.length, compiles },
-    `bastion-run-reaper: released ${released.length}, parked ${parked.length}, failed ${inlineFailed.length} stale inline compile runs; compile runs released ${compiles.released}, parked ${compiles.parked}`,
+    { released: released.length, parked: parked.length, inline_compiles_failed: inlineFailed.length, compiles, questionnaires },
+    `bastion-run-reaper: released ${released.length}, parked ${parked.length}, failed ${inlineFailed.length} stale inline compile runs; compile runs released ${compiles.released}, parked ${compiles.parked}; questionnaires released ${questionnaires.released}, parked ${questionnaires.parked}`,
   );
   return {
     released: released.map((r) => ({ run_id: r.id as string, organization_id: r.organization_id as string, resume_count: Number(r.resume_count) })),
@@ -150,6 +161,8 @@ export async function runReaper(deps: EngineDeps, opts: { organization_id?: stri
     inline_compiles_failed: inlineFailed.length,
     compile_runs_released: compiles.released,
     compile_runs_parked: compiles.parked,
+    questionnaires_released: questionnaires.released,
+    questionnaires_parked: questionnaires.parked,
   };
 }
 

@@ -16,8 +16,8 @@ import { type CompileAiDeps, createQueuedAiRun, resolveLlmProviderId, type Slice
 import { isUniqueViolation } from './shared.js';
 import type { Viewer } from './types.js';
 
-function redisSliceLock(redis: Redis): SliceLock {
-  const key = (runId: string) => `bastion:compile:slice:${runId}`;
+export function redisSliceLock(redis: Redis, prefix = 'bastion:compile:slice:'): SliceLock {
+  const key = (runId: string) => `${prefix}${runId}`;
   return {
     // Fail open on a Redis error: the in-process map still prevents a second slice here, and the
     // run claim still fences every write.

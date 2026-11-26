@@ -851,6 +851,8 @@ export const BASTION_ENGINE_NAMES = [
   // M7
   'compile',
   'attestation-nudge',
+  // M8
+  'questionnaire-autofill',
 ] as const;
 export const BastionEngineName = z.enum(BASTION_ENGINE_NAMES);
 export type BastionEngineName = z.infer<typeof BastionEngineName>;
@@ -992,10 +994,20 @@ export const bastionTickCompileRunSchema = z.object({
 });
 export type BastionTickCompileRun = z.infer<typeof bastionTickCompileRunSchema>;
 
-/** 200 `data` of POST /internal/engines/evaluate-tick. `compile_runs` joined at M7. */
+/** One answering questionnaire nobody is driving (M8; the orphan rule of spec 7). */
+export const bastionTickQuestionnaireRunSchema = z.object({
+  organization_id: z.string().uuid(),
+  questionnaire_id: z.string().uuid(),
+  resume_count: z.number().int().nonnegative(),
+  generation: z.number().int().nonnegative(),
+});
+export type BastionTickQuestionnaireRun = z.infer<typeof bastionTickQuestionnaireRunSchema>;
+
+/** 200 `data` of POST /internal/engines/evaluate-tick. `compile_runs` joined at M7, `questionnaire_runs` at M8. */
 export const bastionEvaluateTickResultSchema = z.object({
   runs: z.array(bastionTickRunSchema),
   compile_runs: z.array(bastionTickCompileRunSchema).default([]),
+  questionnaire_runs: z.array(bastionTickQuestionnaireRunSchema).default([]),
 });
 export type BastionEvaluateTickResult = z.infer<typeof bastionEvaluateTickResultSchema>;
 
@@ -1607,3 +1619,226 @@ export const bastionRequestAttestationsSchema = z
   })
   .strict();
 export type BastionRequestAttestations = z.infer<typeof bastionRequestAttestationsSchema>;
+
+/* ------------------------------------------------------------------ */
+/*  M8: questionnaires, the answer library, autofill on the worker     */
+/* ------------------------------------------------------------------ */
+
+/** M8 (spec 7): async-start LLM slices that draft a questionnaire's answers. */
+export const BASTION_QUESTIONNAIRE_AUTOFILL_QUEUE = 'bastion-questionnaire-autofill';
+
+/** A Bin questionnaire file larger than this is refused (questionnaires are small). */
+export const BASTION_QUESTIONNAIRE_MAX_SOURCE_BYTES = 5 * 1024 * 1024;
+/** Pasted rows (copied from a spreadsheet: tabs, or CSV). */
+export const BASTION_QUESTIONNAIRE_MAX_PASTED_CHARS = 500_000;
+/** Columns kept per row when a questionnaire is read (a wider sheet is cut, and says so). */
+export const BASTION_QUESTIONNAIRE_MAX_COLUMNS = 40;
+/** Cell text kept per cell (the question column is 4000, the database limit). */
+export const BASTION_QUESTIONNAIRE_MAX_CELL_CHARS = 4000;
+
+/** Plain words for the three confidence bands (spec 6.1). */
+export const BASTION_CONFIDENCE_WORDS: Record<BastionConfidenceBand, string> = {
+  high: 'Sure',
+  medium: 'Check this',
+  low: 'Needs an expert',
+};
+
+/** One readable sheet's mapping: which column holds what, and where the questions start. */
+export const bastionQuestionnaireSheetMapSchema = z
+  .object({
+    sheet_name: z.string().max(128),
+    /** 0-based row of the header (null when the sheet has none). */
+    header_row: z.number().int().min(0).nullable(),
+    /** 0-based first row holding a question. */
+    first_row: z.number().int().min(0),
+    question_column: z.number().int().min(0).max(BASTION_QUESTIONNAIRE_MAX_COLUMNS - 1),
+    answer_column: z.number().int().min(0).max(BASTION_QUESTIONNAIRE_MAX_COLUMNS - 1).nullable(),
+    yes_no_column: z.number().int().min(0).max(BASTION_QUESTIONNAIRE_MAX_COLUMNS - 1).nullable(),
+    section_column: z.number().int().min(0).max(BASTION_QUESTIONNAIRE_MAX_COLUMNS - 1).nullable(),
+    answer_kind: BastionAnswerKind.default('yes_no_text'),
+  })
+  .strict()
+  .refine((m) => m.header_row === null || m.first_row > m.header_row, { message: 'Questions must start below the header row', path: ['first_row'] })
+  .refine((m) => ![m.answer_column, m.yes_no_column, m.section_column].includes(m.question_column), {
+    message: 'The question column cannot also be the answer, yes/no or section column',
+    path: ['question_column'],
+  });
+export type BastionQuestionnaireSheetMap = z.infer<typeof bastionQuestionnaireSheetMapSchema>;
+
+/** The whole mapping: one entry per sheet that holds questions. */
+export const bastionQuestionnaireColumnMapSchema = z
+  .object({
+    sheets: z.array(bastionQuestionnaireSheetMapSchema).min(1).max(20),
+  })
+  .strict();
+export type BastionQuestionnaireColumnMap = z.infer<typeof bastionQuestionnaireColumnMapSchema>;
+
+const questionnaireSource = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('bin_asset'), bin_asset_id: z.string().uuid() }).strict(),
+  z
+    .object({
+      kind: z.literal('pasted'),
+      text: z.string().min(1).max(BASTION_QUESTIONNAIRE_MAX_PASTED_CHARS),
+      /** Rows copied from a spreadsheet arrive tab-separated; a CSV file's text is comma-separated. */
+      format: z.enum(['csv', 'tsv']).default('tsv'),
+    })
+    .strict(),
+]);
+
+/** POST /questionnaires (row 73): from a Bin file (xlsx or csv) or pasted rows. */
+export const bastionQuestionnaireCreateSchema = z
+  .object({
+    title: z.string().trim().min(1).max(512),
+    requester_label: z.string().trim().max(256).nullable().optional(),
+    source: questionnaireSource,
+    bond_deal_id: z.string().uuid().nullable().optional(),
+    due_date: isoDate.nullable().optional(),
+    owner_user_id: z.string().uuid().nullable().optional(),
+    /** Optional: the mapping, when the caller already knows it (else Bastion guesses one to check). */
+    column_map: bastionQuestionnaireColumnMapSchema.optional(),
+  })
+  .strict();
+export type BastionQuestionnaireCreate = z.infer<typeof bastionQuestionnaireCreateSchema>;
+
+/** PATCH /questionnaires/:id (row 75): details, and the column mapping while it is being set up. */
+export const bastionQuestionnaireUpdateSchema = z
+  .object({
+    title: z.string().trim().min(1).max(512).optional(),
+    requester_label: z.string().trim().max(256).nullable().optional(),
+    due_date: isoDate.nullable().optional(),
+    owner_user_id: z.string().uuid().nullable().optional(),
+    bond_deal_id: z.string().uuid().nullable().optional(),
+    column_map: bastionQuestionnaireColumnMapSchema.optional(),
+  })
+  .strict()
+  .refine((b) => Object.keys(b).length > 0, { message: 'Nothing to change' });
+export type BastionQuestionnaireUpdate = z.infer<typeof bastionQuestionnaireUpdateSchema>;
+
+/** GET /questionnaires (row 72). */
+export const bastionQuestionnaireListQuerySchema = z
+  .object({
+    status: BastionQuestionnaireStatus.optional(),
+    limit: z.coerce.number().int().min(1).max(200).default(50),
+  })
+  .strict();
+export type BastionQuestionnaireListQuery = z.infer<typeof bastionQuestionnaireListQuerySchema>;
+
+/** GET /questionnaires/:id/items (row 77). Flags are explicit strings, never z.coerce.boolean. */
+export const bastionQuestionnaireItemListQuerySchema = z
+  .object({
+    band: BastionConfidenceBand.optional(),
+    review_status: BastionItemReviewStatus.optional(),
+    needs_review: z.preprocess((v) => (v === 'true' ? true : v === 'false' ? false : v), z.boolean()).optional(),
+  })
+  .strict();
+export type BastionQuestionnaireItemListQuery = z.infer<typeof bastionQuestionnaireItemListQuerySchema>;
+
+/** POST /questionnaires/:id/autofill (row 76, 202). `redraft` drafts again every row nobody reviewed yet. */
+export const bastionQuestionnaireAutofillSchema = z
+  .object({
+    redraft: z.boolean().default(false),
+  })
+  .strict();
+export type BastionQuestionnaireAutofill = z.infer<typeof bastionQuestionnaireAutofillSchema>;
+
+/** PATCH /questionnaire-items/:id (row 78): a person's review of one drafted answer. */
+export const bastionQuestionnaireItemReviewSchema = z
+  .object({
+    review_status: z.enum(['accepted', 'edited', 'needs_owner', 'pending']),
+    final_answer: z.string().max(8000).nullable().optional(),
+    final_yes_no: z.boolean().nullable().optional(),
+    assigned_to: z.string().uuid().nullable().optional(),
+  })
+  .strict()
+  .refine((b) => b.review_status !== 'edited' || (b.final_answer !== undefined && b.final_answer !== null) || b.final_yes_no !== undefined, {
+    message: 'An edited answer needs the new text or yes/no',
+    path: ['final_answer'],
+  })
+  .refine((b) => b.review_status !== 'needs_owner' || !!b.assigned_to, {
+    message: 'Say who should answer it',
+    path: ['assigned_to'],
+  });
+export type BastionQuestionnaireItemReview = z.infer<typeof bastionQuestionnaireItemReviewSchema>;
+
+/** POST /questionnaires/:id/approve (row 79): a vouching act; the body confirms it. */
+export const bastionQuestionnaireApproveSchema = z.object({ confirm: z.literal(true) }).strict();
+export type BastionQuestionnaireApprove = z.infer<typeof bastionQuestionnaireApproveSchema>;
+
+/** GET /questionnaires/:id/export (row 80). */
+export const bastionQuestionnaireExportQuerySchema = z
+  .object({
+    format: z.enum(['xlsx', 'csv']).optional(),
+  })
+  .strict();
+export type BastionQuestionnaireExportQuery = z.infer<typeof bastionQuestionnaireExportQuerySchema>;
+
+/** POST /answers/draft (row 81): draft one answer now, nothing saved. */
+export const bastionDraftAnswerSchema = z
+  .object({
+    question: z.string().trim().min(3).max(BASTION_QUESTIONNAIRE_MAX_CELL_CHARS),
+    answer_kind: BastionAnswerKind.default('yes_no_text'),
+  })
+  .strict();
+export type BastionDraftAnswer = z.infer<typeof bastionDraftAnswerSchema>;
+
+/** GET /answer-library (row 82). */
+export const bastionAnswerLibraryQuerySchema = z
+  .object({
+    q: z.string().trim().max(500).optional(),
+    include_stale: z.preprocess((v) => (v === 'true' ? true : v === 'false' ? false : v), z.boolean()).optional(),
+    include_retired: z.preprocess((v) => (v === 'true' ? true : v === 'false' ? false : v), z.boolean()).optional(),
+    limit: z.coerce.number().int().min(1).max(100).default(25),
+  })
+  .strict();
+export type BastionAnswerLibraryQuery = z.infer<typeof bastionAnswerLibraryQuerySchema>;
+
+/** PATCH /answer-library/:id (row 83): reword, mark checked (clears stale) or retire. */
+export const bastionAnswerLibraryUpdateSchema = z
+  .object({
+    answer_text: z.string().trim().min(1).max(8000).optional(),
+    yes_no: z.boolean().nullable().optional(),
+    /** false: a person checked the answer still holds after its control changed. */
+    stale: z.literal(false).optional(),
+    retired: z.boolean().optional(),
+  })
+  .strict()
+  .refine((b) => Object.keys(b).length > 0, { message: 'Nothing to change' });
+export type BastionAnswerLibraryUpdate = z.infer<typeof bastionAnswerLibraryUpdateSchema>;
+
+/** One autofill run to drive (spec 7.3). Same handover rule as compile (issue #201). */
+export interface BastionQuestionnaireJobData {
+  organization_id: string;
+  questionnaire_id: string;
+  resume_count: number;
+  claimant?: string;
+}
+
+/** The jobId for a bastion-questionnaire-autofill job (BullMQ forbids ':'). */
+export function bastionQuestionnaireJobId(questionnaireId: string, resumeCount: number, generation = 0): string {
+  return generation > 0 ? `qa-${questionnaireId}-r${resumeCount}-g${generation}` : `qa-${questionnaireId}-r${resumeCount}`;
+}
+
+/** Body of the questionnaire-autofill engine: start (or report on) one async LLM slice. */
+export const bastionQuestionnaireEngineSchema = z
+  .object({
+    organization_id: z.string().uuid(),
+    questionnaire_id: z.string().uuid(),
+    claimant: z.string().min(1).max(128),
+  })
+  .strict();
+export type BastionQuestionnaireEngine = z.infer<typeof bastionQuestionnaireEngineSchema>;
+
+/** 200 `data` of POST /internal/engines/questionnaire-autofill (async-start, like compile). */
+export const bastionQuestionnaireSliceSchema = z.object({
+  done: z.boolean(),
+  status: BastionQuestionnaireStatus,
+  rows_done: z.number().int().nonnegative(),
+  row_count: z.number().int().nonnegative(),
+  high: z.number().int().nonnegative(),
+  medium: z.number().int().nonnegative(),
+  low: z.number().int().nonnegative(),
+  slice_running: z.boolean(),
+  released: z.boolean().optional(),
+  waiting: z.enum(['ai_slot', 'ai_throttled']).nullable().optional(),
+});
+export type BastionQuestionnaireSlice = z.infer<typeof bastionQuestionnaireSliceSchema>;

@@ -4,9 +4,12 @@ import {
   BASTION_COMPILE_QUEUE,
   BASTION_EVALUATE_RUN_QUEUE,
   BASTION_EVIDENCE_INGEST_QUEUE,
+  BASTION_QUESTIONNAIRE_AUTOFILL_QUEUE,
   bastionCompileJobId,
   bastionEvaluateRunJobId,
+  bastionQuestionnaireJobId,
   type BastionCompileJobData,
+  type BastionQuestionnaireJobData,
   type BastionEvaluateRunJobData,
   type BastionSweepJobData,
 } from '@bigbluebam/shared';
@@ -106,7 +109,35 @@ export async function enqueueCompileRun(data: BastionCompileJobData): Promise<bo
   }
 }
 
+let autofillQueue: Queue<BastionQuestionnaireJobData> | null = null;
+
+function getAutofillQueue(): Queue<BastionQuestionnaireJobData> {
+  if (!autofillQueue) {
+    if (!connection) connection = new IORedis(env.REDIS_URL, { maxRetriesPerRequest: null });
+    autofillQueue = new Queue<BastionQuestionnaireJobData>(BASTION_QUESTIONNAIRE_AUTOFILL_QUEUE, { connection });
+  }
+  return autofillQueue;
+}
+
+/**
+ * Ask the worker to draft a questionnaire's answers (M8, spec 7). Best effort: the tick re-enqueues
+ * an answering questionnaire nobody claimed within two minutes, so a dropped add only delays it.
+ */
+export async function enqueueQuestionnaireAutofill(data: BastionQuestionnaireJobData): Promise<boolean> {
+  try {
+    await getAutofillQueue().add('autofill', data, {
+      jobId: bastionQuestionnaireJobId(data.questionnaire_id, data.resume_count, Math.floor(Date.now() / 1000)),
+      ...EVALUATE_RUN_JOB_RETENTION,
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export async function closeBastionQueues(): Promise<void> {
+  await autofillQueue?.close().catch(() => {});
+  autofillQueue = null;
   await compileQueue?.close().catch(() => {});
   compileQueue = null;
   await ingestQueue?.close().catch(() => {});

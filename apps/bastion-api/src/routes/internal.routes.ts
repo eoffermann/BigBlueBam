@@ -6,6 +6,7 @@ import {
   bastionCompileEngineSchema,
   bastionEvaluateRunEngineSchema,
   bastionInternalEventSchema,
+  bastionQuestionnaireEngineSchema,
   bastionSweepEngineSchema,
 } from '@bigbluebam/shared';
 import { requireInternalSecret } from '../lib/internal-secret.js';
@@ -26,6 +27,8 @@ import { proposalReconcile } from '../services/decisions.service.js';
 import { compileSlice } from '../services/compile-ai.service.js';
 import { compileAiDeps } from '../services/compile-runtime.js';
 import { attestationNudge } from '../services/policies.service.js';
+import { autofillSlice } from '../services/questionnaire-autofill.service.js';
+import { autofillDeps } from '../services/questionnaire-runtime.js';
 
 /**
  * Service-to-service routes (spec 5.1 rows 105-106), behind the shared internal secret and
@@ -88,6 +91,31 @@ export default async function internalRoutes(fastify: FastifyInstance) {
             error: {
               code: 'RUN_CLAIMED',
               message: 'This compile run is being driven by another worker.',
+              details: [],
+              request_id: request.id,
+              claimed_by: err.claimedBy,
+              heartbeat_stale: err.heartbeatStale,
+            },
+          };
+          return reply.status(409).send(body);
+        }
+        throw err;
+      }
+    }
+
+    if (name === 'questionnaire-autofill') {
+      // M8: async-start LLM slice of one questionnaire (spec 7.3). Same 404 / 409 contract as compile.
+      const parsed = bastionQuestionnaireEngineSchema.safeParse(request.body ?? {});
+      if (!parsed.success) return validationError(request, reply, parsed.error);
+      try {
+        return { data: await autofillSlice(autofillDeps(fastify.log, fastify.redis), parsed.data) };
+      } catch (err) {
+        if (err instanceof RunNotFoundError) return send(request, reply, 404, 'NOT_FOUND', 'We could not find that questionnaire.');
+        if (err instanceof RunLeaseHeldError) {
+          const body: BastionRunClaimedError = {
+            error: {
+              code: 'RUN_CLAIMED',
+              message: 'This questionnaire is being drafted by another worker.',
               details: [],
               request_id: request.id,
               claimed_by: err.claimedBy,
