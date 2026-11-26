@@ -22,7 +22,7 @@ function ControlItem({ c, state, onOpen }: { c: ControlRow; state?: CoverageRow;
         <button type="button" className="text-sm font-medium text-primary-700 dark:text-primary-400 hover:underline text-left" onClick={onOpen}>
           {c.title}
         </button>
-        {state && state.set_up && (
+        {state?.set_up && (
           <p className="text-xs text-zinc-600 dark:text-zinc-400" data-testid="control-row-state">
             {state.state_words}
             {state.owner_name ? ` · Owner: ${state.owner_name}` : ''}

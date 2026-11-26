@@ -61,10 +61,8 @@ export async function enqueueDriftTask(
   if (!s.compliance_project_id || s.remediation_tasks !== 'create') return false;
   const c = (await tx`SELECT title, owner_user_id, plain_summary FROM bastion_controls WHERE organization_id = ${orgId} AND id = ${args.control_id}`)[0];
   if (!c) return false;
-  const description =
-    `Bastion found that this control is not being met: ${String(c.title)}.\n\n` +
-    (c.plain_summary ? `${String(c.plain_summary)}\n\n` : '') +
-    `Open it in Bastion: /bastion/controls/${args.control_id}`;
+  const summary = c.plain_summary ? `${String(c.plain_summary)}\n\n` : '';
+  const description = `Bastion found that this control is not being met: ${String(c.title)}.\n\n${summary}Open it in Bastion: /bastion/controls/${args.control_id}`;
   return enqueueOutbox(tx, {
     orgId,
     kind: 'bam_task_upsert',

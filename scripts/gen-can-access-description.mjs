@@ -32,11 +32,10 @@ if (types.length === 0) {
 }
 
 // Must match canAccessToolDescription() in packages/shared/src/visibility-entity-types.ts.
-const description =
-  'Preflight a visibility check. Returns { allowed, reason } for whether asker_user_id can see (entity_type, entity_id). ' +
-  'Agents that surface cross-app results into shared channels MUST call this for every cited entity and filter out anything that is not allowed. ' +
-  `Supported entity_type values: ${types.join(', ')}. ` +
-  "Unsupported types return reason='unsupported_entity_type' (with a supported_entity_types hint) and MUST NOT be surfaced.";
+const lead =
+  'Preflight a visibility check. Returns { allowed, reason } for whether asker_user_id can see (entity_type, entity_id). Agents that surface cross-app results into shared channels MUST call this for every cited entity and filter out anything that is not allowed.';
+const tail = "Unsupported types return reason='unsupported_entity_type' (with a supported_entity_types hint) and MUST NOT be surfaced.";
+const description = `${lead} Supported entity_type values: ${types.join(', ')}. ${tail}`;
 
 const toolSrc = readFileSync(TOOL_FILE, 'utf8');
 const re = /(name: 'can_access',\s*description:\s*)"[^"\n]*"/;

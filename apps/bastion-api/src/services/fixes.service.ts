@@ -238,13 +238,11 @@ async function draftFor(d: DecisionDeps, tx: Tx, viewer: Viewer, g: Record<strin
       };
     case 'evidence_request': {
       const what = spec?.what ?? 'a report from the system that knows';
+      const example = spec?.example ? `\n\nFor example: ${spec.example}` : '';
       return {
         ...base,
         title: `Please upload: ${what}`.slice(0, 512),
-        body_markdown:
-          `Hi ${owner}, Bastion needs ${what} to show that "${control}" is met.` +
-          (spec?.example ? `\n\nFor example: ${spec.example}` : '') +
-          `\n\nUpload it in Bastion (Evidence locker, Add evidence). Someone else will review it before it counts.`,
+        body_markdown: `Hi ${owner}, Bastion needs ${what} to show that "${control}" is met.${example}\n\nUpload it in Bastion (Evidence locker, Add evidence). Someone else will review it before it counts.`,
         payload: { request_to_user_id: (g.owner_user_id as string | null) ?? null, what, example: spec?.example ?? null },
       };
     }
@@ -253,14 +251,14 @@ async function draftFor(d: DecisionDeps, tx: Tx, viewer: Viewer, g: Record<strin
         const unlisted = (latest?.population_unlisted as unknown[] | null) ?? [];
         const { quoted, suspect } = memberLabels(unlisted);
         const names = quoted.length > 0 ? quoted.join(', ') : `${unlisted.length} item${unlisted.length === 1 ? '' : 's'}`;
+        const one = unlisted.length === 1;
+        const suspectNote =
+          suspect > 0 ? ` (${suspect} name${suspect === 1 ? ' looked' : 's looked'} like instructions, so ${suspect === 1 ? 'it is' : 'they are'} not quoted.)` : '';
         return {
           ...base,
           suspect_label_count: suspect,
           title: `Add ${quoted.length === 1 ? quoted[0] : names} to what Bastion checks for "${control}"`.slice(0, 512),
-          body_markdown:
-            `Bastion found ${unlisted.length} item${unlisted.length === 1 ? '' : 's'} that ${unlisted.length === 1 ? 'is' : 'are'} connected but not on the list it checks for "${control}": ${names}.` +
-            (suspect > 0 ? ` (${suspect} name${suspect === 1 ? ' looked' : 's looked'} like instructions, so ${suspect === 1 ? 'it is' : 'they are'} not quoted.)` : '') +
-            `\n\nApproving files an updated list for one-click confirmation in the review queue.`,
+          body_markdown: `Bastion found ${unlisted.length} item${one ? '' : 's'} that ${one ? 'is' : 'are'} connected but not on the list it checks for "${control}": ${names}.${suspectNote}\n\nApproving files an updated list for one-click confirmation in the review queue.`,
           payload: { add_members: unlisted.slice(0, 200), assertion_id: g.assertion_id },
         };
       }
@@ -343,7 +341,8 @@ export async function proposeFix(d: DecisionDeps, viewer: Viewer, gapId: string,
               ${tx.json({ ...draft.payload, note, suspect_label_count: draft.suspect_label_count } as never)},
               ${tx.json(draft.cited_refs as never)}, ${draft.dropped_citation_count}, 'proposed', ${viewer.id}, ${kind})
       RETURNING id`;
-    const id = String(ins[0]!.id);
+    const id = String(ins[0]?.id ?? '');
+    if (!id) throw new Error('bastion_fix_drafts insert returned no row');
     const approver = (g.owner_user_id as string | null) ?? (await anOrgAdmin(tx, viewer.org_id));
     const proposalId = await fileMirroredProposal(tx, viewer, {
       action: `bastion.fix.${String(g.fix_template)}`,
@@ -508,7 +507,7 @@ async function applyApproval(tx: Tx, viewer: Viewer, r: Record<string, unknown>)
       const kind = String((await tx`SELECT kind FROM users WHERE id = ${viewer.id}`)[0]?.kind ?? 'human');
       await tx`
         INSERT INTO bastion_assertions (organization_id, control_id, kind, manual_evidence_spec, plain_statement, proposed_by, review_status, created_by)
-        VALUES (${viewer.org_id}, ${controlId}, 'manual', ${tx.json(spec as never)}, ${`A record shows the procedure for this control was followed.`},
+        VALUES (${viewer.org_id}, ${controlId}, 'manual', ${tx.json(spec as never)}, ${'A record shows the procedure for this control was followed.'},
                 ${kind === 'human' ? 'human' : 'agent'}, 'proposed', ${viewer.id})`;
       return ['manual_check_proposed'];
     }
@@ -517,12 +516,12 @@ async function applyApproval(tx: Tx, viewer: Viewer, r: Record<string, unknown>)
       // File a superseding assertion with the found members added, for one-click confirmation.
       const a = (await tx`SELECT * FROM bastion_assertions WHERE organization_id = ${viewer.org_id} AND id = ${r.assertion_id as string}`)[0];
       if (!a) return [];
-      const params = { ...((a.params as Record<string, unknown>) ?? {}) };
+      // The confirmation stamp never carries over to a revised list (M3 decision).
+      const { population_confirmed_at: _at, population_confirmed_by: _by, ...kept } = (a.params as Record<string, unknown>) ?? {};
+      const params: Record<string, unknown> = { ...kept };
       const add = ((payload.add_members as unknown[]) ?? []).map((m) => (typeof m === 'string' ? m : String((m as { value?: unknown })?.value ?? ''))).filter(Boolean);
       const current = Array.isArray(params.expected_population) ? (params.expected_population as string[]) : [];
       params.expected_population = [...new Set([...current, ...add])];
-      delete params.population_confirmed_at;
-      delete params.population_confirmed_by;
       const kind = String((await tx`SELECT kind FROM users WHERE id = ${viewer.id}`)[0]?.kind ?? 'human');
       await tx`
         INSERT INTO bastion_assertions (organization_id, control_id, kind, probe_key, probe_version, params, predicate, plain_statement,

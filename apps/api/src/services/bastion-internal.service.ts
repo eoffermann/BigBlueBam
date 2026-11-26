@@ -49,6 +49,13 @@ function rows<T>(raw: unknown): T[] {
   return (Array.isArray(raw) ? raw : ((raw as { rows?: unknown[] }).rows ?? [])) as T[];
 }
 
+/** The single row an INSERT/UPDATE ... RETURNING must produce. */
+function only<T>(list: T[], what: string): T {
+  const row = list[0];
+  if (row === undefined) throw new Error(`${what} returned no row`);
+  return row;
+}
+
 async function bindOrg(tx: Tx, orgId: string) {
   await tx.execute(sql`SELECT set_config('app.current_org_id', ${orgId}, true)`);
 }
@@ -116,15 +123,18 @@ async function postCommentOnce(tx: Tx, task: { id: string; project_id: string },
        LIMIT 1`),
   );
   if (dup) return { comment_id: dup.comment_id, posted: false };
-  const [c] = rows<{ id: string }>(
-    await tx.execute(sql`
-      INSERT INTO comments (task_id, author_id, body, body_plain, is_system)
-      VALUES (${task.id}, ${BASTION_SYSTEM_USER_ID}, ${body}, ${body}, true)
-      RETURNING id`),
+  const c = only(
+    rows<{ id: string }>(
+      await tx.execute(sql`
+        INSERT INTO comments (task_id, author_id, body, body_plain, is_system)
+        VALUES (${task.id}, ${BASTION_SYSTEM_USER_ID}, ${body}, ${body}, true)
+        RETURNING id`),
+    ),
+    'comment insert',
   );
   await tx.execute(sql`UPDATE tasks SET comment_count = comment_count + 1, updated_at = now() WHERE id = ${task.id}`);
-  await activity(tx, task.project_id, task.id, 'comment.created_from_bastion', { comment_id: c!.id, idempotency_key: idempotencyKey });
-  return { comment_id: c!.id, posted: true };
+  await activity(tx, task.project_id, task.id, 'comment.created_from_bastion', { comment_id: c.id, idempotency_key: idempotencyKey });
+  return { comment_id: c.id, posted: true };
 }
 
 async function memberOrNull(tx: Tx, orgId: string, userId: string | null | undefined): Promise<string | null> {
@@ -144,14 +154,17 @@ export async function upsertBastionTask(input: BastionBamTaskUpsert, database: B
 
     if (!existing) {
       const phase = await startPhase(tx, project.id);
-      const [seq] = rows<{ task_id_prefix: string; task_id_sequence: number }>(
-        await tx.execute(sql`
-          UPDATE projects SET task_id_sequence = task_id_sequence + 1 WHERE id = ${project.id}
-          RETURNING task_id_prefix, task_id_sequence`),
+      const seq = only(
+        rows<{ task_id_prefix: string; task_id_sequence: number }>(
+          await tx.execute(sql`
+            UPDATE projects SET task_id_sequence = task_id_sequence + 1 WHERE id = ${project.id}
+            RETURNING task_id_prefix, task_id_sequence`),
+        ),
+        'task id sequence',
       );
-      const humanId = `${seq!.task_id_prefix}-${seq!.task_id_sequence}`;
+      const humanId = `${seq.task_id_prefix}-${seq.task_id_sequence}`;
       const assignee = await memberOrNull(tx, input.org_id, input.assignee_id);
-      const [t] = rows<{ id: string }>(
+      const t = only(rows<{ id: string }>(
         await tx.execute(sql`
           INSERT INTO tasks (project_id, org_id, human_id, external_id, title, description, description_plain,
                              phase_id, state_id, assignee_id, reporter_id, priority, custom_fields, position)
@@ -161,14 +174,14 @@ export async function upsertBastionTask(input: BastionBamTaskUpsert, database: B
                   ${JSON.stringify({ bastion_control_id: input.control_id })}::jsonb,
                   (SELECT coalesce(max(position), 0) + 1024 FROM tasks WHERE phase_id = ${phase.id}))
           RETURNING id`),
-      );
-      await activity(tx, project.id, t!.id, 'task.created_from_bastion', { control_id: input.control_id, idempotency_key: input.idempotency_key });
+      ), 'task insert');
+      await activity(tx, project.id, t.id, 'task.created_from_bastion', { control_id: input.control_id, idempotency_key: input.idempotency_key });
       // spec 8.3: bastion.control -> bam.task, in the transaction that creates the task.
       await tx.execute(sql`
         INSERT INTO entity_links (org_id, src_type, src_id, dst_type, dst_id, link_kind, created_by)
-        VALUES (${input.org_id}, 'bastion.control', ${input.control_id}, 'bam.task', ${t!.id}, 'related_to', ${BASTION_SYSTEM_USER_ID})
+        VALUES (${input.org_id}, 'bastion.control', ${input.control_id}, 'bam.task', ${t.id}, 'related_to', ${BASTION_SYSTEM_USER_ID})
         ON CONFLICT DO NOTHING`);
-      return { task_id: t!.id, human_id: humanId, outcome: 'created', comment_posted: false };
+      return { task_id: t.id, human_id: humanId, outcome: 'created', comment_posted: false };
     }
 
     let outcome: BastionBamTaskUpsertResult['outcome'] = 'updated';

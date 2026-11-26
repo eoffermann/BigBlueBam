@@ -205,7 +205,7 @@ export function ReviewPage({ onNavigate }: { onNavigate: (path: string) => void 
           <p className="text-sm text-zinc-500">Nothing to decide. Draft a fix from What to fix first.</p>
         ) : (
           <ul className="divide-y divide-zinc-200 dark:divide-zinc-800 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-4" data-testid="fix-queue">
-            {fixes.data!.data.map((d) => (
+            {(fixes.data?.data ?? []).map((d) => (
               <FixCard key={d.id} d={d} onNavigate={onNavigate} />
             ))}
           </ul>
@@ -217,7 +217,7 @@ export function ReviewPage({ onNavigate }: { onNavigate: (path: string) => void 
         {exceptions.error && <p className="text-sm text-red-600">{friendlyError(exceptions.error)}</p>}
         {(exceptions.data?.data.length ?? 0) > 0 && (
           <ul className="divide-y divide-zinc-200 dark:divide-zinc-800 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-4" data-testid="exception-queue">
-            {exceptions.data!.data.map((e) => (
+            {(exceptions.data?.data ?? []).map((e) => (
               <ExceptionCard key={e.id} e={e} onNavigate={onNavigate} />
             ))}
           </ul>
@@ -226,9 +226,9 @@ export function ReviewPage({ onNavigate }: { onNavigate: (path: string) => void 
 
       {(approved.data?.data.length ?? 0) > 0 && (
         <section className="space-y-2">
-          <h2 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">Approved fixes to finish ({approved.data!.data.length})</h2>
+          <h2 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">Approved fixes to finish ({(approved.data?.data ?? []).length})</h2>
           <ul className="divide-y divide-zinc-200 dark:divide-zinc-800 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-4">
-            {approved.data!.data.map((d) => (
+            {(approved.data?.data ?? []).map((d) => (
               <AppliedCard key={d.id} d={d} />
             ))}
           </ul>

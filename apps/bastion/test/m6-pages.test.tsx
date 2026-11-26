@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { screen, cleanup, fireEvent } from '@testing-library/react';
+import { screen, cleanup, fireEvent, waitFor } from '@testing-library/react';
 
 let impersonating = false;
 vi.mock('@bigbluebam/ui/impersonation-banner', () => ({
@@ -11,7 +11,7 @@ import { GapsPage } from '@/pages/gaps';
 import { ReviewPage } from '@/pages/review';
 import { ControlDetailPage } from '@/pages/control-detail';
 import { useAuthStore } from '@/stores/auth.store';
-import { ALL_BASTION_PERMISSIONS, VIEWER_PERMISSIONS, jsonResponse, routedFetch, setupState, wrap } from './helpers';
+import { ALL_BASTION_PERMISSIONS, VIEWER_PERMISSIONS, jsonResponse, routedFetch, settled, setupState, wrap } from './helpers';
 
 // M6 pages (spec 6.1-6.3): What to fix first, Review queue, Control detail. Plain language, no raw
 // ids; floored actions hidden with useCan; deciding disabled while impersonating.
@@ -122,14 +122,15 @@ afterEach(() => {
 describe('What to fix first', () => {
   it('ranks gaps in plain words, drafts a fix, and lists accepted risks with owner and expiry', async () => {
     const nav = vi.fn();
-    wrap(<GapsPage onNavigate={nav} />, OWNER);
+    const { qc } = wrap(<GapsPage onNavigate={nav} />, OWNER);
     expect(await screen.findByText('Company laptops are encrypted')).toBeInTheDocument();
     expect(screen.getByText(/Evidence not uploaded yet · Owner: The Professor · Fix: Ask for evidence/)).toBeInTheDocument();
     expect(screen.getByTestId('accepted-risks')).toHaveTextContent('Not met, risk accepted until');
     expect(screen.getByTestId('accepted-risks')).toHaveTextContent('Owner: The Professor');
     fireEvent.click(await screen.findByText('Draft the fix'));
-    await vi.waitFor(() => expect(nav).toHaveBeenCalledWith('/review'));
+    await waitFor(() => expect(nav).toHaveBeenCalledWith('/review'));
     expect(fetchMock.mock.calls.some(([u, i]) => String(u).includes('/gaps/g1/propose-fix') && i?.method === 'POST')).toBe(true);
+    await settled(qc);
     expect(document.body.textContent).not.toMatch(/[0-9a-f]{8}-[0-9a-f]{4}-/);
   });
 
@@ -143,12 +144,13 @@ describe('What to fix first', () => {
 
 describe('Review queue', () => {
   it('the control owner approves a drafted fix here', async () => {
-    wrap(<ReviewPage onNavigate={() => {}} />, OWNER);
+    const { qc } = wrap(<ReviewPage onNavigate={() => {}} />, OWNER);
     expect(await screen.findByText('Please upload: Laptop encryption report')).toBeInTheDocument();
     fireEvent.click(screen.getByText('Approve'));
-    await vi.waitFor(() =>
+    await waitFor(() =>
       expect(fetchMock.mock.calls.some(([u, i]) => String(u).includes('/fix-drafts/d1/decide') && JSON.parse(String(i?.body)).decision === 'approve')).toBe(true),
     );
+    await settled(qc);
   });
 
   it('deciding is disabled while impersonating, with the reason', async () => {

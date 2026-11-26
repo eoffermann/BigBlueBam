@@ -93,7 +93,9 @@ export async function fileMirroredProposal(tx: Tx, viewer: Viewer, p: MirroredPr
     VALUES (${viewer.org_id}, ${viewer.id}, ${kind}::actor_type, ${p.action}, ${tx.json(p.payload as never)}, ${p.subject_type},
             ${p.subject_id}, ${p.approver_id}, 'pending', ${p.expires_at}, 'bastion', true)
     RETURNING id`;
-  return String(r[0]!.id);
+  const row = r[0];
+  if (!row) throw new Error('agent_proposals insert returned no row');
+  return String(row.id);
 }
 
 // ── bastion-proposal-reconcile (spec 7) ────────────────────────────────────────────────

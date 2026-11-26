@@ -152,7 +152,8 @@ export async function proposeException(d: DecisionDeps, viewer: Viewer, body: Ba
       VALUES (${viewer.org_id}, ${body.control_id}, ${body.assertion_id ?? null}, ${body.scope}, ${body.cited_entity_type ?? null},
               ${body.cited_entity_id ?? null}, ${body.reason}, ${body.compensating_note ?? null}, 'proposed', ${viewer.id}, ${expiresAt}, ${now})
       RETURNING id`;
-    const exId = String(ins[0]!.id);
+    const exId = String(ins[0]?.id ?? '');
+    if (!exId) throw new Error('bastion_exceptions insert returned no row');
     // The approver differs from the proposer where possible: the control owner, else an admin.
     const owner = (c.owner_user_id as string | null) ?? null;
     const approver = owner && owner !== viewer.id ? owner : ((await anOrgAdmin(tx, viewer.org_id, viewer.id)) ?? owner);

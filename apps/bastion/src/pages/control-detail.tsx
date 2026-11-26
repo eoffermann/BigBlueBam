@@ -241,7 +241,7 @@ export function ControlDetailPage({ controlId, onNavigate }: { controlId: string
         <section className="space-y-1">
           <h2 className="text-sm font-semibold">What needs doing</h2>
           <ul className="text-sm list-disc pl-5">
-            {gaps.data!.data.map((g) => (
+            {(gaps.data?.data ?? []).map((g) => (
               <li key={g.id}>
                 {g.gap_words}
                 {g.fix_words ? ` (${g.fix_words.toLowerCase()})` : ''}
@@ -260,13 +260,13 @@ export function ControlDetailPage({ controlId, onNavigate }: { controlId: string
           <p className="text-sm text-zinc-500">Nothing has been checked yet. The nightly check fills this in, or use Check now.</p>
         ) : (
           <ul className="divide-y divide-zinc-200 dark:divide-zinc-800 rounded-xl border border-zinc-200 dark:border-zinc-800 px-4" data-testid="evidence-timeline">
-            {evidence.data!.data.map((s) => (
+            {(evidence.data?.data ?? []).map((s) => (
               <li key={s.id} className="py-2 text-sm">
                 <span className="font-medium">{OUTCOME_WORDS[s.outcome]}</span> · {formatDate(s.created_at)} · {statementOf(s.assertion_id)}
                 {s.explanation && <p className="text-xs text-zinc-600 dark:text-zinc-400">{s.explanation}</p>}
                 {(s.cited_labels?.length ?? 0) > 0 && (
                   <div className="mt-1 flex flex-wrap gap-1" data-testid="cited-chips">
-                    {s.cited_labels!.map((l) => (
+                    {(s.cited_labels ?? []).map((l) => (
                       <span key={l} className="rounded-full bg-zinc-100 dark:bg-zinc-800 px-2 py-0.5 text-xs">
                         {l}
                       </span>
@@ -285,7 +285,7 @@ export function ControlDetailPage({ controlId, onNavigate }: { controlId: string
           <p className="text-sm text-zinc-500">None.</p>
         ) : (
           <ul className="text-sm space-y-1">
-            {exceptions.data!.data.map((e) => (
+            {(exceptions.data?.data ?? []).map((e) => (
               <li key={e.id}>
                 {e.status === 'active' ? 'Accepted' : e.status === 'proposed' ? 'Waiting for approval' : e.status === 'expired' ? 'Ran out' : 'Not approved'} ·{' '}
                 {e.scope === 'entity' ? 'one item' : 'a whole check'} until {formatDate(e.expires_at)} · {e.reason}
@@ -303,7 +303,7 @@ export function ControlDetailPage({ controlId, onNavigate }: { controlId: string
             <p className="text-sm text-zinc-500">No fixes drafted.</p>
           ) : (
             <ul className="text-sm space-y-1">
-              {fixes.data!.data.map((f) => (
+              {(fixes.data?.data ?? []).map((f) => (
                 <li key={f.id}>
                   {f.title} · {f.status === 'proposed' ? 'waiting for a decision' : f.status.replace('_', ' ')}
                 </li>
@@ -319,7 +319,7 @@ export function ControlDetailPage({ controlId, onNavigate }: { controlId: string
           <p className="text-sm text-zinc-500">No changes for the worse.</p>
         ) : (
           <ul className="divide-y divide-zinc-200 dark:divide-zinc-800 text-sm">
-            {drift.data!.data.map((d) => (
+            {(drift.data?.data ?? []).map((d) => (
               <li key={d.id} className="py-2 flex items-center justify-between gap-3">
                 <span>
                   {formatDate(d.detected_at)}: {d.from_words} to {d.to_words} ({d.reason_words}). {d.task_words}

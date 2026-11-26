@@ -31,8 +31,8 @@ export function parseRoute(path: string): Route {
   const clean = rest.replace(/\/+$/, '');
   if (clean === '/setup') return { page: 'setup' };
   if (clean === '/controls') return { page: 'controls' };
-  const detail = /^\/controls\/([^/]+)$/.exec(clean);
-  if (detail && UUID_RE.test(detail[1]!)) return { page: 'control', id: detail[1]! };
+  const detailId = /^\/controls\/([^/]+)$/.exec(clean)?.[1];
+  if (detailId && UUID_RE.test(detailId)) return { page: 'control', id: detailId };
   if (clean === '/coverage') return { page: 'coverage' };
   if (clean === '/evidence') return { page: 'evidence' };
   if (clean === '/gaps') return { page: 'gaps' };

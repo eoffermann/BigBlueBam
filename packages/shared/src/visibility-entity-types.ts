@@ -65,10 +65,8 @@ export type VisibilityEntityType = (typeof VISIBILITY_ENTITY_TYPES)[number];
 
 /** The can_access MCP tool description, built from the list above. */
 export function canAccessToolDescription(types: readonly string[] = VISIBILITY_ENTITY_TYPES): string {
-  return (
-    'Preflight a visibility check. Returns { allowed, reason } for whether asker_user_id can see (entity_type, entity_id). ' +
-    'Agents that surface cross-app results into shared channels MUST call this for every cited entity and filter out anything that is not allowed. ' +
-    `Supported entity_type values: ${types.join(', ')}. ` +
-    "Unsupported types return reason='unsupported_entity_type' (with a supported_entity_types hint) and MUST NOT be surfaced."
-  );
+  const lead =
+    'Preflight a visibility check. Returns { allowed, reason } for whether asker_user_id can see (entity_type, entity_id). Agents that surface cross-app results into shared channels MUST call this for every cited entity and filter out anything that is not allowed.';
+  const tail = "Unsupported types return reason='unsupported_entity_type' (with a supported_entity_types hint) and MUST NOT be surfaced.";
+  return `${lead} Supported entity_type values: ${types.join(', ')}. ${tail}`;
 }
