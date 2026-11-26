@@ -4,7 +4,7 @@ import { createHash } from 'node:crypto';
 import { and, eq, ne, sql } from 'drizzle-orm';
 import type { DbTx } from '../db/index.js';
 import { bastionFrameworks, bastionOrgSettings } from '../db/schema/index.js';
-import { NotFoundError } from '../lib/errors.js';
+import { NotFoundError, one } from '../lib/errors.js';
 import type { ConnectedPopulations } from '../library/compile-plan.js';
 
 /** A stable 0-59 minute offset per org so nightly runs spread across the hour (0274 comment). */
@@ -18,8 +18,10 @@ export async function ensureSettings(tx: DbTx, orgId: string) {
     .insert(bastionOrgSettings)
     .values({ organization_id: orgId, evaluation_minute_offset: evaluationMinuteOffset(orgId) })
     .onConflictDoNothing();
-  const [row] = await tx.select().from(bastionOrgSettings).where(eq(bastionOrgSettings.organization_id, orgId)).limit(1);
-  return row!;
+  return one(
+    await tx.select().from(bastionOrgSettings).where(eq(bastionOrgSettings.organization_id, orgId)).limit(1),
+    'bastion_org_settings row',
+  );
 }
 
 export async function loadFramework(tx: DbTx, orgId: string, id: string) {

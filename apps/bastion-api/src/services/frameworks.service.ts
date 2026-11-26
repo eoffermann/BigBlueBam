@@ -15,7 +15,7 @@ import {
   bastionControls,
   bastionFrameworks,
 } from '../db/schema/index.js';
-import { ConflictError, ValidationFailure } from '../lib/errors.js';
+import { ConflictError, ValidationFailure, one } from '../lib/errors.js';
 import { audit } from '../lib/audit.js';
 import {
   FRAMEWORK_TEMPLATES,
@@ -132,7 +132,7 @@ export async function adoptFramework(viewer: Viewer, body: BastionAdoptFramework
       throw new ConflictError(`${template.name} is already adopted.`, 'FRAMEWORK_ALREADY_ADOPTED');
     }
     await ensureSettings(tx, viewer.org_id);
-    const [framework] = await tx
+    const framework = one(await tx
       .insert(bastionFrameworks)
       .values({
         organization_id: viewer.org_id,
@@ -146,7 +146,7 @@ export async function adoptFramework(viewer: Viewer, body: BastionAdoptFramework
         adopted_at: new Date(),
         adopted_by: viewer.id,
       })
-      .returning();
+      .returning(), 'framework');
 
     const libControls = templateControls(template);
     const keys = libControls.map((c) => c.control_key);
@@ -183,8 +183,8 @@ export async function adoptFramework(viewer: Viewer, body: BastionAdoptFramework
     const linkRows = template.requirements.flatMap((req) =>
       req.control_keys.map((k) => ({
         organization_id: viewer.org_id,
-        control_id: idByKey.get(k)!,
-        framework_id: framework!.id,
+        control_id: (idByKey.get(k) as string),
+        framework_id: framework.id,
         ref_code: req.ref_code,
         requirement_title: req.title,
         source: 'crosswalk',
@@ -198,11 +198,11 @@ export async function adoptFramework(viewer: Viewer, body: BastionAdoptFramework
       controls_revived: revived.length,
       requirement_links: linkRows.length,
     };
-    await audit(tx, viewer, 'framework.adopt', { type: 'framework', id: framework!.id }, {
+    await audit(tx, viewer, 'framework.adopt', { type: 'framework', id: framework.id }, {
       template_key: template.template_key,
       ...summary,
     });
-    return { data: { ...framework!, ...summary } };
+    return { data: { ...framework, ...summary } };
   });
 }
 
@@ -241,13 +241,13 @@ export async function archiveFramework(viewer: Viewer, id: string) {
         .set({ lifecycle: 'retired' })
         .where(and(eq(bastionControls.organization_id, viewer.org_id), inArray(bastionControls.id, retire)));
     }
-    const [row] = await tx
+    const row = one(await tx
       .update(bastionFrameworks)
       .set({ status: 'archived' })
       .where(and(eq(bastionFrameworks.id, id), eq(bastionFrameworks.organization_id, viewer.org_id)))
-      .returning();
+      .returning(), 'row');
     await audit(tx, viewer, 'framework.archive', { type: 'framework', id }, { controls_retired: retire.length });
-    return { data: { ...row!, controls_retired: retire.length } };
+    return { data: { ...row, controls_retired: retire.length } };
   });
 }
 

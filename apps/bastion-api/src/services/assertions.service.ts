@@ -12,7 +12,7 @@ import type {
 import { runInOrgScope } from '../plugins/rls.js';
 import type { DbTx } from '../db/index.js';
 import { bastionAssertions, bastionControls, bastionEvidenceFeeds } from '../db/schema/index.js';
-import { ConflictError, NotFoundError, ValidationFailure } from '../lib/errors.js';
+import { ConflictError, NotFoundError, ValidationFailure, one } from '../lib/errors.js';
 import { actorKind, audit } from '../lib/audit.js';
 import { probeEntry } from '../library/index.js';
 import { validateManualSuggestion, validateProbeSuggestion } from '../library/compile-plan.js';
@@ -73,26 +73,26 @@ export async function proposeAssertion(viewer: Viewer, controlId: string, body: 
       if (!feed) throw new NotFoundError('We could not find that evidence feed.');
       values = { kind: 'feed', feed_id: feed.id, plain_statement: body.plain_statement };
     }
-    const [row] = await tx
+    const row = one(await tx
       .insert(bastionAssertions)
       .values({
         ...values,
-        kind: values.kind!,
-        plain_statement: values.plain_statement!,
+        kind: (values.kind as string),
+        plain_statement: (values.plain_statement as string),
         organization_id: viewer.org_id,
         control_id: controlId,
         proposed_by,
         review_status: 'proposed',
         created_by: viewer.id,
       })
-      .returning();
-    await audit(tx, viewer, 'assertion.propose', { type: 'assertion', id: row!.id }, {
+      .returning(), 'row');
+    await audit(tx, viewer, 'assertion.propose', { type: 'assertion', id: row.id }, {
       control_id: controlId,
-      kind: row!.kind,
-      probe_key: row!.probe_key,
+      kind: row.kind,
+      probe_key: row.probe_key,
       proposed_by,
     });
-    return { data: assertionView(row!) };
+    return { data: assertionView(row) };
   });
 }
 
@@ -145,12 +145,12 @@ export async function reviseAssertion(viewer: Viewer, id: string, body: BastionA
       content = { kind: 'feed', feed_id: old.feed_id, plain_statement };
     }
     const kind = await actorKind(tx, viewer.id);
-    const [row] = await tx
+    const row = one(await tx
       .insert(bastionAssertions)
       .values({
         ...content,
-        kind: content.kind!,
-        plain_statement: content.plain_statement!,
+        kind: (content.kind as string),
+        plain_statement: (content.plain_statement as string),
         organization_id: viewer.org_id,
         control_id: old.control_id,
         proposed_by: kind === 'human' ? 'human' : 'agent',
@@ -158,15 +158,15 @@ export async function reviseAssertion(viewer: Viewer, id: string, body: BastionA
         supersedes_id: old.id,
         created_by: viewer.id,
       })
-      .returning();
+      .returning(), 'row');
     if (old.review_status === 'proposed' || old.review_status === 'rejected') {
       await tx
         .update(bastionAssertions)
         .set({ review_status: 'superseded' })
         .where(and(eq(bastionAssertions.id, old.id), eq(bastionAssertions.organization_id, viewer.org_id)));
     }
-    await audit(tx, viewer, 'assertion.revise', { type: 'assertion', id: row!.id }, { supersedes_id: old.id });
-    return { data: assertionView(row!) };
+    await audit(tx, viewer, 'assertion.revise', { type: 'assertion', id: row.id }, { supersedes_id: old.id });
+    return { data: assertionView(row) };
   });
 }
 

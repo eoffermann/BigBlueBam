@@ -14,7 +14,7 @@ import {
   bastionControls,
   bastionFrameworks,
 } from '../db/schema/index.js';
-import { ConflictError } from '../lib/errors.js';
+import { ConflictError, one } from '../lib/errors.js';
 import { audit } from '../lib/audit.js';
 import { planCompile } from '../library/compile-plan.js';
 import { derivedApplicability } from '../library/setup-state.js';
@@ -28,7 +28,7 @@ export async function compileFramework(viewer: Viewer, frameworkId: string) {
     const f = await loadFramework(tx, viewer.org_id, frameworkId);
     if (f.status === 'archived') throw new ConflictError('This framework is archived.', 'FRAMEWORK_ARCHIVED');
     try {
-      const [r] = await tx
+      const r = one(await tx
         .insert(bastionCompileRuns)
         .values({
           organization_id: viewer.org_id,
@@ -40,8 +40,8 @@ export async function compileFramework(viewer: Viewer, frameworkId: string) {
           started_by: viewer.id,
           started_at: new Date(),
         })
-        .returning();
-      return r!;
+        .returning(), 'r');
+      return r;
     } catch (err) {
       if (isUniqueViolation(err)) {
         throw new ConflictError('A setup run is already going for this framework.', 'COMPILE_RUNNING');
@@ -102,7 +102,7 @@ export async function compileFramework(viewer: Viewer, frameworkId: string) {
       const plan = planCompile(
         controls.map((c) => c.control_key),
         existing.map((e) => ({
-          control_key: keyById.get(e.control_id)!,
+          control_key: (keyById.get(e.control_id) as string),
           kind: e.kind,
           probe_key: e.probe_key,
           manual_title: (e.manual_evidence_spec as { title?: string } | null)?.title ?? null,
@@ -114,7 +114,7 @@ export async function compileFramework(viewer: Viewer, frameworkId: string) {
         await tx.insert(bastionAssertions).values(
           plan.planned.map((p) => ({
             organization_id: viewer.org_id,
-            control_id: idByKey.get(p.control_key)!,
+            control_id: (idByKey.get(p.control_key) as string),
             kind: p.kind,
             probe_key: p.probe_key,
             probe_version: p.probe_version,
@@ -129,7 +129,7 @@ export async function compileFramework(viewer: Viewer, frameworkId: string) {
           })),
         );
       }
-      const [done] = await tx
+      const done = one(await tx
         .update(bastionCompileRuns)
         .set({
           status: 'succeeded',
@@ -142,7 +142,7 @@ export async function compileFramework(viewer: Viewer, frameworkId: string) {
           completed_at: new Date(),
         })
         .where(and(eq(bastionCompileRuns.id, run.id), eq(bastionCompileRuns.organization_id, viewer.org_id)))
-        .returning();
+        .returning(), 'done');
       await tx
         .update(bastionFrameworks)
         .set({ status: 'active' })
@@ -159,7 +159,7 @@ export async function compileFramework(viewer: Viewer, frameworkId: string) {
         assertions_dropped: plan.dropped.length,
         used_fallback: true,
       });
-      return { data: done! };
+      return { data: done };
     });
   } catch (err) {
     // 3. Never leave a run claimed: a failed plan marks the run failed so a retry can start.

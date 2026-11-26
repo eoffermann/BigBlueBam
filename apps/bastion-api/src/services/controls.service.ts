@@ -17,11 +17,11 @@ import {
   bastionFrameworks,
   organizationMemberships,
 } from '../db/schema/index.js';
-import { ConflictError, NotFoundError, ValidationFailure } from '../lib/errors.js';
+import { ConflictError, NotFoundError, ValidationFailure, one } from '../lib/errors.js';
 import { audit } from '../lib/audit.js';
 import { frameworkTemplate, probeEntry } from '../library/index.js';
 import { derivedApplicability, setupCounts, setupStateFor } from '../library/setup-state.js';
-import { isUniqueViolation, liveFrameworks, loadFramework } from './shared.js';
+import { liveFrameworks, loadFramework } from './shared.js';
 import type { Viewer } from './types.js';
 
 async function loadControl(tx: DbTx, orgId: string, id: string) {
@@ -213,29 +213,26 @@ export async function createControl(viewer: Viewer, body: BastionControlCreate) 
       if (!req) throw new ValidationFailure(`${f.name} has no requirement ${l.ref_code}.`, 'UNKNOWN_REQUIREMENT');
       links.push({ framework_id: f.id, ref_code: req.ref_code, title: req.title });
     }
-    let row: typeof bastionControls.$inferSelect | undefined;
-    try {
-      [row] = await tx
-        .insert(bastionControls)
-        .values({
-          organization_id: viewer.org_id,
-          control_key: `custom:${body.slug}`,
-          title: body.title,
-          plain_summary: body.plain_summary ?? null,
-          category: body.category ?? 'custom',
-          risk_weight: body.risk_weight ?? 3,
-          owner_user_id: body.owner_user_id ?? null,
-        })
-        .returning();
-    } catch (err) {
-      if (isUniqueViolation(err)) throw new ConflictError('A control with that short name already exists.', 'CONTROL_EXISTS');
-      throw err;
-    }
+    // ON CONFLICT DO NOTHING keeps the transaction usable; no row back means the key is taken.
+    const [row] = await tx
+      .insert(bastionControls)
+      .values({
+        organization_id: viewer.org_id,
+        control_key: `custom:${body.slug}`,
+        title: body.title,
+        plain_summary: body.plain_summary ?? null,
+        category: body.category ?? 'custom',
+        risk_weight: body.risk_weight ?? 3,
+        owner_user_id: body.owner_user_id ?? null,
+      })
+      .onConflictDoNothing()
+      .returning();
+    if (!row) throw new ConflictError('A control with that short name already exists.', 'CONTROL_EXISTS');
     if (links.length > 0) {
       await tx.insert(bastionControlRequirements).values(
         links.map((l) => ({
           organization_id: viewer.org_id,
-          control_id: row!.id,
+          control_id: row.id,
           framework_id: l.framework_id,
           ref_code: l.ref_code,
           requirement_title: l.title,
@@ -243,11 +240,11 @@ export async function createControl(viewer: Viewer, body: BastionControlCreate) 
         })),
       );
     }
-    await audit(tx, viewer, 'control.create', { type: 'control', id: row!.id }, {
-      control_key: row!.control_key,
+    await audit(tx, viewer, 'control.create', { type: 'control', id: row.id }, {
+      control_key: row.control_key,
       requirement_links: links.map((l) => l.ref_code),
     });
-    return { data: { ...row!, tsv: undefined } };
+    return { data: { ...row, tsv: undefined } };
   });
 }
 
@@ -255,13 +252,13 @@ export async function updateControl(viewer: Viewer, id: string, body: BastionCon
   return runInOrgScope(viewer.org_id, async (tx) => {
     await loadControl(tx, viewer.org_id, id);
     if (body.owner_user_id) await assertMember(tx, viewer.org_id, body.owner_user_id);
-    const [row] = await tx
+    const row = one(await tx
       .update(bastionControls)
       .set({ ...body })
       .where(and(eq(bastionControls.id, id), eq(bastionControls.organization_id, viewer.org_id)))
-      .returning();
+      .returning(), 'row');
     await audit(tx, viewer, 'control.update', { type: 'control', id }, { fields: Object.keys(body) });
-    return { data: { ...row!, tsv: undefined } };
+    return { data: { ...row, tsv: undefined } };
   });
 }
 

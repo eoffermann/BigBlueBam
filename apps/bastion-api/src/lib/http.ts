@@ -10,8 +10,10 @@ export function isUuid(value: unknown): value is string {
   return typeof value === 'string' && UUID_RE.test(value);
 }
 
+/** The caller. Routes run requireAuth first, so a missing user here is a wiring bug. */
 export function viewerOf(request: FastifyRequest): Viewer {
-  const u = request.user!;
+  const u = request.user;
+  if (!u) throw new Error('viewerOf called before requireAuth');
   return {
     id: u.id,
     org_id: u.active_org_id ?? u.org_id,

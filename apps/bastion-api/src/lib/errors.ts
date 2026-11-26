@@ -20,6 +20,16 @@ export class ValidationFailure extends Error {
   }
 }
 
+/**
+ * The single row an INSERT/UPDATE ... RETURNING (or a lookup that must hit) produced. Throws an
+ * internal error rather than letting `undefined` flow on, which a non-null assertion would.
+ */
+export function one<T>(rows: readonly T[], what = 'row'): T {
+  const row = rows[0];
+  if (row === undefined) throw new Error(`expected one ${what}, got none`);
+  return row;
+}
+
 export class ConflictError extends Error {
   constructor(
     message = 'Conflict',

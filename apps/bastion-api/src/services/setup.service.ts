@@ -11,7 +11,7 @@ import {
 import { runInOrgScope } from '../plugins/rls.js';
 import type { DbTx } from '../db/index.js';
 import { bastionAssertions, bastionCompileRuns, bastionControls, bastionOrgSettings } from '../db/schema/index.js';
-import { NotFoundError } from '../lib/errors.js';
+import { NotFoundError, one } from '../lib/errors.js';
 import { audit } from '../lib/audit.js';
 import { frameworkTemplate } from '../library/index.js';
 import { ensureSettings, liveFrameworks } from './shared.js';
@@ -113,13 +113,13 @@ export async function saveCompanyProfile(viewer: Viewer, profile: BastionCompany
   return runInOrgScope(viewer.org_id, async (tx) => {
     const settings = await ensureSettings(tx, viewer.org_id);
     const merged = { ...((settings.company_profile ?? {}) as Record<string, unknown>), ...profile };
-    const [row] = await tx
+    const row = one(await tx
       .update(bastionOrgSettings)
       .set({ company_profile: merged, updated_by: viewer.id })
       .where(eq(bastionOrgSettings.organization_id, viewer.org_id))
-      .returning();
+      .returning(), 'row');
     await audit(tx, viewer, 'setup.profile', { type: 'org_settings', id: null }, { answered: answeredCount(merged) });
-    return { data: { company_profile: row!.company_profile, answered: answeredCount(merged) } };
+    return { data: { company_profile: row.company_profile, answered: answeredCount(merged) } };
   });
 }
 
