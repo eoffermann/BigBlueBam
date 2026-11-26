@@ -1,10 +1,10 @@
 {
   "counts": {
-    "total": 1520,
+    "total": 1570,
     "mcp_tools_scanned": 885,
     "rest_routes_scanned": 889,
-    "read_permissions": 588,
-    "destructive_permissions": 145
+    "read_permissions": 607,
+    "destructive_permissions": 148
   },
   "permissions": [
     {
@@ -8845,6 +8845,856 @@
           "source": "rest",
           "ref": "hand_authored (migration 0229)",
           "file": "metrics.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "bastion.answer_library.read",
+      "app": "bastion",
+      "resource": "answer_library",
+      "verb": "read",
+      "is_destructive": false,
+      "is_read": true,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "hand_authored (migration 0281)",
+          "file": "bastion spec 5.5 (routes from M3)"
+        }
+      ]
+    },
+    {
+      "id": "bastion.answer_library.write",
+      "app": "bastion",
+      "resource": "answer_library",
+      "verb": "write",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "hand_authored (migration 0281)",
+          "file": "bastion spec 5.5 (routes from M3)"
+        }
+      ]
+    },
+    {
+      "id": "bastion.assertion.confirm",
+      "app": "bastion",
+      "resource": "assertion",
+      "verb": "confirm",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "hand_authored (migration 0281)",
+          "file": "bastion spec 5.5 (routes from M3)"
+        }
+      ]
+    },
+    {
+      "id": "bastion.assertion.propose",
+      "app": "bastion",
+      "resource": "assertion",
+      "verb": "propose",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "hand_authored (migration 0281)",
+          "file": "bastion spec 5.5 (routes from M3)"
+        }
+      ]
+    },
+    {
+      "id": "bastion.attestation.read",
+      "app": "bastion",
+      "resource": "attestation",
+      "verb": "read",
+      "is_destructive": false,
+      "is_read": true,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "hand_authored (migration 0281)",
+          "file": "bastion spec 5.5 (routes from M3)"
+        }
+      ]
+    },
+    {
+      "id": "bastion.attestation.request",
+      "app": "bastion",
+      "resource": "attestation",
+      "verb": "request",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "hand_authored (migration 0281)",
+          "file": "bastion spec 5.5 (routes from M3)"
+        }
+      ]
+    },
+    {
+      "id": "bastion.attestation.sign",
+      "app": "bastion",
+      "resource": "attestation",
+      "verb": "sign",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "hand_authored (migration 0281)",
+          "file": "bastion spec 5.5 (routes from M3)"
+        }
+      ]
+    },
+    {
+      "id": "bastion.audit.read",
+      "app": "bastion",
+      "resource": "audit",
+      "verb": "read",
+      "is_destructive": false,
+      "is_read": true,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "hand_authored (migration 0281)",
+          "file": "bastion spec 5.5 (routes from M3)"
+        }
+      ]
+    },
+    {
+      "id": "bastion.auditor_room.create",
+      "app": "bastion",
+      "resource": "auditor_room",
+      "verb": "create",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": true,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "hand_authored (migration 0281)",
+          "file": "bastion spec 5.5 (routes from M3)"
+        }
+      ]
+    },
+    {
+      "id": "bastion.auditor_room.read",
+      "app": "bastion",
+      "resource": "auditor_room",
+      "verb": "read",
+      "is_destructive": false,
+      "is_read": true,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "hand_authored (migration 0281)",
+          "file": "bastion spec 5.5 (routes from M3)"
+        }
+      ]
+    },
+    {
+      "id": "bastion.auditor_room.respond",
+      "app": "bastion",
+      "resource": "auditor_room",
+      "verb": "respond",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "hand_authored (migration 0281)",
+          "file": "bastion spec 5.5 (routes from M3)"
+        }
+      ]
+    },
+    {
+      "id": "bastion.auditor_room.revoke",
+      "app": "bastion",
+      "resource": "auditor_room",
+      "verb": "revoke",
+      "is_destructive": true,
+      "is_read": false,
+      "requires_confirmation": true,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "hand_authored (migration 0281)",
+          "file": "bastion spec 5.5 (routes from M3)"
+        }
+      ]
+    },
+    {
+      "id": "bastion.control.read",
+      "app": "bastion",
+      "resource": "control",
+      "verb": "read",
+      "is_destructive": false,
+      "is_read": true,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "hand_authored (migration 0281)",
+          "file": "bastion spec 5.5 (routes from M3)"
+        }
+      ]
+    },
+    {
+      "id": "bastion.control.write",
+      "app": "bastion",
+      "resource": "control",
+      "verb": "write",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "hand_authored (migration 0281)",
+          "file": "bastion spec 5.5 (routes from M3)"
+        }
+      ]
+    },
+    {
+      "id": "bastion.drift.acknowledge",
+      "app": "bastion",
+      "resource": "drift",
+      "verb": "acknowledge",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "hand_authored (migration 0281)",
+          "file": "bastion spec 5.5 (routes from M3)"
+        }
+      ]
+    },
+    {
+      "id": "bastion.drift.read",
+      "app": "bastion",
+      "resource": "drift",
+      "verb": "read",
+      "is_destructive": false,
+      "is_read": true,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "hand_authored (migration 0281)",
+          "file": "bastion spec 5.5 (routes from M3)"
+        }
+      ]
+    },
+    {
+      "id": "bastion.evaluation.run",
+      "app": "bastion",
+      "resource": "evaluation",
+      "verb": "run",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "hand_authored (migration 0281)",
+          "file": "bastion spec 5.5 (routes from M3)"
+        }
+      ]
+    },
+    {
+      "id": "bastion.evidence.link",
+      "app": "bastion",
+      "resource": "evidence",
+      "verb": "link",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "hand_authored (migration 0281)",
+          "file": "bastion spec 5.5 (routes from M3)"
+        }
+      ]
+    },
+    {
+      "id": "bastion.evidence.read",
+      "app": "bastion",
+      "resource": "evidence",
+      "verb": "read",
+      "is_destructive": false,
+      "is_read": true,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "hand_authored (migration 0281)",
+          "file": "bastion spec 5.5 (routes from M3)"
+        }
+      ]
+    },
+    {
+      "id": "bastion.evidence.read_detail",
+      "app": "bastion",
+      "resource": "evidence",
+      "verb": "read_detail",
+      "is_destructive": false,
+      "is_read": true,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "hand_authored (migration 0281)",
+          "file": "bastion spec 5.5 (routes from M3)"
+        }
+      ]
+    },
+    {
+      "id": "bastion.evidence.read_restricted",
+      "app": "bastion",
+      "resource": "evidence",
+      "verb": "read_restricted",
+      "is_destructive": false,
+      "is_read": true,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "hand_authored (migration 0281)",
+          "file": "bastion spec 5.5 (routes from M3)"
+        }
+      ]
+    },
+    {
+      "id": "bastion.evidence.redact",
+      "app": "bastion",
+      "resource": "evidence",
+      "verb": "redact",
+      "is_destructive": true,
+      "is_read": false,
+      "requires_confirmation": true,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "hand_authored (migration 0281)",
+          "file": "bastion spec 5.5 (routes from M3)"
+        }
+      ]
+    },
+    {
+      "id": "bastion.evidence.review",
+      "app": "bastion",
+      "resource": "evidence",
+      "verb": "review",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "hand_authored (migration 0281)",
+          "file": "bastion spec 5.5 (routes from M3)"
+        }
+      ]
+    },
+    {
+      "id": "bastion.evidence.upload",
+      "app": "bastion",
+      "resource": "evidence",
+      "verb": "upload",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "hand_authored (migration 0281)",
+          "file": "bastion spec 5.5 (routes from M3)"
+        }
+      ]
+    },
+    {
+      "id": "bastion.evidence.withdraw",
+      "app": "bastion",
+      "resource": "evidence",
+      "verb": "withdraw",
+      "is_destructive": true,
+      "is_read": false,
+      "requires_confirmation": true,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "hand_authored (migration 0281)",
+          "file": "bastion spec 5.5 (routes from M3)"
+        }
+      ]
+    },
+    {
+      "id": "bastion.exception.approve",
+      "app": "bastion",
+      "resource": "exception",
+      "verb": "approve",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": true,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "hand_authored (migration 0281)",
+          "file": "bastion spec 5.5 (routes from M3)"
+        }
+      ]
+    },
+    {
+      "id": "bastion.exception.propose",
+      "app": "bastion",
+      "resource": "exception",
+      "verb": "propose",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "hand_authored (migration 0281)",
+          "file": "bastion spec 5.5 (routes from M3)"
+        }
+      ]
+    },
+    {
+      "id": "bastion.exception.read",
+      "app": "bastion",
+      "resource": "exception",
+      "verb": "read",
+      "is_destructive": false,
+      "is_read": true,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "hand_authored (migration 0281)",
+          "file": "bastion spec 5.5 (routes from M3)"
+        }
+      ]
+    },
+    {
+      "id": "bastion.export.create",
+      "app": "bastion",
+      "resource": "export",
+      "verb": "create",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "hand_authored (migration 0281)",
+          "file": "bastion spec 5.5 (routes from M3)"
+        }
+      ]
+    },
+    {
+      "id": "bastion.export.read",
+      "app": "bastion",
+      "resource": "export",
+      "verb": "read",
+      "is_destructive": false,
+      "is_read": true,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "hand_authored (migration 0281)",
+          "file": "bastion spec 5.5 (routes from M3)"
+        }
+      ]
+    },
+    {
+      "id": "bastion.feed.manage",
+      "app": "bastion",
+      "resource": "feed",
+      "verb": "manage",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "hand_authored (migration 0281)",
+          "file": "bastion spec 5.5 (routes from M3)"
+        }
+      ]
+    },
+    {
+      "id": "bastion.feed.read",
+      "app": "bastion",
+      "resource": "feed",
+      "verb": "read",
+      "is_destructive": false,
+      "is_read": true,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "hand_authored (migration 0281)",
+          "file": "bastion spec 5.5 (routes from M3)"
+        }
+      ]
+    },
+    {
+      "id": "bastion.fix.decide",
+      "app": "bastion",
+      "resource": "fix",
+      "verb": "decide",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "hand_authored (migration 0281)",
+          "file": "bastion spec 5.5 (routes from M3)"
+        }
+      ]
+    },
+    {
+      "id": "bastion.fix.draft",
+      "app": "bastion",
+      "resource": "fix",
+      "verb": "draft",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "hand_authored (migration 0281)",
+          "file": "bastion spec 5.5 (routes from M3)"
+        }
+      ]
+    },
+    {
+      "id": "bastion.fix.mark_applied",
+      "app": "bastion",
+      "resource": "fix",
+      "verb": "mark_applied",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "hand_authored (migration 0281)",
+          "file": "bastion spec 5.5 (routes from M3)"
+        }
+      ]
+    },
+    {
+      "id": "bastion.fix.read",
+      "app": "bastion",
+      "resource": "fix",
+      "verb": "read",
+      "is_destructive": false,
+      "is_read": true,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "hand_authored (migration 0281)",
+          "file": "bastion spec 5.5 (routes from M3)"
+        }
+      ]
+    },
+    {
+      "id": "bastion.framework.compile",
+      "app": "bastion",
+      "resource": "framework",
+      "verb": "compile",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "hand_authored (migration 0281)",
+          "file": "bastion spec 5.5 (routes from M3)"
+        }
+      ]
+    },
+    {
+      "id": "bastion.framework.read",
+      "app": "bastion",
+      "resource": "framework",
+      "verb": "read",
+      "is_destructive": false,
+      "is_read": true,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "hand_authored (migration 0281)",
+          "file": "bastion spec 5.5 (routes from M3)"
+        }
+      ]
+    },
+    {
+      "id": "bastion.framework.write",
+      "app": "bastion",
+      "resource": "framework",
+      "verb": "write",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "hand_authored (migration 0281)",
+          "file": "bastion spec 5.5 (routes from M3)"
+        }
+      ]
+    },
+    {
+      "id": "bastion.gap.dismiss",
+      "app": "bastion",
+      "resource": "gap",
+      "verb": "dismiss",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "hand_authored (migration 0281)",
+          "file": "bastion spec 5.5 (routes from M3)"
+        }
+      ]
+    },
+    {
+      "id": "bastion.gap.read",
+      "app": "bastion",
+      "resource": "gap",
+      "verb": "read",
+      "is_destructive": false,
+      "is_read": true,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "hand_authored (migration 0281)",
+          "file": "bastion spec 5.5 (routes from M3)"
+        }
+      ]
+    },
+    {
+      "id": "bastion.ledger.acknowledge_restore",
+      "app": "bastion",
+      "resource": "ledger",
+      "verb": "acknowledge_restore",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": true,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "hand_authored (migration 0281)",
+          "file": "bastion spec 5.5 (routes from M3)"
+        }
+      ]
+    },
+    {
+      "id": "bastion.policy.read",
+      "app": "bastion",
+      "resource": "policy",
+      "verb": "read",
+      "is_destructive": false,
+      "is_read": true,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "hand_authored (migration 0281)",
+          "file": "bastion spec 5.5 (routes from M3)"
+        }
+      ]
+    },
+    {
+      "id": "bastion.policy.write",
+      "app": "bastion",
+      "resource": "policy",
+      "verb": "write",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "hand_authored (migration 0281)",
+          "file": "bastion spec 5.5 (routes from M3)"
+        }
+      ]
+    },
+    {
+      "id": "bastion.questionnaire.approve",
+      "app": "bastion",
+      "resource": "questionnaire",
+      "verb": "approve",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": true,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "hand_authored (migration 0281)",
+          "file": "bastion spec 5.5 (routes from M3)"
+        }
+      ]
+    },
+    {
+      "id": "bastion.questionnaire.export",
+      "app": "bastion",
+      "resource": "questionnaire",
+      "verb": "export",
+      "is_destructive": false,
+      "is_read": true,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "hand_authored (migration 0281)",
+          "file": "bastion spec 5.5 (routes from M3)"
+        }
+      ]
+    },
+    {
+      "id": "bastion.questionnaire.read",
+      "app": "bastion",
+      "resource": "questionnaire",
+      "verb": "read",
+      "is_destructive": false,
+      "is_read": true,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "hand_authored (migration 0281)",
+          "file": "bastion spec 5.5 (routes from M3)"
+        }
+      ]
+    },
+    {
+      "id": "bastion.questionnaire.write",
+      "app": "bastion",
+      "resource": "questionnaire",
+      "verb": "write",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "hand_authored (migration 0281)",
+          "file": "bastion spec 5.5 (routes from M3)"
+        }
+      ]
+    },
+    {
+      "id": "bastion.settings.read",
+      "app": "bastion",
+      "resource": "settings",
+      "verb": "read",
+      "is_destructive": false,
+      "is_read": true,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "hand_authored (migration 0281)",
+          "file": "bastion spec 5.5 (routes from M3)"
+        }
+      ]
+    },
+    {
+      "id": "bastion.settings.write",
+      "app": "bastion",
+      "resource": "settings",
+      "verb": "write",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "hand_authored (migration 0281)",
+          "file": "bastion spec 5.5 (routes from M3)"
         }
       ]
     },

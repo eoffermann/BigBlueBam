@@ -90,6 +90,9 @@ const NOT_ROUTE_SCANNED = {
   'bulwark-api': 'satellite; hand-authored bulwark.* ids',
   'burn-api': 'satellite; hand-authored burn.* ids',
   'bursar-api': 'satellite; hand-authored bursar.* ids',
+  // Bastion's full spec 5.5 action set is registered at M2, before any route exists, so the
+  // permission chain and builtin defaults land ahead of the routes that will call requireCan().
+  'bastion-api': 'satellite; hand-authored bastion.* ids (spec 5.5), registered before its routes',
   // Issue #153: coarse hand-authored ids, called from every route via requireCan().
   'blueprint-api': 'hand-authored blueprint.* ids',
   'bureau-api': 'hand-authored bureau.* ids',
@@ -127,7 +130,11 @@ export function discoverAppPrefixes(appsDir = APPS_DIR) {
     appToPrefix[dir] = prefix;
   }
   for (const dir of Object.keys(NOT_ROUTE_SCANNED)) {
-    if (!routeDirs.includes(dir)) problems.push(`NOT_ROUTE_SCANNED lists "${dir}", which has no apps/${dir}/src/routes`);
+    // A classified app may exist before its first route (bastion-api registers its hand-authored
+    // ids at M2, ahead of its routes). Only an entry naming no app directory at all is stale.
+    if (!routeDirs.includes(dir) && !existsSync(join(appsDir, dir, 'package.json'))) {
+      problems.push(`NOT_ROUTE_SCANNED lists "${dir}", which has no apps/${dir} app`);
+    }
   }
   if (problems.length > 0) {
     throw new Error(
@@ -1007,6 +1014,62 @@ function buildManifest() {
     { id: 'bureau.summon.grant_access', app: 'bureau', resource: 'summon', verb: 'grant_access', is_read: false, is_destructive: false, requires_confirmation: false, requires_superuser: false },
     { id: 'bureau.settings.read', app: 'bureau', resource: 'settings', verb: 'read', is_read: true, is_destructive: false, requires_confirmation: false, requires_superuser: false },
     { id: 'bureau.settings.write', app: 'bureau', resource: 'settings', verb: 'write', is_read: false, is_destructive: false, requires_confirmation: false, requires_superuser: false },
+    // Bastion (spec 5.5, the single source of truth; registered at M2 ahead of the routes so
+    // the builtin group defaults land before any non-SuperUser needs them). Satellite pattern:
+    // bastion-api is in NOT_ROUTE_SCANNED and its bastion_ MCP tools stay out of
+    // EXPLICIT_TOOL_OVERRIDES. is_read only on actions that change nothing; destructive and
+    // confirm columns copied from the table. Tiering (owner/admin 50, member 25, viewer 10,
+    // guest 0) lives in the bastion builtin-group-defaults migration that follows the delta.
+    { id: 'bastion.framework.read', app: 'bastion', resource: 'framework', verb: 'read', is_read: true, is_destructive: false, requires_confirmation: false, requires_superuser: false },
+    { id: 'bastion.framework.write', app: 'bastion', resource: 'framework', verb: 'write', is_read: false, is_destructive: false, requires_confirmation: false, requires_superuser: false },
+    { id: 'bastion.framework.compile', app: 'bastion', resource: 'framework', verb: 'compile', is_read: false, is_destructive: false, requires_confirmation: false, requires_superuser: false },
+    { id: 'bastion.control.read', app: 'bastion', resource: 'control', verb: 'read', is_read: true, is_destructive: false, requires_confirmation: false, requires_superuser: false },
+    { id: 'bastion.control.write', app: 'bastion', resource: 'control', verb: 'write', is_read: false, is_destructive: false, requires_confirmation: false, requires_superuser: false },
+    { id: 'bastion.assertion.propose', app: 'bastion', resource: 'assertion', verb: 'propose', is_read: false, is_destructive: false, requires_confirmation: false, requires_superuser: false },
+    { id: 'bastion.assertion.confirm', app: 'bastion', resource: 'assertion', verb: 'confirm', is_read: false, is_destructive: false, requires_confirmation: false, requires_superuser: false },
+    { id: 'bastion.evaluation.run', app: 'bastion', resource: 'evaluation', verb: 'run', is_read: false, is_destructive: false, requires_confirmation: false, requires_superuser: false },
+    { id: 'bastion.evidence.read', app: 'bastion', resource: 'evidence', verb: 'read', is_read: true, is_destructive: false, requires_confirmation: false, requires_superuser: false },
+    { id: 'bastion.evidence.read_detail', app: 'bastion', resource: 'evidence', verb: 'read_detail', is_read: true, is_destructive: false, requires_confirmation: false, requires_superuser: false },
+    { id: 'bastion.evidence.read_restricted', app: 'bastion', resource: 'evidence', verb: 'read_restricted', is_read: true, is_destructive: false, requires_confirmation: false, requires_superuser: false },
+    { id: 'bastion.evidence.upload', app: 'bastion', resource: 'evidence', verb: 'upload', is_read: false, is_destructive: false, requires_confirmation: false, requires_superuser: false },
+    { id: 'bastion.evidence.link', app: 'bastion', resource: 'evidence', verb: 'link', is_read: false, is_destructive: false, requires_confirmation: false, requires_superuser: false },
+    { id: 'bastion.evidence.review', app: 'bastion', resource: 'evidence', verb: 'review', is_read: false, is_destructive: false, requires_confirmation: false, requires_superuser: false },
+    { id: 'bastion.evidence.withdraw', app: 'bastion', resource: 'evidence', verb: 'withdraw', is_read: false, is_destructive: true, requires_confirmation: true, requires_superuser: false },
+    { id: 'bastion.evidence.redact', app: 'bastion', resource: 'evidence', verb: 'redact', is_read: false, is_destructive: true, requires_confirmation: true, requires_superuser: false },
+    { id: 'bastion.ledger.acknowledge_restore', app: 'bastion', resource: 'ledger', verb: 'acknowledge_restore', is_read: false, is_destructive: false, requires_confirmation: true, requires_superuser: false },
+    { id: 'bastion.feed.read', app: 'bastion', resource: 'feed', verb: 'read', is_read: true, is_destructive: false, requires_confirmation: false, requires_superuser: false },
+    { id: 'bastion.feed.manage', app: 'bastion', resource: 'feed', verb: 'manage', is_read: false, is_destructive: false, requires_confirmation: false, requires_superuser: false },
+    { id: 'bastion.gap.read', app: 'bastion', resource: 'gap', verb: 'read', is_read: true, is_destructive: false, requires_confirmation: false, requires_superuser: false },
+    { id: 'bastion.gap.dismiss', app: 'bastion', resource: 'gap', verb: 'dismiss', is_read: false, is_destructive: false, requires_confirmation: false, requires_superuser: false },
+    { id: 'bastion.fix.read', app: 'bastion', resource: 'fix', verb: 'read', is_read: true, is_destructive: false, requires_confirmation: false, requires_superuser: false },
+    { id: 'bastion.fix.draft', app: 'bastion', resource: 'fix', verb: 'draft', is_read: false, is_destructive: false, requires_confirmation: false, requires_superuser: false },
+    { id: 'bastion.fix.decide', app: 'bastion', resource: 'fix', verb: 'decide', is_read: false, is_destructive: false, requires_confirmation: false, requires_superuser: false },
+    { id: 'bastion.fix.mark_applied', app: 'bastion', resource: 'fix', verb: 'mark_applied', is_read: false, is_destructive: false, requires_confirmation: false, requires_superuser: false },
+    { id: 'bastion.exception.read', app: 'bastion', resource: 'exception', verb: 'read', is_read: true, is_destructive: false, requires_confirmation: false, requires_superuser: false },
+    { id: 'bastion.exception.propose', app: 'bastion', resource: 'exception', verb: 'propose', is_read: false, is_destructive: false, requires_confirmation: false, requires_superuser: false },
+    { id: 'bastion.exception.approve', app: 'bastion', resource: 'exception', verb: 'approve', is_read: false, is_destructive: false, requires_confirmation: true, requires_superuser: false },
+    { id: 'bastion.drift.read', app: 'bastion', resource: 'drift', verb: 'read', is_read: true, is_destructive: false, requires_confirmation: false, requires_superuser: false },
+    { id: 'bastion.drift.acknowledge', app: 'bastion', resource: 'drift', verb: 'acknowledge', is_read: false, is_destructive: false, requires_confirmation: false, requires_superuser: false },
+    { id: 'bastion.policy.read', app: 'bastion', resource: 'policy', verb: 'read', is_read: true, is_destructive: false, requires_confirmation: false, requires_superuser: false },
+    { id: 'bastion.policy.write', app: 'bastion', resource: 'policy', verb: 'write', is_read: false, is_destructive: false, requires_confirmation: false, requires_superuser: false },
+    { id: 'bastion.attestation.read', app: 'bastion', resource: 'attestation', verb: 'read', is_read: true, is_destructive: false, requires_confirmation: false, requires_superuser: false },
+    { id: 'bastion.attestation.sign', app: 'bastion', resource: 'attestation', verb: 'sign', is_read: false, is_destructive: false, requires_confirmation: false, requires_superuser: false },
+    { id: 'bastion.attestation.request', app: 'bastion', resource: 'attestation', verb: 'request', is_read: false, is_destructive: false, requires_confirmation: false, requires_superuser: false },
+    { id: 'bastion.questionnaire.read', app: 'bastion', resource: 'questionnaire', verb: 'read', is_read: true, is_destructive: false, requires_confirmation: false, requires_superuser: false },
+    { id: 'bastion.questionnaire.write', app: 'bastion', resource: 'questionnaire', verb: 'write', is_read: false, is_destructive: false, requires_confirmation: false, requires_superuser: false },
+    { id: 'bastion.questionnaire.approve', app: 'bastion', resource: 'questionnaire', verb: 'approve', is_read: false, is_destructive: false, requires_confirmation: true, requires_superuser: false },
+    { id: 'bastion.questionnaire.export', app: 'bastion', resource: 'questionnaire', verb: 'export', is_read: true, is_destructive: false, requires_confirmation: false, requires_superuser: false },
+    { id: 'bastion.answer_library.read', app: 'bastion', resource: 'answer_library', verb: 'read', is_read: true, is_destructive: false, requires_confirmation: false, requires_superuser: false },
+    { id: 'bastion.answer_library.write', app: 'bastion', resource: 'answer_library', verb: 'write', is_read: false, is_destructive: false, requires_confirmation: false, requires_superuser: false },
+    { id: 'bastion.auditor_room.read', app: 'bastion', resource: 'auditor_room', verb: 'read', is_read: true, is_destructive: false, requires_confirmation: false, requires_superuser: false },
+    { id: 'bastion.auditor_room.create', app: 'bastion', resource: 'auditor_room', verb: 'create', is_read: false, is_destructive: false, requires_confirmation: true, requires_superuser: false },
+    { id: 'bastion.auditor_room.revoke', app: 'bastion', resource: 'auditor_room', verb: 'revoke', is_read: false, is_destructive: true, requires_confirmation: true, requires_superuser: false },
+    { id: 'bastion.auditor_room.respond', app: 'bastion', resource: 'auditor_room', verb: 'respond', is_read: false, is_destructive: false, requires_confirmation: false, requires_superuser: false },
+    { id: 'bastion.export.create', app: 'bastion', resource: 'export', verb: 'create', is_read: false, is_destructive: false, requires_confirmation: false, requires_superuser: false },
+    { id: 'bastion.export.read', app: 'bastion', resource: 'export', verb: 'read', is_read: true, is_destructive: false, requires_confirmation: false, requires_superuser: false },
+    { id: 'bastion.settings.read', app: 'bastion', resource: 'settings', verb: 'read', is_read: true, is_destructive: false, requires_confirmation: false, requires_superuser: false },
+    { id: 'bastion.settings.write', app: 'bastion', resource: 'settings', verb: 'write', is_read: false, is_destructive: false, requires_confirmation: false, requires_superuser: false },
+    { id: 'bastion.audit.read', app: 'bastion', resource: 'audit', verb: 'read', is_read: true, is_destructive: false, requires_confirmation: false, requires_superuser: false },
   ];
   for (const c of HAND_AUTHORED) {
     if (!byId.has(c.id)) {
@@ -1058,6 +1121,10 @@ function buildManifest() {
       if (c.id === 'bureau.chat.write') {
         migrationLabel = '0270';
         sourceFile = 'ws.routes.ts';
+      }
+      if (c.id.startsWith('bastion.')) {
+        migrationLabel = '0281';
+        sourceFile = 'bastion spec 5.5 (routes from M3)';
       }
       byId.set(c.id, {
         id: c.id,

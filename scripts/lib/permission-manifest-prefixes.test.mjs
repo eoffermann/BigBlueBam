@@ -5,7 +5,7 @@
 // instead of silently dropping a new app's routes from the catalog.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, mkdirSync, rmSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -27,6 +27,7 @@ const SKIPPED = [
   'bursar-api',
   'blueprint-api',
   'bureau-api',
+  'bastion-api',
   'mcp-server',
 ];
 
@@ -55,6 +56,17 @@ test('a route directory that maps to no prefix fails the generator', () => {
   const root = fakeApps(['api', 'oddly-named', ...SKIPPED]);
   try {
     assert.throws(() => discoverAppPrefixes(root), /apps\/oddly-named\/src\/routes maps to no permission prefix/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('a classified app with no routes yet is allowed (ids registered ahead of routes)', () => {
+  const root = fakeApps(['api', ...SKIPPED.filter((d) => d !== 'bastion-api')]);
+  try {
+    mkdirSync(join(root, 'bastion-api'), { recursive: true });
+    writeFileSync(join(root, 'bastion-api', 'package.json'), '{}');
+    assert.deepEqual(discoverAppPrefixes(root), { api: 'bam' });
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
