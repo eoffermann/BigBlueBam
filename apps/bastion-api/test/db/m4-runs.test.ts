@@ -146,6 +146,27 @@ describe.skipIf(!DATABASE_URL)('M4 evaluation runs and the outbox (live database
     ).rejects.toMatchObject({ code: '23505' });
   });
 
+  it('outbox ordering within ONE transaction: the seal object is delivered before its ledger.sealed event', async () => {
+    // Found live: both rows are enqueued in the seal transaction; with created_at = now() they
+    // tied and the order fell to a random uuid, so ledger.sealed could go before its object.
+    const s = await seedOrg(sql, 'outbox-tx', 1, 1);
+    orgs.push(s.org);
+    const deps = makeDeps(sql);
+    for (let i = 0; i < 5; i++) {
+      await sql.begin(async (raw) => {
+        const tx = raw as unknown as postgres.Sql;
+        for (const k of ['first', 'second', 'third']) {
+          await enqueueOutbox(tx, { orgId: s.org, kind: 'bolt_event', orderingKey: `seal:${i}`, idempotencyKey: `${k}-${i}`, payload: { event_type: 'ledger.sealed', payload: {} } });
+        }
+      });
+    }
+    const order: string[] = [];
+    await drainOutbox(deps, { deliver: async (row) => (order.push(row.idempotency_key), { ok: true }) }, { orgId: s.org, claimant: 't' });
+    for (let i = 0; i < 5; i++) {
+      expect(order.filter((k) => k.endsWith(`-${i}`))).toEqual([`first-${i}`, `second-${i}`, `third-${i}`]);
+    }
+  });
+
   it('outbox ordering: oldest pending row per key, a backing-off row blocks its key, a dead row stops blocking', async () => {
     const s = await seedOrg(sql, 'outbox', 1, 1);
     orgs.push(s.org);

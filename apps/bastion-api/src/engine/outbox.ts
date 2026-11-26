@@ -30,11 +30,17 @@ export interface OutboxInsert {
   payload: Record<string, unknown>;
 }
 
-/** Insert one outbox row; a repeated idempotency key is a no-op. Returns true when inserted. */
+/**
+ * Insert one outbox row; a repeated idempotency key is a no-op. Returns true when inserted.
+ *
+ * created_at is clock_timestamp(), not the column default now(): now() is the transaction's start
+ * time, so rows enqueued in one transaction (a seal object then its ledger.sealed event) tied and
+ * the drainer's (created_at, id) order fell to a random uuid. Found by the M4 live rehearsal.
+ */
 export async function enqueueOutbox(tx: Tx, row: OutboxInsert): Promise<boolean> {
   const inserted = await tx`
-    INSERT INTO bastion_outbox (organization_id, kind, ordering_key, idempotency_key, payload)
-    VALUES (${row.orgId}, ${row.kind}, ${row.orderingKey}, ${row.idempotencyKey}, ${tx.json(row.payload as never)})
+    INSERT INTO bastion_outbox (organization_id, kind, ordering_key, idempotency_key, payload, created_at)
+    VALUES (${row.orgId}, ${row.kind}, ${row.orderingKey}, ${row.idempotencyKey}, ${tx.json(row.payload as never)}, clock_timestamp())
     ON CONFLICT (organization_id, idempotency_key) DO NOTHING
     RETURNING id`;
   return inserted.length > 0;
