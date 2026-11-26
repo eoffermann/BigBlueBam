@@ -14,6 +14,9 @@ import { ReviewPage } from '@/pages/review';
 import { PoliciesPage } from '@/pages/policies';
 import { AttestPage } from '@/pages/attest';
 import { QuestionnaireDetailPage, QuestionnairesPage } from '@/pages/questionnaires';
+import { SharingPage } from '@/pages/sharing';
+import { SettingsPage } from '@/pages/settings';
+import { AuditorRoomPage } from '@/pages/room';
 
 // Grows one variant per page as later milestones land (spec 6.1).
 type Route =
@@ -28,7 +31,10 @@ type Route =
   | { page: 'policies' }
   | { page: 'attest' }
   | { page: 'questionnaires' }
-  | { page: 'questionnaire'; id: string };
+  | { page: 'questionnaire'; id: string }
+  | { page: 'sharing' }
+  | { page: 'settings' }
+  | { page: 'room' };
 
 const BASE_PATH = '/bastion';
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -47,6 +53,9 @@ export function parseRoute(path: string): Route {
   if (clean === '/policies') return { page: 'policies' };
   if (clean === '/attest') return { page: 'attest' };
   if (clean === '/questionnaires') return { page: 'questionnaires' };
+  if (clean === '/sharing') return { page: 'sharing' };
+  if (clean === '/settings') return { page: 'settings' };
+  if (clean === '/room') return { page: 'room' };
   const qId = /^\/questionnaires\/([^/]+)$/.exec(clean)?.[1];
   if (qId && UUID_RE.test(qId)) return { page: 'questionnaire', id: qId };
   return { page: 'home' };
@@ -55,10 +64,20 @@ export function parseRoute(path: string): Route {
 function toActiveRoute(route: Route): ActiveRoute {
   if (route.page === 'control') return { page: 'controls' };
   if (route.page === 'questionnaire') return { page: 'questionnaires' };
+  if (route.page === 'room') return { page: 'home' };
   return { page: route.page };
 }
 
+/**
+ * The public auditor room (spec 5.2, 6.1) is rendered BEFORE the auth gate: an auditor has no
+ * BigBlueBam account, so it never calls fetchMe and never shows the suite layout.
+ */
 export function App() {
+  if (parseRoute(window.location.pathname).page === 'room') return <AuditorRoomPage />;
+  return <SuiteApp />;
+}
+
+function SuiteApp() {
   const { isAuthenticated, isLoading, fetchMe } = useAuthStore();
   const [route, setRoute] = useState<Route>(() => parseRoute(window.location.pathname));
 
@@ -161,6 +180,10 @@ export function App() {
         return <QuestionnairesPage onNavigate={navigate} />;
       case 'questionnaire':
         return <QuestionnaireDetailPage key={route.id} questionnaireId={route.id} onNavigate={navigate} />;
+      case 'sharing':
+        return <SharingPage />;
+      case 'settings':
+        return <SettingsPage />;
       default:
         return null;
     }
