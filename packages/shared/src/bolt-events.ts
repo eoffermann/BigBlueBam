@@ -32,6 +32,25 @@ function resolveInternalSecret(): string {
   return envObj.INTERNAL_SERVICE_SECRET || '';
 }
 
+/** Default publish timeout (issue #125). Override with BOLT_PUBLISH_TIMEOUT_MS. */
+export const BOLT_PUBLISH_TIMEOUT_DEFAULT_MS = 5000;
+
+/**
+ * Upper bound on how long publishBoltEvent waits for bolt-api. Without it, a
+ * bolt-api that accepts the connection and then hangs blocks every awaiting
+ * caller (request handlers, worker jobs past their lease, sweep loops).
+ */
+export function resolveBoltPublishTimeoutMs(): number {
+  const envObj = (typeof process !== 'undefined' && process.env) || {};
+  const raw = Number(envObj.BOLT_PUBLISH_TIMEOUT_MS);
+  return Number.isFinite(raw) && raw > 0 ? Math.floor(raw) : BOLT_PUBLISH_TIMEOUT_DEFAULT_MS;
+}
+
+function isTimeoutError(err: unknown): boolean {
+  const name = (err as { name?: string } | null)?.name;
+  return name === 'TimeoutError' || name === 'AbortError';
+}
+
 export async function publishBoltEvent(
   eventType: string,
   source: string,
@@ -40,12 +59,14 @@ export async function publishBoltEvent(
   actorId?: string,
   actorType?: BoltActorType,
 ): Promise<void> {
+  const timeoutMs = resolveBoltPublishTimeoutMs();
   try {
     const resolvedActorType: BoltActorType =
       actorType ?? (actorId ? 'user' : 'system');
     const url = `${resolveBoltUrl()}/v1/events/ingest`;
-    await fetch(url, {
+    const res = await fetch(url, {
       method: 'POST',
+      signal: AbortSignal.timeout(timeoutMs),
       headers: {
         'Content-Type': 'application/json',
         'X-Internal-Secret': resolveInternalSecret(),
@@ -59,7 +80,23 @@ export async function publishBoltEvent(
         actor_type: resolvedActorType,
       }),
     });
-  } catch {
-    // Fire-and-forget. Do not break the source operation if Bolt is down.
+    // Drain the body so the connection is released; a hung body read is bounded by
+    // the same signal.
+    await res.arrayBuffer().catch(() => undefined);
+  } catch (err) {
+    // Fire-and-forget. Do not break the source operation if Bolt is down. A timeout is
+    // logged because it means bolt-api is accepting connections but not answering.
+    if (isTimeoutError(err)) {
+      console.warn(
+        JSON.stringify({
+          level: 'warn',
+          msg: 'publishBoltEvent timed out; event dropped',
+          event_type: eventType,
+          source,
+          org_id: orgId,
+          timeout_ms: timeoutMs,
+        }),
+      );
+    }
   }
 }
