@@ -59,6 +59,15 @@ describe('inferredToZod', () => {
     expect(parsed).toEqual({ id: 1, active: true });
   });
 
+  it('reads a "false" cell as false, not true (#251)', () => {
+    const rows = [{ active: 'true' }, { active: 'FALSE' }];
+    const schema = inferredToZod(inferSchema(rows, ['active']));
+    expect(schema.parse({ active: 'false' })).toEqual({ active: false });
+    expect(schema.parse({ active: 'FALSE' })).toEqual({ active: false });
+    expect(schema.parse({ active: 'True' })).toEqual({ active: true });
+    expect(schema.safeParse({ active: 'maybe' }).success).toBe(false);
+  });
+
   it('rejects a non-numeric value for an integer field', () => {
     const schema = inferredToZod(inferSchema([{ id: '1' }, { id: '2' }], ['id']));
     expect(schema.safeParse({ id: 'not-a-number' }).success).toBe(false);

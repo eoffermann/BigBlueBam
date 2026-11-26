@@ -14,8 +14,8 @@
  * model changes.
  */
 
-import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import { timingSafeEqual } from 'node:crypto';
+import type { FastifyInstance } from 'fastify';
+import { createInternalSecretGuard, internalSecretPreHandler } from '@bigbluebam/service-health';
 import { and, eq } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '../db/index.js';
@@ -32,42 +32,11 @@ import { env } from '../env.js';
 const UUID_REGEX =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-function timingSafeStringEqual(a: string, b: string): boolean {
-  const bufA = Buffer.from(a, 'utf8');
-  const bufB = Buffer.from(b, 'utf8');
-  if (bufA.length !== bufB.length) {
-    timingSafeEqual(bufA, bufA);
-    return false;
-  }
-  return timingSafeEqual(bufA, bufB);
-}
-
-async function requireInternalSecret(
-  request: FastifyRequest,
-  reply: FastifyReply,
-) {
-  const configured = env.INTERNAL_SERVICE_SECRET;
-  if (!configured) {
-    request.log.warn(
-      'INTERNAL_SERVICE_SECRET is not configured — internal routes are unprotected.',
-    );
-    return;
-  }
-  const header =
-    request.headers['x-internal-service-secret'] ??
-    request.headers['x-internal-secret'];
-  const provided = Array.isArray(header) ? header[0] : header;
-  if (!provided || !timingSafeStringEqual(provided, configured)) {
-    return reply.status(401).send({
-      error: {
-        code: 'UNAUTHORIZED',
-        message: 'Invalid or missing internal service secret',
-        details: [],
-        request_id: request.id,
-      },
-    });
-  }
-}
+// The suite-wide internal-route guard (#252, @bigbluebam/service-health). It fails CLOSED when
+// the secret is not configured (this route used to fail open) and admits direct private peers only.
+const requireInternalSecret = internalSecretPreHandler(
+  createInternalSecretGuard({ secrets: () => [env.INTERNAL_SERVICE_SECRET] }),
+);
 
 const canReadBody = z.object({
   user_id: z.string().uuid(),

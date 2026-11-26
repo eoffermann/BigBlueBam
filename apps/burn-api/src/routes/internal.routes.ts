@@ -5,7 +5,7 @@ import {
   burnInternalPrecheckRequestSchema,
   burnPrecheckOutcomeSchema,
 } from '@bigbluebam/shared';
-import { requireInternalSecret } from '../lib/internal-secret.js';
+import { createInternalSecretGuard } from '@bigbluebam/service-health';
 import { mapServiceError, validationError } from '../lib/http.js';
 import { publishBurnFrame } from '../lib/realtime.js';
 import { runInOrgScope } from '../plugins/rls.js';
@@ -25,6 +25,10 @@ import {
   runCalibrationRecompute,
 } from '../services/engines/sweeps.engine.js';
 import { applyProposalDecided, reconcileProposals } from '../services/engines/change-order.engine.js';
+
+// The suite-wide internal-route guard (#252, @bigbluebam/service-health): constant-time compare,
+// fails CLOSED with no secret configured, direct private-network peers only.
+const requireInternalSecret = createInternalSecretGuard({ secrets: () => [env.INTERNAL_SERVICE_SECRET] });
 
 /**
  * Internal, service-to-service routes. Spec 6.1 and 2.4 points 14 and 16.

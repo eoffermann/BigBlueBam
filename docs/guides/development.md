@@ -50,7 +50,7 @@ This starts:
 - Banter API on `http://localhost:4002` internally (proxied at `http://localhost/banter/api/`)
 - Banter SPA at `http://localhost/banter/` (production nginx) — **Alpha software**
 - Helpdesk portal at `http://localhost/helpdesk/` (production nginx)
-- MCP server on `http://localhost:3001` internally (proxied at `http://localhost/mcp/`, 86 tools)
+- MCP server on `http://localhost:3001` (published on the Docker host's loopback only, `127.0.0.1`; proxied at `http://localhost/mcp/` for everyone else, 86 tools)
 - Worker process (with hot reload, includes Banter notification and retention jobs)
 - LiveKit SFU on `http://localhost:7880` (voice/video, requires configuration in Banter admin)
 

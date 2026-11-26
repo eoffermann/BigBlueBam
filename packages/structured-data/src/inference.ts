@@ -72,6 +72,12 @@ export function inferSchema(
   return { fields };
 }
 
+/** The cell tokens RE_BOOL accepts, as booleans; anything else is left for z.boolean() to refuse. */
+function parseInferredBoolean(v: unknown): unknown {
+  if (typeof v === 'string' && RE_BOOL.test(v.trim())) return v.trim().toLowerCase() === 'true';
+  return v;
+}
+
 /** Bridge an inferred field to a Zod type. */
 function fieldToZod(field: InferredField): z.ZodTypeAny {
   let base: z.ZodTypeAny;
@@ -83,7 +89,9 @@ function fieldToZod(field: InferredField): z.ZodTypeAny {
       base = z.coerce.number();
       break;
     case 'boolean':
-      base = z.coerce.boolean();
+      // A column is inferred boolean when every cell matches RE_BOOL (true/false, any case).
+      // Map exactly those tokens; z.coerce.boolean() would turn every "false" cell into true (#251).
+      base = z.preprocess(parseInferredBoolean, z.boolean());
       break;
     case 'date':
     case 'datetime':

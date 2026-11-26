@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { bulwarkIngestEventSchema } from '@bigbluebam/shared';
-import { requireInternalSecret } from '../lib/internal-secret.js';
+import { createInternalSecretGuard } from '@bigbluebam/service-health';
+import { env } from '../env.js';
 import { writeIngestEvent } from '../services/ingest.service.js';
 import { handleProposalDecided } from '../subscriptions/proposal-decided.js';
 import { drainIngestEvent } from '../services/firing.service.js';
@@ -12,6 +13,10 @@ import {
   retentionSweep,
 } from '../services/sweeps.service.js';
 import { rebuildGate, rebuildAllGates } from '../services/gate.service.js';
+
+// The suite-wide internal-route guard (#252, @bigbluebam/service-health): constant-time compare,
+// fails CLOSED with no secret configured, direct private-network peers only.
+const requireInternalSecret = createInternalSecretGuard({ secrets: () => [env.INTERNAL_SERVICE_SECRET] });
 
 // Run a per-org engine over one org (when body.organization_id is set) or every org with
 // Bulwark data, aggregating a summary. Each (org) is wrapped log-and-continue so one bad org

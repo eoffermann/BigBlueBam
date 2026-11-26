@@ -1,7 +1,10 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
+import { createInternalSecretGuard } from '@bigbluebam/service-health';
 import { env } from '../env.js';
 import { executeQuery, type QueryConfig } from '../services/query.service.js';
+
+const requireInternalSecret = createInternalSecretGuard({ secrets: () => [env.INTERNAL_SERVICE_SECRET] });
 
 /**
  * Internal, secret-gated governed-query route for server-to-server callers
@@ -23,18 +26,8 @@ const bodySchema = z.object({
 
 export default async function internalQueryRoutes(fastify: FastifyInstance) {
   fastify.post('/internal/query', async (request, reply) => {
-    const secret = env.INTERNAL_SERVICE_SECRET;
-    const presented = request.headers['x-internal-secret'];
-    if (!secret || presented !== secret) {
-      return reply.status(401).send({
-        error: {
-          code: 'UNAUTHORIZED',
-          message: 'Invalid or missing internal service secret',
-          details: [],
-          request_id: request.id,
-        },
-      });
-    }
+    // The suite-wide guard (#252): constant-time (this was a plain !==), private peers only.
+    if (!requireInternalSecret(request, reply)) return reply;
 
     const parsed = bodySchema.safeParse(request.body);
     if (!parsed.success) {

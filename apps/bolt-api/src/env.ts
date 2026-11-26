@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { envBool } from '@bigbluebam/shared';
 
 const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
@@ -33,7 +34,7 @@ const envSchema = z.object({
   BASTION_API_INTERNAL_URL: z.string().default('http://bastion-api:4024'),
 
   COOKIE_DOMAIN: z.string().optional(),
-  COOKIE_SECURE: z.coerce.boolean().default(false),
+  COOKIE_SECURE: envBool(false),
 
   // Internal service-to-service secret (shared with other BigBlueBam services)
   INTERNAL_SERVICE_SECRET: z.string().min(32).optional(),

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { envBool } from '@bigbluebam/shared';
 
 const emptyToUndefined = (v: unknown) => (v === '' ? undefined : v);
 
@@ -45,7 +46,7 @@ const envSchema = z.object({
   PUBLIC_URL: z.string().default('http://localhost'),
 
   COOKIE_DOMAIN: z.string().optional(),
-  COOKIE_SECURE: z.coerce.boolean().default(false),
+  COOKIE_SECURE: envBool(false),
 
   // SMTP
   SMTP_HOST: z.string().optional(),

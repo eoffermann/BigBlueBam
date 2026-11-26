@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { envBool } from '@bigbluebam/shared';
 
 const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
@@ -38,7 +39,7 @@ const envSchema = z.object({
   UPLOAD_MAX_FILE_SIZE: z.coerce.number().int().positive().default(25 * 1024 * 1024),
 
   COOKIE_DOMAIN: z.string().optional(),
-  COOKIE_SECURE: z.coerce.boolean().default(false),
+  COOKIE_SECURE: envBool(false),
 
   // Public form rate limiting
   PUBLIC_FORM_RATE_LIMIT: z.coerce.number().int().positive().default(10),

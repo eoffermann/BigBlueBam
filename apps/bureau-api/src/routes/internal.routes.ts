@@ -16,10 +16,10 @@
  *   it never returns the LiveKit token itself, only an `allowed` boolean.
  */
 
-import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
+import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { and, eq } from 'drizzle-orm';
-import { timingSafeEqual } from 'node:crypto';
+import { createInternalSecretGuard } from '@bigbluebam/service-health';
 import { db } from '../db/index.js';
 import { env } from '../env.js';
 import { organizationMemberships } from '../db/schema/index.js';
@@ -27,64 +27,12 @@ import { bureauRooms, bureauRoomAcl } from '../db/schema/bureau.js';
 import { getDoorState } from '../services/presence.service.js';
 
 // ─────────────────────────────────────────────────────────────────────
-// Internal-secret guard.
-//
-// Mirrors apps/api/src/routes/internal-blueprint-sync.routes.ts so the
-// posture is identical across services: timing-safe compare against
-// env.INTERNAL_SERVICE_SECRET, reject 401 if absent or mismatched, and
-// reject 503 if the secret is not configured (fail-closed — never
-// accept the request).
+// Internal-secret guard: the suite-wide one in @bigbluebam/service-health
+// (#252). Either internal-secret header, constant-time, 401 when unconfigured
+// or wrong (fail-closed), 403 for a caller that is not a direct private peer.
 // ─────────────────────────────────────────────────────────────────────
 
-function timingSafeStringEqual(a: string, b: string): boolean {
-  const bufA = Buffer.from(a, 'utf8');
-  const bufB = Buffer.from(b, 'utf8');
-  if (bufA.length !== bufB.length) {
-    // Constant-time op against ourselves so length mismatch doesn't leak via timing.
-    timingSafeEqual(bufA, bufA);
-    return false;
-  }
-  return timingSafeEqual(bufA, bufB);
-}
-
-function getInternalSecretHeader(request: FastifyRequest): string | undefined {
-  const header = request.headers['x-internal-service-secret'];
-  if (typeof header === 'string' && header.length > 0) return header;
-  if (Array.isArray(header) && header.length > 0) return header[0];
-  return undefined;
-}
-
-async function requireInternalSecret(
-  request: FastifyRequest,
-  reply: FastifyReply,
-): Promise<boolean> {
-  const expected = env.INTERNAL_SERVICE_SECRET;
-  if (!expected) {
-    // Fail closed: if the env var is unset, no caller can authenticate.
-    await reply.status(503).send({
-      error: {
-        code: 'INTERNAL_AUTH_UNCONFIGURED',
-        message: 'Internal service secret is not configured on this Bureau API instance',
-        details: [],
-        request_id: request.id,
-      },
-    });
-    return false;
-  }
-  const provided = getInternalSecretHeader(request);
-  if (!provided || !timingSafeStringEqual(provided, expected)) {
-    await reply.status(401).send({
-      error: {
-        code: 'UNAUTHORIZED',
-        message: 'Invalid or missing internal service secret',
-        details: [],
-        request_id: request.id,
-      },
-    });
-    return false;
-  }
-  return true;
-}
+const requireInternalSecret = createInternalSecretGuard({ secrets: () => [env.INTERNAL_SERVICE_SECRET] });
 
 // ─────────────────────────────────────────────────────────────────────
 // Schemas

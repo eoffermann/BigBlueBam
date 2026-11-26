@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { envBool } from '@bigbluebam/shared';
 
 const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
@@ -51,14 +52,14 @@ const envSchema = z.object({
   PRESIGN_GET_TTL_SECONDS: z.coerce.number().int().positive().default(900),
 
   COOKIE_DOMAIN: z.string().optional(),
-  COOKIE_SECURE: z.coerce.boolean().default(false),
+  COOKIE_SECURE: envBool(false),
 
   // Platform default for "may a user work with a file before its AV scan
   // completes?". This is the lowest-precedence layer: an org override
   // (organizations.settings.av.allow_unscanned_access) and the platform
   // system_settings['av.allow_unscanned_access'] both win over it. Default
   // off — serving is gated until the scan clears unless someone opts in.
-  BIN_ALLOW_UNSCANNED_ACCESS: z.coerce.boolean().default(false),
+  BIN_ALLOW_UNSCANNED_ACCESS: envBool(false),
 
   // Wave D Phase 3: per-action permission enforcement. Mirrors the api's
   // BBB_PERMISSIONS_ENFORCE. 'warn' calls the resolver and records

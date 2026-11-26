@@ -153,6 +153,34 @@ describe('Review queue', () => {
     await settled(qc);
   });
 
+  it('says in plain words how many items behind a draft are hidden, singular and plural (#254)', async () => {
+    fetchMock = routedFetch({
+      'GET /bastion/api/v1/fix-drafts': (_i, url) =>
+        jsonResponse(200, {
+          data:
+            url.searchParams.get('status') === 'proposed'
+              ? [
+                  { ...DRAFT, hidden_citation_count: 1 },
+                  { ...DRAFT, id: 'd3', title: 'Please upload: Backup report', hidden_citation_count: 3 },
+                ]
+              : [],
+        }),
+      'GET /bastion/api/v1/setup': () => jsonResponse(200, setupState()),
+      'GET /bastion/api/v1/exceptions': () => jsonResponse(200, { data: [] }),
+      'GET /bastion/api/v1/manual-evidence': () => jsonResponse(200, { data: [], counts: {} }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    const { qc } = wrap(<ReviewPage onNavigate={() => {}} />, OWNER);
+    expect(await screen.findByText('Please upload: Backup report')).toBeInTheDocument();
+    const notes = screen.getAllByTestId('hidden-citations').map((n) => n.textContent);
+    expect(notes).toEqual([
+      "1 item behind this result is hidden because you don't have access to it.",
+      "3 items behind this result are hidden because you don't have access to them.",
+    ]);
+    expect(document.body.textContent).not.toMatch(/\(s\)|cited item/);
+    await settled(qc);
+  });
+
   it('"Mark as done" takes a pasted Bolt automation link, refusing anything else in plain words (#232)', async () => {
     const RULE = '0b0b0b0b-0000-4000-8000-0000000000b1';
     const rule = { ...DRAFT, id: 'd2', template: 'bolt_rule', template_words: 'Add a Bolt automation', title: 'Turn on the rescue-radio check', status: 'approved', decided_by_name: 'Skipper' };

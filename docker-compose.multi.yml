@@ -84,7 +84,7 @@ services:
       timeout: 5s
       retries: 3
     ports:
-      - "4108:4008"
+      - "127.0.0.1:4108:4008"
     networks:
       - backend
       - frontend

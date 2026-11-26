@@ -2,7 +2,7 @@ import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import { eq, desc, and, or, sql, ilike } from 'drizzle-orm';
 import argon2 from 'argon2';
-import { timingSafeEqual } from 'node:crypto';
+import { INTERNAL_TOKEN_HEADER, refuseNonPrivatePeer, sameSecret } from '@bigbluebam/service-health';
 import { env } from '../env.js';
 import { db } from '../db/index.js';
 import { tickets } from '../db/schema/tickets.js';
@@ -73,16 +73,6 @@ declare module 'fastify' {
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-function timingSafeStringEqual(a: string, b: string): boolean {
-  const bufA = Buffer.from(a, 'utf8');
-  const bufB = Buffer.from(b, 'utf8');
-  if (bufA.length !== bufB.length) {
-    timingSafeEqual(bufA, bufA);
-    return false;
-  }
-  return timingSafeEqual(bufA, bufB);
-}
-
 function headerValue(request: FastifyRequest, name: string): string | undefined {
   const raw = request.headers[name];
   return Array.isArray(raw) ? raw[0] : raw;
@@ -97,7 +87,7 @@ function headerValue(request: FastifyRequest, name: string): string | undefined 
  * fall through to X-Agent-Key verification.
  */
 async function tryInternalProxyAuth(request: FastifyRequest, reply: FastifyReply): Promise<boolean> {
-  const token = headerValue(request, 'x-internal-token');
+  const token = headerValue(request, INTERNAL_TOKEN_HEADER);
   if (!token) return false;
 
   const unauthorized = (message: string) => {
@@ -107,10 +97,13 @@ async function tryInternalProxyAuth(request: FastifyRequest, reply: FastifyReply
     return true;
   };
 
+  // The suite-wide compare and private-peer rule (#252, @bigbluebam/service-health). Bam's api
+  // calls here directly at HELPDESK_API_INTERNAL_URL, never through the edge nginx.
   const expected = env.INTERNAL_HELPDESK_SECRET;
-  if (!expected || !timingSafeStringEqual(token, expected)) {
+  if (!expected || !sameSecret(token, expected)) {
     return unauthorized('Invalid internal service token');
   }
+  if (refuseNonPrivatePeer(request, reply)) return true;
 
   const actingUserId = headerValue(request, 'x-acting-user-id');
   const actingOrgId = headerValue(request, 'x-acting-org-id');

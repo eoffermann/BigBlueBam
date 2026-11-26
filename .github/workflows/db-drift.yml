@@ -57,6 +57,7 @@ jobs:
           exit 1
 
       - name: Apply migrations (via migrate runner)
+        id: migrate
         # The runner handles the superuser sentinel bootstrap that unblocks
         # 0023_beacon_tables on fresh DBs; see apps/api/src/migrate.ts.
         env:
@@ -64,15 +65,19 @@ jobs:
         run: node apps/api/dist/migrate.js
 
       - name: Verify SCHEMA_ROOTS coverage (regression test)
+        # A file scan; it needs no database, so it reports even when the migrations fail.
+        if: ${{ !cancelled() }}
         run: node scripts/db-check.coverage.test.mjs
 
       - name: Run drift guard
+        if: ${{ !cancelled() && steps.migrate.outcome == 'success' }}
         run: pnpm db:check
 
       # Issue #124: the Postgres enum bolt_trigger_source cannot be derived from
       # BOLT_SOURCES (packages/shared/src/bolt-sources.ts), so it is checked here
       # against the fully migrated DB. Names any missing or extra values.
       - name: Check bolt_trigger_source enum matches BOLT_SOURCES
+        if: ${{ !cancelled() && steps.migrate.outcome == 'success' }}
         run: pnpm check:bolt-enum
 
   migration-lint:

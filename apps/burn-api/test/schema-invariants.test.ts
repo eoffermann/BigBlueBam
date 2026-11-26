@@ -31,7 +31,8 @@ import {
  */
 
 const MIGRATIONS_DIR = join(import.meta.dirname, '..', '..', '..', 'infra', 'postgres', 'migrations');
-const sqlFor = (name: string) => readFileSync(join(MIGRATIONS_DIR, name), 'utf8');
+// LF-normalized: a Windows checkout (core.autocrlf) has CRLF, and expectations below contain '\n'.
+const sqlFor = (name: string) => readFileSync(join(MIGRATIONS_DIR, name), 'utf8').replace(/\r\n/g, '\n');
 
 const CORE_SQL = sqlFor('0239_burn_core.sql');
 const GATE_SQL = sqlFor('0240_burn_gate_variance.sql');
