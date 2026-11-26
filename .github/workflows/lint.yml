@@ -42,6 +42,12 @@ jobs:
       - name: Run lint
         run: pnpm lint
 
+      # Issue #132: Biome warnings never fail `pnpm lint`, so this ratchet does. Fails when
+      # any package's warning count rises above scripts/biome-warning-budget.json; lower the
+      # baseline with `node scripts/check-biome-budget.mjs --update` after cleaning a package.
+      - name: Biome warning budget
+        run: node scripts/check-biome-budget.mjs
+
       - name: Lint migration files
         run: pnpm lint:migrations
 
