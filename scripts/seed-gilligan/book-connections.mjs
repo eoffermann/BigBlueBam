@@ -229,7 +229,18 @@ function buildIcs() {
   }
 
   if (result.status !== 'active') {
-    console.error('Connection did not reach active status.');
+    const why = result.error ?? after?.sync_error ?? 'no error recorded';
+    console.error(`Connection did not reach active status: ${why}`);
+    if (/private|internal/i.test(String(why))) {
+      // #247: this seed hosts its feed on the stack's MinIO (a private address) so it works with
+      // no outbound internet. A book-api built with the shared egress guard (BOK-1, commit
+      // 850d57d0 on worktree-robustness-audit) refuses private feed URLs by design, and has no
+      // operator allowlist, so this feed cannot sync on such a build. See issue #247.
+      console.error(
+        '  The running book-api refuses feed URLs on private addresses (egress guard), and this seed ' +
+          `hosts its feed at ${feedUrl}. Not a seed-data bug; see issue #247 for the decision it needs.`,
+      );
+    }
     process.exit(1);
   }
   console.log('\nBook Connections seed done.');
