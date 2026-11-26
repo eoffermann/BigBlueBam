@@ -567,7 +567,13 @@ rows through Postgres.
   `next_attempt_at`, `superseded_by_id`, `withdrawn_*`, `redacted_at`, `updated_at`);
   `bastion_feed_records` (all); `bastion_policy_attestations` (all); `bastion_exceptions` (every
   column except `status` and `updated_at` once `active`); `bastion_ledger_entries` (all);
-  `bastion_ledger_seals` (every column except `object_written_at`, `published_at`). DELETE is
+  `bastion_ledger_seals` (every column except `object_written_at`, `published_at`). For the three
+  status-gated tables the status itself only moves forward once frozen (0283, #184), so a row
+  cannot be stepped back, edited and re-frozen: assertions `confirmed -> superseded`; manual
+  evidence `active -> superseded | withdrawn`, `superseded -> withdrawn` (redaction); exceptions
+  `active -> expired` (expiry or revocation). Confirmed assertions additionally freeze every
+  column except `review_status` and `updated_at` (the ON DELETE SET NULL FK columns may only be
+  cleared). DELETE is
   rejected on all of them, except that `bastion_evidence_objects` rows are never deleted (redaction
   sets `bytes_redacted_at`).
 - **Shared objects are reference-counted.** `bastion_evidence_objects` is content-addressed, so
@@ -778,7 +784,8 @@ All tables prefixed `bastion_`, org-scoped by `organization_id`, Drizzle schema 
   `attempts`, `next_attempt_at`, timestamps. Unique `(organization_id, source_idempotency_key)`.
 - **`bastion_outbox`**: `id`, `organization_id`, `kind` (`bolt_event`,`bam_task_upsert`,
   `bam_task_comment`,`proposal_close`,`seal_object`), `ordering_key`, `idempotency_key`,
-  `payload jsonb`, `status` (`pending`,`delivered`,`dead`), `attempts`, `redrive_count`,
+  `payload jsonb`, `status` (`pending`,`delivered`,`dead`,`superseded`; `superseded` added by
+  migration 0283 for the section 7 operator re-drive, #189), `attempts`, `redrive_count`,
   `next_attempt_at`, `last_error`, `claimed_by`, `heartbeat_at`, `delivered_at`, `created_at`.
   Unique `(organization_id, idempotency_key)`; index `(ordering_key, created_at) WHERE status =
   'pending'`.
@@ -800,8 +807,14 @@ All tables prefixed `bastion_`, org-scoped by `organization_id`, Drizzle schema 
 - **`bastion_drift_events`**: `id`, `organization_id`, `control_id`, `evaluation_run_id`,
   `from_status`, `to_status`, `reason`, `snapshot_id`, `bam_task_id`, `task_status`
   (`pending`,`created`,`reopened`,`updated`,`no_project`,`proposed`), `proposal_id`,
-  `acknowledged_by`, `acknowledged_at`, `detected_at`. Unique `(organization_id,
-  evaluation_run_id, control_id)`.
+  `acknowledged_by`, `acknowledged_at`, `detected_at`, `exception_id` (0283, #188). Unique
+  `(organization_id, evaluation_run_id, control_id)` for run-driven drift; exception-expiry drift
+  (`evaluation_run_id` NULL, `reason = 'exception_expired'`, `exception_id` required by CHECK) is
+  unique on `(organization_id, exception_id, control_id) WHERE exception_id IS NOT NULL`.
+  `bastion-evidence-expiry` writes it in one transaction: compare-and-set the exception
+  (`UPDATE ... SET status = 'expired' WHERE id = $1 AND status = 'active' RETURNING id`), insert
+  the drift row `ON CONFLICT ... DO NOTHING RETURNING id`, and write the outbox rows (idempotency
+  key `drift:exception:<exception_id>:<kind>`) only when the insert returned a row.
 - **`bastion_gaps`**: `id`, `organization_id`, `control_id`, `assertion_id`, `gap_kind` (CHECK
   holds the 12 stored kinds of section 2.3: `failing`, `no_source`, `manual_expired`,
   `not_connected`, `manual_missing`, `population_drift`, `check_broken`, `insufficient_data`,
@@ -1326,7 +1339,7 @@ in bastion-api.
 | `bastion-object-backup` | event, **enqueued by `backup-database.job.ts` after the backup has recorded `completed`**, `jobId = backup.id` | calls bastion-api's `mirror-objects` engine (async-start, polled), which mirrors objects with `mirrored_at IS NULL` to the off-site destination within a per-run budget (5,000 objects or 2 GiB) with a resume cursor and progress lines, sets `mirrored_at`, and writes `platform_backups.bastion_mirror_status` and `bastion_mirror_cursor`; a mirror failure never changes the backup's own status |
 | `bastion-run-reaper` | `*/5 * * * *` | releases claims on resumable runs whose heartbeat exceeded the lease (`claimed_by = NULL`, status `queued`, **`resume_count` incremented on every release**) up to `resume_count` 3; only then `partial`; unwedges frameworks and questionnaires |
 | `bastion-weekly-readiness` | `0 13 * * 1` | via the outbox |
-| `bastion-retention` | `20 5 * * *` | prunes processed ingest and delivered outbox rows older than 30 days; calls the access-log purge |
+| `bastion-retention` | `20 5 * * *` | prunes processed ingest and delivered or superseded outbox rows older than 30 days; calls the access-log purge |
 | `bastion-export-packet` | event | the packet, in the worker; personal-data commitments are verified by calling bastion-api's `POST /v1/internal/engines/verify-commitments` (row 106), so the HMAC key lives only in bastion-api |
 
 **19 jobs.**
@@ -1389,6 +1402,26 @@ any `queued` run idle for more than 2 minutes, so a released run is never orphan
 holds the partial unique index against tomorrow's nightly run. Completed items are kept and
 skipped, so a deploy does not send a questionnaire back to mapping. A `restore_pending` partial
 (section 3.4) resumes only after the restore row is resolved.
+
+**Resume and claim against a live full run (#187, migration 0283).** The partial unique index
+`idx_bastion_evaluation_runs_one_full` allows one `queued`/`running` `scope = 'all'` run per org,
+and a manual or agent full run may start after the nightly run went `partial`. A plain
+`UPDATE ... SET status = 'queued'` then raises 23505, and inside a multi-org tick transaction it
+aborts every org's claim. M4 must therefore:
+
+1. Resume only through `SELECT bastion_resume_partial_run($run_id)` (0283). It re-queues a
+   `partial` nightly run in place (`claimed_by`, `heartbeat_at`, `partial_reason` cleared,
+   `resume_count` incremented, same `as_of`) only when `resume_count < 3`, no full run for the
+   org is `queued` or `running`, and no `bastion_ledger_restores` row is unresolved. It returns
+   `false` instead of raising when any of those blocks it, including a race lost to a concurrent
+   insert (its exception block is an implicit savepoint, so the caller's transaction survives).
+   `false` means "not now": the next tick retries, and the live full run already covers the org.
+2. Claim a new nightly run with `INSERT ... ON CONFLICT DO NOTHING` (no conflict target, so both
+   the one-full-run and the one-nightly-per-date indexes are absorbed); zero rows inserted means
+   a full run is live or today's nightly row exists, and the tick moves on.
+3. Process orgs one at a time (or each inside its own SAVEPOINT), so no single org's conflict can
+   abort the batch. A manual "Evaluate now" that hits 23505 is answered 409 with "An evaluation
+   is already running".
 
 **LLM fairness (leased permits).** Copied from `admitLlmCall` in
 `apps/api/src/routes/internal-llm.routes.ts`: Redis sorted sets (`bastion:llm:svc`, and

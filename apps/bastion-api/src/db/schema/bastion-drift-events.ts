@@ -5,6 +5,7 @@ import { pgTable, timestamp, uuid, varchar } from 'drizzle-orm/pg-core';
 import { bastionControls } from './bastion-controls.js';
 import { bastionEvaluationRuns } from './bastion-evaluation-runs.js';
 import { bastionEvidenceSnapshots } from './bastion-evidence-snapshots.js';
+import { bastionExceptions } from './bastion-exceptions.js';
 import { organizations, users } from './bbb-refs.js';
 
 export const bastionDriftEvents = pgTable(
@@ -23,6 +24,9 @@ export const bastionDriftEvents = pgTable(
     proposal_id: uuid('proposal_id'),
     acknowledged_by: uuid('acknowledged_by').references(() => users.id, { onDelete: 'set null' }),
     acknowledged_at: timestamp('acknowledged_at', { withTimezone: true }),
+    // 0283 (#188): set only for exception-expiry drift (evaluation_run_id NULL); unique per
+    // (organization_id, exception_id, control_id), so a retried expiry job cannot double-write.
+    exception_id: uuid('exception_id').references(() => bastionExceptions.id, { onDelete: 'restrict' }),
     detected_at: timestamp('detected_at', { withTimezone: true }).defaultNow().notNull(),
   },
 );

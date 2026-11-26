@@ -269,7 +269,8 @@ export const BastionOutboxKind = z.enum([
 ]);
 export type BastionOutboxKind = z.infer<typeof BastionOutboxKind>;
 
-export const BastionOutboxStatus = z.enum(['pending', 'delivered', 'dead']);
+/** `superseded` (0283, #189): a re-driven dead row whose key already delivered a newer row. */
+export const BastionOutboxStatus = z.enum(['pending', 'delivered', 'dead', 'superseded']);
 export type BastionOutboxStatus = z.infer<typeof BastionOutboxStatus>;
 
 /* ------------------------------------------------------------------ */
