@@ -79,6 +79,8 @@ describe.skipIf(!DATABASE_URL)('bastion_% definer-function hardening', () => {
     expect(bad, `functions without the pinned search_path: ${bad.join(', ')}`).toEqual([]);
   });
 
+  const GOLDENS_TEST_ROLE = 'bastion_rls_golden_test';
+
   it('grants no PUBLIC execute: owner-only, or owner + bam_app on definer functions', () => {
     const problems: string[] = [];
     for (const p of procs) {
@@ -92,6 +94,10 @@ describe.skipIf(!DATABASE_URL)('bastion_% definer-function hardening', () => {
         if (grantee === '') problems.push(`${p.signature}: PUBLIC entry ${entry}`);
         else if (grantee === p.owner) continue;
         else if (grantee === 'bam_app' && p.prosecdef) continue;
+        // m4-probe-goldens.test.ts grants EXECUTE ON ALL FUNCTIONS to its own NOLOGIN test role
+        // for the length of that file and drops it after; when the files run in parallel against
+        // one database this check saw it. A test fixture, not a migration grant.
+        else if (grantee === GOLDENS_TEST_ROLE) continue;
         else problems.push(`${p.signature}: unexpected grantee in ${entry}`);
       }
       const ownerEntry = p.acl.find((e) => e.startsWith(`${p.owner}=`));

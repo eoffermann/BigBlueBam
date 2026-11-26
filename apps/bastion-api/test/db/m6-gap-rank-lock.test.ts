@@ -53,17 +53,22 @@ describe.skipIf(!DATABASE_URL)('gap ranking is serialized per org (#230, live da
     orgs.push(s.org);
     const deps = makeDeps(sql);
     const h = holdLock(s.org);
-    await h.held;
-    let finished = false;
-    const second = orgTx(sql, s.org, (tx) => rankOrgGaps(tx, s.org, deps.now())).then(() => {
-      finished = true;
-    });
-    await sleep(500);
-    expect(finished).toBe(false);
-    h.release();
-    await h.done;
-    await second;
-    expect(finished).toBe(true);
+    try {
+      await h.held;
+      let finished = false;
+      const second = orgTx(sql, s.org, (tx) => rankOrgGaps(tx, s.org, deps.now())).then(() => {
+        finished = true;
+      });
+      await sleep(500);
+      expect(finished).toBe(false);
+      h.release();
+      await h.done;
+      await second;
+      expect(finished).toBe(true);
+    } finally {
+      h.release();
+      await h.done.catch(() => undefined);
+    }
   });
 
   it('the post-run pass (one org) waits; the daily pass skips a busy org and ranks the rest', async () => {
@@ -72,22 +77,29 @@ describe.skipIf(!DATABASE_URL)('gap ranking is serialized per org (#230, live da
     orgs.push(busy.org, free.org);
     const deps = makeDeps(sql);
     const h = holdLock(busy.org);
-    await h.held;
-    const daily = await gapRank(deps, {});
-    expect(daily.complete).toBe(true);
-    expect(daily.skipped_busy).toBeGreaterThanOrEqual(1);
-    expect(daily.failed).toBe(0);
+    try {
+      await h.held;
+      // The daily pass walks every org in the database, including ones other test files are
+      // setting up and wiping right now, so only what this test owns is asserted.
+      const daily = await gapRank(deps, {});
+      expect(daily.complete).toBe(true);
+      expect(daily.skipped_busy).toBeGreaterThanOrEqual(1);
 
-    let single = false;
-    const post = gapRank(deps, { organization_id: busy.org }).then((r) => {
-      single = true;
-      return r;
-    });
-    await sleep(500);
-    expect(single).toBe(false);
-    h.release();
-    await h.done;
-    expect((await post).ranked).toBe(1);
+      let single = false;
+      const post = gapRank(deps, { organization_id: busy.org }).then((r) => {
+        single = true;
+        return r;
+      });
+      await sleep(500);
+      expect(single).toBe(false);
+      h.release();
+      await h.done;
+      expect((await post).ranked).toBe(1);
+    } finally {
+      // Never leave the lock-holding transaction open (it would block the cleanup).
+      h.release();
+      await h.done.catch(() => undefined);
+    }
   });
 
   it('the daily pass stops on its budget and resumes from the cursor until complete', async () => {
