@@ -100,3 +100,53 @@ export async function publishBoltEvent(
     }
   }
 }
+
+/** What publishBoltEventChecked reports: `ok` only for a 2xx from bolt-api ingest. */
+export interface BoltPublishOutcome {
+  ok: boolean;
+  status: number | null;
+  error?: string;
+}
+
+/**
+ * The same positional call as publishBoltEvent, for callers that own a durable retry (an
+ * outbox): it never throws, but it reports whether bolt-api accepted the event, so the caller
+ * can back off and retry instead of losing the event. Same URL, secret and timeout.
+ */
+export async function publishBoltEventChecked(
+  eventType: string,
+  source: string,
+  payload: Record<string, unknown>,
+  orgId: string,
+  actorId?: string,
+  actorType?: BoltActorType,
+): Promise<BoltPublishOutcome> {
+  const timeoutMs = resolveBoltPublishTimeoutMs();
+  try {
+    const resolvedActorType: BoltActorType = actorType ?? (actorId ? 'user' : 'system');
+    const res = await fetch(`${resolveBoltUrl()}/v1/events/ingest`, {
+      method: 'POST',
+      signal: AbortSignal.timeout(timeoutMs),
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Internal-Secret': resolveInternalSecret(),
+      },
+      body: JSON.stringify({
+        event_type: eventType,
+        source,
+        payload,
+        org_id: orgId,
+        actor_id: actorId,
+        actor_type: resolvedActorType,
+      }),
+    });
+    await res.arrayBuffer().catch(() => undefined);
+    return res.ok ? { ok: true, status: res.status } : { ok: false, status: res.status, error: `bolt-api ingest returned ${res.status}` };
+  } catch (err) {
+    return {
+      ok: false,
+      status: null,
+      error: isTimeoutError(err) ? `bolt-api ingest timed out after ${timeoutMs} ms` : (err as Error).message,
+    };
+  }
+}

@@ -703,3 +703,158 @@ export type BastionControlListQuery = z.infer<typeof bastionControlListQuerySche
 /** Whether a control has a confirmed way to be checked (spec 2.3 "Not set up yet"). */
 export const BastionSetupState = z.enum(['set_up', 'not_set_up', 'not_applicable']);
 export type BastionSetupState = z.infer<typeof BastionSetupState>;
+
+/* ------------------------------------------------------------------ */
+/*  M4: evidence engine (evaluations, ledger, outbox, events, queues) */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Every Bolt event Bastion publishes (spec 8.1), source `bastion`. A unit test in bolt-api
+ * asserts this tuple equals the `bastionEvents` set in event-catalog.ts, and
+ * scripts/check-bolt-catalog.mjs treats `enqueueBastionEvent('<literal>', ...)` as a `bastion`
+ * publisher, so a name used in code but missing from the catalog fails CI.
+ */
+export const BASTION_EVENT_TYPES = [
+  'framework.adopted',
+  'assertions.compiled',
+  'evaluation.completed',
+  'evaluation.missed',
+  'control.drifted',
+  'control.recovered',
+  'evidence.uploaded',
+  'evidence.expiring',
+  'evidence.expired',
+  'evidence.integrity_failed',
+  'evidence.redacted',
+  'ledger.sealed',
+  'ledger.restore_detected',
+  'ledger.restored',
+  'gap.fix_proposed',
+  'exception.proposed',
+  'exception.approved',
+  'exception.expired',
+  'attestation.overdue',
+  'questionnaire.drafted',
+  'questionnaire.approved',
+  'auditor_room.created',
+  'auditor_room.revoked',
+  'readiness.weekly',
+] as const;
+export type BastionEventType = (typeof BASTION_EVENT_TYPES)[number];
+
+/** POST /evaluations (spec 5.1 row 22): a full run, or one control's run when control_id is set. */
+export const bastionRunEvaluationSchema = z
+  .object({
+    control_id: z.string().uuid().optional(),
+  })
+  .strict();
+export type BastionRunEvaluation = z.infer<typeof bastionRunEvaluationSchema>;
+
+/** GET /evaluations filters (spec 5.1 row 23). */
+export const bastionEvaluationListQuerySchema = z
+  .object({
+    status: BastionRunStatus.optional(),
+    limit: z.coerce.number().int().min(1).max(100).default(25),
+  })
+  .strict();
+export type BastionEvaluationListQuery = z.infer<typeof bastionEvaluationListQuerySchema>;
+
+/** GET /controls/:id/evidence (spec 5.1 row 25). */
+export const bastionEvidenceListQuerySchema = z
+  .object({
+    assertion_id: z.string().uuid().optional(),
+    limit: z.coerce.number().int().min(1).max(100).default(25),
+  })
+  .strict();
+export type BastionEvidenceListQuery = z.infer<typeof bastionEvidenceListQuerySchema>;
+
+/**
+ * POST /ledger/restores/:id/acknowledge (spec 3.4 points 4 and 5, row 31). `confirm` is the
+ * confirm gate; `continue_unexplained` is the only resolution allowed for an `unmatched` row.
+ */
+export const bastionRestoreAcknowledgeSchema = z
+  .object({
+    resolution: BastionRestoreResolution,
+    confirm: z.literal(true),
+  })
+  .strict();
+export type BastionRestoreAcknowledge = z.infer<typeof bastionRestoreAcknowledgeSchema>;
+
+/** The engines bastion-api runs for the worker behind POST /v1/internal/engines/:name (row 106). */
+export const BASTION_ENGINE_NAMES = [
+  'evaluate-tick',
+  'evaluate-run',
+  'outbox-drain',
+  'ledger-seal',
+  'ledger-verify',
+  'run-reaper',
+  'evaluation-missed',
+  'weekly-readiness',
+  'retention',
+] as const;
+export const BastionEngineName = z.enum(BASTION_ENGINE_NAMES);
+export type BastionEngineName = z.infer<typeof BastionEngineName>;
+
+/** Body of the evaluate-run engine: one slice of one run, fenced on the claimant. */
+export const bastionEvaluateRunEngineSchema = z
+  .object({
+    organization_id: z.string().uuid(),
+    run_id: z.string().uuid(),
+    claimant: z.string().min(1).max(128),
+  })
+  .strict();
+export type BastionEvaluateRunEngine = z.infer<typeof bastionEvaluateRunEngineSchema>;
+
+/** Body of every scheduled engine: optionally narrowed to one org (tests, operators). */
+export const bastionSweepEngineSchema = z
+  .object({
+    organization_id: z.string().uuid().optional(),
+  })
+  .strict();
+export type BastionSweepEngine = z.infer<typeof bastionSweepEngineSchema>;
+
+/** POST /v1/internal/events (row 105): what bolt-api's bastion dispatch hook forwards. */
+export const bastionInternalEventSchema = z
+  .object({
+    organization_id: z.string().uuid(),
+    event: z.string().min(1).max(128),
+    source: z.string().min(1).max(32),
+    event_id: z.string().min(1).max(200).nullable().optional(),
+    payload: z.record(z.unknown()).default({}),
+  })
+  .strict();
+export type BastionInternalEvent = z.infer<typeof bastionInternalEventSchema>;
+
+/** Worker queues (spec 7). bastion-api produces evaluate-run; the rest are scheduled sweeps. */
+export const BASTION_EVALUATE_TICK_QUEUE = 'bastion-evaluate-tick';
+export const BASTION_EVALUATE_RUN_QUEUE = 'bastion-evaluate-run';
+export const BASTION_OUTBOX_DRAIN_QUEUE = 'bastion-outbox-drain';
+export const BASTION_LEDGER_SEAL_QUEUE = 'bastion-ledger-seal';
+export const BASTION_LEDGER_VERIFY_QUEUE = 'bastion-ledger-verify';
+export const BASTION_RUN_REAPER_QUEUE = 'bastion-run-reaper';
+export const BASTION_EVALUATION_MISSED_QUEUE = 'bastion-evaluation-missed';
+export const BASTION_WEEKLY_READINESS_QUEUE = 'bastion-weekly-readiness';
+export const BASTION_RETENTION_QUEUE = 'bastion-retention';
+
+/** One evaluation run to drive. resume_count goes into the jobId (spec 7.3). */
+export interface BastionEvaluateRunJobData {
+  organization_id: string;
+  run_id: string;
+  resume_count: number;
+}
+
+/** Scheduled sweep jobs carry nothing (or one org for an operator re-run). */
+export interface BastionSweepJobData {
+  organization_id?: string;
+}
+
+/**
+ * The jobId for an evaluate-run job, so a re-enqueue after a release (resume_count + 1) is never
+ * deduplicated against an earlier completed job still kept by removeOnComplete (spec 7.3).
+ * The spec writes `run.id + ':' + resume_count`; BullMQ 5 rejects a custom id with a single
+ * colon ("Custom Id cannot contain :"), so the separator is `-r`. `generation` > 0 marks the
+ * job's own re-enqueue after MAX_POLLS while the run is still live.
+ */
+export function bastionEvaluateRunJobId(runId: string, resumeCount: number, generation = 0): string {
+  return generation > 0 ? `${runId}-r${resumeCount}-g${generation}` : `${runId}-r${resumeCount}`;
+}

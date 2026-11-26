@@ -56,10 +56,23 @@ const envSchema = z.object({
   BASTION_ROOM_IP_SALT: z.string().length(64),
   BASTION_FEED_KEY_PEPPER: z.string().length(64),
 
+  // Public keys of seal signing keys that were replaced (spec 3.4: GET /ledger/seals publishes
+  // every signing_key_id, so seals signed before a key change stay verifiable). Comma-separated
+  // 64-hex raw Ed25519 public keys; the key id is derived from each. Optional.
+  BASTION_SEAL_RETIRED_PUBLIC_KEYS: z.preprocess(
+    emptyToUndefined,
+    z
+      .string()
+      .regex(/^[0-9a-fA-F]{64}(,[0-9a-fA-F]{64})*$/, 'comma-separated 64-hex Ed25519 public keys')
+      .optional(),
+  ),
+
   // Time budgets (spec 7.3).
   BASTION_LLM_TIMEOUT_MS: z.coerce.number().int().positive().default(60000),
   BASTION_ENGINE_TIMEOUT_MS: z.coerce.number().int().positive().default(30000),
   BASTION_PROBE_TIMEOUT_MS: z.coerce.number().int().positive().default(8000),
+  BASTION_PUT_TIMEOUT_MS: z.coerce.number().int().positive().default(5000),
+  BASTION_RUN_LEASE_MS: z.coerce.number().int().positive().default(300000),
 
   // NOTE: BBB_PERMISSIONS_ENFORCE is deliberately ABSENT. Bastion's per-action enforcement is a
   // hardcoded boot invariant (see boot/assert-permissions-enforce.ts), not an env setting.

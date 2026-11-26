@@ -39,3 +39,14 @@ export class ConflictError extends Error {
     this.name = 'ConflictError';
   }
 }
+
+/** A service-layer rule on top of the permission (e.g. owner-only acts, spec 5.5). Maps to 403. */
+export class ForbiddenError extends Error {
+  constructor(
+    message = 'You cannot do this.',
+    public readonly code = 'FORBIDDEN',
+  ) {
+    super(message);
+    this.name = 'ForbiddenError';
+  }
+}

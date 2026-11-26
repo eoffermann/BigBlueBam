@@ -1,7 +1,7 @@
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import type { ZodError } from 'zod';
 import type { Viewer } from '../services/types.js';
-import { ConflictError, NotFoundError, ValidationFailure } from './errors.js';
+import { ConflictError, ForbiddenError, NotFoundError, ValidationFailure } from './errors.js';
 import { authMethodOf } from './guards.js';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -50,6 +50,12 @@ export function mapServiceError(request: FastifyRequest, reply: FastifyReply, er
   if (err instanceof ValidationFailure) {
     reply.status(400).send({
       error: { code: err.code, message: err.message, details: err.details, request_id: request.id },
+    });
+    return true;
+  }
+  if (err instanceof ForbiddenError) {
+    reply.status(403).send({
+      error: { code: err.code, message: err.message, details: [], request_id: request.id },
     });
     return true;
   }
