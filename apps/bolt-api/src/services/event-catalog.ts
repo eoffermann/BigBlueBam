@@ -3483,6 +3483,209 @@ const bursarEvents: EventDefinition[] = [
 ];
 
 // ---------------------------------------------------------------------------
+// Bastion (compliance evidence) events (Bastion spec 8.1). Registered at M4 together with the
+// outbox that delivers them. Every payload carries refs and scalars only: no names, no labels,
+// no evidence content. BASTION_EVENT_TYPES in @bigbluebam/shared must equal this set (tested).
+// ---------------------------------------------------------------------------
+
+const bastionOrg: PayloadField = { name: 'org_id', type: 'uuid', description: 'Organization ID' };
+
+const bastionEvents: EventDefinition[] = [
+  {
+    source: 'bastion',
+    event_type: 'framework.adopted',
+    description: 'Fired when a compliance framework (SOC 2, ISO 27001) is adopted.',
+    payload_schema: [{ name: 'framework_id', type: 'uuid', description: 'The adopted framework' }, { name: 'template_key', type: 'string', description: 'soc2 | iso27001' }, bastionOrg],
+  },
+  {
+    source: 'bastion',
+    event_type: 'assertions.compiled',
+    description: 'Fired when a compile run finishes proposing checks for a framework.',
+    payload_schema: [{ name: 'framework_id', type: 'uuid', description: 'The framework' }, { name: 'compile_run_id', type: 'uuid', description: 'The run' }, { name: 'assertions_proposed', type: 'number', description: 'Checks proposed' }, bastionOrg],
+  },
+  {
+    source: 'bastion',
+    event_type: 'evaluation.completed',
+    description: 'Fired when an evaluation run finishes. Counts only.',
+    payload_schema: [
+      { name: 'run_id', type: 'uuid', description: 'The evaluation run' },
+      { name: 'trigger', type: 'string', description: 'nightly | manual | agent' },
+      { name: 'scope', type: 'string', description: 'all | control' },
+      { name: 'control_id', type: 'uuid', description: 'The control, for a one-control run (nullable)' },
+      { name: 'controls_done', type: 'number', description: 'Controls evaluated' },
+      { name: 'pass_count', type: 'number', description: 'Checks that passed' },
+      { name: 'fail_count', type: 'number', description: 'Checks that failed' },
+      { name: 'unprovable_count', type: 'number', description: 'Checks that could not be proven' },
+      bastionOrg,
+    ],
+  },
+  {
+    source: 'bastion',
+    event_type: 'evaluation.missed',
+    description: 'Fired once per missed period when no full evaluation has finished for 26 hours.',
+    payload_schema: [{ name: 'last_completed_at', type: 'string', description: 'When the last full run finished (nullable)' }, { name: 'hours_since', type: 'number', description: 'Hours since then' }, bastionOrg],
+  },
+  {
+    source: 'bastion',
+    event_type: 'control.drifted',
+    description: 'Fired when a control\'s stored status worsens for a non-infrastructure reason.',
+    payload_schema: [
+      { name: 'control_id', type: 'uuid', description: 'The control' },
+      { name: 'drift_id', type: 'uuid', description: 'The drift record' },
+      { name: 'run_id', type: 'uuid', description: 'The evaluation run that saw it' },
+      { name: 'from_status', type: 'string', description: 'pass | fail | unprovable' },
+      { name: 'to_status', type: 'string', description: 'pass | fail | unprovable' },
+      { name: 'reason', type: 'string', description: 'failed, or the unprovable reason' },
+      bastionOrg,
+    ],
+  },
+  {
+    source: 'bastion',
+    event_type: 'control.recovered',
+    description: 'Fired when a control returns to pass after drifting.',
+    payload_schema: [{ name: 'control_id', type: 'uuid', description: 'The control' }, { name: 'run_id', type: 'uuid', description: 'The evaluation run' }, { name: 'from_status', type: 'string', description: 'fail | unprovable' }, bastionOrg],
+  },
+  {
+    source: 'bastion',
+    event_type: 'evidence.uploaded',
+    description: 'Fired when uploaded or self-attested evidence becomes active.',
+    payload_schema: [{ name: 'manual_evidence_id', type: 'uuid', description: 'The evidence item' }, { name: 'kind', type: 'string', description: 'file | attestation_statement' }, bastionOrg],
+  },
+  {
+    source: 'bastion',
+    event_type: 'evidence.expiring',
+    description: 'Fired when evidence enters its expiry warning window.',
+    payload_schema: [{ name: 'manual_evidence_id', type: 'uuid', description: 'The evidence item' }, { name: 'days_left', type: 'number', description: 'Days until it expires' }, bastionOrg],
+  },
+  {
+    source: 'bastion',
+    event_type: 'evidence.expired',
+    description: 'Fired when evidence expires.',
+    payload_schema: [{ name: 'manual_evidence_id', type: 'uuid', description: 'The evidence item' }, bastionOrg],
+  },
+  {
+    source: 'bastion',
+    event_type: 'evidence.integrity_failed',
+    description: 'Fired on a hash mismatch, a broken chain, or a ledger gap no completed restore explains.',
+    payload_schema: [{ name: 'cause', type: 'string', description: 'hash_mismatch | prev_mismatch | unexplained_gap' }, { name: 'seq', type: 'number', description: 'Ledger position (nullable)' }, { name: 'restore_id', type: 'uuid', description: 'The restore record, for a gap (nullable)' }, bastionOrg],
+  },
+  {
+    source: 'bastion',
+    event_type: 'evidence.redacted',
+    description: 'Fired when personal data on evidence is redacted by an owner.',
+    payload_schema: [{ name: 'holder_kind', type: 'string', description: 'snapshot | manual_evidence | feed_record | attestation | exception' }, { name: 'holder_id', type: 'uuid', description: 'The redacted holder' }, bastionOrg],
+  },
+  {
+    source: 'bastion',
+    event_type: 'ledger.sealed',
+    description: 'Fired daily when the evidence ledger head is signed and the seal object is written.',
+    payload_schema: [
+      { name: 'seal_date', type: 'string', description: 'UTC date (YYYY-MM-DD)' },
+      { name: 'epoch', type: 'number', description: 'Ledger epoch' },
+      { name: 'head_seq', type: 'number', description: 'Sealed head position' },
+      { name: 'signing_key_id', type: 'string', description: 'The signing key' },
+      bastionOrg,
+    ],
+  },
+  {
+    source: 'bastion',
+    event_type: 'ledger.restore_detected',
+    description: 'Fired when the database ledger is behind the newest bucket seal (history lost). Recording pauses until an owner resolves it.',
+    payload_schema: [
+      { name: 'restore_id', type: 'uuid', description: 'The restore record' },
+      { name: 'epoch', type: 'number', description: 'Epoch of the lost range' },
+      { name: 'lost_from_seq', type: 'number', description: 'First lost position' },
+      { name: 'lost_to_seq', type: 'number', description: 'Last lost position' },
+      { name: 'status', type: 'string', description: 'pending_ack | unmatched' },
+      bastionOrg,
+    ],
+  },
+  {
+    source: 'bastion',
+    event_type: 'ledger.restored',
+    description: 'Fired when an owner acknowledges a gap that a completed platform restore explains.',
+    payload_schema: [
+      { name: 'restore_id', type: 'uuid', description: 'The restore record' },
+      { name: 'epoch', type: 'number', description: 'The provisional epoch recording resumed under' },
+      { name: 'lost_from_seq', type: 'number', description: 'First lost position' },
+      { name: 'lost_to_seq', type: 'number', description: 'Last lost position' },
+      bastionOrg,
+    ],
+  },
+  {
+    source: 'bastion',
+    event_type: 'gap.fix_proposed',
+    description: 'Fired when a fix proposal is filed for a gap.',
+    payload_schema: [{ name: 'gap_id', type: 'uuid', description: 'The gap' }, { name: 'fix_draft_id', type: 'uuid', description: 'The draft' }, { name: 'template', type: 'string', description: 'Fix template' }, bastionOrg],
+  },
+  {
+    source: 'bastion',
+    event_type: 'exception.proposed',
+    description: 'Fired when an accepted-risk exception is proposed.',
+    payload_schema: [{ name: 'exception_id', type: 'uuid', description: 'The exception' }, { name: 'control_id', type: 'uuid', description: 'The control' }, bastionOrg],
+  },
+  {
+    source: 'bastion',
+    event_type: 'exception.approved',
+    description: 'Fired when an exception is approved in Bastion.',
+    payload_schema: [{ name: 'exception_id', type: 'uuid', description: 'The exception' }, { name: 'control_id', type: 'uuid', description: 'The control' }, { name: 'expires_at', type: 'string', description: 'When the accepted risk lapses' }, bastionOrg],
+  },
+  {
+    source: 'bastion',
+    event_type: 'exception.expired',
+    description: 'Fired when an accepted-risk exception expires or is revoked.',
+    payload_schema: [{ name: 'exception_id', type: 'uuid', description: 'The exception' }, { name: 'control_id', type: 'uuid', description: 'The control' }, bastionOrg],
+  },
+  {
+    source: 'bastion',
+    event_type: 'attestation.overdue',
+    description: 'Fired when someone has not acknowledged a required policy within its cadence.',
+    payload_schema: [{ name: 'policy_id', type: 'uuid', description: 'The policy' }, { name: 'user_id', type: 'uuid', description: 'The person who has not attested' }, bastionOrg],
+  },
+  {
+    source: 'bastion',
+    event_type: 'questionnaire.drafted',
+    description: 'Fired when a security questionnaire autofill finishes. Band counts only.',
+    payload_schema: [{ name: 'questionnaire_id', type: 'uuid', description: 'The questionnaire' }, { name: 'high_count', type: 'number', description: 'High-confidence answers' }, { name: 'medium_count', type: 'number', description: 'Medium' }, { name: 'low_count', type: 'number', description: 'Low' }, bastionOrg],
+  },
+  {
+    source: 'bastion',
+    event_type: 'questionnaire.approved',
+    description: 'Fired when a questionnaire is approved for export.',
+    payload_schema: [{ name: 'questionnaire_id', type: 'uuid', description: 'The questionnaire' }, bastionOrg],
+  },
+  {
+    source: 'bastion',
+    event_type: 'auditor_room.created',
+    description: 'Fired when an auditor room (time-limited read-only link) is created.',
+    payload_schema: [{ name: 'room_id', type: 'uuid', description: 'The room' }, { name: 'expires_at', type: 'string', description: 'When the link lapses' }, bastionOrg],
+  },
+  {
+    source: 'bastion',
+    event_type: 'auditor_room.revoked',
+    description: 'Fired when an auditor room is revoked or auto-locked.',
+    payload_schema: [{ name: 'room_id', type: 'uuid', description: 'The room' }, { name: 'reason', type: 'string', description: 'revoked | locked' }, bastionOrg],
+  },
+  {
+    source: 'bastion',
+    event_type: 'readiness.weekly',
+    description: 'Fired every Monday: the four readiness numbers, the not-set-up count, the risk-accepted count and the denominator.',
+    payload_schema: [
+      { name: 'proven_by_suite', type: 'number', description: 'Proven by the suite' },
+      { name: 'proven_by_evidence', type: 'number', description: 'Proven by evidence you provided' },
+      { name: 'not_met', type: 'number', description: 'Not met (includes risk accepted)' },
+      { name: 'risk_accepted', type: 'number', description: 'Not met, risk accepted' },
+      { name: 'cant_prove', type: 'number', description: 'Can\'t prove yet' },
+      { name: 'not_set_up', type: 'number', description: 'Not set up yet' },
+      { name: 'checked', type: 'number', description: 'Controls checked' },
+      { name: 'total', type: 'number', description: 'Controls in scope' },
+      { name: 'week_of', type: 'string', description: 'UTC date of the summary' },
+      bastionOrg,
+    ],
+  },
+];
+
+// ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
 
@@ -3510,6 +3713,7 @@ const ALL_EVENTS: EventDefinition[] = [
   ...bulwarkEvents,
   ...burnEvents,
   ...bursarEvents,
+  ...bastionEvents,
 ];
 
 export function getAllEvents(): EventDefinition[] {
