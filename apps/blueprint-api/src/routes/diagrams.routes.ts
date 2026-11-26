@@ -1,4 +1,4 @@
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { publishBoltEvent } from '@bigbluebam/shared';
 import { requireAuth, requireScope } from '../plugins/auth.js';
@@ -66,6 +66,22 @@ function mapDomainError(err: unknown, requestId: string) {
 function emitBolt(eventType: string, payload: Record<string, unknown>, orgId: string, userId: string) {
   publishBoltEvent(eventType, 'blueprint', payload, orgId, userId, 'user').catch(() => {});
 }
+
+/** requireAuth has run on every route here, so the user is set; this narrows it. */
+function caller(request: FastifyRequest) {
+  const user = request.user;
+  if (!user) throw new ForbiddenError('Authentication required');
+  return user;
+}
+
+/** The per-diagram ACL (#167) for the :id route being served. */
+const acl = {
+  read: (r: FastifyRequest) => svc.assertCanRead(caller(r).org_id, caller(r).id, (r.params as { id: string }).id),
+  edit: (r: FastifyRequest) => svc.assertCanEdit(caller(r).org_id, caller(r).id, (r.params as { id: string }).id),
+  comment: (r: FastifyRequest) =>
+    svc.assertCanComment(caller(r).org_id, caller(r).id, (r.params as { id: string }).id),
+  manage: (r: FastifyRequest) => svc.assertCanManage(caller(r).org_id, caller(r), (r.params as { id: string }).id),
+};
 
 export default async function diagramRoutes(fastify: FastifyInstance) {
   // ─── List + Create ──────────────────────────────────────────────────
@@ -158,7 +174,7 @@ export default async function diagramRoutes(fastify: FastifyInstance) {
       try {
         // requireScope('admin') is a no-op for session users, so the
         // per-diagram owner check is what actually limits archive (#167).
-        await svc.assertCanManage(orgId, request.user!, request.params.id);
+        await acl.manage(request);
         const row = await svc.archiveDiagram(orgId, request.params.id);
         emitBolt('diagram.archived', { 'diagram.id': row.id }, orgId, userId);
         return reply.send({ data: { id: row.id, is_archived: true } });
@@ -176,7 +192,7 @@ export default async function diagramRoutes(fastify: FastifyInstance) {
     { preHandler: [requireAuth, fastify.requireCan('blueprint.diagram.read')] },
     async (request, reply) => {
       try {
-        await svc.assertCanRead(request.user!.org_id, request.user!.id, request.params.id);
+        await acl.read(request);
         const graph = await svc.getDiagramGraph(request.user!.org_id, request.params.id);
         return reply.send({ data: graph });
       } catch (err) {
@@ -193,7 +209,7 @@ export default async function diagramRoutes(fastify: FastifyInstance) {
     { preHandler: [requireAuth, fastify.requireCan('blueprint.diagram.read')] },
     async (request, reply) => {
       try {
-        await svc.assertCanRead(request.user!.org_id, request.user!.id, request.params.id);
+        await acl.read(request);
         const nodes = await nodeSvc.listNodes(request.params.id);
         return reply.send({ data: nodes });
       } catch (err) {
@@ -210,7 +226,7 @@ export default async function diagramRoutes(fastify: FastifyInstance) {
     { preHandler: [requireAuth, fastify.requireCan('blueprint.diagram.read')] },
     async (request, reply) => {
       try {
-        await svc.assertCanRead(request.user!.org_id, request.user!.id, request.params.id);
+        await acl.read(request);
         const edges = await edgeSvc.listEdges(request.params.id);
         return reply.send({ data: edges });
       } catch (err) {
@@ -402,7 +418,7 @@ export default async function diagramRoutes(fastify: FastifyInstance) {
     async (request, reply) => {
       const format = (request.query.format ?? 'json') as 'json' | 'mermaid' | 'svg' | 'png';
       try {
-        await svc.assertCanRead(request.user!.org_id, request.user!.id, request.params.id);
+        await acl.read(request);
         const result = await exportSvc.exportDiagram(request.params.id, format);
         reply.header('Content-Type', result.content_type);
         return reply.send(result.body);
@@ -420,7 +436,7 @@ export default async function diagramRoutes(fastify: FastifyInstance) {
     { preHandler: [requireAuth, fastify.requireCan('blueprint.diagram.read')] },
     async (request, reply) => {
       try {
-        await svc.assertCanRead(request.user!.org_id, request.user!.id, request.params.id);
+        await acl.read(request);
         const rows = await svc.listVersions(request.user!.org_id, request.params.id);
         return reply.send({ data: rows });
       } catch (err) {
@@ -437,7 +453,7 @@ export default async function diagramRoutes(fastify: FastifyInstance) {
     async (request, reply) => {
       const body = z.object({ label: z.string().max(200).nullable().optional() }).parse(request.body ?? {});
       try {
-        await svc.assertCanEdit(request.user!.org_id, request.user!.id, request.params.id);
+        await acl.edit(request);
         const row = await svc.snapshotVersion(
           request.user!.org_id,
           request.params.id,
@@ -469,7 +485,7 @@ export default async function diagramRoutes(fastify: FastifyInstance) {
         });
       }
       try {
-        await svc.assertCanEdit(request.user!.org_id, request.user!.id, request.params.id);
+        await acl.edit(request);
         const graph = await svc.restoreVersion(
           request.user!.org_id,
           request.params.id,
@@ -490,7 +506,7 @@ export default async function diagramRoutes(fastify: FastifyInstance) {
     { preHandler: [requireAuth, fastify.requireCan('blueprint.diagram.star')] },
     async (request, reply) => {
       try {
-        await svc.assertCanRead(request.user!.org_id, request.user!.id, request.params.id);
+        await acl.read(request);
         await svc.starDiagram(request.user!.org_id, request.user!.id, request.params.id);
         return reply.send({ data: { starred: true } });
       } catch (err) {
@@ -522,7 +538,7 @@ export default async function diagramRoutes(fastify: FastifyInstance) {
     { preHandler: [requireAuth, fastify.requireCan('blueprint.diagram.read')] },
     async (request, reply) => {
       try {
-        await svc.assertCanRead(request.user!.org_id, request.user!.id, request.params.id);
+        await acl.read(request);
         const rows = await svc.listCollaborators(request.user!.org_id, request.params.id);
         return reply.send({ data: rows });
       } catch (err) {
@@ -544,7 +560,7 @@ export default async function diagramRoutes(fastify: FastifyInstance) {
     async (request, reply) => {
       const body = addCollabSchema.parse(request.body);
       try {
-        await svc.assertCanManage(request.user!.org_id, request.user!, request.params.id);
+        await acl.manage(request);
         const row = await svc.addCollaborator(
           request.user!.org_id,
           request.params.id,
@@ -565,7 +581,7 @@ export default async function diagramRoutes(fastify: FastifyInstance) {
     { preHandler: [requireAuth, requireScope('read_write'), fastify.requireCan('blueprint.collaborator.write')] },
     async (request, reply) => {
       try {
-        await svc.assertCanManage(request.user!.org_id, request.user!, request.params.id);
+        await acl.manage(request);
         await svc.removeCollaborator(
           request.user!.org_id,
           request.params.id,
@@ -586,7 +602,7 @@ export default async function diagramRoutes(fastify: FastifyInstance) {
     { preHandler: [requireAuth, fastify.requireCan('blueprint.diagram.read')] },
     async (request, reply) => {
       try {
-        await svc.assertCanRead(request.user!.org_id, request.user!.id, request.params.id);
+        await acl.read(request);
         const rows = await svc.listComments(request.user!.org_id, request.params.id);
         return reply.send({ data: rows });
       } catch (err) {
@@ -646,13 +662,13 @@ export default async function diagramRoutes(fastify: FastifyInstance) {
     async (request, reply) => {
       const body = patchCommentSchema.parse(request.body);
       try {
-        await svc.assertCanComment(request.user!.org_id, request.user!.id, request.params.id);
+        await acl.comment(request);
         const row = await svc.updateComment(
           request.user!.org_id,
           request.params.id,
           request.params.cid,
           body,
-          request.user!,
+          caller(request),
         );
         return reply.send({ data: row });
       } catch (err) {
