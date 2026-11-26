@@ -117,8 +117,18 @@ export interface BamProject {
   is_archived?: boolean;
 }
 
+/** One organization member, as GET /b3/api/org/members returns it (the people other suite SPAs pick from). */
+export interface OrgMember {
+  id: string;
+  display_name: string;
+  email: string;
+  is_active?: boolean;
+}
+
 export const bamApi = {
   listProjects: () => request<{ data: BamProject[] }>('/b3/api', 'GET', '/projects'),
+  /** The organization's members (#268: the "Ask someone" picker). */
+  listMembers: () => request<{ data: OrgMember[] }>('/b3/api', 'GET', '/org/members'),
   createComplianceProject: () => {
     const csrf = readCsrfToken();
     return request<{ data: BamProject }>(

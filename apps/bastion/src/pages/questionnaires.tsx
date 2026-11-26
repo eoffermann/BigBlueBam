@@ -4,6 +4,7 @@ import { BASTION_CONFIDENCE_WORDS } from '@bigbluebam/shared';
 import { useCan } from '@bigbluebam/ui/use-can';
 import { getImpersonation, impersonateHeader } from '@bigbluebam/ui/impersonation-banner';
 import type { AnswerLibraryRow, QuestionnaireItemRow, QuestionnaireRow, QuestionnaireSheetMap } from '@/lib/api';
+import { MemberPicker } from '@/components/member-picker';
 import { binAssetIdFrom, NOT_A_BIN_LINK } from '@/lib/bin-link';
 import { friendlyError } from '@/lib/errors';
 import {
@@ -149,7 +150,9 @@ function AddQuestionnaireForm({ onCreated }: { onCreated: (id: string) => void }
 
 function AnswerLibrary() {
   const [q, setQ] = useState('');
-  const lib = useAnswerLibrary(q);
+  const [showRetired, setShowRetired] = useState(false);
+  const [retiring, setRetiring] = useState<string | null>(null);
+  const lib = useAnswerLibrary(q, showRetired);
   const canWrite = useCan('bastion.answer_library.write');
   const update = useUpdateAnswerLibrary();
   const rows: AnswerLibraryRow[] = lib.data?.data ?? [];
@@ -158,6 +161,10 @@ function AnswerLibrary() {
       <h2 className="text-base font-semibold text-zinc-900 dark:text-zinc-100">Answer library</h2>
       <p className="text-sm text-zinc-600 dark:text-zinc-400">Answers you approved before. Bastion reuses them, and marks one to check again when a control it relies on changes.</p>
       <input className={input} value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search approved answers" />
+      <label className="text-xs flex items-center gap-1">
+        <input type="checkbox" checked={showRetired} onChange={(e) => setShowRetired(e.target.checked)} />
+        Show retired answers
+      </label>
       {lib.isLoading && <Loader2 className="h-4 w-4 animate-spin text-zinc-400" />}
       {!lib.isLoading && rows.length === 0 && <p className="text-sm text-zinc-500">No approved answers yet. They appear here after you approve a questionnaire.</p>}
       <ul className="divide-y divide-zinc-200 dark:divide-zinc-800">
@@ -173,16 +180,39 @@ function AnswerLibrary() {
               {r.approved_at ? ` on ${formatDate(r.approved_at)}` : ''}
             </p>
             {r.stale && <p className="text-xs text-amber-700">{r.stale_words}</p>}
+            {r.retired_at && <p className="text-xs text-zinc-500">Retired on {formatDate(r.retired_at)}. Bastion no longer reuses it.</p>}
             {canWrite && (
-              <div className="flex gap-2">
-                {r.stale && (
+              <div className="flex flex-wrap gap-2">
+                {r.stale && !r.retired_at && (
                   <button type="button" className={secondary} disabled={update.isPending} onClick={() => update.mutate({ id: r.id, body: { stale: false } })}>
                     It still holds
                   </button>
                 )}
-                <button type="button" className={secondary} disabled={update.isPending} onClick={() => update.mutate({ id: r.id, body: { retired: true } })}>
-                  Retire
-                </button>
+                {r.retired_at ? (
+                  <button type="button" className={secondary} disabled={update.isPending} onClick={() => update.mutate({ id: r.id, body: { retired: false } })}>
+                    Bring it back
+                  </button>
+                ) : retiring === r.id ? (
+                  // #268: retiring stops Bastion reusing the answer; say so and ask first.
+                  <span className="flex flex-wrap items-center gap-2 text-xs text-amber-800" data-testid="retire-confirm">
+                    Bastion will stop reusing this answer. You can bring it back from the retired answers.
+                    <button
+                      type="button"
+                      className={primary}
+                      disabled={update.isPending}
+                      onClick={() => update.mutate({ id: r.id, body: { retired: true } }, { onSettled: () => setRetiring(null) })}
+                    >
+                      Retire it
+                    </button>
+                    <button type="button" className={secondary} onClick={() => setRetiring(null)}>
+                      Keep it
+                    </button>
+                  </span>
+                ) : (
+                  <button type="button" className={secondary} onClick={() => setRetiring(r.id)}>
+                    Retire
+                  </button>
+                )}
               </div>
             )}
           </li>
@@ -425,6 +455,8 @@ function ItemRow({ item, questionnaireId, locked }: { item: QuestionnaireItemRow
   const review = useReviewItem(questionnaireId);
   const canWrite = useCan('bastion.questionnaire.write');
   const [editing, setEditing] = useState(false);
+  const [asking, setAsking] = useState(false);
+  const [expert, setExpert] = useState<string | null>(null);
   const [text, setText] = useState(item.final_answer ?? item.draft_answer ?? '');
   const [yesNo, setYesNo] = useState<string>(String(item.final_yes_no ?? item.draft_yes_no ?? ''));
   const shownAnswer = item.final_answer ?? item.draft_answer;
@@ -499,7 +531,23 @@ function ItemRow({ item, questionnaireId, locked }: { item: QuestionnaireItemRow
           </div>
         </div>
       )}
-      {canWrite && !locked && !editing && (
+      {canWrite && !locked && asking && (
+        <div className="flex flex-wrap items-end gap-2" data-testid="ask-someone">
+          <MemberPicker value={expert} onChange={setExpert} className="w-64" />
+          <button
+            type="button"
+            className={primary}
+            disabled={!expert || review.isPending}
+            onClick={() => review.mutate({ id: item.id, review_status: 'needs_owner', assigned_to: expert }, { onSuccess: () => setAsking(false) })}
+          >
+            Ask them
+          </button>
+          <button type="button" className={secondary} onClick={() => setAsking(false)}>
+            Cancel
+          </button>
+        </div>
+      )}
+      {canWrite && !locked && !editing && !asking && (
         <div className="flex gap-2">
           {item.review_status === 'pending' && (shownAnswer || shownYesNo) && (
             <button type="button" className={secondary} disabled={review.isPending} onClick={() => review.mutate({ id: item.id, review_status: 'accepted' })}>
@@ -509,6 +557,11 @@ function ItemRow({ item, questionnaireId, locked }: { item: QuestionnaireItemRow
           <button type="button" className={secondary} onClick={() => setEditing(true)}>
             Edit
           </button>
+          {item.review_status === 'pending' && (
+            <button type="button" className={secondary} onClick={() => setAsking(true)}>
+              Ask someone
+            </button>
+          )}
           {item.review_status !== 'pending' && (
             <button type="button" className={secondary} disabled={review.isPending} onClick={() => review.mutate({ id: item.id, review_status: 'pending' })}>
               Undo review
@@ -541,10 +594,12 @@ function ReviewStep({ q }: { q: QuestionnaireRow }) {
   const canExport = useCan('bastion.questionnaire.export');
   const [filter, setFilter] = useState<'all' | 'needs'>('all');
   const [downloadError, setDownloadError] = useState<string | null>(null);
+  const [confirming, setConfirming] = useState(false);
   const impersonating = getImpersonation() !== null;
   const approved = q.status === 'approved' || q.status === 'exported';
   const data = items.data?.data ?? [];
   const approval = items.data?.approval;
+  const unreviewedChecks = approval?.medium_unreviewed ?? 0;
   const shown = filter === 'needs' ? data.filter((i) => i.needs_review || i.review_status === 'needs_owner') : data;
   return (
     <section className="space-y-4">
@@ -564,17 +619,36 @@ function ReviewStep({ q }: { q: QuestionnaireRow }) {
           <input type="checkbox" checked={filter === 'needs'} onChange={(e) => setFilter(e.target.checked ? 'needs' : 'all')} />
           Only answers that still need a person
         </label>
-        {!approved && canApprove && (
+        {!approved && canApprove && !confirming && (
           <button
             type="button"
             className={primary}
             disabled={!approval?.can_approve || impersonating || approve.isPending}
             title={impersonating ? IMPERSONATING_NOTE : undefined}
-            onClick={() => approve.mutate(q.id)}
+            // #268: the person approving is told what they vouch for. With "Check this" answers
+            // nobody reviewed, a second step says so in plain words before anything is approved.
+            onClick={() => (unreviewedChecks > 0 ? setConfirming(true) : approve.mutate(q.id))}
             data-testid="approve"
           >
             Approve
           </button>
+        )}
+        {!approved && canApprove && confirming && (
+          <span className="flex flex-wrap items-center gap-2 text-xs text-amber-800 dark:text-amber-300" data-testid="approve-confirm">
+            {unreviewedChecks} answer{unreviewedChecks === 1 ? '' : 's'} marked "{BASTION_CONFIDENCE_WORDS.medium}" {unreviewedChecks === 1 ? 'has' : 'have'} not been reviewed. Approving
+            sends {unreviewedChecks === 1 ? 'it' : 'them'} as written.
+            <button
+              type="button"
+              className={primary}
+              disabled={impersonating || approve.isPending}
+              onClick={() => approve.mutate(q.id, { onSettled: () => setConfirming(false) })}
+            >
+              Approve anyway
+            </button>
+            <button type="button" className={secondary} onClick={() => setConfirming(false)}>
+              Review them first
+            </button>
+          </span>
         )}
         {approved && canExport && (
           <>

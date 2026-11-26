@@ -194,6 +194,74 @@ describe('Questionnaires (M8)', () => {
     await settled(reader.qc);
   });
 
+  // #268: the human path has "Ask someone" with a member picker, by name.
+  it('"Ask someone" hands a row to a member picked by name', async () => {
+    const patches: unknown[] = [];
+    const base = api(BLOCKED, patches);
+    vi.stubGlobal('fetch', async (url: string, init: RequestInit = {}) =>
+      String(url).includes('/b3/api/org/members')
+        ? jsonResponse(200, { data: [{ id: '0b0b0b0b-0000-4000-8000-000000000002', display_name: 'The Professor', email: 'professor@gilligantravel.example' }] })
+        : base(url, init),
+    );
+    const view = wrap(<QuestionnaireDetailPage questionnaireId={Q} onNavigate={() => {}} />, OWNER);
+    await screen.findByText('Are all company laptops encrypted?');
+    fireEvent.click(screen.getAllByText('Ask someone')[1] as HTMLElement);
+    const picker = (await screen.findByTestId('member-picker')) as HTMLSelectElement;
+    await screen.findByText('The Professor');
+    expect(UUID_RE.test(screen.getByTestId('ask-someone').textContent ?? '')).toBe(false);
+    fireEvent.change(picker, { target: { value: '0b0b0b0b-0000-4000-8000-000000000002' } });
+    fireEvent.click(screen.getByText('Ask them'));
+    await waitFor(() => expect(patches).toEqual([{ review_status: 'needs_owner', assigned_to: '0b0b0b0b-0000-4000-8000-000000000002' }]));
+    await settled(view.qc);
+  });
+
+  // #268: Approve says what it vouches for when "Check this" answers were not reviewed.
+  it('Approve asks first when "Check this" answers were not reviewed, naming how many', async () => {
+    let approved = 0;
+    const base = api(READY);
+    vi.stubGlobal('fetch', async (url: string, init: RequestInit = {}) => {
+      if (String(url).endsWith(`/questionnaires/${Q}/approve`)) {
+        approved += 1;
+        return jsonResponse(200, { data: QUESTIONNAIRE });
+      }
+      return base(url, init);
+    });
+    const view = wrap(<QuestionnaireDetailPage questionnaireId={Q} onNavigate={() => {}} />, OWNER);
+    await waitFor(() => expect((screen.getByTestId('approve') as HTMLButtonElement).disabled).toBe(false));
+    fireEvent.click(screen.getByTestId('approve'));
+    expect(screen.getByTestId('approve-confirm').textContent).toMatch(/1 answer marked "Check this" has not been reviewed\. Approving sends it as written\./);
+    expect(approved).toBe(0);
+    fireEvent.click(screen.getByText('Approve anyway'));
+    await waitFor(() => expect(approved).toBe(1));
+    await settled(view.qc);
+  });
+
+  it('Retire asks first, and retired answers can be shown and brought back', async () => {
+    const patches: unknown[] = [];
+    const urls: string[] = [];
+    const ROW = { id: '0c0c0c0c-0000-4000-8000-000000000001', question_text: 'Do you use MFA?', answer_text: 'Yes.', yes_no: true, cited_refs: [], approved_by_name: 'Skipper', approved_at: null, stale: false, stale_words: null, retired_at: null };
+    vi.stubGlobal('fetch', async (url: string, init: RequestInit = {}) => {
+      urls.push(String(url));
+      if ((init.method ?? 'GET') === 'PATCH') {
+        patches.push(JSON.parse(String(init.body)));
+        return jsonResponse(200, { data: ROW });
+      }
+      if (String(url).includes('/answer-library')) return jsonResponse(200, { data: [String(url).includes('include_retired=true') ? { ...ROW, retired_at: '2026-11-20T00:00:00Z' } : ROW] });
+      return jsonResponse(200, { data: [] });
+    });
+    const view = wrap(<QuestionnairesPage onNavigate={() => {}} />, OWNER);
+    await screen.findByText('Do you use MFA?');
+    fireEvent.click(screen.getByText('Retire'));
+    expect(screen.getByTestId('retire-confirm').textContent).toMatch(/stop reusing this answer/);
+    expect(patches).toEqual([]);
+    fireEvent.click(screen.getByText('Retire it'));
+    await waitFor(() => expect(patches).toEqual([{ retired: true }]));
+    fireEvent.click(screen.getByLabelText('Show retired answers'));
+    await screen.findByText('Bring it back');
+    expect(urls.some((u) => u.includes('include_retired=true'))).toBe(true);
+    await settled(view.qc);
+  });
+
   // #266: every sheet is shown and saved; dropping one needs a confirmation.
   it('maps every sheet: saving one sheet\'s change sends all of them, and leaving one out asks first', async () => {
     const access = { sheet_name: 'Access', header_row: 0, first_row: 1, question_column: 0, answer_column: 1, yes_no_column: null, section_column: null, answer_kind: 'yes_no_text' };
@@ -242,6 +310,18 @@ describe('Questionnaires (M8)', () => {
     await waitFor(() => expect(patches).toHaveLength(2));
     expect(patches[1]).toMatchObject({ drop_unmapped_sheets: true });
     await settled(view.qc);
+  });
+
+  // #268: the surface map names buttons that exist; every quoted label in its questionnaire rows'
+  // UI column is on the page.
+  it('the surface map\'s questionnaire UI labels are the page\'s labels', () => {
+    const map = readFileSync(join(__dirname, '../../../docs/reference/mcp-endpoint-mapping.md'), 'utf8');
+    const page = readFileSync(join(__dirname, '../src/pages/questionnaires.tsx'), 'utf8');
+    const rows = map.split('\n').filter((l) => /^\| `(GET|POST|PATCH) \/v1\/(questionnaire|answer)/.test(l));
+    expect(rows.length).toBeGreaterThanOrEqual(12);
+    const labels = rows.flatMap((l) => [...(l.split('|')[4] ?? '').matchAll(/"([^"]+)"/g)].map((m) => m[1]!));
+    expect(labels.length).toBeGreaterThan(5);
+    for (const label of labels) expect(page, label).toContain(label);
   });
 
   // #272: the page, the hooks and the types use @bigbluebam/shared, not hand-copied literals.

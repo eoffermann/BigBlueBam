@@ -188,6 +188,17 @@ export function useBamProjects(enabled: boolean) {
   return useQuery({ queryKey: key('bam-projects'), queryFn: () => bamApi.listProjects(), enabled, retry: false });
 }
 
+/** The organization's active members, by name (#268): the one source for every Bastion person picker. */
+export function useMembers(enabled = true) {
+  return useQuery({
+    queryKey: key('org-members'),
+    queryFn: async () => (await bamApi.listMembers()).data.filter((m) => m.is_active !== false).sort((a, b) => a.display_name.localeCompare(b.display_name)),
+    enabled,
+    staleTime: 5 * 60_000,
+    retry: false,
+  });
+}
+
 /* -------------------------------- Mutations -------------------------------- */
 
 export function useAdoptFramework() {
@@ -298,10 +309,10 @@ export function useApproveQuestionnaire() {
   });
 }
 
-export function useAnswerLibrary(q: string) {
+export function useAnswerLibrary(q: string, includeRetired = false) {
   return useQuery({
-    queryKey: key('answer-library', q),
-    queryFn: () => api.get<{ data: AnswerLibraryRow[] }>('/answer-library', { q: q || undefined }),
+    queryKey: key('answer-library', q, includeRetired),
+    queryFn: () => api.get<{ data: AnswerLibraryRow[] }>('/answer-library', { q: q || undefined, include_retired: includeRetired ? 'true' : undefined }),
   });
 }
 
