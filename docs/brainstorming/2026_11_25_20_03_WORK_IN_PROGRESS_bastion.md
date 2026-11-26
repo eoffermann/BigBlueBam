@@ -33,15 +33,15 @@ Each milestone lands as small commits, is pushed, and is followed by the post-co
   - [x] #134 Bill invoice PDF links 404; authorized bill-api download route
   - [x] #135 deploy vitest suite wired into CI
 - [ ] **Follow-ups from the M0 review (before M1)**
-  - [ ] #136 human-only deciding must require a session login, not just a human key owner (also applied to Bastion's vouching routes, spec 2.8)
-  - [ ] #137 `syncNew` stranded variable after a partial failure; redeploy any service whose variable is present but whose last deploy predates it, or write and redeploy per service
-  - [ ] #139 a failed Railway variable read must fail closed instead of minting a divergent stable secret
-  - [ ] #141 lazy-expiry UPDATE in the proposals decide route guarded on `status = 'pending'`
+  - [x] #136 human-only deciding must require a session login, not just a human key owner (also applied to Bastion's vouching routes, spec 2.8)
+  - [x] #137 `syncNew` stranded variable after a partial failure; redeploy any service whose variable is present but whose last deploy predates it, or write and redeploy per service
+  - [x] #139 a failed Railway variable read must fail closed instead of minting a divergent stable secret
+  - [x] #141 lazy-expiry UPDATE in the proposals decide route guarded on `status = 'pending'`
   - [ ] #142 the four legacy `/files/*` prefixes move to app-owned authorized download routes; drop `bill/receipts/` from the allowlist now
-  - [ ] #143 introduction docs still say "sixteen apps" and 847 tools; add them to the count checks
-  - [ ] #144 MCP platform tools' 14-app Launchpad enum; one shared Launchpad app-id list
-  - [ ] #145 Bill receipt upload uses a hard-coded bucket and fallback credentials; authorized receipt download route
-  - [ ] #146 permission manifest generator's hand-written app prefix list
+  - [x] #143 introduction docs still say "sixteen apps" and 847 tools; add them to the count checks
+  - [x] #144 MCP platform tools' 14-app Launchpad enum; one shared Launchpad app-id list
+  - [x] #145 Bill receipt upload uses a hard-coded bucket and fallback credentials; authorized receipt download route
+  - [x] #146 permission manifest generator's hand-written app prefix list
 - [ ] **M1 - Scaffold and infrastructure (direct URL only, no Launchpad)**
   - [ ] `apps/bastion-api` from the bursar-api skeleton; Dockerfile copies and builds `packages/storage` and `packages/permissions`; service-health, logging, permissions plugin, auth with `rejectWhenImpersonating`, `BASTION_TRUST_PROXY_HOPS`
   - [ ] Own bucket (`BASTION_S3_BUCKET`) with boot put/stat/delete check and a plain error
@@ -51,7 +51,7 @@ Each milestone lands as small commits, is pushed, and is followed by the post-co
   - [ ] `apps/frontend/Dockerfile` four lines (spec 9.3); `apps/bastion/vite.config.ts` with every `@bigbluebam/ui/*` alias from bursar
   - [ ] SPA shell matching `/b3/`: shared sidebar with `SidebarPlatformFooter`, top bar (LaunchpadTrigger, breadcrumb, OrgSwitcher, Banter link, NotificationsBell, HelpTrigger, UserMenu), shared `Launchpad`, theme tokens copied verbatim, `mountBureauClient` and `initSystemErrorReporter({ service: 'bastion' })`, `@bigbluebam/bureau-client` dependency, `PermissionsProvider`, auth store, `?` opens Help
   - [ ] Gate: `/bastion/` serves; health 200; internal path 404 through nginx; Railway grep gates (`bastion-api.railway.internal:8080` present, `127.0.0.11` absent); stopping bastion-api leaves other apps up; `check:env-hints` green; fresh `.env` refusal; dry-run adds the bucket and URL to the existing worker
-- [ ] **M2 - Data model and permission chain** (note: migration `0262` was taken by the #134 permission delta, so Bastion's migrations start at `0263` or later; re-verify the tip)
+- [ ] **M2 - Data model and permission chain** (note: follow-up fixes took migrations `0262`-`0269`, so Bastion's migrations start at `0270` or later; re-verify the tip)
   - [ ] `packages/shared/src/schemas/bastion.ts` created and exported
   - [ ] Migrations `0262`-`0269` (GitHub PR events, Bastion tables, hardened probe and resolver functions with guarded GRANT, RLS); Drizzle schema modules; RLS loop
   - [ ] GitHub webhook stores `subscribed_events` from `ping` and every PR in `github_pr_events`; surface-map row for the webhook change
@@ -119,6 +119,8 @@ Each milestone lands as small commits, is pushed, and is followed by the post-co
 - **Plan review.** An adversarial review of this plan against the spec and the build skill (15 findings: 2 blockers, 12 majors, 1 minor) was folded in on 2026-11-26; this version of the file reflects it.
 
 ## Progress log
+
+- 2026-11-26: **Follow-up batches 2 and 3 done** (21 issues: #136, #137, #139, #141, #143-#159; #142 partly). Migration tip 0269. Behavior change from #153: bill expense reimburse now requires `bill.expense.approve` and recurring "generate now" requires `bill.recurring_invoice.update` (both were ungated because their ids were never in the catalog). Stack rebuild: the default desktop-linux BuildKit wedged (even a 2-line Dockerfile hung for minutes after a 30-way parallel build stalled at 0 steps for 108 min); builds now run one image at a time on an isolated `bbam-builder` docker-container builder selected by `BUILDX_BUILDER`, leaving the global default untouched. M1 started.
 
 - 2026-11-26: **Follow-up batch 1 done**: #133 (62f1fb25), #138 (696d25dd; the MCP schema extractor was emitting zero tools and now covers all 885), #129 (84ee5f56, new `check-app-counts.mjs`), #131 (15d4c525, runner strips top-level BEGIN/COMMIT, rehearsed on a scratch postgres: 225 applied, 0 warnings, checksums unchanged), #135 (ff6eb65c), #132 (2e01263f, 4ae952aa: warning budget ratchet, 4,952 to 4,815), #134 (2b699520, migration 0262). Found and filed #143-#146. Branch CI green at 84ee5f56.
 
