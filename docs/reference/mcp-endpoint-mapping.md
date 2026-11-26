@@ -64,9 +64,9 @@ A tool/command "corresponds" to the endpoint(s) its handler calls. Sections are 
 | Bulwark | 29 | 17 | 12 | 0 |
 | Burn | 48 | 19 | 29 | 0 |
 | Bursar | 79 | 22 | 57 | 0 |
-| Bastion | 1 | 0 | 1 | 0 |
+| Bastion (tools pending registration at M11) | 26 | 13 | 13 | 0 |
 | Cross-app platform | 43 | 32 | 11 | 6 |
-| **Total** | **1265** | **874** | **391** | **17** |
+| **Total** | **1290** | **887** | **403** | **17** |
 
 _Counts are summed from the per-section tables (each row's REST endpoint counted once even when several MCP tools share it). After the `feat/mcp-endpoint-parity` build the "with an MCP tool" total roughly doubled (≈334 → ≈690). Of the ~247 endpoints still tool-less, the large majority are now annotated `— _(skip: …)_` with a reason — auth/OAuth/session, public-inbound (forms/booking/portal/tracking), multipart/binary upload, binary export (PDF/SVG/CSV/.ics), raw credential/API-key admin, SuperUser/permission/account admin (Bam org/admin held to a deliberately conservative scope this pass), Yjs/scene/WebSocket realtime sync, internal/service-to-service routes, and slug/name resolvers done internally — plus the deferred Helpdesk `X-Agent-Key` agent routes. Some endpoints are shared by multiple MCP tools and many are internal / webhook / public-inbound (not user-facing), so treat the totals as close approximations of the surface size, not an exact public-API inventory. The remaining intentional gaps cluster in **Bam org/admin** (SuperUser & permissions admin, integrations, credentials — UI/CLI-only) and a few per-app binary/upload/realtime tails._
 
@@ -2199,10 +2199,35 @@ AI procurement leveling & spend-baseline monitor. 20 `bursar_*` tools (spec sect
 
 - **Service:** `apps/bastion-api` · external `/bastion/api/` · MCP module(s): none yet (handlers accumulate in `apps/mcp-server/src/tools-pending/bastion.ts` from M2 and register as `bastion-tools.ts` at M11) · added on the `suite-brainstorm` branch.
 
-> **⚠ No MCP tools in this section — intentional.** Milestone M1 of `docs/brainstorming/2026_11_25_20_03_APP_DESIGN_bastion.md` ships only the service skeleton, reachable by direct URL with no Launchpad tile; it has no domain routes yet. Each later milestone adds its routes here together with their tool or skip reason. `/bastion/api/v1/internal/*` is denied at nginx (404) and will only ever be service-to-service.
+> **Tools here are written and tested but not yet registered.** The `bastion_*` handlers named below live in `apps/mcp-server/src/tools-pending/bastion.ts` (client: `apps/mcp-server/src/clients/bastion-client.ts`), tested by `apps/mcp-server/test/bastion-pending-tools.test.ts`. They are deliberately outside `src/tools/` so the tool-count and docs-catalog gates stay unchanged until the M11 merge unit registers them together with the Launchpad row (spec 5.4 of `docs/brainstorming/2026_11_25_20_03_APP_DESIGN_bastion.md`). Every skip below is a human gate the spec fixes in section 2.8 (setup, applicability, vouching) or a sanctioned category; the M3 parity reconciliation is recorded in `docs/brainstorming/2026_11_25_20_03_WORK_IN_PROGRESS_bastion.md`. `/bastion/api/v1/internal/*` is denied at nginx (404) and will only ever be service-to-service.
 
 | REST endpoint | MCP tool | Description | UI call site |
 | --- | --- | --- | --- |
+| `GET /v1/library/templates` | `bastion_list_frameworks` | Built-in framework templates (SOC 2, ISO 27001) and whether each is adopted (spec row 1; was a skip in the spec, now folded into the list tool) | Setup wizard (`pages/setup.tsx`) |
+| `GET /v1/probes` | `bastion_list_probes` | The closed probe menu: key, version, plain title, population kind, inherited | — |
+| `GET /v1/frameworks` | `bastion_list_frameworks` | Adopted frameworks with setup counts and Statement of Applicability progress | Setup wizard; Controls (`pages/controls.tsx`) framework picker |
+| `POST /v1/frameworks` | — _(skip: human setup act, spec 2.8; adopting a framework creates controls and requirement links)_ | Adopt a built-in framework | Setup wizard "Adopt" |
+| `GET /v1/frameworks/:id` | `bastion_list_frameworks` | One framework with its counts | Setup wizard |
+| `PATCH /v1/frameworks/:id` | — _(skip: human admin, spec 2.8)_ | Rename, audit target date, period | — |
+| `POST /v1/frameworks/:id/archive` | — _(skip: destructive human act, spec 2.8; confirm; retires single-framework controls)_ | Archive a framework | — |
+| `GET /v1/frameworks/:id/requirements` | `bastion_list_frameworks` | Every requirement with our plain summary, linked controls and applicability decision | Setup wizard ISO applicability step |
+| `POST /v1/frameworks/:id/applicability` | — _(skip: human applicability decision; the Statement of Applicability is a human statement)_ | Decide several requirements at once (every link of each ref code) | Setup wizard "Everything else applies", "Does not apply" |
+| `GET /v1/frameworks/:id/statement-of-applicability` | — _(skip: binary download, CSV)_ | `statement_of_applicability.csv` (ISO only; formula-neutralized; sandboxed download headers) | — (Sharing page, M9) |
+| `POST /v1/frameworks/:id/compile` | `bastion_compile_framework` | Deterministic compile (202 + run): library suggestions proposed, populations from the connected set | Setup wizard "Set up checks" |
+| `GET /v1/frameworks/:id/compile-runs` | `bastion_compile_framework` | Compile run history | Setup wizard |
+| `GET /v1/controls` | `bastion_list_controls` | Controls in a framework view with requirement chips, setup state and the "Not set up yet" count | Controls (`pages/controls.tsx`) |
+| `POST /v1/controls` | — _(skip: human admin, spec 2.8; custom control `custom:<slug>`)_ | Create a custom control | — |
+| `GET /v1/controls/:id` | `bastion_control_status` | One control with requirements and checks | — (Control detail, M6) |
+| `PATCH /v1/controls/:id` | — _(skip: human admin, spec 2.8)_ | Edit title, summary, owner, risk weight | — |
+| `PATCH /v1/control-requirements/:id` | — _(skip: human applicability decision, audited)_ | One link's applicability and reason | — |
+| `GET /v1/controls/:id/assertions` | `bastion_control_status` | A control's checks, with population lists and confirmation | — |
+| `POST /v1/controls/:id/assertions` | `bastion_propose_assertion` | Propose a check (probe, manual or feed); lands as proposed | — |
+| `POST /v1/assertions/:id/confirm` | — _(skip: human gate, spec 2.8; session required, impersonation refused; "This is the complete list" for populations)_ | Confirm a proposed check | Setup wizard "Confirm" |
+| `POST /v1/assertions/:id/reject` | — _(skip: human gate, spec 2.8; session required, impersonation refused)_ | Reject a proposed check | Setup wizard "Reject" |
+| `POST /v1/assertions/:id/revise` | `bastion_propose_assertion` | File a superseding proposed check (for example adding a repository to the list) | Setup wizard "Add" on a population |
+| `GET /v1/setup` | `bastion_get_setup_status` | Setup wizard state: frameworks, profile, Compliance project, proposed checks, ISO applicability progress | Setup wizard |
+| `PATCH /v1/setup/profile` | — _(skip: human setup act, spec 2.8; the ten company-profile answers)_ | Save the company profile | Setup wizard "Save answers" |
+| `POST /v1/setup/compliance-project` | — _(skip: human setup act, spec 2.8; the project itself is created through Bam's `create_project`)_ | Record the required Compliance project | Setup wizard "Create a Compliance project for me", "Use an existing project" |
 | `GET /health`, `GET /health/ready`, `GET /metrics` | — _(skip: probe)_ | Health / readiness (Postgres and Redis only) / metrics | — |
 
-Section counts: 1 REST endpoint row (the combined health/metrics row), 0 with a tool. No MCP-only tools.
+`bastion_list_frameworks` backs four rows, `bastion_compile_framework` two, `bastion_control_status` two, `bastion_propose_assertion` two. Section counts: 26 REST endpoint rows (25 bastion-api routes plus the combined health/metrics row), 13 with a pending `bastion_*` tool, 13 skip-annotated; 7 pending `bastion_*` tools at M3. No MCP-only tools.
