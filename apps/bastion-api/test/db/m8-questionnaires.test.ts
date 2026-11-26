@@ -3,11 +3,12 @@ import postgres from 'postgres';
 import { encodeXlsx, decodeXlsx } from '@bigbluebam/structured-data';
 import { aggregateControl, RunLeaseHeldError, type RunRow } from '../../src/engine/evaluator.js';
 import { orgTx, type EngineDeps } from '../../src/engine/context.js';
-import type { LlmChat } from '../../src/lib/llm-errors.js';
+import { LlmError, LlmThrottledError, type LlmChat } from '../../src/lib/llm-errors.js';
 import type { LlmPermits } from '../../src/lib/llm-permits.js';
 import type { BinAccessDeps } from '../../src/lib/bin-asset-access.js';
 import type { SliceLock } from '../../src/services/compile-ai.service.js';
 import {
+  AUTOFILL_MAX_AI_FAILURES,
   autofillSlice,
   draftOneAnswer,
   orphanedQuestionnaires,
@@ -328,6 +329,113 @@ describe.skipIf(!DATABASE_URL)('M8 questionnaires (live database)', () => {
     expect(mapped!.row_count).toBe(5);
     expect((mapped!.column_map as { autofill_requested_by: string; guessed: boolean }).autofill_requested_by).toBe('someone');
     expect((mapped!.column_map as { guessed: boolean }).guessed).toBe(false);
+  });
+
+  type Row = { question_text: string; confidence_band: string | null; band_reasons: Array<{ code: string }> };
+  const rowsOf = async (qid: string) =>
+    (await sql`SELECT question_text, confidence_band, band_reasons FROM bastion_questionnaire_items WHERE questionnaire_id = ${qid} ORDER BY row_index`) as unknown as Row[];
+  const qState = async (qid: string) =>
+    (await sql`SELECT status, rows_done, llm_calls_used, ai_failure_streak, last_ai_failure FROM bastion_questionnaires WHERE id = ${qid}`)[0]!;
+
+  it('a transient AI failure leaves the row undrafted and retries it; it is never banded "Needs an expert" for it (#260)', async () => {
+    const s = await setUp('flaky');
+    await provider(s.org, s.owner);
+    const owner = viewer(s.org, s.owner);
+    const d = qdeps(s.engine);
+    const q = (await createQuestionnaire(d, owner, { title: 'Flaky AI', source: { kind: 'pasted', text: PASTED, format: 'tsv' } })).data as unknown as { id: string };
+    await startAutofill(d, owner, q.id, { redraft: false });
+    // The proxy is down for the first three calls (connection refused, 502, a timeout), then back.
+    let calls = 0;
+    const waits: number[] = [];
+    const flaky: LlmChat = async (opts) => {
+      calls += 1;
+      if (calls <= 3) throw new LlmError(calls === 2 ? 'internal LLM proxy returned 502' : 'fetch failed', calls === 2 ? 502 : null);
+      return yesModel(opts);
+    };
+    const deps = { ...adeps(s.engine, { llm: flaky }), sleep: async (ms: number) => void waits.push(ms) };
+    // One slice whose time budget is too short to wait out the back-off: the row waits, undrafted.
+    await autofillSlice({ ...deps, sliceCutoffMs: 1 }, { organization_id: s.org, questionnaire_id: q.id, claimant: 'w1' });
+    let st = await qState(q.id);
+    expect(st).toMatchObject({ status: 'answering', rows_done: 0, ai_failure_streak: 1 });
+    expect(String(st.last_ai_failure)).toContain('fetch failed');
+    expect((await rowsOf(q.id)).every((r) => r.confidence_band === null)).toBe(true);
+    // The next slice backs off (10 s after the second failure in a row, 20 s after the third),
+    // retries the same row and drafts everything once the AI is back.
+    await autofillSlice(deps, { organization_id: s.org, questionnaire_id: q.id, claimant: 'w1' });
+    st = await qState(q.id);
+    expect(st).toMatchObject({ status: 'in_review', rows_done: 5, ai_failure_streak: 0 });
+    expect(waits).toEqual([10_000, 20_000]);
+    const rows = await rowsOf(q.id);
+    expect(rows[0]!.confidence_band).toBe('high');
+    // The four real questions got AI drafts (the formula row finds nothing to cite, so it is never sent).
+    for (const r of rows.slice(0, 4)) expect(r.band_reasons.map((x) => x.code), r.question_text).not.toContain('no_draft');
+  });
+
+  it('an AI outage that does not end parks the rest as "the AI was unavailable", not "could not draft" (#260)', async () => {
+    const s = await setUp('outage');
+    await provider(s.org, s.owner);
+    const owner = viewer(s.org, s.owner);
+    const d = qdeps(s.engine);
+    const q = (await createQuestionnaire(d, owner, { title: 'Outage', source: { kind: 'pasted', text: PASTED, format: 'tsv' } })).data as unknown as { id: string };
+    await startAutofill(d, owner, q.id, { redraft: false });
+    const down: LlmChat = async () => {
+      throw new LlmError('internal LLM proxy returned 503', 503);
+    };
+    await autofillSlice(adeps(s.engine, { llm: down }), { organization_id: s.org, questionnaire_id: q.id, claimant: 'w1' });
+    expect(await qState(q.id)).toMatchObject({ status: 'in_review', ai_failure_streak: AUTOFILL_MAX_AI_FAILURES });
+    for (const r of await rowsOf(q.id)) {
+      expect(r.confidence_band).toBe('low');
+      expect(r.band_reasons.map((x) => x.code)).toEqual(['ai_unavailable']);
+    }
+    // A new start begins with a clean streak.
+    await startAutofill(d, owner, q.id, { redraft: true });
+    expect((await qState(q.id)).ai_failure_streak).toBe(0);
+  });
+
+  it('a cut-off answer is banded with its reason recorded (#260)', async () => {
+    const s = await setUp('cutoff');
+    await provider(s.org, s.owner);
+    const owner = viewer(s.org, s.owner);
+    const d = qdeps(s.engine);
+    const q = (await createQuestionnaire(d, owner, { title: 'Cut off', source: { kind: 'pasted', text: PASTED, format: 'tsv' } })).data as unknown as { id: string };
+    await startAutofill(d, owner, q.id, { redraft: false });
+    const cut: LlmChat = async () => ({ content: '', finish_reason: 'length' });
+    await autofillSlice(adeps(s.engine, { llm: cut }), { organization_id: s.org, questionnaire_id: q.id, claimant: 'w1' });
+    const rows = await rowsOf(q.id);
+    const withAi = rows.filter((r) => r.band_reasons.some((x) => x.code === 'ai_cut_off'));
+    expect(withAi.length).toBeGreaterThan(0);
+    for (const r of withAi) expect(r.band_reasons.map((x) => x.code)).not.toContain('no_draft');
+  });
+
+  it('every AI call is charged before it is made, retries included, and a redraft does not refill the allowance (#261)', async () => {
+    const s = await setUp('budget');
+    await provider(s.org, s.owner);
+    const owner = viewer(s.org, s.owner);
+    const d = qdeps(s.engine);
+    await sql`UPDATE bastion_org_settings SET max_llm_calls_per_questionnaire = 3 WHERE organization_id = ${s.org}`;
+    const q = (await createQuestionnaire(d, owner, { title: 'Budget', source: { kind: 'pasted', text: PASTED, format: 'tsv' } })).data as unknown as { id: string };
+    await startAutofill(d, owner, q.id, { redraft: false });
+    // The provider throttles the first call once: that retry is a second charged call.
+    let calls = 0;
+    const throttledOnce: LlmChat = async (opts) => {
+      calls += 1;
+      if (calls === 1) throw new LlmThrottledError(1);
+      return yesModel(opts);
+    };
+    await autofillSlice(adeps(s.engine, { llm: throttledOnce }), { organization_id: s.org, questionnaire_id: q.id, claimant: 'w1' });
+    expect(calls).toBe(3);
+    expect(await qState(q.id)).toMatchObject({ status: 'in_review', llm_calls_used: 3 });
+    const rows = await rowsOf(q.id);
+    const out = rows.filter((r) => r.band_reasons.some((x) => x.code === 'budget_exhausted'));
+    expect(out.length).toBeGreaterThanOrEqual(2);
+
+    // A redraft gets no fresh allowance: no AI call is made and the rows say why.
+    await startAutofill(d, owner, q.id, { redraft: true });
+    await autofillSlice(adeps(s.engine, { llm: throttledOnce }), { organization_id: s.org, questionnaire_id: q.id, claimant: 'w2' });
+    expect(calls).toBe(3);
+    expect(await qState(q.id)).toMatchObject({ status: 'in_review', llm_calls_used: 3 });
+    const again = await rowsOf(q.id);
+    expect(again.filter((r) => r.band_reasons.some((x) => x.code === 'budget_exhausted')).length).toBeGreaterThanOrEqual(4);
   });
 
   it('SIGTERM releases; the reaper releases stale claims and parks after three; the tick finds orphans', async () => {

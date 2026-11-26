@@ -169,7 +169,7 @@ function shapeQuestionnaire(r: Record<string, unknown>, opts: { preview?: Return
 
 const Q_SELECT = `q.id, q.title, q.requester_label, q.bond_deal_id, q.bond_company_id, q.source_bin_asset_id, q.source_bin_asset_version_id,
   q.source_sha256, q.format, q.column_map, q.source_truncated, q.status, q.injection_suspected, q.row_count, q.rows_done, q.low_count, q.medium_count,
-  q.high_count, q.resume_count, q.due_date::text AS due_date, q.owner_user_id, ou.display_name AS owner_name, q.claimed_by IS NOT NULL AS drafting_now,
+  q.high_count, q.resume_count, q.llm_calls_used, q.ai_failure_streak, q.due_date::text AS due_date, q.owner_user_id, ou.display_name AS owner_name, q.claimed_by IS NOT NULL AS drafting_now,
   q.approved_by, au.display_name AS approved_by_name, q.approved_at, q.created_by, cu.display_name AS created_by_name, q.created_at, q.updated_at`;
 const Q_FROM = `FROM bastion_questionnaires q
   LEFT JOIN users ou ON ou.id = q.owner_user_id
@@ -332,10 +332,13 @@ export async function startAutofill(d: QuestionnaireDeps, viewer: Viewer, id: st
     const left = await tx`
       SELECT count(*)::int AS n FROM bastion_questionnaire_items WHERE organization_id = ${viewer.org_id} AND questionnaire_id = ${id} AND confidence_band IS NULL`;
     if (Number(left[0]?.n ?? 0) === 0) throw new ConflictError('Every question already has a draft. Ask for new drafts to replace the ones nobody reviewed.', 'NOTHING_TO_DRAFT');
-    // The person who asked is the asker for can_access on every citation the worker writes.
+    // The person who asked is the asker for can_access on every citation the worker writes. A new
+    // run starts with no failed AI calls behind it (#260); llm_calls_used is NOT reset: the
+    // per-questionnaire allowance covers every run, redrafts included (#261).
     await tx`
       UPDATE bastion_questionnaires
          SET status = 'answering', claimed_by = NULL, heartbeat_at = NULL, resume_count = 0,
+             ai_failure_streak = 0, last_ai_failure = NULL,
              column_map = jsonb_set(column_map, '{autofill_requested_by}', to_jsonb(${viewer.id}::text))
        WHERE organization_id = ${viewer.org_id} AND id = ${id}`;
     await auditRaw(tx, viewer, 'questionnaire.autofill_start', { type: 'questionnaire', id }, { redraft: body.redraft, kind: await viewerKind(tx, viewer) });

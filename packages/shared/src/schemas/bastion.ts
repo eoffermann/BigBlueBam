@@ -1850,5 +1850,9 @@ export const bastionQuestionnaireSliceSchema = z.object({
   slice_running: z.boolean(),
   released: z.boolean().optional(),
   waiting: z.enum(['ai_slot', 'ai_throttled']).nullable().optional(),
+  /** AI calls charged to this questionnaire so far, across every run (#261). */
+  llm_calls_used: z.number().int().nonnegative().optional(),
+  /** Consecutive failed AI calls; the rows wait and are retried until it reaches the limit (#260). */
+  ai_failure_streak: z.number().int().nonnegative().optional(),
 });
 export type BastionQuestionnaireSlice = z.infer<typeof bastionQuestionnaireSliceSchema>;
