@@ -181,13 +181,6 @@ function mockUpdateReturning(rows: any[]) {
   return set;
 }
 
-function mockUpdateNoReturning() {
-  // .update().set().where() — used for lazy-expire transitions
-  const where = vi.fn().mockResolvedValue(undefined);
-  const set = vi.fn().mockReturnValue({ where });
-  mockDb.update.mockReturnValueOnce({ set });
-}
-
 // ---------- tests ----------
 
 describe('proposals routes', () => {
@@ -384,7 +377,7 @@ describe('proposals routes', () => {
     it('returns 410 when the proposal has expired (and flips to expired)', async () => {
       const expired = { ...existingPending(), expires_at: new Date(Date.now() - 1000) };
       mockSelectFromWhereLimit([expired]);
-      mockUpdateNoReturning(); // lazy transition to 'expired'
+      const set = mockUpdateReturning([{ id: PROPOSAL_ID }]); // lazy transition to 'expired'
       const res = await app.inject({
         method: 'POST',
         url: `/v1/proposals/${PROPOSAL_ID}/decide`,
@@ -394,6 +387,54 @@ describe('proposals routes', () => {
       expect(res.statusCode).toBe(410);
       expect(res.json().error.code).toBe('PROPOSAL_EXPIRED');
       expect(mockDb.update).toHaveBeenCalledTimes(1);
+      expect(set).toHaveBeenCalledWith(expect.objectContaining({ status: 'expired' }));
+    });
+
+    it('guards the lazy-expiry write on pending/revising status (issue #141)', async () => {
+      const expired = { ...existingPending(), expires_at: new Date(Date.now() - 1000) };
+      mockSelectFromWhereLimit([expired]);
+      const set = mockUpdateReturning([{ id: PROPOSAL_ID }]);
+      await app.inject({
+        method: 'POST',
+        url: `/v1/proposals/${PROPOSAL_ID}/decide`,
+        headers: { 'x-test-user': 'human' },
+        payload: { decision: 'approve' },
+      });
+      const where = set.mock.results[0]!.value.where as ReturnType<typeof vi.fn>;
+      const predicate = where.mock.calls[0]![0];
+      // The predicate must reference the status column, not just the id.
+      const seen = new WeakSet<object>();
+      const columnNames: string[] = [];
+      const walk = (node: unknown): void => {
+        if (!node || typeof node !== 'object' || seen.has(node as object)) return;
+        seen.add(node as object);
+        const n = node as Record<string, unknown>;
+        if (typeof n.name === 'string' && 'columnType' in n) columnNames.push(n.name);
+        for (const v of Object.values(n)) {
+          if (Array.isArray(v)) v.forEach(walk);
+          else if (v && typeof v === 'object' && !('table' in (v as object) && 'columnType' in n)) walk(v);
+        }
+      };
+      walk(predicate);
+      expect(columnNames).toContain('status');
+      expect(columnNames).toContain('id');
+    });
+
+    it('does not overwrite a concurrent approval with expired (issue #141)', async () => {
+      // Both callers read 'pending'; the approver committed first, so the guarded
+      // expiry write matches no row. The late caller must see 409, not 410.
+      const expired = { ...existingPending(), expires_at: new Date(Date.now() - 1000) };
+      mockSelectFromWhereLimit([expired]);
+      mockUpdateReturning([]);
+      const res = await app.inject({
+        method: 'POST',
+        url: `/v1/proposals/${PROPOSAL_ID}/decide`,
+        headers: { 'x-test-user': 'human' },
+        payload: { decision: 'approve' },
+      });
+      expect(res.statusCode).toBe(409);
+      expect(res.json().error.code).toBe('PROPOSAL_ALREADY_DECIDED');
+      expect(publishBoltEventSpy).not.toHaveBeenCalled();
     });
 
     it('approves a pending proposal and fires proposal.decided', async () => {

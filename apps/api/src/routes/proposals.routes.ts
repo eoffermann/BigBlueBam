@@ -346,10 +346,29 @@ export default async function proposalRoutes(fastify: FastifyInstance) {
       // saves the client from racing the background sweep.
       const now = new Date();
       if (existing.expires_at < now && (existing.status === 'pending' || existing.status === 'revising')) {
-        await db
+        // Issue #141: expiry is a conditional transition too. Without the status
+        // guard, a decider who read 'pending' just before the deadline could have
+        // committed an approval that this write would then overwrite with 'expired'.
+        const expiredRows = await db
           .update(agentProposals)
           .set({ status: 'expired', updated_at: now })
-          .where(eq(agentProposals.id, existing.id));
+          .where(
+            and(
+              eq(agentProposals.id, existing.id),
+              or(eq(agentProposals.status, 'pending'), eq(agentProposals.status, 'revising')),
+            ),
+          )
+          .returning({ id: agentProposals.id });
+        if (expiredRows.length === 0) {
+          return reply.status(409).send({
+            error: {
+              code: 'PROPOSAL_ALREADY_DECIDED',
+              message: 'Proposal was decided by someone else first',
+              details: [],
+              request_id: request.id,
+            },
+          });
+        }
         return reply.status(410).send({
           error: {
             code: 'PROPOSAL_EXPIRED',
