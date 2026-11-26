@@ -10,13 +10,18 @@ const mockInsert = vi.fn();
 const mockUpdate = vi.fn();
 const mockExecute = vi.fn();
 
+// The upsert runs in one transaction (#280); the mock tx is the same statement mocks.
+const mockTransaction = vi.fn(async (fn: (tx: unknown) => unknown) =>
+  fn({ select: mockSelect, insert: mockInsert, update: mockUpdate, execute: mockExecute }),
+);
+
 vi.mock('../src/db/index.js', () => ({
   db: {
     select: mockSelect,
     insert: mockInsert,
     update: mockUpdate,
     delete: vi.fn(),
-    transaction: vi.fn(),
+    transaction: mockTransaction,
     execute: mockExecute,
   },
   connection: { end: vi.fn() },
@@ -64,6 +69,7 @@ function chainable(result: unknown[]) {
   obj.innerJoin = vi.fn().mockReturnValue(obj);
   obj.leftJoin = vi.fn().mockReturnValue(obj);
   obj.onConflictDoUpdate = vi.fn().mockReturnValue(obj);
+  obj.onConflictDoNothing = vi.fn().mockReturnValue(obj);
   obj.groupBy = vi.fn().mockReturnValue(obj);
   return obj;
 }
@@ -151,16 +157,13 @@ describe('upsertEntryBySlug — create path', () => {
     upsertEntryBySlug = mod.upsertEntryBySlug;
   });
 
-  it('returns created=true on first insert', async () => {
-    // Pre-check: no matching row.
-    mockSelect.mockReturnValueOnce(chainable([]));
+  it('returns created=true on first insert, inside one transaction', async () => {
     // resolveDefaultExpiryDays uses db.execute; return empty rows so it
     // falls back to the 90-day default.
     mockExecute.mockResolvedValueOnce({ rows: [] });
-    // Insert .onConflictDoUpdate.returning() → { entry, created }.
-    mockInsert.mockReturnValueOnce(
-      chainable([{ entry: makeEntry(), created: true }]),
-    );
+    // INSERT ... ON CONFLICT DO NOTHING RETURNING → the new row.
+    const entryInsert = chainable([makeEntry()]);
+    mockInsert.mockReturnValueOnce(entryInsert);
     // Version insert.
     mockInsert.mockReturnValueOnce(chainable([{ id: 'ver-1' }]));
 
@@ -173,22 +176,30 @@ describe('upsertEntryBySlug — create path', () => {
     expect(result.created).toBe(true);
     expect(result.data.slug).toBe('deploy-runbook');
     expect(result.idempotency_key).toBe('slug:deploy-runbook');
+    expect(mockTransaction).toHaveBeenCalledTimes(1);
+    expect(entryInsert.onConflictDoNothing).toHaveBeenCalled();
+    expect(mockUpdate).not.toHaveBeenCalled();
   });
 
-  it('returns created=false if the insert was raced and conflicted', async () => {
-    mockSelect.mockReturnValueOnce(chainable([]));
+  it('applies the loser of a create race as the next version instead of dropping it (#280)', async () => {
     mockExecute.mockResolvedValueOnce({ rows: [] });
-    mockInsert.mockReturnValueOnce(
-      chainable([{ entry: makeEntry(), created: false }]),
-    );
+    // The parallel writer won the insert: ON CONFLICT DO NOTHING returns no row.
+    mockInsert.mockReturnValueOnce(chainable([]));
+    const update = chainable([makeEntry({ version: 2, title: 'Mine', body_markdown: 'my body' })]);
+    mockUpdate.mockReturnValueOnce(update);
+    const snapshot = chainable([{ id: 'ver-2' }]);
+    mockInsert.mockReturnValueOnce(snapshot);
 
     const result = await upsertEntryBySlug(
-      { slug: 'deploy-runbook', title: 'Deploy Runbook', body_markdown: '## Steps' },
+      { slug: 'deploy-runbook', title: 'Mine', body_markdown: 'my body' },
       USER_ID,
       ORG_ID,
     );
 
     expect(result.created).toBe(false);
+    expect(result.data.version).toBe(2);
+    expect(update.set).toHaveBeenCalledWith(expect.objectContaining({ title: 'Mine', body_markdown: 'my body' }));
+    expect(snapshot.values).toHaveBeenCalledWith(expect.objectContaining({ version: 2, body_markdown: 'my body' }));
   });
 });
 
@@ -204,13 +215,16 @@ describe('upsertEntryBySlug — update path', () => {
 
   it('returns created=false and bumps version on an existing slug', async () => {
     const existing = makeEntry({ version: 3 });
-    mockSelect.mockReturnValueOnce(chainable([existing]));
-    // Update returns the bumped row.
+    mockExecute.mockResolvedValueOnce({ rows: [] });
+    // The slug exists: the insert does nothing.
+    mockInsert.mockReturnValueOnce(chainable([]));
+    // Update bumps version in SQL and returns the row it wrote.
     mockUpdate.mockReturnValueOnce(
       chainable([{ ...existing, version: 4, title: 'Deploy Runbook v2' }]),
     );
-    // Version snapshot insert.
-    mockInsert.mockReturnValueOnce(chainable([{ id: 'ver-4' }]));
+    // Version snapshot insert, numbered from the returned row.
+    const snapshot = chainable([{ id: 'ver-4' }]);
+    mockInsert.mockReturnValueOnce(snapshot);
 
     const result = await upsertEntryBySlug(
       {
@@ -225,5 +239,6 @@ describe('upsertEntryBySlug — update path', () => {
     expect(result.created).toBe(false);
     expect(result.data.version).toBe(4);
     expect(result.idempotency_key).toBe('slug:deploy-runbook');
+    expect(snapshot.values).toHaveBeenCalledWith(expect.objectContaining({ version: 4 }));
   });
 });

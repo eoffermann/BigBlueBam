@@ -1,5 +1,5 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import { timingSafeEqual } from 'node:crypto';
+import { createInternalSecretGuard } from '@bigbluebam/service-health';
 import type { ZodError } from 'zod';
 import {
   braidResolveInputSchema,
@@ -77,29 +77,9 @@ function conflict(request: FastifyRequest, reply: FastifyReply, msg: string) {
   });
 }
 
-// Internal-route guard (spec 5.1). Fail closed: a missing or mismatched secret is a
-// 401. Mirrors the bolt-api X-Internal-Secret / timingSafeEqual convention.
-function requireInternalSecret(request: FastifyRequest, reply: FastifyReply): boolean {
-  const configured = env.INTERNAL_SERVICE_SECRET;
-  const provided = request.headers['x-internal-secret'];
-  const ok =
-    !!configured &&
-    typeof provided === 'string' &&
-    provided.length === configured.length &&
-    timingSafeEqual(Buffer.from(provided), Buffer.from(configured));
-  if (!ok) {
-    reply.status(401).send({
-      error: {
-        code: 'UNAUTHORIZED',
-        message: 'Invalid or missing X-Internal-Secret header',
-        details: [],
-        request_id: request.id,
-      },
-    });
-    return false;
-  }
-  return true;
-}
+// Internal-route guard (spec 5.1): the suite-wide one in @bigbluebam/service-health (#252).
+// Fails closed, constant-time, direct private-network peers only.
+const requireInternalSecret = createInternalSecretGuard({ secrets: () => [env.INTERNAL_SERVICE_SECRET] });
 
 // Braid REST surface (spec 5.1). Success { data }; errors the canonical envelope.
 export default async function braidRoutes(fastify: FastifyInstance) {

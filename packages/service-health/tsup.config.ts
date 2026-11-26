@@ -1,7 +1,8 @@
 import { defineConfig } from 'tsup';
 
 export default defineConfig({
-  entry: ['src/index.ts'],
+  // internal-peer: the framework-free guard core for non-Fastify servers (mcp-server, #277).
+  entry: ['src/index.ts', 'src/internal-peer.ts'],
   format: ['esm', 'cjs'],
   dts: true,
   clean: true,

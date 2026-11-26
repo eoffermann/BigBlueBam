@@ -1,8 +1,11 @@
 import crypto from 'node:crypto';
 import type Redis from 'ioredis';
+import { stableStringify } from '@bigbluebam/shared';
 
 const CACHE_PREFIX = 'bench:query:';
-const ADHOC_CACHE_PREFIX = 'bench:adhoc:';
+// v2 (#275): keys hashed by the old shallow serializer are never read again, so any entry primed
+// under a colliding v1 key is orphaned (and expires within its 300 s TTL) rather than served.
+const ADHOC_CACHE_PREFIX = 'bench:adhoc:v2:';
 
 /**
  * Simple Redis caching for widget query results.
@@ -82,11 +85,23 @@ export class CacheService {
   }
 
   /**
-   * Hash a query config object into a short deterministic string.
+   * Hash every input that changes an ad-hoc query's result (#275): the data source (`product`),
+   * the `entity`, and the WHOLE config (measures, filters, dimensions, time dimension, date range,
+   * sort, limit) at every depth. The org is in the key prefix. buildQuery takes nothing else (there
+   * is no per-asker scoping), so equal hashes mean equal SQL.
+   *
+   * The old hash was `JSON.stringify(config, Object.keys(config).sort())`. An array replacer is a
+   * property allowlist at every depth, so nested objects serialized as `{}` and product/entity
+   * were left out. Any member could prime the entry a certified Basis metric then read.
    */
-  hashQueryConfig(config: Record<string, unknown>): string {
-    const json = JSON.stringify(config, Object.keys(config).sort());
-    return crypto.createHash('sha256').update(json).digest('hex').slice(0, 16);
+  hashQuery(product: string, entity: string, config: Record<string, unknown>): string {
+    const material = stableStringify({ product, entity, config });
+    return crypto.createHash('sha256').update(material).digest('hex').slice(0, 32);
+  }
+
+  /** The ad-hoc cache key for one query, or null when the range includes today (not cached). */
+  adHocKey(product: string, entity: string, config: { date_range?: { preset?: string; start?: string; end?: string } }, orgId: string): string | null {
+    return this.buildAdHocCacheKey(this.hashQuery(product, entity, config as Record<string, unknown>), config.date_range, orgId);
   }
 
   async getAdHoc(cacheKey: string): Promise<unknown | null> {

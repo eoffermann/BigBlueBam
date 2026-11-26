@@ -11,7 +11,8 @@
       "package.json",
       "tsconfig.base.json",
       "apps/mcp-server/Dockerfile",
-      "packages/permissions/**"
+      "packages/permissions/**",
+      "packages/service-health/**"
     ]
   },
   "deploy": {

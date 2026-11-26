@@ -1,3 +1,5 @@
+# Dev overlay. Every published port is bound to 127.0.0.1 (#276): these are developer-host
+# conveniences that bypass nginx, so they must never listen on a LAN or public interface.
 services:
   api:
     build:
@@ -8,7 +10,7 @@ services:
     volumes:
       - ./apps/api/src:/app/apps/api/src
     ports:
-      - "4000:4000"
+      - "127.0.0.1:4000:4000"
     environment:
       NODE_ENV: development
       # BAM-RL-E2E: dev stacks always run permissive so Playwright workers
@@ -24,7 +26,7 @@ services:
     volumes:
       - ./apps/helpdesk-api/src:/app/apps/helpdesk-api/src
     ports:
-      - "4001:4001"
+      - "127.0.0.1:4001:4001"
     environment:
       NODE_ENV: development
       # BAM-RL-E2E: dev stacks always run permissive so Playwright workers
@@ -40,7 +42,7 @@ services:
     volumes:
       - ./apps/frontend:/app/apps/frontend
     ports:
-      - "5173:5173"
+      - "127.0.0.1:5173:5173"
     environment:
       NODE_ENV: development
 
@@ -64,7 +66,7 @@ services:
     volumes:
       - ./apps/banter-api/src:/app/apps/banter-api/src
     ports:
-      - "4002:4002"
+      - "127.0.0.1:4002:4002"
     environment:
       NODE_ENV: development
 
@@ -77,7 +79,7 @@ services:
     volumes:
       - ./apps/bearing-api/src:/app/apps/bearing-api/src
     ports:
-      - "4007:4007"
+      - "127.0.0.1:4007:4007"
     environment:
       NODE_ENV: development
 

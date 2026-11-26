@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { envBool } from '@bigbluebam/shared';
 
 const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
@@ -26,10 +27,8 @@ const envSchema = z.object({
   // brute-force protection in production. The flag must be explicitly set on
   // any container running with NODE_ENV=production for it to take effect, so
   // production deployments stay strict by default.
-  BBB_E2E_PERMISSIVE_RATE_LIMIT: z.preprocess(
-    (val) => (val === '' || val === undefined ? undefined : val),
-    z.coerce.boolean().optional(),
-  ),
+  // envBool (#251): with z.coerce.boolean, BBB_E2E_PERMISSIVE_RATE_LIMIT=false turned it ON.
+  BBB_E2E_PERMISSIVE_RATE_LIMIT: envBool(),
   RATE_LIMIT_E2E_MULTIPLIER: z.preprocess(
     (val) => (val === '' || val === undefined ? undefined : val),
     z.coerce.number().int().positive().default(100),
@@ -54,22 +53,9 @@ const envSchema = z.object({
   S3_REGION: z.string().default('us-east-1'),
 
   COOKIE_DOMAIN: z.string().optional(),
-  // z.coerce.boolean() runs JS Boolean() which is `true` for any non-empty
-  // string — including 'false'. Parse the env string explicitly so the
-  // Secure flag actually flips off when an operator sets COOKIE_SECURE=false
-  // for an HTTP-only deployment. See apps/api/src/env.ts for context.
-  COOKIE_SECURE: z.preprocess(
-    (val) => {
-      if (val === '' || val === undefined) return false;
-      if (typeof val === 'string') {
-        const v = val.toLowerCase();
-        if (v === 'false' || v === '0' || v === 'no' || v === 'off') return false;
-        if (v === 'true' || v === '1' || v === 'yes' || v === 'on') return true;
-      }
-      return val;
-    },
-    z.boolean().default(false),
-  ),
+  // The shared envBool (#251) so COOKIE_SECURE=false actually turns the Secure flag off for an
+  // HTTP-only deployment. See apps/api/src/env.ts for the incident.
+  COOKIE_SECURE: envBool(false),
 
   // HB-7: URL + shared secret for Bam's /internal/helpdesk/* surface. All
   // Bam-side writes (tasks, comments, phase transitions) go through these

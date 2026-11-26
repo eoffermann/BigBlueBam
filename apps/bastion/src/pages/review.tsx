@@ -5,6 +5,7 @@ import { getImpersonation } from '@bigbluebam/ui/impersonation-banner';
 import { useCan } from '@bigbluebam/ui/use-can';
 import type { ExceptionRow, FixDraftRow } from '@/lib/api';
 import { friendlyError } from '@/lib/errors';
+import { hiddenItemsSentence } from '@/lib/wording';
 import { useAuthStore } from '@/stores/auth.store';
 import { useDecideException, useDecideFix, useExceptions, useFixDrafts, useManualEvidence, useMarkFixApplied, useSetup } from '@/hooks/use-bastion';
 
@@ -76,7 +77,11 @@ function FixCard({ d, onNavigate }: { d: FixDraftRow; onNavigate: (path: string)
           Approving lets you create this automation in Bolt, turned off. It only {rule.actions.map((a) => (a.mcp_tool === 'create_task' ? 'creates a task in the Compliance project' : 'posts in a Banter channel')).join(' and ')}.
         </p>
       )}
-      {d.hidden_citation_count > 0 && <p className="text-xs text-zinc-500">{d.hidden_citation_count} cited item(s) are hidden because you cannot see them.</p>}
+      {hiddenItemsSentence(d.hidden_citation_count) && (
+        <p className="text-xs text-zinc-500" data-testid="hidden-citations">
+          {hiddenItemsSentence(d.hidden_citation_count)}
+        </p>
+      )}
       {impersonating && mayDecide && <p className="text-xs text-amber-700">{IMPERSONATING_NOTE}</p>}
       {decide.error && <p className="text-xs text-red-600">{friendlyError(decide.error)}</p>}
     </li>

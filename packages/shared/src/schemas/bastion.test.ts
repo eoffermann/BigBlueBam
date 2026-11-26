@@ -88,14 +88,8 @@ describe('boolean query parameters (#215, #231)', () => {
     expect(bastionDriftListQuerySchema.parse({}).unacknowledged).toBeUndefined();
     expect(bastionDriftListQuerySchema.safeParse({ unacknowledged: 'yes' }).success).toBe(false);
   });
-
-  it('no Bastion schema uses z.coerce.boolean (it reads the string "false" as true)', () => {
-    const src = readFileSync(join(__dirname, 'bastion.ts'), 'utf8')
-      .split('\n')
-      .filter((l) => !/^\s*(\/\/|\*|\/\*)/.test(l))
-      .join('\n');
-    expect(src).not.toMatch(/z\.coerce\.boolean\s*\(/);
-  });
+  // The file-local "no coerce-boolean in bastion.ts" check is now repo-wide (#251):
+  // scripts/check-no-coerce-boolean.mjs (lint.yml) and scripts/lib/no-coerce-boolean.test.mjs.
 });
 
 // The Bastion enums mirror CHECK constraints in the bastion migrations. This suite reads every

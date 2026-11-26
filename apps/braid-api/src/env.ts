@@ -1,5 +1,9 @@
 import { z } from 'zod';
+<<<<<<< HEAD
 import { llmTimeoutEnvSchema } from '@bigbluebam/shared';
+=======
+import { envBool } from '@bigbluebam/shared';
+>>>>>>> origin/suite-brainstorm
 
 const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
@@ -35,7 +39,7 @@ const envSchema = z.object({
   INTERNAL_SERVICE_SECRET: z.string().min(32).optional(),
 
   COOKIE_DOMAIN: z.string().optional(),
-  COOKIE_SECURE: z.coerce.boolean().default(false),
+  COOKIE_SECURE: envBool(false),
 
   // Reserved for Braid's LLM calls (none ship yet, #283); bounded by the proxy's own limits so the
   // first caller cannot be silently cut at the proxy.

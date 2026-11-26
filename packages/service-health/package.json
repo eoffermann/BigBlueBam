@@ -7,6 +7,11 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
       "require": "./dist/index.cjs"
+    },
+    "./internal-peer": {
+      "types": "./dist/internal-peer.d.ts",
+      "import": "./dist/internal-peer.js",
+      "require": "./dist/internal-peer.cjs"
     }
   },
   "main": "./dist/index.cjs",

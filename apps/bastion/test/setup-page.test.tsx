@@ -108,7 +108,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-describe('Setup wizard: the compiler\'s not-applicable suggestions (#238)', () => {
+describe("Setup wizard: the AI's not-applicable suggestions (#238, #254)", () => {
   const SUGGESTIONS = {
     data: [
       {
@@ -124,7 +124,9 @@ describe('Setup wizard: the compiler\'s not-applicable suggestions (#238)', () =
   it('shows each suggestion with its reason, and "Does not apply" saves the (editable) reason', async () => {
     mount(undefined, { routes: { 'GET /bastion/api/v1/frameworks/f-iso/not-applicable-suggestions': () => jsonResponse(200, SUGGESTIONS) } });
     const box = await screen.findByTestId('na-suggestions');
-    expect(within(box).getByText(/the compiler thinks this requirement may not apply/)).toBeInTheDocument();
+    expect(within(box).getByText(/Bastion's AI suggests this requirement may not apply/)).toBeInTheDocument();
+    // #254: no internal component names on a page a non-specialist runs.
+    expect(within(box).queryByText(/compiler/i)).toBeNull();
     expect(within(box).getByText('Security roles are assigned: Everyone on the island shares one role.')).toBeInTheDocument();
     const reason = within(box).getByLabelText('Why A.5.2 does not apply') as HTMLInputElement;
     expect(reason.value).toBe('Everyone on the island shares one role.');

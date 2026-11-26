@@ -1,5 +1,9 @@
 import { z } from 'zod';
+<<<<<<< HEAD
 import { llmTimeoutEnvSchema } from '@bigbluebam/shared';
+=======
+import { envBool } from '@bigbluebam/shared';
+>>>>>>> origin/suite-brainstorm
 
 const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
@@ -46,7 +50,7 @@ const envSchema = z.object({
   INTERNAL_SERVICE_SECRET: z.string().min(32),
 
   COOKIE_DOMAIN: z.string().optional(),
-  COOKIE_SECURE: z.coerce.boolean().default(false),
+  COOKIE_SECURE: envBool(false),
 
   // One LLM call's deadline, sent to the proxy as timeout_ms (#283). The spec names no value, so
   // it is the proxy's own default; refused at boot outside the proxy's 1 s..180 s bounds.

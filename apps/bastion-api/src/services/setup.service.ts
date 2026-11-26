@@ -9,7 +9,9 @@ import {
   type BastionSetupComplianceProject,
 } from '@bigbluebam/shared';
 import { runInOrgScope } from '../plugins/rls.js';
-import type { DbTx } from '../db/index.js';
+import { type DbTx, engineConnection } from '../db/index.js';
+import { orgTx } from '../engine/context.js';
+import { complianceProjectHealth } from '../engine/remediation.js';
 import { bastionAssertions, bastionCompileRuns, bastionControls, bastionOrgSettings } from '../db/schema/index.js';
 import { NotFoundError, one, ValidationFailure } from '../lib/errors.js';
 import { audit } from '../lib/audit.js';
@@ -167,11 +169,12 @@ export async function setComplianceProject(viewer: Viewer, body: BastionSetupCom
     const project = await projectVisibleTo(tx, viewer, body.project_id);
     if (!project || project.is_archived) throw new NotFoundError('We could not find that project in your organization.');
     // The same question the api asks before it files a task (#229): a project with no open
-    // phase would refuse every task, so it cannot be the Compliance project.
-    const open = (await tx.execute(sql`
-      SELECT 1 FROM phases WHERE project_id = ${project.id} AND (is_start OR NOT is_terminal) LIMIT 1
-    `)) as unknown as unknown[];
-    if (open.length === 0) {
+    // phase would refuse every task, so it cannot be the Compliance project. Asked through
+    // complianceProjectHealth, Bastion's one copy of the api's rule (#253); it reads the engine
+    // connection, a read-only check outside this write transaction.
+    const health = await orgTx(engineConnection, viewer.org_id, (etx) => complianceProjectHealth(etx, viewer.org_id, project.id));
+    if (health === 'missing') throw new NotFoundError('We could not find that project in your organization.');
+    if (health === 'no_open_phase') {
       throw new ValidationFailure(
         'That project has no open phase for Bastion to put tasks in. Add one in Bam, or pick another project.',
         'PROJECT_HAS_NO_OPEN_PHASE',

@@ -11,7 +11,7 @@
 // Comments are addressed by external_id `bastion:control:<id>`, never by a task id from an
 // earlier delivery, so they never depend on that delivery's result.
 
-import { bastionControlTaskExternalId } from '@bigbluebam/shared';
+import { BAM_OPEN_PHASE_SQL, bastionControlTaskExternalId } from '@bigbluebam/shared';
 import { type EngineDeps, localClock, orgTx, type Tx } from './context.js';
 import { enqueueOutbox, PROJECT_UNAVAILABLE_CODES } from './outbox.js';
 
@@ -52,7 +52,10 @@ export function driftTaskStatus(s: RemediationSettings): 'pending' | 'no_project
 // The project id in bastion_org_settings has no foreign key into Bam, so the project can be
 // deleted (or left with no open phase) under Bastion. The api then refuses every task upsert with
 // PROJECT_NOT_FOUND or CONFIGURATION_ERROR (apps/api bastion-internal.service.ts loadProject and
-// startPhase). This is the one place Bastion asks the same two questions the api asks.
+// startPhase). This is the one place Bastion asks the same two questions the api asks: Setup
+// (setup.service.ts setComplianceProject), the Readiness banner and the re-drive gate all call it.
+// "Open phase" is BAM_OPEN_PHASE_SQL from @bigbluebam/shared, the predicate the api's startPhase
+// reads too (#253), so the two cannot drift.
 
 export type ComplianceProjectHealth = 'not_set' | 'ok' | 'missing' | 'no_open_phase';
 
@@ -60,7 +63,7 @@ export async function complianceProjectHealth(tx: Tx, orgId: string, projectId: 
   if (!projectId) return 'not_set';
   const r = (await tx`
     SELECT EXISTS (SELECT 1 FROM projects WHERE id = ${projectId} AND org_id = ${orgId}) AS present,
-           EXISTS (SELECT 1 FROM phases WHERE project_id = ${projectId} AND (is_start OR NOT is_terminal)) AS open_phase`)[0];
+           EXISTS (SELECT 1 FROM phases WHERE project_id = ${projectId} AND ${tx.unsafe(BAM_OPEN_PHASE_SQL)}) AS open_phase`)[0];
   if (!r?.present) return 'missing';
   if (!r.open_phase) return 'no_open_phase';
   return 'ok';

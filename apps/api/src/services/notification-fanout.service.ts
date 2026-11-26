@@ -42,6 +42,12 @@ export interface NotificationPayload {
   org_id: string;
   /** Who triggered the notification. */
   actor_name?: string;
+  /**
+   * The user who triggered it. The Banter DM is sent FROM this user to the recipient (banter-api
+   * /v1/internal/dm posts as a real user, as for Bureau's leave-a-note), so the DM reads like
+   * "Gilligan assigned you ..." in the DM with Gilligan. Without it, banter_dm is skipped.
+   */
+  actor_user_id?: string;
 }
 
 export interface FanoutResult {
@@ -115,24 +121,48 @@ async function dispatchEmail(payload: NotificationPayload): Promise<FanoutResult
   }
 }
 
+/** banter-api's POST /v1/internal/dm body (apps/banter-api/src/routes/internal.routes.ts). */
+export function banterDmRequest(payload: NotificationPayload): {
+  org_id: string;
+  from_user_id: string;
+  to_user_id: string;
+  content: string;
+  source: string;
+} | null {
+  if (!payload.actor_user_id || payload.actor_user_id === payload.recipient_user_id) return null;
+  const content = `**${payload.subject}**\n\n${payload.body}${payload.url ? `\n\n[View](${payload.url})` : ''}`;
+  return {
+    org_id: payload.org_id,
+    from_user_id: payload.actor_user_id,
+    to_user_id: payload.recipient_user_id,
+    content: content.slice(0, 4000),
+    source: 'bam-notification',
+  };
+}
+
 async function dispatchBanterDm(payload: NotificationPayload): Promise<FanoutResult> {
+  // #278: this used to send X-Internal-Token from INTERNAL_SERVICE_TOKEN (set nowhere) and a body
+  // banter's route does not accept ({recipient_user_id, message}), so every DM was refused. It now
+  // sends the route's own shape, from the acting user, with the shared internal secret that
+  // banter-api's guard reads (X-Internal-Secret / INTERNAL_SERVICE_SECRET, #252).
+  const body = banterDmRequest(payload);
+  if (!body) {
+    return { channel: 'banter_dm', status: 'skipped', error: 'No sending user (system action or self-notification)' };
+  }
+  if (!env.INTERNAL_SERVICE_SECRET) {
+    return { channel: 'banter_dm', status: 'skipped', error: 'INTERNAL_SERVICE_SECRET is not configured' };
+  }
   try {
-    // Internal HTTP call to banter-api. In production this resolves to
-    // the compose service name. Falls back gracefully if banter-api is
-    // not reachable (fire-and-forget pattern).
+    // Internal HTTP call to banter-api over the private network (the guard refuses
+    // anything relayed by the edge). Fire-and-forget: failures are reported, not thrown.
     const banterBaseUrl = process.env.BANTER_API_URL ?? 'http://banter-api:4002';
     const res = await fetch(`${banterBaseUrl}/v1/internal/dm`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        // Internal service token; banter-api trusts it for server-to-server calls.
-        'X-Internal-Token': process.env.INTERNAL_SERVICE_TOKEN ?? '',
+        'X-Internal-Secret': env.INTERNAL_SERVICE_SECRET,
       },
-      body: JSON.stringify({
-        recipient_user_id: payload.recipient_user_id,
-        message: `**${payload.subject}**\n\n${payload.body}${payload.url ? `\n\n[View](${payload.url})` : ''}`,
-        org_id: payload.org_id,
-      }),
+      body: JSON.stringify(body),
       signal: AbortSignal.timeout(5000),
     });
 

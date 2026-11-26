@@ -26,6 +26,7 @@ import type {
   BastionProposalClose,
   BastionProposalCloseResult,
 } from '@bigbluebam/shared';
+import { BAM_OPEN_PHASE_SQL } from '@bigbluebam/shared';
 import { db as defaultDb } from '../db/index.js';
 
 /** Seeded by migration 0274 (kind = 'service'; braid b1 ... bursar b4, Bastion b5). */
@@ -75,12 +76,16 @@ async function loadProject(tx: Tx, orgId: string, projectId: string): Promise<Pr
   return p;
 }
 
-/** The phase a task opens (or reopens) in: the start phase, else the first non-terminal phase. */
+/**
+ * The phase a task opens (or reopens) in: the start phase, else the first non-terminal phase.
+ * "Open" is BAM_OPEN_PHASE_SQL, the one predicate Bastion's Setup, Readiness banner and re-drive
+ * gate also read (#253), so Bastion cannot accept a project this refuses.
+ */
 async function startPhase(tx: Tx, projectId: string): Promise<{ id: string; auto_state_on_enter: string | null }> {
   const [ph] = rows<{ id: string; auto_state_on_enter: string | null }>(
     await tx.execute(sql`
       SELECT id, auto_state_on_enter FROM phases
-       WHERE project_id = ${projectId} AND (is_start OR NOT is_terminal)
+       WHERE project_id = ${projectId} AND ${sql.raw(BAM_OPEN_PHASE_SQL)}
        ORDER BY is_start DESC, position ASC LIMIT 1`),
   );
   if (!ph) throw new BastionInternalError(422, 'CONFIGURATION_ERROR', 'The Compliance project has no open phase to put the task in');

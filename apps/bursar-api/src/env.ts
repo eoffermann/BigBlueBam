@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { llmTimeoutEnvSchema } from '@bigbluebam/shared';
+import { envBool, llmTimeoutEnvSchema } from '@bigbluebam/shared';
 
 const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
@@ -34,7 +34,7 @@ const envSchema = z.object({
   INTERNAL_SERVICE_SECRET: z.string().min(32),
 
   COOKIE_DOMAIN: z.string().optional(),
-  COOKIE_SECURE: z.coerce.boolean().default(false),
+  COOKIE_SECURE: envBool(false),
 
   // Bounded, inert document parsing (spec 5.4). Default 20MB, deliberately BELOW nginx's
   // server-level client_max_body_size (25m / 26_214_400) so an over-limit file yields Bursar's

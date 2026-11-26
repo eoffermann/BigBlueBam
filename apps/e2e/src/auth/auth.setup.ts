@@ -1,6 +1,6 @@
 import { test as setup, request as playwrightRequest } from '@playwright/test';
 import { loginViaUI, readCsrfTokenFromCookies } from './auth.helper';
-import { TEST_USERS } from './test-users';
+import { DEFAULT_E2E_ADMIN_EMAIL, GENERIC_SEED_ALLOWED, TEST_USERS } from './test-users';
 import { DirectApiClient, ApiClientError } from '../api/api-client';
 import path from 'node:path';
 
@@ -109,11 +109,26 @@ async function seedIfEmpty<TItem = { id: string; name?: string }>(
   }
 }
 
+/**
+ * A "seed e2e ..." setup step. Each one writes generic placeholder data into the admin's org, so
+ * every one is skipped unless the admin is the generic e2e admin (GENERIC_SEED_ALLOWED, #249):
+ * a run signed in as Skipper must not drop "E2E Seed Ticket" into the GILLIGAN org.
+ */
+function seedSetup(name: string, body: (args: { baseURL: string | undefined }) => Promise<void>) {
+  setup(name, async ({ baseURL }) => {
+    setup.skip(
+      !GENERIC_SEED_ALLOWED,
+      `generic e2e seed data is only written for ${DEFAULT_E2E_ADMIN_EMAIL}; admin is ${TEST_USERS.admin.email}`,
+    );
+    await body({ baseURL });
+  });
+}
+
 // ---------------------------------------------------------------------------
 // Bam (b3) — at least one project for the e2e admin. Project template creates
 // phases automatically so the board renders real columns.
 // ---------------------------------------------------------------------------
-setup('seed e2e admin project', async ({ baseURL }) => {
+seedSetup('seed e2e admin project', async ({ baseURL }) => {
   const { api, dispose } = await makeAdminApi(baseURL, '/b3/api');
   try {
     const existing = await api.get<Array<{ id: string; name: string }>>('/projects');
@@ -143,7 +158,7 @@ setup('seed e2e admin project', async ({ baseURL }) => {
 // drag-drop / reorder / ui-api-agreement / pagination tests have rows to
 // exercise.
 // ---------------------------------------------------------------------------
-setup('seed e2e admin tasks', async ({ baseURL }) => {
+seedSetup('seed e2e admin tasks', async ({ baseURL }) => {
   const { api, dispose } = await makeAdminApi(baseURL, '/b3/api');
   try {
     const projects = await api.get<Array<{ id: string; name: string }>>('/projects');
@@ -200,7 +215,7 @@ setup('seed e2e admin tasks', async ({ baseURL }) => {
 // is seeded so canvas-interactions tests ("drag element", "delete element")
 // have something to target.
 // ---------------------------------------------------------------------------
-setup('seed e2e admin board', async ({ baseURL }) => {
+seedSetup('seed e2e admin board', async ({ baseURL }) => {
   const { api, dispose } = await makeAdminApi(baseURL, '/board/api');
   try {
     const unwrap = (raw: unknown): Array<{ id: string }> => {
@@ -269,7 +284,7 @@ setup('seed e2e admin board', async ({ baseURL }) => {
 // passes. trigger_source:'bam' + trigger_event:'task.created' is the most
 // boring possible event shape.
 // ---------------------------------------------------------------------------
-setup('seed e2e admin automation', async ({ baseURL }) => {
+seedSetup('seed e2e admin automation', async ({ baseURL }) => {
   const { api, dispose } = await makeAdminApi(baseURL, '/bolt/api');
   try {
     await seedIfEmpty(
@@ -310,7 +325,7 @@ setup('seed e2e admin automation', async ({ baseURL }) => {
 // pipeline_id AND a stage_id, so we create the pipeline with stages first,
 // then seed a deal referencing the first stage.
 // ---------------------------------------------------------------------------
-setup('seed e2e admin bond', async ({ baseURL }) => {
+seedSetup('seed e2e admin bond', async ({ baseURL }) => {
   const { api, dispose } = await makeAdminApi(baseURL, '/bond/api');
   try {
     // KNOWN BOND-API BUG: GET /v1/pipelines crashes with `malformed array
@@ -456,7 +471,7 @@ setup('seed e2e admin bond', async ({ baseURL }) => {
 // Brief — at least one published document so "document detail" test can hit
 // `/v1/documents/:id`.
 // ---------------------------------------------------------------------------
-setup('seed e2e admin brief document', async ({ baseURL }) => {
+seedSetup('seed e2e admin brief document', async ({ baseURL }) => {
   const { api, dispose } = await makeAdminApi(baseURL, '/brief/api');
   try {
     let existing: Array<{ id: string }> = [];
@@ -500,7 +515,7 @@ setup('seed e2e admin brief document', async ({ baseURL }) => {
 // channels are non-empty. Still, defensively create an e2e channel if none
 // exist after the list call (some environments may have membership gaps).
 // ---------------------------------------------------------------------------
-setup('seed e2e admin banter channel', async ({ baseURL }) => {
+seedSetup('seed e2e admin banter channel', async ({ baseURL }) => {
   const { api, dispose } = await makeAdminApi(baseURL, '/banter/api');
   try {
     let channels: Array<{ id: string; slug?: string }> = [];
@@ -539,7 +554,7 @@ setup('seed e2e admin banter channel', async ({ baseURL }) => {
 // ---------------------------------------------------------------------------
 // Blank — at least one form. Slug must match ^[a-z0-9][a-z0-9-]*[a-z0-9]$.
 // ---------------------------------------------------------------------------
-setup('seed e2e admin form', async ({ baseURL }) => {
+seedSetup('seed e2e admin form', async ({ baseURL }) => {
   const { api, dispose } = await makeAdminApi(baseURL, '/blank/api');
   try {
     await seedIfEmpty(
@@ -571,7 +586,7 @@ setup('seed e2e admin form', async ({ baseURL }) => {
 // Bill — at least one client and one invoice (client is prerequisite for
 // invoice).
 // ---------------------------------------------------------------------------
-setup('seed e2e admin bill client + invoice', async ({ baseURL }) => {
+seedSetup('seed e2e admin bill client + invoice', async ({ baseURL }) => {
   const { api, dispose } = await makeAdminApi(baseURL, '/bill/api');
   try {
     // Client
@@ -635,7 +650,7 @@ setup('seed e2e admin bill client + invoice', async ({ baseURL }) => {
 // ---------------------------------------------------------------------------
 // Blast — at least one template and one campaign.
 // ---------------------------------------------------------------------------
-setup('seed e2e admin blast template + campaign', async ({ baseURL }) => {
+seedSetup('seed e2e admin blast template + campaign', async ({ baseURL }) => {
   const { api, dispose } = await makeAdminApi(baseURL, '/blast/api');
   try {
     // Template
@@ -691,8 +706,25 @@ setup('seed e2e admin blast template + campaign', async ({ baseURL }) => {
 // the B3 superuser endpoint, register the user, seed a ticket, then restore
 // the original setting.
 // ---------------------------------------------------------------------------
-setup('seed e2e helpdesk user + ticket', async ({ baseURL }) => {
+seedSetup('seed e2e helpdesk user + ticket', async ({ baseURL }) => {
   const { api: b3Api, dispose: disposeB3 } = await makeAdminApi(baseURL!, '/b3/api');
+
+  // 0. #249: name the org explicitly. With no X-Org-Slug, helpdesk-api registers the user (and
+  // files the ticket) in the FIRST helpdesk_settings row, which on a shared stack is whichever org
+  // was set up first (GILLIGAN on the local stack), not the e2e admin's org.
+  let orgSlug: string | null = null;
+  try {
+    const raw = await b3Api.get<Record<string, unknown>>('/auth/orgs');
+    const data = ((raw as any)?.data ?? raw) as { active_org_id?: string; organizations?: Array<{ org_id: string; slug: string }> };
+    orgSlug = data.organizations?.find((o) => o.org_id === data.active_org_id)?.slug ?? null;
+  } catch {
+    orgSlug = null;
+  }
+  if (!orgSlug) {
+    console.warn("[seed] helpdesk: could not resolve the e2e admin's org slug; not seeding (it would land in an arbitrary org).");
+    await disposeB3();
+    return;
+  }
 
   // 1. Read current platform signup setting
   let wasDisabled = false;
@@ -723,7 +755,7 @@ setup('seed e2e helpdesk user + ticket', async ({ baseURL }) => {
   // which matches the route definition at /helpdesk/auth/login.
   const helpdeskBase = (baseURL ?? 'http://localhost') + '/helpdesk/api';
 
-  const helpdeskCtx = await playwrightRequest.newContext({ baseURL: helpdeskBase });
+  const helpdeskCtx = await playwrightRequest.newContext({ baseURL: helpdeskBase, extraHTTPHeaders: { 'X-Org-Slug': orgSlug } });
   let helpdeskSessionOk = false;
   try {
     const loginRes = await helpdeskCtx.post('/auth/login', {

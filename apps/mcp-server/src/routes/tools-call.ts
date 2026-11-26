@@ -7,7 +7,8 @@
  * /mcp transport is intended for real MCP clients; /tools/call is a local
  * shortcut for service-to-service tool invocation inside the cluster.
  *
- * Authentication: shared-secret header X-Internal-Secret (timing-safe compare).
+ * Authentication: the suite-wide internal rule from @bigbluebam/service-health/internal-peer
+ * (X-Internal-Secret or X-Internal-Service-Secret, timing-safe; direct private-network peers only).
  * The secret is provisioned via INTERNAL_SERVICE_SECRET and is shared across
  * api, worker, bolt-api, and this mcp-server.
  *
@@ -21,7 +22,8 @@
  */
 
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import { randomUUID, timingSafeEqual } from 'node:crypto';
+import { randomUUID } from 'node:crypto';
+import { internalRequestVerdict } from '@bigbluebam/service-health/internal-peer';
 import type { Logger } from 'pino';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { ApiClient } from '../middleware/api-client.js';
@@ -46,16 +48,6 @@ function readBody(req: IncomingMessage): Promise<string> {
     req.on('end', () => resolve(Buffer.concat(chunks).toString()));
     req.on('error', reject);
   });
-}
-
-function safeEqual(provided: string, expected: string): boolean {
-  if (provided.length === 0 || expected.length === 0) return false;
-  if (provided.length !== expected.length) return false;
-  try {
-    return timingSafeEqual(Buffer.from(provided), Buffer.from(expected));
-  } catch {
-    return false;
-  }
 }
 
 type ToolsCallHandler = (
@@ -100,15 +92,28 @@ export async function handleToolsCall(
     return;
   }
 
-  const providedSecret =
-    (req.headers['x-internal-secret'] as string | undefined) ?? '';
-  if (!safeEqual(providedSecret, internalSecret)) {
-    logger.warn(
-      { headers: { hasSecret: Boolean(providedSecret) } },
-      'handleToolsCall: X-Internal-Secret rejected',
-    );
+  // The suite-wide internal rule (#252, #277): constant-time compare on either internal-secret
+  // header, and the caller must be a direct private-network peer (the socket address, not
+  // X-Forwarded-For; a request relayed by the edge nginx is refused). Every legitimate caller
+  // (worker bolt-execute, bolt-api, api) reaches this at MCP_INTERNAL_URL on the private network.
+  const verdict = internalRequestVerdict(
+    { headers: req.headers, remoteAddress: req.socket?.remoteAddress },
+    { secrets: [internalSecret] },
+  );
+  if (verdict === 'unconfigured' || verdict === 'bad_secret') {
+    logger.warn({ verdict }, 'handleToolsCall: internal secret rejected');
     sendJson(res, 401, {
-      error: { code: 'UNAUTHORIZED', message: 'Invalid or missing X-Internal-Secret' },
+      error: { code: 'UNAUTHORIZED', message: 'Invalid or missing internal service secret' },
+    });
+    return;
+  }
+  if (verdict === 'not_private') {
+    logger.warn(
+      { peer: req.socket?.remoteAddress, forwarded: req.headers['x-forwarded-for'] ?? null },
+      'handleToolsCall: internal credential from a caller that is not a direct private-network peer',
+    );
+    sendJson(res, 403, {
+      error: { code: 'FORBIDDEN', message: 'Internal endpoints are not reachable from this network' },
     });
     return;
   }

@@ -161,10 +161,14 @@ services:
     # Published for local MCP clients (e.g. Claude Code): the nginx route
     # at https://localhost/mcp/ serves a self-signed cert that Node-based
     # clients reject, so they connect straight to the container instead
-    # (http://localhost:3001/). Production stays nginx-only — this mapping
-    # is a developer-host convenience.
+    # (http://localhost:3001/). Bound to 127.0.0.1 (#276): this file is also
+    # the production Compose deploy (scripts/deploy/platforms/docker-compose.mjs),
+    # and a 0.0.0.0 mapping put /tools/call and plaintext /mcp on every host
+    # interface, around nginx (which 404s /mcp/tools/call). Off-host clients
+    # use https://<host>/mcp/. scripts/lib/compose-published-ports.test.mjs
+    # keeps every non-edge port on loopback.
     ports:
-      - '${MCP_PORT:-3001}:3001'
+      - '127.0.0.1:${MCP_PORT:-3001}:3001'
     depends_on:
       api:
         condition: service_healthy
@@ -458,6 +462,11 @@ services:
       LOG_LEVEL: ${LOG_LEVEL:-info}
       BBB_API_INTERNAL_URL: http://api:4000
       INTERNAL_HELPDESK_SECRET: ${INTERNAL_HELPDESK_SECRET:?INTERNAL_HELPDESK_SECRET is required}
+      # #248: helpdesk-api publishes ticket.* events to bolt-api through the shared
+      # publishBoltEvent, which sends X-Internal-Secret from this variable. Without it
+      # every helpdesk event was refused with 401 and Bolt rules on helpdesk events
+      # never fired. scripts/lib/internal-secret-wiring.test.mjs keeps this wired.
+      INTERNAL_SERVICE_SECRET: ${INTERNAL_SERVICE_SECRET:-}
       # BAM-RL-E2E: opt-in flag to multiply the global rate limit ceiling for
       # parallel e2e runs. Leave unset on real production deployments.
       BBB_E2E_PERMISSIVE_RATE_LIMIT: ${BBB_E2E_PERMISSIVE_RATE_LIMIT:-}
@@ -1629,9 +1638,10 @@ services:
     <<: *common
     profiles: ["mailhog"]
     image: mailhog/mailhog:latest
+    # Loopback only (#276): the UI shows every captured email, unauthenticated.
     ports:
-      - "${MAILHOG_SMTP_PORT:-1025}:1025"
-      - "${MAILHOG_UI_PORT:-8025}:8025"
+      - "127.0.0.1:${MAILHOG_SMTP_PORT:-1025}:1025"
+      - "127.0.0.1:${MAILHOG_UI_PORT:-8025}:8025"
     networks:
       - backend
 

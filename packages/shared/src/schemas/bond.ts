@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { boolQueryParam } from './common.js';
 
 // Bond (CRM) schemas.
 
@@ -63,6 +64,28 @@ export const createBondDealSchema = z.object({
 export const updateBondDealSchema = createBondDealSchema.partial().extend({
   status: BondDealStatus.optional(),
 });
+
+/**
+ * GET /bond/api/v1/deals query (#251). `stale` uses boolQueryParam: with z.coerce.boolean,
+ * `?stale=false` parsed as true and filtered TO stale deals.
+ */
+export const listBondDealsQuerySchema = z.object({
+  pipeline_id: z.string().uuid().optional(),
+  stage_id: z.string().uuid().optional(),
+  owner_id: z.string().uuid().optional(),
+  company_id: z.string().uuid().optional(),
+  value_min: z.coerce.number().int().optional(),
+  value_max: z.coerce.number().int().optional(),
+  expected_close_after: z.string().optional(),
+  expected_close_before: z.string().optional(),
+  stale: boolQueryParam().optional(),
+  search: z.string().max(200).optional(),
+  include_deleted: z.enum(['true', 'false']).optional(),
+  limit: z.coerce.number().int().min(1).max(100).optional(),
+  offset: z.coerce.number().int().min(0).optional(),
+  sort: z.string().optional(),
+});
+export type ListBondDealsQuery = z.infer<typeof listBondDealsQuerySchema>;
 
 export const createBondActivitySchema = z.object({
   activity_type: BondActivityKind,

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { envBool } from '@bigbluebam/shared';
 
 // Railway (and most managed PaaS providers) inject `PORT` and require the
 // service to bind to it for healthchecks and the public proxy to work. Prefer
@@ -38,7 +39,7 @@ const envSchema = z.object({
   BLIP_API_URL: z.string().url().default('http://blip-api:4018/v1'),
   BUREAU_API_URL: z.string().url().default('http://bureau-api:4015/v1'),
   REDIS_URL: z.string().url().default('redis://localhost:6379'),
-  MCP_AUTH_REQUIRED: z.coerce.boolean().default(true),
+  MCP_AUTH_REQUIRED: envBool(true),
   MCP_RATE_LIMIT_RPM: z.coerce.number().int().positive().default(120),
   // Wave D Phase 2: per-action permissions enforcement. Mirrors the api's
   // BBB_PERMISSIONS_ENFORCE setting. 'off' = no resolver call from MCP;
