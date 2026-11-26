@@ -155,10 +155,26 @@ async function adoptAndCompile(templateKey) {
   return fw.id;
 }
 
+/**
+ * One way to find a GILLIGAN Bam project by name. Bam's `GET /projects` lists only the projects
+ * the caller is a member of, and an org owner is not a member of the projects other castaways
+ * created (the Professor's "Fix the Radio", Mary Ann's "Island Infrastructure"), so the list
+ * cannot answer "does this project exist". The org-scoped table can; the project routes Skipper
+ * then calls admit him as org owner.
+ */
+async function bamProjectByName(name) {
+  return (
+    await withDb(
+      (sql) => sql`SELECT p.id, p.name FROM projects p JOIN organizations o ON o.id = p.org_id
+                   WHERE o.slug = ${EXP.org.slug} AND p.name = ${name} AND p.is_archived = false
+                   ORDER BY p.created_at LIMIT 1`,
+    )
+  )[0] ?? null;
+}
+
 async function ensureComplianceProject() {
   log('Compliance project...');
-  const list = must(await bam('GET', '/projects'), 'GET /projects').data ?? [];
-  let project = list.find((p) => p.name === EXP.complianceProject.name);
+  let project = await bamProjectByName(EXP.complianceProject.name);
   if (!project) {
     project = must(
       await bam('POST', '/projects', {
@@ -578,9 +594,8 @@ async function seedRadioRelayKey() {
 async function seedGithubHistory() {
   const g = EXP.m6.codeReview;
   log('GitHub: Rescue Radio Firmware and Coral Reef Booking connected; PR #42 merged without review...');
-  const projects = must(await bam('GET', '/projects'), 'GET /projects').data ?? [];
   for (const i of g.integrations) {
-    const p = projects.find((x) => x.name === i.project);
+    const p = await bamProjectByName(i.project);
     if (!p) throw new Error(`project "${i.project}" is missing; run the Bam seed first`);
     const cur = await bam('GET', `/projects/${p.id}/github-integration`);
     if (cur.ok && cur.json?.data?.repo_name === i.repo) continue;
@@ -752,7 +767,14 @@ The Skipper reviews this policy every year, or sooner after anything goes wrong.
 /** The policy article in Gilligan's Beacon: created once (an upsert would add a version each run). */
 async function ensurePolicyArticle() {
   const m = EXP.m7.policy;
-  const existing = (await withDb((sql) => sql`SELECT id, status::text AS status, visibility::text AS visibility FROM beacon_entries WHERE slug = ${m.slug}`))[0];
+  // Org-scoped: a slug is a per-org key, never a global one.
+  const existing = (
+    await withDb(
+      (sql) => sql`SELECT e.id, e.status::text AS status, e.visibility::text AS visibility
+                   FROM beacon_entries e JOIN organizations o ON o.id = e.organization_id
+                   WHERE o.slug = ${EXP.org.slug} AND e.slug = ${m.slug}`,
+    )
+  )[0];
   if (existing) {
     log(`  "${m.title}" already in Beacon (${existing.status}, shared with ${existing.visibility})`);
     return existing.id;
