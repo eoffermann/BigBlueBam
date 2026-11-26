@@ -1,16 +1,17 @@
 // ---------------------------------------------------------------------------
 // beacon_upsert_by_slug service (AGENTIC_TODO §14 Wave 4)
 //
-// Idempotent create-or-update on `slug` (globally unique, enforced by the
-// existing `.unique().notNull()` declaration on beaconEntries.slug). Update
-// path bumps `version` to match existing `beacon_update` behavior and writes
+// Idempotent create-or-update on (organization_id, slug). Slugs are unique per
+// org (beacon_entries_org_slug_key, migration 0289, issue #246), so the natural
+// key is the caller's org plus the slug: another org's row with the same slug is
+// invisible here and never touched. Update path bumps `version` to match existing `beacon_update` behavior and writes
 // a new `beacon_versions` snapshot.
 //
 // Response envelope: `{ data, created, idempotency_key }`. The idempotency
 // key is `slug:<slug>` so log lines for retried webhooks collate.
 // ---------------------------------------------------------------------------
 
-import { eq, sql } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import { beaconEntries, beaconVersions } from '../db/schema/index.js';
 import { sanitizeHtml } from '../lib/sanitize.js';
@@ -66,8 +67,13 @@ async function resolveDefaultExpiryDays(orgId: string): Promise<number> {
 }
 
 /**
- * Upsert a Beacon entry by slug. Globally unique natural key, so no
- * (organization_id, slug) composite: two orgs cannot collide on slug.
+ * Upsert a Beacon entry by slug within the caller's org.
+ *
+ * This used to treat slug as a global natural key, so a caller naming another
+ * org's slug resolved that org's row, overwrote it and got it back (BCN-1,
+ * #246). The lookup, the ON CONFLICT target and the update predicate are all
+ * org-scoped now: a slug held by another org reads as "does not exist" and the
+ * insert path creates the caller's own row under the per-org unique key.
  */
 export async function upsertEntryBySlug(
   input: EntryUpsertInput,
@@ -103,7 +109,7 @@ export async function upsertEntryBySlug(
   const [existing] = await db
     .select()
     .from(beaconEntries)
-    .where(eq(beaconEntries.slug, slug))
+    .where(and(eq(beaconEntries.organization_id, orgId), eq(beaconEntries.slug, slug)))
     .limit(1);
 
   if (!existing) {
@@ -111,8 +117,8 @@ export async function upsertEntryBySlug(
     const expiresAt = new Date(Date.now() + expiryDays * 24 * 60 * 60 * 1000);
 
     // Race-safe insert: if a parallel writer grabbed the same slug between
-    // our pre-check and this statement, ON CONFLICT (slug) gives us the
-    // existing row. `xmax = 0` is true only for the freshly-inserted row.
+    // our pre-check and this statement, ON CONFLICT (organization_id, slug)
+    // gives us the existing row (in this org only). `xmax = 0` is true only for the freshly-inserted row.
     const inserted = await db
       .insert(beaconEntries)
       .values({
@@ -132,7 +138,7 @@ export async function upsertEntryBySlug(
         metadata: input.metadata ?? {},
       })
       .onConflictDoUpdate({
-        target: beaconEntries.slug,
+        target: [beaconEntries.organization_id, beaconEntries.slug],
         set: {
           // Deliberately narrow set: the conflict branch only happens when
           // a parallel writer raced us. Let the canonical update path
@@ -175,8 +181,8 @@ export async function upsertEntryBySlug(
     };
   }
 
-  // Update path: existing row with same slug. Bump version and write a
-  // snapshot to mirror beacon_update.
+  // Update path: existing row with same slug in this org. Bump version and
+  // write a snapshot to mirror beacon_update.
   const newVersion = existing.version + 1;
   const [entry] = await db
     .update(beaconEntries)
@@ -190,7 +196,9 @@ export async function upsertEntryBySlug(
       metadata: input.metadata ?? existing.metadata,
       updated_at: new Date(),
     })
-    .where(eq(beaconEntries.id, existing.id))
+    // The org predicate is redundant with the scoped lookup above on purpose:
+    // a future regression there cannot become a cross-tenant overwrite here.
+    .where(and(eq(beaconEntries.id, existing.id), eq(beaconEntries.organization_id, orgId)))
     .returning();
 
   if (!entry) {

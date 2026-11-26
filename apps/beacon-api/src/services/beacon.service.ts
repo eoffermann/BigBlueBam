@@ -10,6 +10,7 @@ import {
   projects,
 } from '../db/schema/index.js';
 import { sanitizeHtml } from '../lib/sanitize.js';
+import { beaconRefLookup } from '../lib/beacon-ref.js';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -39,11 +40,15 @@ export function slugify(title: string): string {
 }
 
 /**
- * Generate a unique slug for a beacon entry.
+ * Generate a slug that is unique within the org.
  * Uses base slug if available, otherwise appends a random 8-char hex suffix
  * for O(1) uniqueness without scanning existing slugs.
+ *
+ * The probe is org-scoped to match beacon_entries_org_slug_key (#246): another
+ * org owning the same slug is no collision, and an unscoped probe would both
+ * leak that it exists and needlessly suffix a clean slug.
  */
-async function uniqueSlug(title: string): Promise<string> {
+async function uniqueSlug(title: string, orgId: string): Promise<string> {
   const base = slugify(title);
   if (!base) return `beacon-${crypto.randomBytes(4).toString('hex')}`;
 
@@ -51,7 +56,7 @@ async function uniqueSlug(title: string): Promise<string> {
   const [existing] = await db
     .select({ slug: beaconEntries.slug })
     .from(beaconEntries)
-    .where(eq(beaconEntries.slug, base))
+    .where(and(eq(beaconEntries.slug, base), eq(beaconEntries.organization_id, orgId)))
     .limit(1);
 
   if (!existing) return base;
@@ -147,7 +152,7 @@ export async function createBeacon(
   userId: string,
   orgId: string,
 ) {
-  const slug = await uniqueSlug(data.title);
+  const slug = await uniqueSlug(data.title, orgId);
   const expiryDays = await resolveDefaultExpiryDays(orgId, data.project_id ?? null);
   const expiresAt = new Date(Date.now() + expiryDays * 24 * 60 * 60 * 1000);
 
@@ -185,19 +190,13 @@ export async function createBeacon(
   return beacon!;
 }
 
-const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
 export async function getBeacon(idOrSlug: string, userId: string, orgId: string) {
-  const isUuid = UUID_REGEX.test(idOrSlug);
-
-  const idCondition = isUuid
-    ? eq(beaconEntries.id, idOrSlug)
-    : eq(beaconEntries.slug, idOrSlug);
+  const lookup = beaconRefLookup(idOrSlug, orgId);
 
   const [beacon] = await db
     .select()
     .from(beaconEntries)
-    .where(and(idCondition, eq(beaconEntries.organization_id, orgId)))
+    .where(and(lookup.where, eq(beaconEntries.organization_id, orgId)))
     .limit(1);
 
   if (!beacon) return null;
