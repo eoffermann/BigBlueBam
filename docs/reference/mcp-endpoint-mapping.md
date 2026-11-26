@@ -507,7 +507,7 @@ Covers `platform.routes.ts` (`/v1/platform/*`) and `superuser.routes.ts` (`/supe
 
 | REST endpoint | MCP tool | Description | UI call site |
 | --- | --- | --- | --- |
-| `GET /launchpad/apps` | `get_launchpad_apps` | Resolved Launchpad app list for caller | `apps/frontend/src/components/layout/app-layout.tsx` |
+| `GET /launchpad/apps` | `get_launchpad_apps` | Resolved Launchpad app list for caller, plus `catalog_detail` (every catalog app's name/description/path) that the SuperUser editors build their rows from (#158) | `apps/frontend/src/components/layout/app-layout.tsx`, `apps/frontend/src/lib/launchpad-catalog.ts` (`useLaunchpadCatalog`: SuperUser root-redirect picker and Launchpad-defaults card in `apps/frontend/src/pages/superuser/index.tsx`) |
 | `PUT /system-settings/launchpad_default_apps` | `set_platform_launchpad_defaults` | Set/clear platform Launchpad default | `apps/frontend/src/pages/superuser/index.tsx` |
 
 
@@ -810,9 +810,9 @@ All write endpoints return HTTP 410 Gone (calling moved to the Bureau docked-box
 | `POST /v1/admin/settings/test-stt` | — _(skip: org/provider-credential admin — UI-only)_ | Test STT provider connectivity | `apps/banter/src/pages/admin-calling-settings.tsx` |
 | `POST /v1/admin/settings/test-tts` | — _(skip: org/provider-credential admin — UI-only)_ | Test TTS provider connectivity | `apps/banter/src/pages/admin-calling-settings.tsx` |
 | `POST /v1/admin/settings/push-voice-config` | — _(skip: org/provider-credential admin — UI-only)_ | Push voice config to voice agent | `apps/banter/src/pages/admin-calling-settings.tsx` |
-| `POST /v1/files/upload` | — _(skip: multipart binary upload)_ | Multipart upload to MinIO; returns the `banter/uploads/...` key with `url: null` (#142: the file is served only once attached, by the route below) and records an upload grant so only the uploader, in their org, can attach the key (#156) | `apps/banter/src/components/messages/message-compose.tsx` |
+| `POST /v1/files/upload` | — _(skip: multipart binary upload)_ | Multipart upload via `@bigbluebam/storage` (#159); 503 `STORAGE_NOT_CONFIGURED` without S3 settings; returns the `banter/uploads/...` key with `url: null` (#142: the file is served only once attached, by the route below) and records an upload grant so only the uploader, in their org, can attach the key (#156) | `apps/banter/src/components/messages/message-compose.tsx` |
 | `GET /v1/channels/:id/attachments/:attachmentId` | — _(skip: multipart/binary download)_ | Download a message attachment (#142); channel read rule (`requireChannelMember`), attachment must be on a live message in that channel, only Banter-written keys served, and only from the channel the key was originally attached in (#156); read via `@bigbluebam/storage`, 404 only for a missing object, 503 `STORAGE_NOT_CONFIGURED` without S3 settings, 502 `STORAGE_ERROR` (logged) otherwise (#159); attachment `url` fields in message responses point here | `apps/banter/src/components/messages/message-item.tsx` |
-| `POST /v1/files/presigned-upload` | — _(skip: binary upload presign)_ | Generate a presigned PUT URL; records an upload grant for the key like the upload route (#156) | `apps/banter/src/components/messages/message-compose.tsx` |
+| `POST /v1/files/presigned-upload` | — _(skip: binary upload presign)_ | Generate a presigned PUT URL via `@bigbluebam/storage`; 503 `STORAGE_NOT_CONFIGURED` without S3 settings; records an upload grant for the key like the upload route (#156) | `apps/banter/src/components/messages/message-compose.tsx` |
 
 
 ### Slack import (admin)
@@ -1318,13 +1318,13 @@ omitted from each row; see the per-app header line). UI call sites are best-effo
 | `POST /diagrams/from-bam` | `blueprint_generate_from_bam` | Build diagram from Bam tasks | `apps/blueprint/src/hooks/use-diagrams.ts` |
 | `GET /diagrams/:id` | `blueprint_get` | Get diagram metadata | `apps/blueprint/src/hooks/use-diagrams.ts` |
 | `PATCH /diagrams/:id` | `blueprint_update` | Update diagram metadata | `apps/blueprint/src/hooks/use-diagrams.ts` |
-| `POST /diagrams/:id/archive` | `blueprint_archive` | Archive diagram (soft delete) | `apps/blueprint/src/hooks/use-diagrams.ts` |
-| `GET /diagrams/:id/collaborators` | `blueprint_list_collaborators` | List diagram collaborators | — |
-| `POST /diagrams/:id/collaborators` | `blueprint_add_collaborator` | Add collaborator | — |
-| `DELETE /diagrams/:id/collaborators/:userId` | `blueprint_remove_collaborator` | Remove collaborator | — |
+| `POST /diagrams/:id/archive` | `blueprint_archive` | Archive diagram (soft delete); diagram creator, owner collaborator or org owner/admin only (#167) | `apps/blueprint/src/hooks/use-diagrams.ts` |
+| `GET /diagrams/:id/collaborators` | `blueprint_list_collaborators` | List diagram collaborators (diagram read access, #167) | — |
+| `POST /diagrams/:id/collaborators` | `blueprint_add_collaborator` | Add collaborator; diagram creator, owner collaborator or org owner/admin only (#167) | — |
+| `DELETE /diagrams/:id/collaborators/:userId` | `blueprint_remove_collaborator` | Remove collaborator; same owner rule as add (#167) | — |
 | `GET /diagrams/:id/comments` | `blueprint_list_comments` | List anchored comments | — |
 | `POST /diagrams/:id/comments` | `blueprint_add_comment` | Add a comment | — |
-| `PATCH /diagrams/:id/comments/:cid` | `blueprint_update_comment` | Edit/resolve a comment | — |
+| `PATCH /diagrams/:id/comments/:cid` | `blueprint_update_comment` | Edit/resolve a comment; editing the text is author-or-diagram-owner only, resolving needs comment access (#167) | — |
 | `GET /diagrams/:id/edges` | `blueprint_read_edges` | Read all edges | (via `/graph`) |
 | `POST /diagrams/:id/edges` | `blueprint_add_edge` | Create an edge | `apps/blueprint/src/hooks/use-graph.ts` |
 | `PATCH /diagrams/:id/edges/:edgeId` | `blueprint_update_edge` | Update an edge | `apps/blueprint/src/hooks/use-graph.ts` |
@@ -1593,7 +1593,7 @@ or `/helpdesk/agents`) segment in-code.
 | `POST /bill/api/v1/expenses/:id/approve` | `bill_approve_expense` | Approve an expense | `apps/bill/src/pages/expense-list.tsx` |
 | `POST /bill/api/v1/expenses/:id/reject` | `bill_reject_expense` | Reject an expense | `apps/bill/src/pages/expense-list.tsx` |
 | `POST /bill/api/v1/expenses/:id/reimburse` | — _(skip: deferred — UI-only terminal state transition, approved→reimbursed)_ | Mark an approved expense reimbursed | `apps/bill/src/pages/expense-list.tsx` |
-| `POST /bill/api/v1/expenses/:id/receipt` | — _(skip: multipart/binary upload)_ | Upload a receipt file to the configured S3 bucket via `@bigbluebam/storage` (#145); sets `receipt_url` to the download route below; 503 `STORAGE_NOT_CONFIGURED` without S3 settings | `apps/bill/src/components/receipt-upload.tsx` (Expenses list "Attach receipt" / "Replace receipt"), `apps/bill/src/pages/expense-new.tsx` ("Receipt (optional)", #155) |
+| `POST /bill/api/v1/expenses/:id/receipt` | — _(skip: multipart/binary upload)_ | Upload a receipt file to the configured S3 bucket via `@bigbluebam/storage` (#145); sets `receipt_url` to the download route below; 503 `STORAGE_NOT_CONFIGURED` without S3 settings; the object is written to its own versioned key outside the row lock (#169), 504 `STORAGE_TIMEOUT` if storage stalls, 409 `EXPENSE_BUSY` on a row-lock timeout | `apps/bill/src/components/receipt-upload.tsx` (Expenses list "Attach receipt" / "Replace receipt"), `apps/bill/src/pages/expense-new.tsx` ("Receipt (optional)", #155) |
 | `GET /bill/api/v1/expenses/:id/receipt` | — _(skip: multipart/binary download)_ | Download the expense's uploaded receipt as an attachment (#145); requires `bill.expense.list`, org-scoped, key pinned to the expense | `apps/bill/src/pages/expense-list.tsx` |
 | `GET /bill/api/v1/invoices` | `bill_list_invoices` | List invoices (filters) | `apps/bill/src/hooks/use-invoices.ts` |
 | `POST /bill/api/v1/invoices` | `bill_create_invoice` | Create a draft invoice | `apps/bill/src/hooks/use-invoices.ts` |
@@ -1688,6 +1688,8 @@ or `/helpdesk/agents`) segment in-code.
 | `POST /bureau/api/v1/surface-huddle/token` | — _(skip: LiveKit token mint)_ | Mint surface-huddle LiveKit token | `apps/bureau/src/hooks/use-bureau-ws.ts` |
 | `GET /bureau/api/v1/settings` | `bureau_get_settings` | Get org Bureau settings | `apps/bureau/src/pages/admin/settings.tsx` |
 | `PATCH /bureau/api/v1/settings` | `bureau_update_settings` | Update Bureau settings (admin) | `apps/bureau/src/pages/admin/settings.tsx` |
+
+The realtime hub at `/bureau/ws` (a `GET /bureau/ws` upgrade on bureau-api, driven by `apps/bureau/src/hooks/use-bureau-ws.ts`) is `— _(skip: realtime/ws — presence, knocks, summons, chat frames)_`. Every frame type is gated by the same `bureau.*` catalog id as its REST twin (`apps/bureau-api/src/lib/ws-permissions.ts`, #166); `chat_send` uses `bureau.chat.write`, which has no REST route. A denied frame gets an `error` frame with code `PERMISSION_DENIED`.
 
 
 ## Helpdesk (app)
