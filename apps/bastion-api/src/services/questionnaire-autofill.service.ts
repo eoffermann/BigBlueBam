@@ -333,6 +333,8 @@ export async function draftOneAnswer(
   viewer: { id: string; org_id: string },
   body: BastionDraftAnswer,
   waitMs = 20_000,
+  /** An agent drafting for a person (#274): citations must pass can_access for them too. Narrows, never widens. */
+  asker: string | null = null,
 ) {
   const now = d.engine.now();
   const { ctx, cands } = await orgTx(d.engine.sql, viewer.org_id, async (tx) => {
@@ -358,7 +360,12 @@ export async function draftOneAnswer(
       d.engine.log.warn({ organization_id: viewer.org_id, reason: out.reason }, 'bastion-draft: the AI call failed; the answer comes from the library or is empty');
     } else note = 'every AI slot was busy';
   } else note = 'no AI provider is set up';
-  const visible = await visibleRefs(d.canAccess, viewer.id, [...cands, ...libraryControlCandidates(cands, ctx)], new Map());
+  const all = [...cands, ...libraryControlCandidates(cands, ctx)];
+  const visible = await visibleRefs(d.canAccess, viewer.id, all, new Map());
+  if (asker && asker !== viewer.id) {
+    const forAsker = await visibleRefs(d.canAccess, asker, all, new Map());
+    for (const k of [...visible]) if (!forAsker.has(k)) visible.delete(k);
+  }
   let banded = bandWithContext(body.question, body.answer_kind, cands, response, visible, ctx);
   if (aiReason) banded = withAiReason(banded, aiReason);
   const labels = new Map<string, string>();

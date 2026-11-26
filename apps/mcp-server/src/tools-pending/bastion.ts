@@ -1127,10 +1127,12 @@ export function registerBastionQuestionnaireTools(server: McpServer, client: Bas
     input: {
       status: BastionQuestionnaireStatus.optional(),
       limit: z.number().int().min(1).max(200).optional(),
+      // #274: questionnaires carry customer names and deal links; the same rule as the evidence reads (#217).
+      asker_user_id: askerUserId,
     },
     returns: z.record(z.unknown()),
-    handler: async ({ status, limit }) => {
-      const r = await client.listQuestionnaires({ status, limit });
+    handler: async ({ status, limit, asker_user_id }) => {
+      const r = await client.listQuestionnaires({ status, limit, asker_user_id });
       return r.ok ? ok(r.data) : err('listing questionnaires', r.data);
     },
   });
@@ -1145,7 +1147,7 @@ export function registerBastionQuestionnaireTools(server: McpServer, client: Bas
       include_items: z.boolean().optional(),
       band: BastionConfidenceBand.optional(),
       needs_review: z.boolean().optional().describe('Only "Needs an expert" rows nobody reviewed yet.'),
-      asker_user_id: z.string().uuid().optional().describe('The person you are acting for; narrows, never widens.'),
+      asker_user_id: askerUserId,
     },
     returns: z.record(z.unknown()),
     handler: async ({ questionnaire_id, include_items, band, needs_review, asker_user_id }) => {
@@ -1254,12 +1256,13 @@ export function registerBastionQuestionnaireTools(server: McpServer, client: Bas
     input: {
       question: z.string().min(3).max(4000),
       answer_kind: BastionAnswerKind.optional(),
+      asker_user_id: askerUserId,
     },
     returns: z.record(z.unknown()),
-    handler: async ({ question, answer_kind }) => {
+    handler: async ({ question, answer_kind, asker_user_id }) => {
       const parsed = bastionDraftAnswerSchema.safeParse(strip({ question, answer_kind }));
       if (!parsed.success) return err('drafting the answer', { code: 'VALIDATION_ERROR', message: parsed.error.errors[0]?.message });
-      const r = await client.draftAnswer(parsed.data);
+      const r = await client.draftAnswer(parsed.data, { asker_user_id });
       return r.ok ? ok(r.data) : err('drafting the answer', r.data);
     },
   });
@@ -1274,7 +1277,7 @@ export function registerBastionQuestionnaireTools(server: McpServer, client: Bas
       include_stale: z.boolean().optional(),
       include_retired: z.boolean().optional(),
       limit: z.number().int().min(1).max(100).optional(),
-      asker_user_id: z.string().uuid().optional(),
+      asker_user_id: askerUserId,
     },
     returns: z.record(z.unknown()),
     handler: async (q) => {

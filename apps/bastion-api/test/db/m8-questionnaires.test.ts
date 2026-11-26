@@ -497,6 +497,17 @@ describe.skipIf(!DATABASE_URL)('M8 questionnaires (live database)', () => {
     expect((await sql`SELECT count(*)::int AS n FROM bastion_questionnaire_items WHERE organization_id = ${s.org}`)[0]!.n).toBe(0);
   });
 
+  it('a draft for an asker cites only what both the caller and the asker may see (#274)', async () => {
+    const s = await setUp('one-asker');
+    await provider(s.org, s.owner);
+    const asker = s.agent;
+    const deps = { ...adeps(s.engine), canAccess: async (u: string, type: string, id: string) => !(u === asker && `${type}:${id}` === `bastion.control:${s.controls[1]}`) };
+    const forOwner = await draftOneAnswer(deps, { id: s.owner, org_id: s.org }, { question: 'Is laptop disk encryption in place?', answer_kind: 'yes_no_text' });
+    expect(forOwner.data.citations.map((c) => c.entity_id)).toContain(s.controls[1]);
+    const forAsker = await draftOneAnswer(deps, { id: s.owner, org_id: s.org }, { question: 'Is laptop disk encryption in place?', answer_kind: 'yes_no_text' }, 20_000, asker);
+    expect(forAsker.data.citations.map((c) => c.entity_id)).not.toContain(s.controls[1]);
+  });
+
   it('the AI may reword a drafted fix; a Bolt rule keeps its shape and gains only a new name and description', async () => {
     const s = await setUp('reword');
     const owner = viewer(s.org, s.owner);
