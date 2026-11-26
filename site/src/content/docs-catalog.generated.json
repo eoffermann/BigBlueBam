@@ -3113,7 +3113,7 @@
           },
           {
             "name": "blip_transform_set",
-            "description": "Set the ordered PII/redaction transform rules for a tracked app (optionally narrowed to one report_type). Rules run on the edge before tail/store. Each rule: { match: \"payload:user.email\" | \"glob:*token*\" | \"regex:...\", action: \"drop\"|\"mask\"|\"hash\"|\"truncate\", params?: { keep_last?, max_len? } }."
+            "description": "Set the ordered PII/redaction transform rules for a tracked app (optionally narrowed to one report_type). Rules run on the edge before tail/store. Each rule: { match: \"payload:user.email\" | \"glob:*token*\" | \"regex:...\", action: \"drop\"|\"mask\"|\"hash\"|\"truncate\"|\"pseudonymize\", params?: { keep_last?, max_len?, period?, unless? } }. params.unless { field: \"metadata.privacy_version\", at_least: 2 } skips the rule for payloads whose numeric field is at least that value (missing field: the rule applies). Use \"pseudonymize\" (params.period \"day\"|\"week\"|\"month\", default month) for user/install ids: stable within the UTC period, unlinkable once it ends. \"hash\" is stable forever and re-linkable by anyone holding the raw value."
           },
           {
             "name": "blip_view_create",

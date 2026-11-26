@@ -3,7 +3,7 @@ import { ArrowRight, Github } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { FloatingFrame } from '@/components/ui/floating-frame';
 import { HeroBlobs } from '@/components/ui/hero-blobs';
-import { MCP_TOOL_COUNT } from '@/lib/facts';
+import { MCP_TOOL_COUNT, APP_COUNT_WORDS } from '@/lib/facts';
 
 export function Hero() {
   const reduced = useReducedMotion();
@@ -54,7 +54,7 @@ export function Hero() {
             className="mx-auto mt-6 max-w-2xl text-lg leading-relaxed text-zinc-600"
           >
             The average company runs more than a hundred apps and loses half a workday a week just
-            switching between them. BigBlueBam is the other bet: twenty-two apps (boards, chat, CRM,
+            switching between them. BigBlueBam is the other bet: {APP_COUNT_WORDS} apps (boards, chat, CRM,
             docs, helpdesk, and a dozen more) that behave like a single product. Self-hosted, open
             source, and built for AI from day one, so agents can work the same boards, sprints, and
             tickets your team does, through one MCP server with {MCP_TOOL_COUNT} tools. The ones you bring on

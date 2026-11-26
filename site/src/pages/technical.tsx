@@ -19,7 +19,7 @@ import { Button } from '@/components/ui/button';
 import { SectionWrapper } from '@/components/ui/section-wrapper';
 import { AnimatedReveal } from '@/components/ui/animated-reveal';
 import { Badge } from '@/components/ui/badge';
-import { MCP_TOOL_COUNT } from '@/lib/facts';
+import { MCP_TOOL_COUNT, APP_COUNT, APP_COUNT_WORDS } from '@/lib/facts';
 
 /**
  * "Talk nerdy to me": the deep technical page (the landing-page-ultra).
@@ -131,7 +131,7 @@ export function TechnicalPage() {
                   <h3 className="text-xl font-bold text-zinc-900">One server, every action</h3>
                   <p className="mt-3 text-zinc-600">
                     The built-in Model Context Protocol server exposes {MCP_TOOL_COUNT} structured tools that
-                    mirror every UI action across all twenty-two apps, plus cross-cutting platform
+                    mirror every UI action across all {APP_COUNT_WORDS} apps, plus cross-cutting platform
                     capabilities: agent identity, approval queues, visibility preflight, unified
                     activity, cross-app search, composite views, entity linking, scheduled posts,
                     upserts, attachment metadata, agent policies, and outbound webhooks. AI agents
@@ -150,7 +150,7 @@ export function TechnicalPage() {
                 </div>
                 <div>
                   <h3 className="mb-4 text-sm font-semibold uppercase tracking-wider text-zinc-500">
-                    {MCP_TOOL_COUNT} MCP tools across 22 apps and the platform
+                    {MCP_TOOL_COUNT} MCP tools across {APP_COUNT} apps and the platform
                   </h3>
                   <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                     {capabilities.map((cap) => (
@@ -241,7 +241,7 @@ export function TechnicalPage() {
             <div className="mt-10 rounded-xl border border-zinc-200 bg-zinc-50 p-6">
               <div className="mb-4 flex flex-wrap justify-center gap-2">
                 <Badge variant="blue">{MCP_TOOL_COUNT} MCP Tools</Badge>
-                <Badge variant="blue">22 Apps</Badge>
+                <Badge variant="blue">{APP_COUNT} Apps</Badge>
                 <Badge variant="blue">900+ Tests</Badge>
                 <Badge variant="blue">MIT License</Badge>
               </div>

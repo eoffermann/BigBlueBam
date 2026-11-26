@@ -3,7 +3,7 @@ import { SectionWrapper } from '@/components/ui/section-wrapper';
 import { AnimatedReveal } from '@/components/ui/animated-reveal';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { MCP_TOOL_COUNT } from '@/lib/facts';
+import { MCP_TOOL_COUNT, APP_COUNT } from '@/lib/facts';
 
 const benefits = [
   {
@@ -65,7 +65,7 @@ export function Architecture() {
         <div className="mt-10 rounded-xl border border-zinc-200 bg-zinc-50 p-6 text-center">
           <div className="mb-4 flex flex-wrap justify-center gap-2">
             <Badge variant="blue">{MCP_TOOL_COUNT} MCP Tools</Badge>
-            <Badge variant="blue">22 Apps</Badge>
+            <Badge variant="blue">{APP_COUNT} Apps</Badge>
             <Badge variant="blue">900+ Tests</Badge>
             <Badge variant="blue">MIT License</Badge>
           </div>

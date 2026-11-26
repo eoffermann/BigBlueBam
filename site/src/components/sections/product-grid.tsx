@@ -25,7 +25,7 @@ import type { LucideIcon } from 'lucide-react';
 import { SectionWrapper } from '@/components/ui/section-wrapper';
 import { AnimatedReveal } from '@/components/ui/animated-reveal';
 import { Badge } from '@/components/ui/badge';
-import { MCP_TOOL_COUNT } from '@/lib/facts';
+import { MCP_TOOL_COUNT, APP_COUNT, APP_COUNT_WORDS } from '@/lib/facts';
 
 interface Product {
   name: string;
@@ -304,14 +304,14 @@ export function ProductGrid() {
       <AnimatedReveal>
         <div className="mx-auto mb-12 max-w-2xl text-center">
           <Badge variant="blue" className="mb-4">
-            22 Apps + MCP Platform, One Stack
+            {APP_COUNT} Apps + MCP Platform, One Stack
           </Badge>
           <h2 className="text-3xl font-bold tracking-tight text-zinc-900 sm:text-4xl">
-            Not a 23rd tab. The twenty-two you stop opening tabs for.
+            Not one more tab. The {APP_COUNT_WORDS} you stop opening tabs for.
           </h2>
           <p className="mt-4 text-lg text-zinc-600">
             "All-in-one" usually means a pile of shallow features that don't quite replace the
-            specialist tools you're already paying for. This isn't that. Twenty-two genuinely capable
+            specialist tools you're already paying for. This isn't that. {APP_COUNT} genuinely capable
             apps (work, communication, sales, operations, media review, telemetry), built as one
             system, self-hosted, and wired together through a single MCP server with {MCP_TOOL_COUNT} tools.
             No tab-switching, no integration spreadsheet, no app that didn't get

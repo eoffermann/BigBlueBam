@@ -2,7 +2,7 @@ import { FileSpreadsheet, Trello, Github, Bug, CalendarDays, Bot, Key } from 'lu
 import { SectionWrapper } from '@/components/ui/section-wrapper';
 import { AnimatedReveal } from '@/components/ui/animated-reveal';
 import { Badge } from '@/components/ui/badge';
-import { MCP_TOOL_COUNT } from '@/lib/facts';
+import { MCP_TOOL_COUNT, APP_COUNT_WORDS } from '@/lib/facts';
 
 const importSources = [
   { icon: FileSpreadsheet, label: 'CSV' },
@@ -66,7 +66,7 @@ export function Integrations() {
               </div>
             </div>
             <p className="mb-4 text-sm text-zinc-600">
-              A full Model Context Protocol server exposes every action across all twenty-two apps
+              A full Model Context Protocol server exposes every action across all {APP_COUNT_WORDS} apps
               (Bam, Banter, Beacon, Bearing, Bench, Bill, Blank, Blast, Blueprint, Board, Bolt,
               Bond, Book, Brief, Bureau, Helpdesk) plus cross-cutting platform capabilities (cross-app search,
               composite views, entity linking, scheduled posts, upserts, agent policies, outbound
