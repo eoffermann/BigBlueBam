@@ -250,6 +250,23 @@ export function planPropagation(desired, live) {
   return add;
 }
 
+/**
+ * Issue #137: durable "written but not yet redeployed" marker. syncNew writes it as
+ * 'pending' in the SAME skipDeploys upsert as the propagated variables (so the two
+ * land atomically), and flips it to 'done' only after that service's redeploy was
+ * triggered. A run that died in between leaves 'pending' behind, and the next run
+ * redeploys every service still carrying it, even though planPropagation (which only
+ * looks for ABSENT keys) plans nothing for it. Not a secret, read by nothing else.
+ */
+export const PROPAGATE_PENDING_VAR = 'BBB_PROPAGATE_REDEPLOY';
+export const PROPAGATE_PENDING = 'pending';
+export const PROPAGATE_DONE = 'done';
+
+/** True when a live variable set carries an unfinished propagate write. Pure. */
+export function hasPendingPropagateRedeploy(live) {
+  return (live ?? {})[PROPAGATE_PENDING_VAR] === PROPAGATE_PENDING;
+}
+
 // ─── Orchestrator ─────────────────────────────────────────────────────
 
 export class RailwayOrchestrator {
@@ -731,49 +748,82 @@ export class RailwayOrchestrator {
     // Only hints marked `propagate` (env-hints.mjs), only keys absent live, never an
     // overwrite. Every planned addition is printed (dry run or not); writes use
     // skipDeploys and each changed service then gets exactly one redeploy below.
+    //
+    // Issue #137: a failure between a write and its redeploy must not strand the
+    // variable. (a) Every successful write is recorded in `written`, and if the pass
+    // throws partway, the services already written are still redeployed before the
+    // error propagates. (b) Each write also sets PROPAGATE_PENDING_VAR='pending',
+    // flipped to 'done' only after the redeploy is triggered, so a later run picks
+    // up anything (a) could not finish (`resumed`).
     const propagated = {};
-    for (const svc of plan) {
-      if (!liveByName.has(svc.name)) continue; // new services got the full set above
-      const desired = buildPropagatedVariables(svc);
-      if (Object.keys(desired).length === 0) continue;
-      const serviceId = liveByName.get(svc.name);
-      const live = await this.client.getServiceVariables({
-        projectId: this.projectId,
-        environmentId: this.defaultEnvironmentId,
-        serviceId,
-      });
-      const add = planPropagation(desired, live);
-      const keys = Object.keys(add);
-      if (keys.length === 0) continue;
-      propagated[svc.name] = add;
-      for (const k of keys) {
-        this._emit({
-          phase: 'sync-vars',
-          service: svc.name,
-          message: `${dryRun ? 'would add' : 'adding'} ${svc.name}: ${k}=${add[k]}`,
-          ok: true,
-        });
-      }
-      if (!dryRun) {
-        await this.client.upsertVariables({
+    const written = [];
+    const resumed = [];
+    let passError = null;
+    try {
+      for (const svc of plan) {
+        if (!liveByName.has(svc.name)) continue; // new services got the full set above
+        const desired = buildPropagatedVariables(svc);
+        if (Object.keys(desired).length === 0) continue;
+        const serviceId = liveByName.get(svc.name);
+        const live = await this.client.getServiceVariables({
           projectId: this.projectId,
           environmentId: this.defaultEnvironmentId,
           serviceId,
-          variables: add,
-          skipDeploys: true,
         });
+        if (hasPendingPropagateRedeploy(live)) {
+          resumed.push(svc.name);
+          this._emit({
+            phase: 'sync-vars',
+            service: svc.name,
+            message: `${svc.name}: propagated variables from an earlier run were never redeployed; ${dryRun ? 'would redeploy' : 'redeploying'}`,
+            ok: true,
+          });
+        }
+        const add = planPropagation(desired, live);
+        const keys = Object.keys(add);
+        if (keys.length === 0) continue;
+        propagated[svc.name] = add;
+        for (const k of keys) {
+          this._emit({
+            phase: 'sync-vars',
+            service: svc.name,
+            message: `${dryRun ? 'would add' : 'adding'} ${svc.name}: ${k}=${add[k]}`,
+            ok: true,
+          });
+        }
+        if (!dryRun) {
+          await this.client.upsertVariables({
+            projectId: this.projectId,
+            environmentId: this.defaultEnvironmentId,
+            serviceId,
+            variables: { ...add, [PROPAGATE_PENDING_VAR]: PROPAGATE_PENDING },
+            skipDeploys: true,
+          });
+          written.push(svc.name);
+        }
       }
+    } catch (err) {
+      passError = err;
     }
 
     // Decide the redeploy set. Newly-created services always deploy. The
     // ingress (and any alwaysRedeploy targets) redeploy per the rules above.
-    // A service that received propagated variables redeploys once (Set dedups).
+    // A service that received propagated variables (this run or a failed earlier
+    // one) redeploys once (Set dedups). After a pass error only the services that
+    // need it to make a stored write live are redeployed, then the error is rethrown.
     const toDeploy = new Set(provisioned);
-    for (const name of Object.keys(propagated)) toDeploy.add(name);
-    if (provisioned.length > 0) for (const n of redeployOnNew) toDeploy.add(n);
-    for (const n of alwaysRedeploy) toDeploy.add(n);
+    // Only services whose write actually landed (a dry run writes nothing, so it
+    // reports every planned one).
+    for (const name of dryRun ? Object.keys(propagated) : written) toDeploy.add(name);
+    for (const name of resumed) toDeploy.add(name);
+    if (!passError) {
+      if (provisioned.length > 0) for (const n of redeployOnNew) toDeploy.add(n);
+      for (const n of alwaysRedeploy) toDeploy.add(n);
+    }
+    const needsMarkerClear = new Set([...written, ...resumed]);
 
     const deployed = [];
+    const deployErrors = [];
     for (const name of toDeploy) {
       const serviceId = this.serviceIds.get(name);
       if (!serviceId) continue; // never provisioned and not live — skip
@@ -782,19 +832,65 @@ export class RailwayOrchestrator {
         deployed.push(name);
         continue;
       }
-      await this._step(
-        'deploy-trigger',
-        `Triggering deploy for "${name}"`,
-        async () => {
-          await this.client.triggerDeploy({
+      try {
+        await this._step(
+          'deploy-trigger',
+          `Triggering deploy for "${name}"`,
+          async () => {
+            await this.client.triggerDeploy({
+              projectId: this.projectId,
+              environmentId: this.defaultEnvironmentId,
+              serviceId,
+            });
+          },
+          { service: name },
+        );
+      } catch (err) {
+        // Keep going: one failed trigger must not leave the remaining written
+        // services undeployed. Its marker stays 'pending' for the next run.
+        deployErrors.push({ name, err });
+        continue;
+      }
+      deployed.push(name);
+      if (needsMarkerClear.has(name)) {
+        try {
+          await this.client.upsertVariables({
             projectId: this.projectId,
             environmentId: this.defaultEnvironmentId,
             serviceId,
+            variables: { [PROPAGATE_PENDING_VAR]: PROPAGATE_DONE },
+            skipDeploys: true,
           });
-        },
-        { service: name },
+        } catch (err) {
+          // Harmless: the next run sees 'pending' and redeploys once more.
+          this._emit({
+            phase: 'sync-vars',
+            service: name,
+            message: `could not clear ${PROPAGATE_PENDING_VAR} on "${name}" (${err?.message ?? err}); the next run will redeploy it again`,
+            ok: false,
+          });
+        }
+      }
+    }
+
+    if (passError) {
+      this._emit({
+        phase: 'sync-vars',
+        message: `Variable pass failed after writing ${written.length} service(s) (${written.join(', ') || 'none'}); those were redeployed before stopping`,
+        ok: false,
+        error: passError,
+      });
+      throw passError;
+    }
+    if (deployErrors.length > 0) {
+      const names = deployErrors.map((d) => d.name).join(', ');
+      const err = new Error(
+        `Deploy trigger failed for ${deployErrors.length} service(s): ${names}. ` +
+          `Services with stored propagated variables keep ${PROPAGATE_PENDING_VAR}=pending and are redeployed on the next run. ` +
+          `First error: ${deployErrors[0].err?.message ?? deployErrors[0].err}`,
       );
-      deployed.push(name);
+      err.cause = deployErrors[0].err;
+      throw err;
     }
 
     const summary = {
@@ -805,6 +901,7 @@ export class RailwayOrchestrator {
       deployed,
       missing: missing.map((s) => s.name),
       propagated,
+      resumed,
     };
     this._emit({
       phase: 'sync-done',
