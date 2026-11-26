@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 // ---------- mocks ----------
 const { mockDb } = vi.hoisted(() => {
@@ -24,6 +24,27 @@ vi.mock('../src/services/realtime.service.js', () => ({
 
 vi.mock('../src/services/activity.service.js', () => ({
   logActivity: vi.fn().mockResolvedValue(undefined),
+}));
+
+// Issue #151: postToSlack runs its own db.select() chain; without this mock it
+// threw inside the shared mockDb and the fire-and-forget catch hid it. Mocking
+// it lets the tests assert that the notification path actually fires.
+const { postToSlack, redisPublish } = vi.hoisted(() => ({
+  postToSlack: vi.fn(),
+  redisPublish: vi.fn(),
+}));
+vi.mock('../src/services/slack-notify.service.js', () => ({
+  postToSlack: (...args: unknown[]) => postToSlack(...args),
+  taskDeepLink: (projectId: string, taskId: string) => `http://localhost/b3/projects/${projectId}/tasks/${taskId}`,
+}));
+
+// The helpdesk ticket-sync path publishes the status change on Redis.
+vi.mock('ioredis', () => ({
+  default: class {
+    publish(...args: unknown[]) {
+      return redisPublish(...args);
+    }
+  },
 }));
 
 vi.mock('../src/env.js', () => ({
@@ -58,8 +79,26 @@ import {
   getTask,
   TaskError,
 } from '../src/services/task.service.js';
+import { tickets, ticketMessages } from '../src/db/schema/tickets.js';
 
 // ---------- helpers ----------
+/**
+ * A select chain whose every step (where / orderBy / limit) is chainable and
+ * awaitable, resolving to `rows`. Used as the default so a fire-and-forget
+ * branch that reads the DB gets a well-formed empty result instead of a
+ * TypeError that its catch block would silently swallow (issue #151).
+ */
+function flexibleSelect(rows: unknown[] = []) {
+  const step: Record<string, unknown> = {};
+  for (const name of ['where', 'orderBy', 'limit', 'innerJoin', 'leftJoin']) {
+    step[name] = vi.fn(() => step);
+  }
+  step.then = (resolve: (v: unknown) => unknown, reject?: (e: unknown) => unknown) =>
+    Promise.resolve(rows).then(resolve, reject);
+  const from = vi.fn(() => step);
+  return { from };
+}
+
 function chainSelect(rows: unknown[]) {
   const limitFn = vi.fn().mockResolvedValue(rows);
   const orderByFn = vi.fn().mockReturnValue({ limit: limitFn });
@@ -121,8 +160,26 @@ const fakeTask = {
 
 // ---------- tests ----------
 describe('Task Service', () => {
+  let consoleError: ReturnType<typeof vi.spyOn>;
+
   beforeEach(() => {
     vi.clearAllMocks();
+    // Reset leaked mockReturnValue defaults from earlier tests, then fall back
+    // to a well-formed empty select for any query a test does not script.
+    mockDb.select.mockReset();
+    mockDb.select.mockImplementation(() => flexibleSelect([]));
+    postToSlack.mockResolvedValue(undefined);
+    redisPublish.mockResolvedValue(1);
+    consoleError = vi.spyOn(console, 'error');
+  });
+
+  afterEach(async () => {
+    // Let fire-and-forget branches settle, then fail on any swallowed error
+    // they logged: a TypeError hidden by a catch block must not pass (#151).
+    await new Promise((r) => setTimeout(r, 0));
+    const calls = consoleError.mock.calls;
+    consoleError.mockRestore();
+    expect(calls).toEqual([]);
   });
 
   describe('createTask', () => {
@@ -162,6 +219,12 @@ describe('Task Service', () => {
       }, 'user-1');
 
       expect(result.human_id).toBe('TST-42');
+      // The Slack outbound notification path ran with the created task (issue #151).
+      expect(postToSlack).toHaveBeenCalledTimes(1);
+      expect(postToSlack).toHaveBeenCalledWith(
+        'proj-1',
+        expect.objectContaining({ event_type: 'task.created', text: expect.stringContaining('TST-42') }),
+      );
     });
 
     it('uses auto_state_on_enter from phase if no state_id provided', async () => {
@@ -369,7 +432,14 @@ describe('Task Service', () => {
       }]);
       const phaseWhere = vi.fn().mockReturnValue({ limit: phaseLimit });
       const phaseFrom = vi.fn().mockReturnValue({ where: phaseWhere });
-      mockDb.select.mockReturnValue({ from: phaseFrom });
+
+      // Select order: getTask (no row), target phase, helpdesk ticket lookup
+      // (no linked ticket), then the Bolt fire-and-forget org lookup.
+      const ticketLookup = flexibleSelect([]);
+      mockDb.select
+        .mockReturnValueOnce(flexibleSelect([]))
+        .mockReturnValueOnce({ from: phaseFrom })
+        .mockReturnValueOnce(ticketLookup);
 
       // update task
       const updateReturning = vi.fn().mockResolvedValue([{
@@ -388,6 +458,56 @@ describe('Task Service', () => {
       expect(updateSet).toHaveBeenCalledWith(
         expect.objectContaining({ state_id: 'state-in-progress' }),
       );
+      // The ticket-sync branch ran its lookup and, with no linked ticket, did nothing more.
+      expect(ticketLookup.from).toHaveBeenCalledWith(tickets);
+      expect(mockDb.update).toHaveBeenCalledTimes(1);
+      expect(mockDb.insert).not.toHaveBeenCalled();
+      expect(redisPublish).not.toHaveBeenCalled();
+      // Not a terminal phase, so no completion notification.
+      expect(postToSlack).not.toHaveBeenCalled();
+    });
+
+    it('syncs a linked helpdesk ticket to the new phase status', async () => {
+      const phaseLimit = vi.fn().mockResolvedValue([{
+        id: 'phase-2',
+        auto_state_on_enter: null,
+        is_terminal: false,
+        is_start: false,
+      }]);
+      const phaseFrom = vi.fn().mockReturnValue({ where: vi.fn().mockReturnValue({ limit: phaseLimit }) });
+      const ticketLookup = flexibleSelect([{ id: 'ticket-1', task_id: 'task-1', status: 'open' }]);
+      const duplicateCheck = flexibleSelect([]);
+      mockDb.select
+        .mockReturnValueOnce(flexibleSelect([fakeTask]))
+        .mockReturnValueOnce({ from: phaseFrom })
+        .mockReturnValueOnce(ticketLookup)
+        .mockReturnValueOnce(duplicateCheck);
+
+      const updateReturning = vi.fn().mockResolvedValue([{ ...fakeTask, phase_id: 'phase-2' }]);
+      const updateWhere = vi.fn().mockReturnValue({ returning: updateReturning });
+      const updateSet = vi.fn().mockReturnValue({ where: updateWhere });
+      mockDb.update.mockReturnValue({ set: updateSet });
+      const insertValues = vi.fn().mockResolvedValue(undefined);
+      mockDb.insert.mockReturnValue({ values: insertValues });
+
+      await moveTask('task-1', { phase_id: 'phase-2', position: 10 }, 'user-1');
+
+      expect(ticketLookup.from).toHaveBeenCalledWith(tickets);
+      expect(mockDb.update).toHaveBeenCalledWith(tickets);
+      expect(updateSet).toHaveBeenCalledWith({ status: 'in_progress' });
+      expect(duplicateCheck.from).toHaveBeenCalledWith(ticketMessages);
+      expect(mockDb.insert).toHaveBeenCalledWith(ticketMessages);
+      expect(insertValues).toHaveBeenCalledWith(
+        expect.objectContaining({ ticket_id: 'ticket-1', author_type: 'system', body: 'Status changed to in progress' }),
+      );
+      expect(redisPublish).toHaveBeenCalledTimes(1);
+      const [channel, message] = redisPublish.mock.calls[0] as [string, string];
+      expect(channel).toBe('bigbluebam:events');
+      expect(JSON.parse(message)).toMatchObject({
+        room: 'ticket:ticket-1',
+        type: 'ticket.status.changed',
+        payload: { ticket_id: 'ticket-1', status: 'in_progress' },
+      });
     });
 
     it('sets completed_at when moving to terminal phase', async () => {
@@ -414,11 +534,20 @@ describe('Task Service', () => {
       const childrenWhere = vi.fn().mockResolvedValue([]);
       const childrenFrom = vi.fn().mockReturnValue({ where: childrenWhere });
 
+      // 5. helpdesk ticket lookup → a linked ticket still in progress
+      // 6. duplicate system-message check → none
+      const ticketLookup = flexibleSelect([{ id: 'ticket-9', task_id: 'task-1', status: 'in_progress' }]);
+      const duplicateCheck = flexibleSelect([]);
+
       mockDb.select
         .mockReturnValueOnce({ from: getTaskFrom })
         .mockReturnValueOnce({ from: phaseFrom })
         .mockReturnValueOnce({ from: childrenFrom })
-        .mockReturnValueOnce({ from: childrenFrom });
+        .mockReturnValueOnce({ from: childrenFrom })
+        .mockReturnValueOnce(ticketLookup)
+        .mockReturnValueOnce(duplicateCheck);
+      const insertValues = vi.fn().mockResolvedValue(undefined);
+      mockDb.insert.mockReturnValue({ values: insertValues });
 
       // update task
       const updateReturning = vi.fn().mockResolvedValue([{
@@ -434,6 +563,17 @@ describe('Task Service', () => {
 
       expect(updateSet).toHaveBeenCalledWith(
         expect.objectContaining({ completed_at: expect.any(Date) }),
+      );
+      // Terminal phase resolves the linked ticket ...
+      expect(updateSet).toHaveBeenCalledWith({ status: 'resolved', resolved_at: expect.any(Date) });
+      expect(insertValues).toHaveBeenCalledWith(
+        expect.objectContaining({ ticket_id: 'ticket-9', body: 'Status changed to resolved' }),
+      );
+      expect(redisPublish).toHaveBeenCalledTimes(1);
+      // ... and, since the task entered the terminal phase, posts the completion to Slack.
+      expect(postToSlack).toHaveBeenCalledWith(
+        'proj-1',
+        expect.objectContaining({ event_type: 'task.completed', text: expect.stringContaining('TST-1') }),
       );
     });
   });
