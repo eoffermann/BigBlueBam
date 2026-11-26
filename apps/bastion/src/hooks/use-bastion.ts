@@ -23,6 +23,11 @@ import {
   type FeedKeyRow,
   type FeedRow,
   type MintedKey,
+  type MyAttestationRow,
+  type PolicyAttestations,
+  type PolicyAudience,
+  type PolicyBody,
+  type PolicyRow,
   type SummaryResponse,
   type RequirementsResponse,
   type SetupState,
@@ -39,7 +44,13 @@ function useInvalidate() {
 /* ---------------------------------- Reads ---------------------------------- */
 
 export function useSetup() {
-  return useQuery({ queryKey: key('setup'), queryFn: () => api.get<{ data: SetupState }>('/setup') });
+  return useQuery({
+    queryKey: key('setup'),
+    queryFn: () => api.get<{ data: SetupState }>('/setup'),
+    // Poll only while an AI-tailored compile is queued or running (spec 6.3).
+    refetchInterval: (q) =>
+      (q.state.data?.data.frameworks ?? []).some((f) => f.latest_compile_run?.status === 'queued' || f.latest_compile_run?.status === 'running') ? 5000 : false,
+  });
 }
 
 export function useTemplates() {
@@ -167,10 +178,80 @@ export function useAdoptFramework() {
   });
 }
 
+/**
+ * Start a compile. M7: with an AI provider the run comes back `queued` and the worker drives it;
+ * `useAi: false` asks for the library suggestions only (finished at once).
+ */
 export function useCompileFramework() {
   const invalidate = useInvalidate();
   return useMutation({
-    mutationFn: (frameworkId: string) => api.post(`/frameworks/${frameworkId}/compile`, {}),
+    mutationFn: (args: string | { frameworkId: string; useAi?: boolean }) => {
+      const a = typeof args === 'string' ? { frameworkId: args } : args;
+      return api.post(`/frameworks/${a.frameworkId}/compile`, a.useAi === false ? { use_ai: false } : {});
+    },
+    onSuccess: invalidate,
+  });
+}
+
+/* ------------------------------ M7: policies ------------------------------ */
+
+export function usePolicies(status: 'active' | 'retired' | 'all' = 'active') {
+  return useQuery({ queryKey: key('policies', status), queryFn: () => api.get<{ data: PolicyRow[] }>('/policies', { status }) });
+}
+
+export function usePolicyAttestations(id: string | null) {
+  return useQuery({
+    queryKey: key('policy-attestations', id),
+    queryFn: () => api.get<{ data: PolicyAttestations }>(`/policies/${id}/attestations`),
+    enabled: !!id,
+  });
+}
+
+export function usePolicyBody(id: string | null) {
+  return useQuery({
+    queryKey: key('policy-body', id),
+    queryFn: () => api.get<{ data: PolicyBody }>(`/policies/${id}/body`),
+    enabled: !!id,
+    retry: false,
+  });
+}
+
+export function useMyAttestations() {
+  return useQuery({ queryKey: key('my-attestations'), queryFn: () => api.get<{ data: MyAttestationRow[] }>('/me/attestations') });
+}
+
+export function useCreatePolicy() {
+  const invalidate = useInvalidate();
+  return useMutation({
+    mutationFn: (body: { beacon_entry_id: string; audience?: PolicyAudience; cadence_days?: number; control_id?: string }) =>
+      api.post<{ data: PolicyRow }>('/policies', body),
+    onSuccess: invalidate,
+  });
+}
+
+export function useUpdatePolicy() {
+  const invalidate = useInvalidate();
+  return useMutation({
+    mutationFn: (args: { id: string; body: { audience?: PolicyAudience; cadence_days?: number; owner_user_id?: string | null; status?: 'active' | 'retired' } }) =>
+      api.patch<{ data: PolicyRow }>(`/policies/${args.id}`, args.body),
+    onSuccess: invalidate,
+  });
+}
+
+/** "I have read and understood this": sends back exactly the version and hash that were served. */
+export function useAttest() {
+  const invalidate = useInvalidate();
+  return useMutation({
+    mutationFn: (args: { id: string; beacon_version: number; body_sha256: string }) =>
+      api.post(`/policies/${args.id}/attest`, { beacon_version: args.beacon_version, body_sha256: args.body_sha256 }),
+    onSuccess: invalidate,
+  });
+}
+
+export function useRequestAttestations() {
+  const invalidate = useInvalidate();
+  return useMutation({
+    mutationFn: (id: string) => api.post<{ data: { due: number; asked: number; nudged: number } }>(`/policies/${id}/request-attestations`, {}),
     onSuccess: invalidate,
   });
 }

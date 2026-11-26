@@ -11,6 +11,8 @@ import { EvidencePage } from '@/pages/evidence';
 import { ControlDetailPage } from '@/pages/control-detail';
 import { GapsPage } from '@/pages/gaps';
 import { ReviewPage } from '@/pages/review';
+import { PoliciesPage } from '@/pages/policies';
+import { AttestPage } from '@/pages/attest';
 
 // Grows one variant per page as later milestones land (spec 6.1).
 type Route =
@@ -21,7 +23,9 @@ type Route =
   | { page: 'coverage' }
   | { page: 'evidence' }
   | { page: 'gaps' }
-  | { page: 'review' };
+  | { page: 'review' }
+  | { page: 'policies' }
+  | { page: 'attest' };
 
 const BASE_PATH = '/bastion';
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -37,6 +41,8 @@ export function parseRoute(path: string): Route {
   if (clean === '/evidence') return { page: 'evidence' };
   if (clean === '/gaps') return { page: 'gaps' };
   if (clean === '/review') return { page: 'review' };
+  if (clean === '/policies') return { page: 'policies' };
+  if (clean === '/attest') return { page: 'attest' };
   return { page: 'home' };
 }
 
@@ -139,6 +145,10 @@ export function App() {
         return <GapsPage onNavigate={navigate} />;
       case 'review':
         return <ReviewPage onNavigate={navigate} />;
+      case 'policies':
+        return <PoliciesPage />;
+      case 'attest':
+        return <AttestPage />;
       default:
         return null;
     }
