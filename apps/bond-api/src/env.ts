@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { envBool } from '@bigbluebam/shared';
 
 const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
@@ -22,7 +23,7 @@ const envSchema = z.object({
   BBB_API_INTERNAL_URL: z.string().default('http://api:4000'),
 
   COOKIE_DOMAIN: z.string().optional(),
-  COOKIE_SECURE: z.coerce.boolean().default(false),
+  COOKIE_SECURE: envBool(false),
 
   // Bolt integration (fire-and-forget event publishing)
   BOLT_API_INTERNAL_URL: z.string().default('http://bolt-api:4006'),

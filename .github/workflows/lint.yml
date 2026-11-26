@@ -56,6 +56,11 @@ jobs:
       - name: Check permission catalog drift
         run: pnpm check:permission-catalog
 
+      # Issue #251: z.coerce.boolean() parses the string 'false' as true. Query strings use
+      # boolQueryParam() and env vars use envBool(), both from @bigbluebam/shared.
+      - name: No z.coerce.boolean
+        run: pnpm check:no-coerce-boolean
+
       # Bolt event-catalog drift guard: every publishBoltEvent(source, event_type) call site
       # must be declared in apps/bolt-api/src/services/event-catalog.ts. Exists at
       # package.json but ran in no workflow until this build wired it in (Burn spec 8.2).

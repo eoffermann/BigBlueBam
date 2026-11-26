@@ -1333,6 +1333,9 @@ importers:
       '@bigbluebam/service-health':
         specifier: workspace:*
         version: link:../../packages/service-health
+      '@bigbluebam/shared':
+        specifier: workspace:*
+        version: link:../../packages/shared
       '@fastify/cookie':
         specifier: ^11.0.0
         version: 11.0.2
