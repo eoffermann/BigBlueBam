@@ -326,6 +326,24 @@ import { processBursarRunReaperJob } from './jobs/bursar-run-reaper.job.js';
 import { processBursarDraftReconcileJob } from './jobs/bursar-draft-reconcile.job.js';
 import { processBursarWeeklyDigestJob } from './jobs/bursar-weekly-digest.job.js';
 import { processBursarRetentionJob } from './jobs/bursar-retention.job.js';
+// Bastion (compliance evidence engine) jobs (Bastion spec 7). Thin callers into bastion-api's
+// internal engines route; queue contracts live in @bigbluebam/shared.
+import {
+  BASTION_EVALUATE_TICK_QUEUE,
+  BASTION_EVALUATE_RUN_QUEUE,
+  BASTION_OUTBOX_DRAIN_QUEUE,
+  BASTION_LEDGER_SEAL_QUEUE,
+  BASTION_LEDGER_VERIFY_QUEUE,
+  BASTION_RUN_REAPER_QUEUE,
+  BASTION_EVALUATION_MISSED_QUEUE,
+  BASTION_WEEKLY_READINESS_QUEUE,
+  BASTION_RETENTION_QUEUE,
+  type BastionEvaluateRunJobData,
+  type BastionSweepJobData,
+} from '@bigbluebam/shared';
+import { processBastionEvaluateRunJob } from './jobs/bastion-evaluate-run.job.js';
+import { makeBastionEngineJob, processBastionEvaluateTickJob } from './jobs/bastion-engines.job.js';
+import { postBastion } from './jobs/bastion-shared.js';
 
 const env = loadEnv();
 
@@ -2660,6 +2678,67 @@ registerBursarSweep(BURSAR_RUN_REAPER_QUEUE, processBursarRunReaperJob, { id: 'b
 registerBursarSweep(BURSAR_DRAFT_RECONCILE_QUEUE, processBursarDraftReconcileJob, { id: 'bursar-draft-reconcile-15min', pattern: '*/15 * * * *' });
 registerBursarSweep(BURSAR_WEEKLY_DIGEST_QUEUE, processBursarWeeklyDigestJob, { id: 'bursar-weekly-digest-monday', pattern: '0 13 * * 1' });
 registerBursarSweep(BURSAR_RETENTION_QUEUE, processBursarRetentionJob, { id: 'bursar-retention-daily', pattern: '20 5 * * *' });
+
+// ─── Bastion (compliance evidence engine) ─────────────────────────────────────
+// Spec 7: one event-driven queue (bastion-evaluate-run, produced by bastion-api and by the tick)
+// and the scheduled sweeps of M4, each a thin caller into POST /v1/internal/engines/<name>.
+// registerBastionSweep is registerBursarSweep plus tz 'UTC' and withRetention on every
+// scheduler; every producer add passes a jobId and SCHEDULED_JOB_RETENTION
+// (src/lib/bastion-jobs.test.ts scans for both).
+// A scheduled sweep that fails retries a few times; the next scheduled tick is the real retry.
+const BASTION_JOB_OPTS = { attempts: 3, backoff: { type: 'exponential' as const, delay: 30_000 } };
+const bastionEvaluateRunQueue = makeQueue<BastionEvaluateRunJobData>(BASTION_EVALUATE_RUN_QUEUE);
+const bastionRecordError = (message: string, details: Record<string, unknown>) => {
+  logger.error(details, message);
+  void recordWorkerError({ queueName: BASTION_OUTBOX_DRAIN_QUEUE, jobId: undefined, jobName: 'outbox-drain', err: new Error(message) });
+};
+
+const bastionEvaluateRunWorker = new Worker<BastionEvaluateRunJobData>(
+  BASTION_EVALUATE_RUN_QUEUE,
+  async (job) => {
+    await processBastionEvaluateRunJob(job, logger, { post: postBastion, queue: bastionEvaluateRunQueue });
+  },
+  { ...connection, concurrency: 4 },
+);
+bastionEvaluateRunWorker.on('completed', (job) => { logger.info({ jobId: job.id, queue: BASTION_EVALUATE_RUN_QUEUE }, 'Job completed'); });
+bastionEvaluateRunWorker.on('failed', (job, err) => {
+  logger.error({ jobId: job?.id, queue: BASTION_EVALUATE_RUN_QUEUE, err }, 'Job failed');
+  void recordWorkerError({ queueName: BASTION_EVALUATE_RUN_QUEUE, jobId: job?.id, jobName: job?.name, err: err as Error });
+});
+
+function registerBastionSweep(
+  queue: string,
+  handler: (job: Job<BastionSweepJobData>, l: typeof logger) => Promise<unknown>,
+  schedule: { id: string; pattern: string },
+) {
+  const w = new Worker<BastionSweepJobData>(
+    queue,
+    async (job) => { await handler(job, logger); },
+    { ...connection, concurrency: 1 },
+  );
+  w.on('completed', (job) => { logger.info({ jobId: job.id, queue }, 'Job completed'); });
+  w.on('failed', (job, err) => {
+    logger.error({ jobId: job?.id, queue, err }, 'Job failed');
+    void recordWorkerError({ queueName: queue, jobId: job?.id, jobName: job?.name, err: err as Error });
+  });
+  const q = makeQueue<BastionSweepJobData>(queue);
+  q.upsertJobScheduler(schedule.id, { pattern: schedule.pattern, tz: 'UTC' }, withRetention({ name: 'run', data: {}, opts: BASTION_JOB_OPTS }))
+    .catch((err) => logger.error({ err }, `Failed to register ${queue} scheduler`));
+}
+
+const bastionEngineDeps = { post: postBastion, recordError: bastionRecordError };
+registerBastionSweep(
+  BASTION_EVALUATE_TICK_QUEUE,
+  (job, l) => processBastionEvaluateTickJob(job, l, { ...bastionEngineDeps, queue: bastionEvaluateRunQueue }),
+  { id: 'bastion-evaluate-tick-5min', pattern: '*/5 * * * *' },
+);
+registerBastionSweep(BASTION_OUTBOX_DRAIN_QUEUE, makeBastionEngineJob('outbox-drain', bastionEngineDeps), { id: 'bastion-outbox-drain-1min', pattern: '* * * * *' });
+registerBastionSweep(BASTION_LEDGER_SEAL_QUEUE, makeBastionEngineJob('ledger-seal', bastionEngineDeps), { id: 'bastion-ledger-seal-daily', pattern: '55 23 * * *' });
+registerBastionSweep(BASTION_LEDGER_VERIFY_QUEUE, makeBastionEngineJob('ledger-verify', bastionEngineDeps), { id: 'bastion-ledger-verify-weekly', pattern: '40 4 * * 0' });
+registerBastionSweep(BASTION_RUN_REAPER_QUEUE, makeBastionEngineJob('run-reaper', bastionEngineDeps), { id: 'bastion-run-reaper-5min', pattern: '*/5 * * * *' });
+registerBastionSweep(BASTION_EVALUATION_MISSED_QUEUE, makeBastionEngineJob('evaluation-missed', bastionEngineDeps), { id: 'bastion-evaluation-missed-hourly', pattern: '0 * * * *' });
+registerBastionSweep(BASTION_WEEKLY_READINESS_QUEUE, makeBastionEngineJob('weekly-readiness', bastionEngineDeps), { id: 'bastion-weekly-readiness-monday', pattern: '0 13 * * 1' });
+registerBastionSweep(BASTION_RETENTION_QUEUE, makeBastionEngineJob('retention', bastionEngineDeps), { id: 'bastion-retention-daily', pattern: '20 5 * * *' });
 
 // §1 Wave 5 banter subs — pattern-match consumer.
 // Subscribes to the banter:events Redis channel (the same fan-out used by
