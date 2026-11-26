@@ -64,9 +64,9 @@ A tool/command "corresponds" to the endpoint(s) its handler calls. Sections are 
 | Bulwark | 29 | 17 | 12 | 0 |
 | Burn | 48 | 19 | 29 | 0 |
 | Bursar | 79 | 22 | 57 | 0 |
-| Bastion (tools pending registration at M11) | 26 | 13 | 13 | 0 |
+| Bastion (tools pending registration at M11) | 37 | 21 | 16 | 0 |
 | Cross-app platform | 43 | 32 | 11 | 6 |
-| **Total** | **1291** | **887** | **404** | **17** |
+| **Total** | **1302** | **895** | **407** | **17** |
 
 _Counts are summed from the per-section tables (each row's REST endpoint counted once even when several MCP tools share it). After the `feat/mcp-endpoint-parity` build the "with an MCP tool" total roughly doubled (≈334 → ≈690). Of the ~247 endpoints still tool-less, the large majority are now annotated `— _(skip: …)_` with a reason — auth/OAuth/session, public-inbound (forms/booking/portal/tracking), multipart/binary upload, binary export (PDF/SVG/CSV/.ics), raw credential/API-key admin, SuperUser/permission/account admin (Bam org/admin held to a deliberately conservative scope this pass), Yjs/scene/WebSocket realtime sync, internal/service-to-service routes, and slug/name resolvers done internally — plus the deferred Helpdesk `X-Agent-Key` agent routes. Some endpoints are shared by multiple MCP tools and many are internal / webhook / public-inbound (not user-facing), so treat the totals as close approximations of the surface size, not an exact public-API inventory. The remaining intentional gaps cluster in **Bam org/admin** (SuperUser & permissions admin, integrations, credentials — UI/CLI-only) and a few per-app binary/upload/realtime tails._
 
@@ -2229,6 +2229,17 @@ AI procurement leveling & spend-baseline monitor. 20 `bursar_*` tools (spec sect
 | `GET /v1/setup` | `bastion_get_setup_status` | Setup wizard state: frameworks, profile, Compliance project, proposed checks, ISO applicability progress | Setup wizard |
 | `PATCH /v1/setup/profile` | — _(skip: human setup act, spec 2.8; the ten company-profile answers)_ | Save the company profile | Setup wizard "Save answers" |
 | `POST /v1/setup/compliance-project` | — _(skip: human setup act, spec 2.8; the project itself is created through Bam's `create_project`)_ | Record the required Compliance project | Setup wizard "Create a Compliance project for me", "Use an existing project" |
+| `POST /v1/evaluations` | `bastion_run_evaluation` | Evaluate now (202 + queued run; full or one control); 409 `EVALUATION_RUNNING` while one of the same scope is live | — (Readiness "Check now", M5) |
+| `GET /v1/evaluations` | `bastion_list_evaluations` | Evaluation runs, newest first, with status, partial reason and counts | — (Readiness, M5) |
+| `GET /v1/evaluations/:id` | `bastion_list_evaluations` | One run's status (polled; no realtime in v1) | — (Readiness, M5) |
+| `GET /v1/controls/:id/evidence` | `bastion_evidence_for` | A control's evidence snapshots with a plain explanation; counts only unless owner, admin or control owner | — (Control detail, M6) |
+| `GET /v1/evidence/:id` | `bastion_get_evidence` | One evidence snapshot | — (Control detail, M6) |
+| `GET /v1/evidence/:id/verify` | `bastion_verify_evidence` | Re-hash entry and stored file, check the personal-data commitment, walk to the next signed seal | — (Control detail, M6) |
+| `GET /v1/ledger/seals` | `bastion_list_seals` | Signed daily seals plus every signing key (current and retired) | — (Sharing, M9) |
+| `GET /v1/ledger/restores` | `bastion_list_restores` | Lost ledger ranges from the database and from the bucket's `restores/` records | — (Settings, M9) |
+| `POST /v1/ledger/restores/:id/acknowledge` | — _(skip: human gate, spec 2.8 and 3.4; owner only, session required, impersonation refused, confirm)_ | Acknowledge a matched restore or resume recording under an unexplained gap | — (Settings, M9) |
+| `POST /v1/internal/engines/:name` | — _(skip: internal service-to-service; the worker's thin jobs call it with the internal secret)_ | evaluate-tick, evaluate-run, outbox-drain, ledger-seal, ledger-verify, run-reaper, evaluation-missed, weekly-readiness, retention | worker |
+| `POST /v1/internal/events` | — _(skip: internal service-to-service; bolt-api's bastion dispatch hook)_ | Durable inbox for consumed events (deduplicated per org) | bolt-api |
 | `GET /health`, `GET /health/ready`, `GET /metrics` | — _(skip: probe)_ | Health / readiness (Postgres and Redis only) / metrics | — |
 
-`bastion_list_frameworks` backs four rows, `bastion_compile_framework` two, `bastion_control_status` two, `bastion_propose_assertion` two. Section counts: 26 REST endpoint rows (25 bastion-api routes plus the combined health/metrics row), 13 with a pending `bastion_*` tool, 13 skip-annotated; 7 pending `bastion_*` tools at M3. No MCP-only tools.
+`bastion_list_frameworks` backs four rows, `bastion_compile_framework` two, `bastion_control_status` two, `bastion_propose_assertion` two, `bastion_list_evaluations` two. Section counts: 37 REST endpoint rows (36 bastion-api routes plus the combined health/metrics row), 21 with a pending `bastion_*` tool, 16 skip-annotated; 14 pending `bastion_*` tools at M4. No MCP-only tools.

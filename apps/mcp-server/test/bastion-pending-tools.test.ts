@@ -56,7 +56,7 @@ describe('Bastion pending tools stay out of the registered surface until M11', (
   });
 
   it('every handler goes through registerTool (agent policies apply once registered)', () => {
-    expect((PENDING.match(/registerTool\(server, \{/g) ?? []).length).toBe(7);
+    expect((PENDING.match(/registerTool\(server, \{/g) ?? []).length).toBe(14);
     expect(PENDING).not.toMatch(/server\.tool\(/);
   });
 });
@@ -156,6 +156,50 @@ describe('Bastion M3 tool handlers', () => {
       'GET http://bastion-api:4024/v1/probes',
       'GET http://bastion-api:4024/v1/setup',
     ]);
+  });
+
+  it('M4: bastion_run_evaluation starts a full or one-control run; bastion_list_evaluations lists or reads one', async () => {
+    const tool = await load();
+    await tool('bastion_run_evaluation').handler({} as never);
+    await tool('bastion_run_evaluation').handler({ control_id: CTRL } as never);
+    await tool('bastion_list_evaluations').handler({ status: 'partial', limit: 5 } as never);
+    await tool('bastion_list_evaluations').handler({ run_id: ASSERTION } as never);
+    expect(calls.map((c) => `${c.method} ${c.url}`)).toEqual([
+      'POST http://bastion-api:4024/v1/evaluations',
+      'POST http://bastion-api:4024/v1/evaluations',
+      'GET http://bastion-api:4024/v1/evaluations?status=partial&limit=5',
+      `GET http://bastion-api:4024/v1/evaluations/${ASSERTION}`,
+    ]);
+    expect(calls[0]!.body).toEqual({});
+    expect(calls[1]!.body).toEqual({ control_id: CTRL });
+  });
+
+  it('M4: the run input is the shared Zod body (no stray fields reach bastion-api)', async () => {
+    const tool = await load();
+    const input = tool('bastion_run_evaluation').input as Record<string, { safeParse: (v: unknown) => { success: boolean } }>;
+    expect(Object.keys(input)).toEqual(['control_id']);
+    expect(input.control_id!.safeParse('not-a-uuid').success).toBe(false);
+  });
+
+  it('M4: evidence, verification, seals and restores are plain reads on the right routes', async () => {
+    const tool = await load();
+    await tool('bastion_evidence_for').handler({ control_id: CTRL, assertion_id: ASSERTION, limit: 10 } as never);
+    await tool('bastion_get_evidence').handler({ evidence_id: ASSERTION } as never);
+    await tool('bastion_verify_evidence').handler({ evidence_id: ASSERTION } as never);
+    await tool('bastion_list_seals').handler({} as never);
+    await tool('bastion_list_restores').handler({} as never);
+    expect(calls.map((c) => `${c.method} ${c.url}`)).toEqual([
+      `GET http://bastion-api:4024/v1/controls/${CTRL}/evidence?assertion_id=${ASSERTION}&limit=10`,
+      `GET http://bastion-api:4024/v1/evidence/${ASSERTION}`,
+      `GET http://bastion-api:4024/v1/evidence/${ASSERTION}/verify`,
+      'GET http://bastion-api:4024/v1/ledger/seals',
+      'GET http://bastion-api:4024/v1/ledger/restores',
+    ]);
+  });
+
+  it('M4: resolving a ledger restore has no tool (owner integrity act behind a session)', async () => {
+    await load();
+    expect(captured.map((c) => c.name).join(' ')).not.toMatch(/acknowledge|resolve|restore_ack/);
   });
 
   it('surfaces a bastion-api error as an MCP error result', async () => {
