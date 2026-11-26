@@ -1,8 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
-import { applyDriftBaseline, checkPayloadCalls, objectLiteralKeys, parsePayloadSchemas } from './bolt-payload-keys.mjs';
+import { applyDriftBaseline, checkPayloadCalls, objectLiteralKeys, parsePayloadSchemas, publishedPayloads } from './bolt-payload-keys.mjs';
 
 const CATALOG = `
 const orgField: PayloadField = { name: 'org_id', type: 'uuid', description: 'Org' };
@@ -76,6 +76,48 @@ test('the baseline hides known drift and reports entries that are no longer sent
   const out = applyDriftBaseline(v, { 'bond:deal.rotting:stage': 1, 'bond:deal.rotting:gone': 2 }, 'baseline.json');
   assert.equal(out.length, 1);
   assert.match(out[0].reason, /"bond:deal\.rotting:gone".*no longer sent/);
+});
+
+// #289: the reverse direction for the shipped Bolt templates. A template condition or parameter
+// that reads event.<key>... must read a key the event's publishers actually send, or the rule a
+// person instantiates from it can never match (tpl_auto_assign_ticket read event.ticket.* while
+// Helpdesk sent only flat ticket_id / priority).
+test('every Bolt template reads payload keys its trigger event is published with', () => {
+  const root = join(import.meta.dirname, '..', '..');
+  const tpl = readFileSync(join(root, 'apps/bolt-api/src/services/template.service.ts'), 'utf8');
+  const sent = new Map();
+  const walk = (dir) => {
+    for (const n of readdirSync(dir)) {
+      if (['node_modules', 'dist', 'build', '__tests__'].includes(n)) continue;
+      const p = join(dir, n);
+      if (statSync(p).isDirectory()) walk(p);
+      else if (n.endsWith('.ts') && !n.endsWith('.d.ts') && !n.endsWith('.test.ts')) {
+        for (const c of publishedPayloads(readFileSync(p, 'utf8'))) {
+          const k = `${c.source}:${c.eventName}`;
+          if (!sent.has(k)) sent.set(k, { keys: new Set(), open: false });
+          const e = sent.get(k);
+          for (const key of c.keys) e.keys.add(key);
+          e.open ||= c.open;
+        }
+      }
+    }
+  };
+  walk(join(root, 'apps'));
+  const blocks = tpl.split(/\bid: 'tpl_/).slice(1);
+  let checked = 0;
+  for (const b of blocks) {
+    const id = /^([a-z_]+)'/.exec(b)?.[1];
+    const source = /trigger_source: '([a-z_]+)'/.exec(b)?.[1];
+    const event = /trigger_event: '([a-z0-9_.]+)'/.exec(b)?.[1];
+    const e = sent.get(`${source}:${event}`);
+    if (!e || e.open) continue; // no literal publisher found, or a spread payload: cannot tell
+    for (const m of b.matchAll(/event\.([a-z_]+)/g)) {
+      if (['actor', 'org'].includes(m[1])) continue; // added by the publisher's actor/org arguments on some sources
+      checked += 1;
+      assert.ok(e.keys.has(m[1]), `tpl_${id} reads event.${m[1]} but ${source}:${event} is published without "${m[1]}"`);
+    }
+  }
+  assert.ok(checked > 0);
 });
 
 test('every Bastion publisher in the repo sends only declared keys (#262)', () => {

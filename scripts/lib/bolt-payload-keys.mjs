@@ -261,6 +261,29 @@ function literal(arg) {
   return null;
 }
 
+/**
+ * Every literal publish call in one file with the top-level keys its object-literal payload sends:
+ * [{ source, eventName, keys, open }] (calls whose payload is not an object literal are skipped).
+ */
+export function publishedPayloads(text) {
+  const out = [];
+  if (!text.includes('publishBoltEvent') && !text.includes('enqueueBastionEvent')) return out;
+  for (const call of CALLS) {
+    call.re.lastIndex = 0;
+    for (let m = call.re.exec(text); m !== null; m = call.re.exec(text)) {
+      if (/function\s*\*?\s*$/.test(text.slice(Math.max(0, m.index - 16), m.index))) continue;
+      const whole = balancedSlice(text, m.index + m[0].length - 1);
+      if (!whole) continue;
+      const args = splitTopLevel(whole.slice(1, -1));
+      const eventName = literal(args[0] ?? '');
+      const source = typeof call.source === 'string' ? call.source : literal(args[call.source] ?? '');
+      const lit = args[call.payload] === undefined ? null : objectLiteralKeys(args[call.payload]);
+      if (eventName && source && lit) out.push({ source, eventName, keys: lit.keys, open: lit.open });
+    }
+  }
+  return out;
+}
+
 /** Payload-key violations for every literal publish call in one file. */
 export function checkPayloadCalls(file, text, schemas) {
   const out = [];
