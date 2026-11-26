@@ -11,6 +11,10 @@
       "package.json",
       "tsconfig.base.json",
       "apps/api/Dockerfile",
+      "packages/logging/**",
+      "packages/service-health/**",
+      "packages/permissions/**",
+      "packages/smtp-resolver/**",
       "infra/postgres/migrations/**"
     ]
   },

@@ -10,7 +10,8 @@
       "pnpm-workspace.yaml",
       "package.json",
       "tsconfig.base.json",
-      "apps/mcp-server/Dockerfile"
+      "apps/mcp-server/Dockerfile",
+      "packages/permissions/**"
     ]
   },
   "deploy": {

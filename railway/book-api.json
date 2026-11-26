@@ -10,7 +10,11 @@
       "pnpm-workspace.yaml",
       "package.json",
       "tsconfig.base.json",
-      "apps/book-api/Dockerfile"
+      "apps/book-api/Dockerfile",
+      "packages/logging/**",
+      "packages/service-health/**",
+      "packages/db-stubs/**",
+      "packages/permissions/**"
     ]
   },
   "deploy": {

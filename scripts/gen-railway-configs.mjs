@@ -36,6 +36,7 @@ import {
 } from './deploy/shared/services.mjs';
 import { hintFor } from './deploy/shared/env-hints.mjs';
 import { transformNginxForRailway } from './lib/railway-nginx.mjs';
+import { dockerfileCopiedDirs, watchPatternForDir } from './lib/railway-watch.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const OUT_DIR = join(ROOT, 'railway');
@@ -44,7 +45,11 @@ const OUT_DIR = join(ROOT, 'railway');
 //
 // A service is rebuilt when any matched file changes. We include the
 // service's own source tree, its Dockerfile, the shared schema package
-// (everything depends on it), the root lockfile, and the root package.json.
+// (everything depends on it), the root lockfile, and the root package.json,
+// plus (issue #170) every packages/<name> and apps/<name> directory the
+// service's Dockerfile COPYs, read from the Dockerfile itself so a package
+// the image builds can never be missing from its watch list.
+// scripts/lib/railway-watch.test.mjs fails when the committed output drifts.
 
 function watchPatternsFor(service) {
   if (!service.dockerfile) return undefined;
@@ -58,10 +63,12 @@ function watchPatternsFor(service) {
     'tsconfig.base.json',
     service.dockerfile,
   ];
+  const dockerfileText = readFileSync(join(ROOT, service.dockerfile), 'utf8');
+  for (const dir of dockerfileCopiedDirs(dockerfileText)) base.push(watchPatternForDir(dir));
   if (service.extra_watch_patterns) {
     base.push(...service.extra_watch_patterns);
   }
-  return base;
+  return [...new Set(base)];
 }
 
 // ─── Config builders ──────────────────────────────────────────────────

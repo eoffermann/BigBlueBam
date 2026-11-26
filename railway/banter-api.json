@@ -10,7 +10,13 @@
       "pnpm-workspace.yaml",
       "package.json",
       "tsconfig.base.json",
-      "apps/banter-api/Dockerfile"
+      "apps/banter-api/Dockerfile",
+      "packages/logging/**",
+      "packages/service-health/**",
+      "packages/db-stubs/**",
+      "packages/livekit-tokens/**",
+      "packages/permissions/**",
+      "packages/storage/**"
     ]
   },
   "deploy": {

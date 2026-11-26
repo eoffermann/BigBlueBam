@@ -11,8 +11,11 @@
       "package.json",
       "tsconfig.base.json",
       "apps/bastion-api/Dockerfile",
-      "packages/storage/**",
-      "packages/permissions/**"
+      "packages/logging/**",
+      "packages/service-health/**",
+      "packages/db-stubs/**",
+      "packages/permissions/**",
+      "packages/storage/**"
     ]
   },
   "deploy": {

@@ -10,7 +10,9 @@
       "pnpm-workspace.yaml",
       "package.json",
       "tsconfig.base.json",
-      "apps/worker/Dockerfile"
+      "apps/worker/Dockerfile",
+      "packages/smtp-resolver/**",
+      "packages/storage/**"
     ]
   },
   "deploy": {
