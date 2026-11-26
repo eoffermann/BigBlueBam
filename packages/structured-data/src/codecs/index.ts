@@ -8,6 +8,7 @@ export * from './json.js';
 export * from './jsonl.js';
 export * from './csv.js';
 export * from './yaml.js';
+export * from './xlsx.js';
 
 /** Decode bytes into a plain JS value + a replayable dialect, by format. */
 export function decode(text: string, format: Format): DecodeResult {

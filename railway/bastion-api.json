@@ -15,7 +15,8 @@
       "packages/service-health/**",
       "packages/db-stubs/**",
       "packages/permissions/**",
-      "packages/storage/**"
+      "packages/storage/**",
+      "packages/structured-data/**"
     ]
   },
   "deploy": {
