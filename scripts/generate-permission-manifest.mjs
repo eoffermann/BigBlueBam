@@ -603,6 +603,8 @@ const EXCLUDED_FILE_BASENAMES = new Set([
   'slack-webhook.routes.ts',
   'internal-helpdesk.routes.ts',
   'internal-llm.routes.ts',
+  // Bastion -> Bam service-to-service routes, mounted at /internal/bastion (Bastion spec 8.4).
+  'internal-bastion.routes.ts',
   'ical.routes.ts',
   // Wave F: permissions-admin routes use contract-document ids
   // (e.g. bam.superuser_permission_group.set_defaults) rather than

@@ -65,8 +65,8 @@ A tool/command "corresponds" to the endpoint(s) its handler calls. Sections are 
 | Burn | 48 | 19 | 29 | 0 |
 | Bursar | 79 | 22 | 57 | 0 |
 | Bastion (tools pending registration at M11) | 58 | 42 | 16 | 2 |
-| Cross-app platform | 43 | 32 | 11 | 6 |
-| **Total** | **1323** | **916** | **407** | **19** |
+| Cross-app platform | 46 | 32 | 14 | 6 |
+| **Total** | **1326** | **916** | **410** | **19** |
 
 _Counts are summed from the per-section tables (each row's REST endpoint counted once even when several MCP tools share it). After the `feat/mcp-endpoint-parity` build the "with an MCP tool" total roughly doubled (≈334 → ≈690). Of the ~247 endpoints still tool-less, the large majority are now annotated `— _(skip: …)_` with a reason — auth/OAuth/session, public-inbound (forms/booking/portal/tracking), multipart/binary upload, binary export (PDF/SVG/CSV/.ics), raw credential/API-key admin, SuperUser/permission/account admin (Bam org/admin held to a deliberately conservative scope this pass), Yjs/scene/WebSocket realtime sync, internal/service-to-service routes, and slug/name resolvers done internally — plus the deferred Helpdesk `X-Agent-Key` agent routes. Some endpoints are shared by multiple MCP tools and many are internal / webhook / public-inbound (not user-facing), so treat the totals as close approximations of the surface size, not an exact public-API inventory. The remaining intentional gaps cluster in **Bam org/admin** (SuperUser & permissions admin, integrations, credentials — UI/CLI-only) and a few per-app binary/upload/realtime tails._
 
@@ -1876,6 +1876,9 @@ External prefix for the Bam api is `/b3/api/`, so a route shown as `POST /v1/pro
 
 | REST endpoint | MCP tool | Description | UI call site |
 |---|---|---|---|
+| `POST /internal/bastion/tasks/upsert` | — _(skip: internal service-to-service route)_ | Internal (bastion-api outbox): one remediation task per control by `external_id`, reopened to the start phase on repeat drift | — |
+| `POST /internal/bastion/tasks/comment` | — _(skip: internal service-to-service route)_ | Internal (bastion-api outbox): comment on a control's task by `external_id`, deduplicated on its idempotency key | — |
+| `POST /internal/bastion/proposals/:id/close` | — _(skip: internal service-to-service route)_ | Internal (bastion-api outbox): close an `owning_app = 'bastion'` proposal for a human member decider; emits `proposal.decided` | — |
 | `POST /internal/helpdesk/comments` | — _(skip: internal service-to-service route)_ | Internal: post a Bam comment from a helpdesk ticket | — |
 | `GET /internal/helpdesk/queue` | — _(skip: SPA session proxy; agents use helpdesk MCP tools)_ | Session-auth proxy to helpdesk ticket queue | `apps/frontend/src/pages/helpdesk-agent-queue.tsx` |
 | `GET /internal/helpdesk/tickets/:id` | — _(skip: SPA session proxy; agents use helpdesk MCP tools)_ | Session-auth proxy to helpdesk agent ticket detail (with internal notes) | `apps/frontend/src/components/tasks/helpdesk-panel.tsx` |
