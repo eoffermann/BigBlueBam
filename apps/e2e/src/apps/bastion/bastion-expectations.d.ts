@@ -29,6 +29,23 @@ interface BastionSeedExpectations {
     notApplicableReason: string;
     notApplicableRefs: string[];
   };
+  m5: {
+    twoStep: {
+      controlKey: string;
+      title: string;
+      sourceSystem: string;
+      uploaderEmail: string;
+      uploaderRole: string;
+      reviewerEmail: string;
+      fileName: string;
+      daysLeft: number;
+      producedDaysAgo: number;
+    };
+    backgroundChecks: { controlKey: string; title: string; sourceSystem: string; authorEmail: string; statement: string; validDays: number };
+    laptopEncryption: { controlKey: string };
+    provenByEvidence: number;
+    feed: { feedKey: string; label: string; feedKind: string; cadenceDays: number; keyLabel: string; records: string[] };
+  };
   companyProfile: Record<string, string | boolean>;
 }
 

@@ -81,4 +81,27 @@ describe('BASTION_SEED_EXPECTATIONS matches the library', () => {
   it('answers all ten profile questions', () => {
     expect(Object.keys(EXP.companyProfile)).toHaveLength(10);
   });
+
+  it('M5: the evidence-backed controls have exactly one manual check of the right kind, in both views', () => {
+    const only = (key: string, kind: 'file' | 'attestation_statement') => {
+      const c = LIBRARY_CONTROLS.find((x) => x.control_key === key);
+      expect(c, key).toBeDefined();
+      expect(c?.suggested_assertions, `${key} has no probe check beside the manual one`).toHaveLength(0);
+      expect(c?.suggested_manual_evidence.map((m) => m.spec.kind)).toEqual([kind]);
+      expect(soc, key).toContain(key);
+      expect(iso, key).toContain(key);
+      expect(left).not.toContain(key);
+    };
+    only(EXP.m5.twoStep.controlKey, 'file');
+    only(EXP.m5.backgroundChecks.controlKey, 'attestation_statement');
+    // So exactly these two count under "Proven by evidence you provided" in either view.
+    expect(EXP.m5.provenByEvidence).toBe(2);
+    // The 2-Step report's cadence (90 days) covers a report produced two days before seeding.
+    const mfa = LIBRARY_CONTROLS.find((x) => x.control_key === EXP.m5.twoStep.controlKey);
+    expect(mfa?.suggested_manual_evidence[0]?.spec.cadence_days).toBeGreaterThan(EXP.m5.twoStep.producedDaysAgo);
+    // Laptop encryption asks for evidence and gets none in the seed.
+    const laptops = LIBRARY_CONTROLS.find((x) => x.control_key === EXP.m5.laptopEncryption.controlKey);
+    expect(laptops?.suggested_manual_evidence.length).toBeGreaterThan(0);
+    expect(left).not.toContain(EXP.m5.laptopEncryption.controlKey);
+  });
 });
