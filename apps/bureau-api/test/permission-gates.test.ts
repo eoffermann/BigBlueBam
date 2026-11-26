@@ -139,8 +139,11 @@ describe('Bureau route permission gates (issue #153)', () => {
     }
   });
 
-  it('uses every catalogued bureau.* id somewhere', () => {
-    const used = new Set(routes.flatMap((r) => r.ids));
+  it('uses every catalogued bureau.* id somewhere (REST routes or WebSocket frames)', () => {
+    // bureau.chat.write gates only the WebSocket chat_send frame (issue #166).
+    const wsMap = readFileSync(resolve(REPO, 'apps/bureau-api/src/lib/ws-permissions.ts'), 'utf8');
+    const wsIds = [...wsMap.matchAll(/'(bureau\.[a-z_]+\.[a-z_]+)'/g)].map((m) => m[1]!);
+    const used = new Set([...routes.flatMap((r) => r.ids), ...wsIds]);
     expect([...grants.rows.keys()].filter((id) => !used.has(id))).toEqual([]);
   });
 

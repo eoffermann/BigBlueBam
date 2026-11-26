@@ -237,6 +237,107 @@ export interface HttpPermissionsPluginOptions {
   onUnknown?: 'allow' | 'deny';
 }
 
+export interface HttpResolverOptions {
+  /** apps/api internal URL, e.g. 'http://api:4000'. */
+  apiInternalUrl: string;
+  /** Shared INTERNAL_SERVICE_SECRET. */
+  internalSecret: string;
+  /** Test seam; defaults to the global fetch. */
+  fetchImpl?: typeof fetch;
+}
+
+/**
+ * One POST to apps/api's /internal/permissions/dual-read. This is the single
+ * place a satellite asks the resolver for a decision: the HTTP plugin's
+ * requireCan and non-HTTP surfaces (the Bureau WebSocket hub, issue #166) both
+ * call it, so a REST route and its realtime twin cannot disagree on how a
+ * decision is fetched. 'unknown' means no usable answer (non-2xx, malformed
+ * body, or a thrown fetch); each caller decides what unknown means for it.
+ */
+export async function resolveViaHttp(
+  opts: HttpResolverOptions,
+  userId: string,
+  permissionId: string,
+  scope: { org_id: string | null; project_id: string | null },
+  logger?: { warn: (obj: object, msg: string) => void },
+): Promise<'allow' | 'deny' | 'unknown'> {
+  try {
+    const res = await (opts.fetchImpl ?? fetch)(
+      opts.apiInternalUrl.replace(/\/$/, '') + '/internal/permissions/dual-read',
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Internal-Secret': opts.internalSecret,
+        },
+        body: JSON.stringify({
+          user_id: userId,
+          permission_id: permissionId,
+          agent_policy_decision: 'allow',
+          scope,
+        }),
+      },
+    );
+    if (!res.ok) return 'unknown';
+    const json = (await res.json()) as { data?: { decision?: string } };
+    const d = json?.data?.decision;
+    if (d === 'allow' || d === 'deny') return d;
+    return 'unknown';
+  } catch (err) {
+    logger?.warn({ err, permissionId }, 'permissions: resolver POST failed');
+    return 'unknown';
+  }
+}
+
+export interface HttpPermissionCheckerOptions extends HttpResolverOptions {
+  mode: EnforcementMode;
+  /** Same meaning as HttpPermissionsPluginOptions.onUnknown. */
+  onUnknown: 'allow' | 'deny';
+  /** How long one decision is reused, per (user, org, permission). Default 30s. */
+  cacheTtlMs?: number;
+  /** Test seam for the cache clock. */
+  now?: () => number;
+}
+
+/**
+ * A boolean permission probe for code paths with no Fastify request/reply,
+ * e.g. WebSocket frames. Applies the same enforcement mode semantics as
+ * requireCan: 'off' and 'warn' always allow ('warn' still calls the resolver
+ * so divergence is recorded), 'on' allows only an explicit allow (or unknown
+ * under onUnknown: 'allow'). Decisions are memoized briefly so a chatty
+ * socket does not POST to the api on every frame.
+ */
+export function createHttpPermissionChecker(opts: HttpPermissionCheckerOptions) {
+  const ttl = opts.cacheTtlMs ?? 30_000;
+  const now = opts.now ?? Date.now;
+  const cache = new Map<string, { allowed: boolean; expires: number }>();
+  return async function check(
+    caller: { user_id: string; org_id: string | null },
+    permissionId: string,
+    logger?: { warn: (obj: object, msg: string) => void },
+  ): Promise<boolean> {
+    if (opts.mode === 'off') return true;
+    const key = `${caller.user_id}|${caller.org_id ?? ''}|${permissionId}`;
+    const hit = cache.get(key);
+    if (hit && hit.expires > now()) return hit.allowed;
+    const decision = await resolveViaHttp(
+      opts,
+      caller.user_id,
+      permissionId,
+      { org_id: caller.org_id, project_id: null },
+      logger,
+    );
+    if (opts.mode === 'warn') return true;
+    const allowed = decision === 'allow' || (decision === 'unknown' && opts.onUnknown === 'allow');
+    // Do not pin a transient resolver failure for the whole TTL.
+    if (decision !== 'unknown') {
+      if (cache.size > 5000) cache.clear();
+      cache.set(key, { allowed, expires: now() + ttl });
+    }
+    return allowed;
+  };
+}
+
 export const httpPermissionsPlugin = fp<HttpPermissionsPluginOptions>(
   async (fastify: FastifyInstance, opts) => {
     if (opts.mode === 'off') {
@@ -259,37 +360,15 @@ export const httpPermissionsPlugin = fp<HttpPermissionsPluginOptions>(
       scope: { org_id: string | null; project_id: string | null },
       logger: { warn: (obj: object, msg: string) => void },
     ): Promise<'allow' | 'deny' | 'unknown'> {
-      try {
-        const res = await fetch(
-          opts.apiInternalUrl.replace(/\/$/, '') + '/internal/permissions/dual-read',
-          {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'X-Internal-Secret': opts.internalSecret,
-            },
-            body: JSON.stringify({
-              user_id: userId,
-              permission_id: permissionId,
-              agent_policy_decision: 'allow',
-              scope,
-            }),
-          },
-        );
-        if (!res.ok) return 'unknown';
-        const json = (await res.json()) as { data?: { decision?: string } };
-        const d = json?.data?.decision;
-        if (d === 'allow' || d === 'deny') return d;
-        return 'unknown';
-      } catch (err) {
-        logger.warn(
-          { err, permissionId, on_unknown: onUnknown },
-          onUnknown === 'deny'
-            ? 'httpPermissionsPlugin: resolver POST failed; failing closed'
-            : 'httpPermissionsPlugin: resolver POST failed; pass-through',
-        );
-        return 'unknown';
-      }
+      return resolveViaHttp(opts, userId, permissionId, scope, {
+        warn: (obj, _msg) =>
+          logger.warn(
+            { ...obj, on_unknown: onUnknown },
+            onUnknown === 'deny'
+              ? 'httpPermissionsPlugin: resolver POST failed; failing closed'
+              : 'httpPermissionsPlugin: resolver POST failed; pass-through',
+          ),
+      });
     }
 
     fastify.decorate(

@@ -46,6 +46,7 @@ import { db } from '../db/index.js';
 import { sessions, users } from '../db/schema/index.js';
 import { bureauKnocks, bureauSummons } from '../db/schema/bureau.js';
 import { env } from '../env.js';
+import { deniedPermissionForFrame } from '../lib/ws-permissions.js';
 import {
   canLockRoomDecision,
   canSetDoorDecision,
@@ -479,6 +480,25 @@ export default async function wsRoutes(fastify: FastifyInstance) {
         safeSend(
           socket,
           frame('error', { code: 'BAD_FRAME', message: 'Missing type' }),
+        );
+        return;
+      }
+
+      // Same catalog gate as the REST twin of each frame (issue #166).
+      const deniedId = await deniedPermissionForFrame(
+        msg.type,
+        { user_id: userId, org_id: orgId },
+        request.log,
+      );
+      if (deniedId) {
+        safeSend(
+          socket,
+          frame('error', {
+            code: 'PERMISSION_DENIED',
+            message: `Permission denied: ${deniedId}`,
+            permission_id: deniedId,
+            frame_type: msg.type,
+          }),
         );
         return;
       }

@@ -291,9 +291,82 @@ function checkRouteCoverage() {
   console.log(`✓ every route-bearing app contributes catalog actions (${apps} apps, ${Object.keys(ROUTE_COVERAGE_EXEMPT).length} exempt)`);
 }
 
+// ─── WebSocket frame coverage (issue #166) ────────────────────────────
+//
+// The route scan above only sees requireCan()/can() in HTTP route files, so it
+// reported Bureau as fully covered while its WebSocket hub ran knock, summon,
+// door, chat and presence frames with no catalog check at all. Each hub listed
+// here must map EVERY `case '<frame>':` in its handler to a list of catalog ids
+// (an empty list is an explicit "always allowed"), every mapped id must exist in
+// the catalog, no map key may be stale, and the handler must still call the gate.
+
+export const WS_FRAME_MAPS = [
+  {
+    handler: 'apps/bureau-api/src/routes/ws.routes.ts',
+    map: 'apps/bureau-api/src/lib/ws-permissions.ts',
+    exportName: 'WS_FRAME_PERMISSIONS',
+    gateCall: 'deniedPermissionForFrame(',
+  },
+];
+
+export function parseFrameMap(text, exportName) {
+  const at = text.indexOf(`${exportName}`);
+  if (at < 0) return null;
+  const open = text.indexOf('= {', at);
+  const close = text.indexOf('\n};', open);
+  if (open < 0 || close < 0) return null;
+  const body = text.slice(open + 3, close);
+  const map = new Map();
+  for (const m of body.matchAll(/^\s*([a-z_]+)\s*:\s*\[([^\]]*)\]/gm)) {
+    map.set(m[1], [...m[2].matchAll(/['"]([a-z0-9_.]+)['"]/g)].map((x) => x[1]));
+  }
+  return map;
+}
+
+export function wsFrameCoverageProblems(root = ROOT, manifest = null, hubs = WS_FRAME_MAPS) {
+  const m = manifest ?? JSON.parse(readFile(join(root, 'docs/permissions-action-manifest.json')));
+  const catalog = new Set(m.permissions.map((p) => p.id));
+  const problems = [];
+  let frames = 0;
+  for (const hub of hubs) {
+    const handler = readFile(join(root, hub.handler));
+    const map = parseFrameMap(readFile(join(root, hub.map)), hub.exportName);
+    if (!map) {
+      problems.push(`${hub.map}: could not find ${hub.exportName} = { ... };`);
+      continue;
+    }
+    const cases = new Set([...handler.matchAll(/case\s+'([a-z_]+)'\s*:/g)].map((x) => x[1]));
+    frames += cases.size;
+    for (const c of cases) {
+      if (!map.has(c)) problems.push(`${hub.handler}: frame '${c}' has no entry in ${hub.exportName} (${hub.map})`);
+    }
+    for (const [k, ids] of map) {
+      if (!cases.has(k)) problems.push(`${hub.map}: ${hub.exportName} maps '${k}', which ${hub.handler} no longer handles`);
+      for (const id of ids) {
+        if (!catalog.has(id)) problems.push(`${hub.map}: frame '${k}' maps to '${id}', which is not in the catalog`);
+      }
+    }
+    if (!handler.includes(hub.gateCall)) {
+      problems.push(`${hub.handler}: no longer calls ${hub.gateCall}...), so its frame map is not enforced`);
+    }
+  }
+  return { problems, frames };
+}
+
+function checkWsFrameCoverage() {
+  const { problems, frames } = wsFrameCoverageProblems();
+  if (problems.length > 0) {
+    console.error('✗ permission catalog WebSocket frame coverage:');
+    for (const p of problems) console.error(`    ${p}`);
+    process.exit(1);
+  }
+  console.log(`✓ every WebSocket frame is mapped to catalog actions (${WS_FRAME_MAPS.length} hubs, ${frames} frame types)`);
+}
+
 const isMain = process.argv[1] && resolve(process.argv[1]) === resolve(new URL(import.meta.url).pathname.replace(/^\/([A-Za-z]):\//, '$1:/'));
 if (isMain) {
   regenerate();
   checkRouteCoverage();
+  checkWsFrameCoverage();
   checkDb();
 }

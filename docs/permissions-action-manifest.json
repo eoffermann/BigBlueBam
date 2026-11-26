@@ -1,6 +1,6 @@
 {
   "counts": {
-    "total": 1519,
+    "total": 1520,
     "mcp_tools_scanned": 885,
     "rest_routes_scanned": 889,
     "read_permissions": 588,
@@ -23978,6 +23978,23 @@
           "source": "rest",
           "ref": "hand_authored (migration 0267)",
           "file": "rooms.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "bureau.chat.write",
+      "app": "bureau",
+      "resource": "chat",
+      "verb": "write",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "hand_authored (migration 0270)",
+          "file": "ws.routes.ts"
         }
       ]
     },

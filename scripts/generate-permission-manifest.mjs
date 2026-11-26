@@ -991,6 +991,8 @@ function buildManifest() {
     { id: 'bureau.booking.write', app: 'bureau', resource: 'booking', verb: 'write', is_read: false, is_destructive: false, requires_confirmation: false, requires_superuser: false },
     { id: 'bureau.chat.read', app: 'bureau', resource: 'chat', verb: 'read', is_read: true, is_destructive: false, requires_confirmation: false, requires_superuser: false },
     { id: 'bureau.chat.configure', app: 'bureau', resource: 'chat', verb: 'configure', is_read: false, is_destructive: false, requires_confirmation: false, requires_superuser: false },
+    // Issue #166: sending room chat over the WebSocket (chat_send frame). Delta 0270, defaults 0271.
+    { id: 'bureau.chat.write', app: 'bureau', resource: 'chat', verb: 'write', is_read: false, is_destructive: false, requires_confirmation: false, requires_superuser: false },
     { id: 'bureau.presence.read', app: 'bureau', resource: 'presence', verb: 'read', is_read: true, is_destructive: false, requires_confirmation: false, requires_superuser: false },
     { id: 'bureau.status.update', app: 'bureau', resource: 'status', verb: 'update', is_read: false, is_destructive: false, requires_confirmation: false, requires_superuser: false },
     { id: 'bureau.office.read', app: 'bureau', resource: 'office', verb: 'read', is_read: true, is_destructive: false, requires_confirmation: false, requires_superuser: false },
@@ -1052,6 +1054,10 @@ function buildManifest() {
       if (c.id.startsWith('bureau.')) {
         migrationLabel = '0267';
         sourceFile = 'rooms.routes.ts';
+      }
+      if (c.id === 'bureau.chat.write') {
+        migrationLabel = '0270';
+        sourceFile = 'ws.routes.ts';
       }
       byId.set(c.id, {
         id: c.id,
