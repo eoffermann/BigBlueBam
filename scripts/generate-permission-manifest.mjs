@@ -68,14 +68,85 @@ function computeRequiresSuperuser(id, resource) {
   return false;
 }
 
+// ── App directories → permission prefixes (issue #146) ───────────────
+//
+// The set of apps is DERIVED from the filesystem: every `apps/<dir>/src/routes`
+// directory is a route-bearing app. Each one must be classified exactly once,
+// either as route-SCANNED (its prefix is derived: `<x>-api` → `<x>`, with the
+// one exception in PREFIX_EXCEPTIONS) or as NOT_ROUTE_SCANNED with a reason.
+// A new app directory that is in neither list makes the generator FAIL, so an
+// app's routes can no longer drop out of the catalog because someone forgot to
+// add it to a hand-written list.
+const PREFIX_EXCEPTIONS = { api: 'bam' };
+
+// Route-bearing app dirs whose routes the scanner deliberately does NOT walk.
+// Their permission ids come from somewhere else (or are intentionally absent).
+const NOT_ROUTE_SCANNED = {
+  // MCP tool overrides (EXPLICIT_TOOL_OVERRIDES blip_*) are the sole source of blip.* ids.
+  'blip-api': 'ids come from the blip_* EXPLICIT_TOOL_OVERRIDES',
+  // Satellite apps: ids are hand-authored in HAND_AUTHORED (buildManifest).
+  'basis-api': 'satellite; hand-authored basis.* ids',
+  'braid-api': 'satellite; hand-authored braid.* ids',
+  'bulwark-api': 'satellite; hand-authored bulwark.* ids',
+  'burn-api': 'satellite; hand-authored burn.* ids',
+  'bursar-api': 'satellite; hand-authored bursar.* ids',
+  // Not yet catalogued: their routes enforce org/role checks in-route and use no
+  // requireCan() ids. Moving them to scanned would add ~their whole route surface
+  // to the catalog and needs a seed delta migration; tracked as a follow-up.
+  'blueprint-api': 'not yet catalogued (no requireCan ids)',
+  'bureau-api': 'not yet catalogued (no requireCan ids)',
+  // The MCP server's own routes (/tools/call etc.) are transport, not app actions.
+  'mcp-server': 'MCP transport routes; tools are scanned separately',
+};
+
+// Tool-name prefixes that have no scanned route app but are still app prefixes.
+const TOOL_ONLY_PREFIXES = ['blip'];
+
+function prefixForAppDir(dir) {
+  if (Object.prototype.hasOwnProperty.call(PREFIX_EXCEPTIONS, dir)) return PREFIX_EXCEPTIONS[dir];
+  const m = dir.match(/^([a-z][a-z0-9]*)-api$/);
+  return m ? m[1] : null;
+}
+
+/**
+ * Discover every route-bearing app directory and map the scanned ones to their
+ * prefix. Throws when a directory is unclassified, maps to no prefix, or when a
+ * classification names a directory that no longer exists.
+ */
+export function discoverAppPrefixes(appsDir = APPS_DIR) {
+  const routeDirs = readdirSync(appsDir)
+    .filter((d) => existsSync(join(appsDir, d, 'src/routes')))
+    .sort();
+  const appToPrefix = {};
+  const problems = [];
+  for (const dir of routeDirs) {
+    if (Object.prototype.hasOwnProperty.call(NOT_ROUTE_SCANNED, dir)) continue;
+    const prefix = prefixForAppDir(dir);
+    if (!prefix) {
+      problems.push(`apps/${dir}/src/routes maps to no permission prefix (expected a "<app>-api" directory)`);
+      continue;
+    }
+    appToPrefix[dir] = prefix;
+  }
+  for (const dir of Object.keys(NOT_ROUTE_SCANNED)) {
+    if (!routeDirs.includes(dir)) problems.push(`NOT_ROUTE_SCANNED lists "${dir}", which has no apps/${dir}/src/routes`);
+  }
+  if (problems.length > 0) {
+    throw new Error(
+      `[permission-manifest] cannot classify app route directories:\n  - ${problems.join('\n  - ')}\n` +
+        'Fix: a "<app>-api" directory is scanned automatically; otherwise add it to NOT_ROUTE_SCANNED ' +
+        'in scripts/generate-permission-manifest.mjs with the reason its ids come from elsewhere.',
+    );
+  }
+  return appToPrefix;
+}
+
 // ── App prefixes — first segment of the permission ID. Tool names and
 //    REST mount paths use these prefixes consistently. Anything else is
-//    `platform.*` (cross-cutting) or `shared.*` (utility).
-const APP_PREFIXES = new Set([
-  'bam', 'banter', 'beacon', 'brief', 'bolt', 'bearing',
-  'board', 'bond', 'blast', 'bench', 'book', 'blank', 'bill',
-  'bin', 'bay', 'blip', 'helpdesk',
-]);
+//    `platform.*` (cross-cutting) or `shared.*` (utility). Derived: the
+//    scanned route apps' prefixes plus TOOL_ONLY_PREFIXES.
+const APP_TO_PREFIX = discoverAppPrefixes();
+const APP_PREFIXES = new Set([...Object.values(APP_TO_PREFIX), ...TOOL_ONLY_PREFIXES]);
 
 // ── Tool name → permission ID overrides. Tools that don't fit the
 //    `<app>_<verb>_<resource>` pattern, plus the always-permitted core.
@@ -383,24 +454,7 @@ function extractMcpTools() {
 
 // ── REST route extraction ──────────────────────────────────────────────
 
-const APP_TO_PREFIX = {
-  api: 'bam',
-  'banter-api': 'banter',
-  'beacon-api': 'beacon',
-  'brief-api': 'brief',
-  'bolt-api': 'bolt',
-  'bearing-api': 'bearing',
-  'board-api': 'board',
-  'bond-api': 'bond',
-  'blast-api': 'blast',
-  'bench-api': 'bench',
-  'book-api': 'book',
-  'blank-api': 'blank',
-  'bill-api': 'bill',
-  'bin-api': 'bin',
-  'bay-api': 'bay',
-  'helpdesk-api': 'helpdesk',
-};
+// APP_TO_PREFIX is derived from the app directories by discoverAppPrefixes() above.
 
 function methodVerb(method, path, hasIdParam) {
   // Map (method, path) -> verb. Path-suffix overrides win for action routes.
@@ -1010,4 +1064,8 @@ function main() {
   }
 }
 
-main();
+// Run only when invoked directly, so tests can import discoverAppPrefixes.
+const invokedPath = process.argv[1] ? resolve(process.argv[1]).replace(/\\/g, '/').toLowerCase() : '';
+if (invokedPath.endsWith('scripts/generate-permission-manifest.mjs')) {
+  main();
+}
