@@ -71,16 +71,19 @@ WORKDIR /app
 RUN addgroup -g 1001 -S bbam \
  && adduser -S bbam -u 1001 -G bbam
 
-COPY --from=build /app/deployed/node_modules ./node_modules
-COPY --from=build /app/apps/bastion-api/dist ./dist
-COPY --from=build /app/deployed/package.json ./
+# COPY --chown instead of a trailing `RUN chown -R`: a recursive chown rewrites every
+# node_modules file into a second layer (doubling the image's node_modules) and takes over
+# an hour on slow Docker disks. Only /app itself still needs a (non-recursive) chown.
+COPY --from=build --chown=bbam:bbam /app/deployed/node_modules ./node_modules
+COPY --from=build --chown=bbam:bbam /app/apps/bastion-api/dist ./dist
+COPY --from=build --chown=bbam:bbam /app/deployed/package.json ./
 
 ARG GIT_COMMIT=unknown
 ARG BUILD_DATE=unknown
 ENV GIT_COMMIT=$GIT_COMMIT
 ENV BUILD_DATE=$BUILD_DATE
 
-RUN chown -R bbam:bbam /app
+RUN chown bbam:bbam /app
 
 USER bbam
 
