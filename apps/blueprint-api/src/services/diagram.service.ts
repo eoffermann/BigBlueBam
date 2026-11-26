@@ -354,8 +354,23 @@ export async function updateComment(
   diagramId: string,
   commentId: string,
   patch: { body?: string; body_plain?: string | null; resolved?: boolean },
+  actor: DiagramActor,
 ) {
   await getDiagram(orgId, diagramId);
+  const [existing] = await db
+    .select({ author_id: blueprintComments.author_id })
+    .from(blueprintComments)
+    .where(
+      and(eq(blueprintComments.id, commentId), eq(blueprintComments.diagram_id, diagramId)),
+    )
+    .limit(1);
+  if (!existing) throw new NotFoundError('Comment not found');
+  // Rewriting a comment's text is the author's call, or the diagram owner's
+  // (moderation). Resolving is open to anyone who can comment.
+  const editsText = patch.body !== undefined || patch.body_plain !== undefined;
+  if (editsText && existing.author_id !== actor.id) {
+    await assertCanManage(orgId, actor, diagramId);
+  }
   const update: Record<string, unknown> = {};
   if (patch.body !== undefined) {
     update.body = patch.body;
@@ -542,4 +557,58 @@ export async function assertCanEdit(orgId: string, userId: string, diagramId: st
     }
   }
   return diagram;
+}
+
+/** The caller, as the per-diagram ACL needs it. `role` is the org legacy role. */
+export interface DiagramActor {
+  id: string;
+  role?: string | null;
+  is_superuser?: boolean;
+}
+
+async function collaboratorRole(diagramId: string, userId: string): Promise<string | null> {
+  const [collab] = await db
+    .select({ role: blueprintCollaborators.role })
+    .from(blueprintCollaborators)
+    .where(
+      and(
+        eq(blueprintCollaborators.diagram_id, diagramId),
+        eq(blueprintCollaborators.user_id, userId),
+      ),
+    )
+    .limit(1);
+  return collab?.role ?? null;
+}
+
+/**
+ * Comment access (issue #167): read access, and on a private diagram any
+ * collaborator role except `viewer` (so `commenter` can comment).
+ */
+export async function assertCanComment(orgId: string, userId: string, diagramId: string) {
+  const diagram = await assertCanRead(orgId, userId, diagramId);
+  if (diagram.visibility === 'private' && diagram.created_by !== userId) {
+    const role = await collaboratorRole(diagramId, userId);
+    if (!role || role === 'viewer') {
+      throw new ForbiddenError('You do not have comment access to this diagram');
+    }
+  }
+  return diagram;
+}
+
+/** Org owners and admins (and platform SuperUsers) may manage any diagram in the org. */
+export function isOrgAdmin(actor: DiagramActor): boolean {
+  return actor.is_superuser === true || actor.role === 'owner' || actor.role === 'admin';
+}
+
+/**
+ * Management access (issue #167): collaborator writes and archive. The caller
+ * must be the diagram's creator, a collaborator with role `owner`, or an org
+ * owner/admin. Applies regardless of visibility: an organization-visible
+ * diagram is editable by everyone but owned by someone.
+ */
+export async function assertCanManage(orgId: string, actor: DiagramActor, diagramId: string) {
+  const diagram = await getDiagram(orgId, diagramId);
+  if (diagram.created_by === actor.id || isOrgAdmin(actor)) return diagram;
+  if ((await collaboratorRole(diagramId, actor.id)) === 'owner') return diagram;
+  throw new ForbiddenError('Only the diagram owner can do this');
 }
