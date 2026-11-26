@@ -8,6 +8,8 @@ export * from './bolt-events.js';
 export * from './bolt-sources.js';
 // The single Launchpad app-id list (issue #144), shared by the api and the MCP tools.
 export * from './launchpad-apps.js';
+// The single can_access entity_type allowlist (api visibility service and the MCP tool).
+export * from './visibility-entity-types.js';
 export * from './bolt-graph.js';
 export * from './bolt-graph-shape.js';
 export * from './bolt-automation-versions/index.js';

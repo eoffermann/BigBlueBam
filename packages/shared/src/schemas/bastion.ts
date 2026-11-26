@@ -825,6 +825,9 @@ export const BASTION_ENGINE_NAMES = [
   // M5
   'evidence-ingest',
   'evidence-expiry',
+  // M6
+  'gap-rank',
+  'proposal-reconcile',
 ] as const;
 export const BastionEngineName = z.enum(BASTION_ENGINE_NAMES);
 export type BastionEngineName = z.infer<typeof BastionEngineName>;
@@ -888,6 +891,10 @@ export const BASTION_RETENTION_QUEUE = 'bastion-retention';
 /** M5 (spec 7): pending-scan retries and Bolt-event feeds; expiring evidence. */
 export const BASTION_EVIDENCE_INGEST_QUEUE = 'bastion-evidence-ingest';
 export const BASTION_EVIDENCE_EXPIRY_QUEUE = 'bastion-evidence-expiry';
+
+/** M6 (spec 7): stored gap ranking (after each run and daily) and proposal reconciliation. */
+export const BASTION_GAP_RANK_QUEUE = 'bastion-gap-rank';
+export const BASTION_PROPOSAL_RECONCILE_QUEUE = 'bastion-proposal-reconcile';
 
 /** One evaluation run to drive. resume_count goes into the jobId (spec 7.3). */
 export interface BastionEvaluateRunJobData {
@@ -1158,3 +1165,235 @@ export const bastionReadinessNumbersSchema = z.object({
   total: z.number().int(),
 });
 export type BastionReadinessNumbersOut = z.infer<typeof bastionReadinessNumbersSchema>;
+
+/* ------------------------------------------------------------------ */
+/*  M6: gaps, fixes, exceptions, drift, the internal Bam routes       */
+/* ------------------------------------------------------------------ */
+
+/** The org-level gap row derived at read time from effectiveStatus, never stored (spec 2.3). */
+export const BASTION_STALE_GAP_KIND = 'stale' as const;
+/** A population confirmed longer ago than this asks for a re-confirmation (spec 2.3). */
+export const BASTION_POPULATION_REVIEW_DAYS = 180;
+/** population_review carries cost 2 although its template is confirm_check (spec 2.3). */
+export const BASTION_POPULATION_REVIEW_COST = 2;
+/** Mirrored fix proposals expire after this many days (spec 2.4). */
+export const BASTION_FIX_PROPOSAL_TTL_DAYS = 14;
+/** Orgs with fewer active humans than this may self-approve, labelled as such (spec 2.6). */
+export const BASTION_SMALL_TEAM_HUMANS = 3;
+
+/** GET /gaps (row 51). `active` is open plus proposed (a drafted fix not yet decided). */
+export const bastionGapListQuerySchema = z
+  .object({
+    framework_id: z.string().uuid().optional(),
+    control_id: z.string().uuid().optional(),
+    status: z.enum(['active', 'open', 'proposed', 'dismissed', 'resolved', 'all']).default('active'),
+    gap_kind: BastionGapKind.optional(),
+    sort: z.enum(['risk', 'quick_wins']).default('risk'),
+    limit: z.coerce.number().int().min(1).max(500).default(200),
+  })
+  .strict();
+export type BastionGapListQuery = z.infer<typeof bastionGapListQuerySchema>;
+
+/** POST /gaps/:id/propose-fix (row 52). The template comes from the gap; nobody picks it. */
+export const bastionProposeFixSchema = z
+  .object({ note: z.string().trim().max(2000).nullable().optional() })
+  .strict();
+export type BastionProposeFix = z.infer<typeof bastionProposeFixSchema>;
+
+/** POST /gaps/:id/dismiss (row 53). */
+export const bastionGapDismissSchema = z.object({ reason: z.string().trim().min(1).max(2000) }).strict();
+export type BastionGapDismiss = z.infer<typeof bastionGapDismissSchema>;
+
+/** GET /fix-drafts (row 54). */
+export const bastionFixDraftListQuerySchema = z
+  .object({
+    status: BastionFixDraftStatus.optional(),
+    gap_id: z.string().uuid().optional(),
+    control_id: z.string().uuid().optional(),
+    limit: z.coerce.number().int().min(1).max(200).default(100),
+  })
+  .strict();
+export type BastionFixDraftListQuery = z.infer<typeof bastionFixDraftListQuerySchema>;
+
+/** POST /fix-drafts/:id/decide (row 56). Humans decide in Bastion, with a session (spec 2.8). */
+export const bastionFixDecideSchema = z
+  .object({
+    decision: z.enum(['approve', 'reject']),
+    reason: z.string().trim().max(2000).nullable().optional(),
+  })
+  .strict();
+export type BastionFixDecide = z.infer<typeof bastionFixDecideSchema>;
+
+/** What an approved fix can point at once it is done elsewhere (spec 2.4, 8.3). */
+export const BastionFixAppliedEntityType = z.enum(['beacon.entry', 'bolt.rule']);
+export type BastionFixAppliedEntityType = z.infer<typeof BastionFixAppliedEntityType>;
+
+/** POST /fix-drafts/:id/mark-applied (row 57). */
+export const bastionFixMarkAppliedSchema = z
+  .object({
+    applied_entity_type: BastionFixAppliedEntityType.nullable().optional(),
+    applied_entity_id: z.string().uuid().nullable().optional(),
+    note: z.string().trim().max(2000).nullable().optional(),
+  })
+  .strict()
+  .refine((b) => !!b.applied_entity_type === !!b.applied_entity_id, {
+    message: 'Give both the kind of thing you made and its id, or neither',
+    path: ['applied_entity_id'],
+  });
+export type BastionFixMarkApplied = z.infer<typeof bastionFixMarkAppliedSchema>;
+
+/** GET /exceptions (row 58). */
+export const bastionExceptionListQuerySchema = z
+  .object({
+    status: BastionExceptionStatus.optional(),
+    control_id: z.string().uuid().optional(),
+    limit: z.coerce.number().int().min(1).max(200).default(100),
+  })
+  .strict();
+export type BastionExceptionListQuery = z.infer<typeof bastionExceptionListQuerySchema>;
+
+/**
+ * POST /exceptions (row 60). An entity exception names one cited ref and lasts up to 365 days;
+ * an assertion-wide one covers only the refs failing when it is approved and lasts up to 90
+ * (spec 2.6). `expires_on` is a local date in the org's zone (end of that day).
+ */
+export const bastionExceptionProposeSchema = z
+  .object({
+    control_id: z.string().uuid(),
+    scope: BastionExceptionScope,
+    assertion_id: z.string().uuid().nullable().optional(),
+    cited_entity_type: z
+      .string()
+      .regex(/^[a-z]+\.[a-z_]+$/, 'Use an entity type like bam.api_key')
+      .max(48)
+      .nullable()
+      .optional(),
+    cited_entity_id: z.string().uuid().nullable().optional(),
+    reason: z.string().trim().min(1).max(2000),
+    compensating_note: z.string().trim().max(2000).nullable().optional(),
+    expires_on: isoDate,
+  })
+  .strict()
+  .refine((b) => b.scope !== 'entity' || (!!b.cited_entity_type && !!b.cited_entity_id), {
+    message: 'An exception for one item needs the item it covers',
+    path: ['cited_entity_id'],
+  })
+  .refine((b) => b.scope !== 'assertion' || !!b.assertion_id, {
+    message: 'An exception for a whole check needs the check it covers',
+    path: ['assertion_id'],
+  });
+export type BastionExceptionPropose = z.infer<typeof bastionExceptionProposeSchema>;
+
+/** POST /exceptions/:id/decide (row 61, confirm). Humans decide in Bastion (spec 2.6, 2.8). */
+export const bastionExceptionDecideSchema = z
+  .object({
+    decision: z.enum(['approve', 'reject']),
+    confirm: z.literal(true),
+    reason: z.string().trim().max(2000).nullable().optional(),
+  })
+  .strict();
+export type BastionExceptionDecide = z.infer<typeof bastionExceptionDecideSchema>;
+
+/** GET /drift (row 62). */
+export const bastionDriftListQuerySchema = z
+  .object({
+    control_id: z.string().uuid().optional(),
+    unacknowledged: z.coerce.boolean().optional(),
+    limit: z.coerce.number().int().min(1).max(200).default(50),
+    before: z.string().datetime({ offset: true }).optional(),
+  })
+  .strict();
+export type BastionDriftListQuery = z.infer<typeof bastionDriftListQuerySchema>;
+
+/** POST /drift/:id/acknowledge (row 63). */
+export const bastionDriftAcknowledgeSchema = z
+  .object({ note: z.string().trim().max(2000).nullable().optional() })
+  .strict();
+export type BastionDriftAcknowledge = z.infer<typeof bastionDriftAcknowledgeSchema>;
+
+/**
+ * Bolt rule shapes (spec 2.4): the only actions a drafted rule may carry. send_webhook and every
+ * send_email* action are refused, so a drafted rule can never send anything outside the suite.
+ */
+export const BASTION_BOLT_RULE_ALLOWED_ACTIONS = ['create_task', 'banter_post'] as const;
+export type BastionBoltRuleAction = (typeof BASTION_BOLT_RULE_ALLOWED_ACTIONS)[number];
+
+/** The one Bam task per control (spec 2.5): `bastion:control:<control_id>`. */
+export function bastionControlTaskExternalId(controlId: string): string {
+  return `bastion:control:${controlId}`;
+}
+
+const controlTaskExternalId = z
+  .string()
+  .regex(/^bastion:control:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/, 'external_id must be bastion:control:<control id>');
+
+/**
+ * POST /internal/bastion/tasks/upsert (api-owned, spec 8.4). Creates the control's task in the
+ * project's start phase, or, when it sits in a terminal phase, moves it back to the start phase
+ * and posts `comment`; on an open task `comment` is posted as an update. The comment is
+ * deduplicated on idempotency_key, so a retried delivery never posts it twice.
+ */
+export const bastionBamTaskUpsertSchema = z
+  .object({
+    org_id: z.string().uuid(),
+    project_id: z.string().uuid(),
+    control_id: z.string().uuid(),
+    external_id: controlTaskExternalId,
+    title: z.string().trim().min(1).max(500),
+    description: z.string().max(20_000).nullable().optional(),
+    assignee_id: z.string().uuid().nullable().optional(),
+    comment: z.string().trim().min(1).max(4000).nullable().optional(),
+    idempotency_key: z.string().min(1).max(256),
+  })
+  .strict();
+export type BastionBamTaskUpsert = z.infer<typeof bastionBamTaskUpsertSchema>;
+
+export const bastionBamTaskUpsertResultSchema = z.object({
+  task_id: z.string().uuid(),
+  human_id: z.string(),
+  outcome: z.enum(['created', 'reopened', 'updated']),
+  comment_posted: z.boolean(),
+});
+export type BastionBamTaskUpsertResult = z.infer<typeof bastionBamTaskUpsertResultSchema>;
+
+/** POST /internal/bastion/tasks/comment: a comment addressed by external_id, never by task id. */
+export const bastionBamTaskCommentSchema = z
+  .object({
+    org_id: z.string().uuid(),
+    project_id: z.string().uuid(),
+    external_id: controlTaskExternalId,
+    body: z.string().trim().min(1).max(4000),
+    idempotency_key: z.string().min(1).max(256),
+  })
+  .strict();
+export type BastionBamTaskComment = z.infer<typeof bastionBamTaskCommentSchema>;
+
+export const bastionBamTaskCommentResultSchema = z.object({
+  task_id: z.string().uuid().nullable(),
+  comment_id: z.string().uuid().nullable(),
+  outcome: z.enum(['posted', 'duplicate', 'no_task']),
+});
+export type BastionBamTaskCommentResult = z.infer<typeof bastionBamTaskCommentResultSchema>;
+
+/**
+ * POST /internal/bastion/proposals/:id/close (api-owned, spec 2.8, 8.4). Accepted only for a
+ * proposal with owning_app = 'bastion' whose decider is a human member of its org who decided
+ * with a session; records the decider in the #128 columns and emits proposal.decided.
+ */
+export const bastionProposalCloseSchema = z
+  .object({
+    org_id: z.string().uuid(),
+    decision: z.enum(['approved', 'rejected']),
+    decided_by: z.string().uuid(),
+    decided_auth_method: z.literal('session'),
+    reason: z.string().trim().max(2000).nullable().optional(),
+  })
+  .strict();
+export type BastionProposalClose = z.infer<typeof bastionProposalCloseSchema>;
+
+export const bastionProposalCloseResultSchema = z.object({
+  proposal_id: z.string().uuid(),
+  status: z.string(),
+  already_closed: z.boolean(),
+});
+export type BastionProposalCloseResult = z.infer<typeof bastionProposalCloseResultSchema>;

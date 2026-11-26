@@ -1,4 +1,5 @@
 import { and, eq } from 'drizzle-orm';
+import { VISIBILITY_ENTITY_TYPES, type VisibilityEntityType as SharedVisibilityEntityType } from '@bigbluebam/shared';
 import { db } from '../db/index.js';
 import { users } from '../db/schema/users.js';
 import { projects } from '../db/schema/projects.js';
@@ -48,6 +49,12 @@ import {
   bursarOffersStub,
   bursarAwardsStub,
   bursarMismatchesStub,
+  bastionControlsStub,
+  bastionManualEvidenceStub,
+  bastionPoliciesStub,
+  bastionQuestionnairesStub,
+  bastionFixDraftsStub,
+  bastionExceptionsStub,
 } from '../db/schema/peer-app-stubs/index.js';
 
 /**
@@ -75,104 +82,11 @@ import {
  * deciding whether to escalate to a human asker.
  */
 
-export type VisibilityEntityType =
-  | 'bam.task'
-  | 'bam.project'
-  | 'bam.sprint'
-  | 'helpdesk.ticket'
-  | 'bond.deal'
-  | 'bond.contact'
-  | 'bond.company'
-  | 'brief.document'
-  | 'beacon.entry'
-  | 'blueprint.diagram'
-  | 'blueprint.node'
-  // Banter Feed entity-type registration (banter-feed-design-document.md §16)
-  | 'banter.message'
-  | 'banter.channel'
-  | 'bearing.goal'
-  | 'bearing.kr'
-  | 'board.board'
-  | 'book.event'
-  | 'bill.invoice'
-  | 'blank.form'
-  | 'bolt.rule'
-  | 'bin.asset'
-  | 'bin.folder'
-  | 'bay.asset'
-  // Blip telemetry entity-type registration (BigBlueBam_Blip_Design_Document.md §2)
-  | 'blip.tracked_app'
-  | 'blip.saved_view'
-  // Braid person-source + golden-profile registration (APP_DESIGN_braid.md §2.5)
-  | 'bill.client'
-  | 'book.event_attendee'
-  | 'braid.profile'
-  | 'braid.identity'
-  // Bulwark contract-obligation-monitor registration (APP_DESIGN_bulwark.md §2.5)
-  | 'bulwark.contract'
-  | 'bulwark.obligation'
-  | 'bulwark.deadline'
-  // Burn margin/envelope-attribution monitor registration (APP_DESIGN_burn.md 2.4 point 4)
-  | 'burn.engagement'
-  | 'burn.deliverable'
-  // Bursar absence-detection / bid-leveling registration (APP_DESIGN_bursar.md §16.3).
-  // bill.expense was missing platform-wide (only bill.invoice + bill.client existed), so
-  // under treat-non-ok-as-deny every Bursar drift citation of an expense silently dropped.
-  | 'bill.expense'
-  | 'bursar.vendor'
-  | 'bursar.request'
-  | 'bursar.offer'
-  | 'bursar.award'
-  | 'bursar.mismatch';
+// The allowlist is ONE list in @bigbluebam/shared (visibility-entity-types.ts): the dispatch
+// below and the MCP can_access description are both built from it.
+export type VisibilityEntityType = SharedVisibilityEntityType;
 
-export const SUPPORTED_ENTITY_TYPES: readonly VisibilityEntityType[] = [
-  'bam.task',
-  'bam.project',
-  'bam.sprint',
-  'helpdesk.ticket',
-  'bond.deal',
-  'bond.contact',
-  'bond.company',
-  'brief.document',
-  'beacon.entry',
-  'blueprint.diagram',
-  'blueprint.node',
-  // Banter Feed entity-type registration (banter-feed-design-document.md §16)
-  'banter.message',
-  'banter.channel',
-  'bearing.goal',
-  'bearing.kr',
-  'board.board',
-  'book.event',
-  'bill.invoice',
-  'blank.form',
-  'bolt.rule',
-  'bin.asset',
-  'bin.folder',
-  'bay.asset',
-  // Blip telemetry entity-type registration (BigBlueBam_Blip_Design_Document.md §2)
-  'blip.tracked_app',
-  'blip.saved_view',
-  // Braid person-source + golden-profile registration (APP_DESIGN_braid.md §2.5)
-  'bill.client',
-  'book.event_attendee',
-  'braid.profile',
-  'braid.identity',
-  // Bulwark contract-obligation-monitor registration (APP_DESIGN_bulwark.md §2.5)
-  'bulwark.contract',
-  'bulwark.obligation',
-  'bulwark.deadline',
-  // Burn margin/envelope-attribution monitor registration (APP_DESIGN_burn.md 2.4 point 4)
-  'burn.engagement',
-  'burn.deliverable',
-  // Bursar absence-detection / bid-leveling registration (APP_DESIGN_bursar.md §16.3)
-  'bill.expense',
-  'bursar.vendor',
-  'bursar.request',
-  'bursar.offer',
-  'bursar.award',
-  'bursar.mismatch',
-] as const;
+export const SUPPORTED_ENTITY_TYPES: readonly VisibilityEntityType[] = VISIBILITY_ENTITY_TYPES;
 
 export type PreflightReason =
   | 'ok'
@@ -186,6 +100,8 @@ export type PreflightReason =
   | 'banter_not_channel_member'
   | 'board_private_no_collaborator'
   | 'bin_private_not_owner'
+  | 'bastion_role_not_granted'
+  | 'bastion_restricted_evidence'
   | 'unsupported_entity_type';
 
 export interface PreflightResult {
@@ -1766,6 +1682,19 @@ export async function preflightAccess(
       return preflightBursarAward(asker, entityId);
     case 'bursar.mismatch':
       return preflightBursarMismatch(asker, entityId);
+    // Bastion continuous-compliance registration (APP_DESIGN_bastion.md 8.3, 8.4)
+    case 'bastion.control':
+      return preflightBastionOrgRow(asker, bastionControlsStub, entityId, 'read');
+    case 'bastion.policy':
+      return preflightBastionOrgRow(asker, bastionPoliciesStub, entityId, 'read');
+    case 'bastion.exception':
+      return preflightBastionOrgRow(asker, bastionExceptionsStub, entityId, 'read');
+    case 'bastion.questionnaire':
+      return preflightBastionOrgRow(asker, bastionQuestionnairesStub, entityId, 'member');
+    case 'bastion.fix_draft':
+      return preflightBastionOrgRow(asker, bastionFixDraftsStub, entityId, 'member');
+    case 'bastion.manual_evidence':
+      return preflightBastionManualEvidence(asker, entityId);
     default:
       return { allowed: false, reason: 'unsupported_entity_type' };
   }
@@ -1959,7 +1888,78 @@ async function preflightBursarMismatch(
   return { allowed: true, reason: 'ok', entity_org_id: row.organization_id };
 }
 
+// ---------------------------------------------------------------------------
+// bastion.* (APP_DESIGN_bastion.md 5.5, 8.3, 8.4)
+// ---------------------------------------------------------------------------
+//
+// Every bastion_* row is org-scoped by organization_id; a cross-org row denies as not_found.
+// Within the org the rule follows the spec 5.5 group grants: guests hold no Bastion action, so
+// they see nothing; viewers hold control, exception and policy reads but not fix or
+// questionnaire reads; restricted manual evidence is visible only to owners and admins (the
+// floored evidence.read_restricted holders) and to the item's owner and uploader.
+
+type BastionOrgStub =
+  | typeof bastionControlsStub
+  | typeof bastionPoliciesStub
+  | typeof bastionExceptionsStub
+  | typeof bastionQuestionnairesStub
+  | typeof bastionFixDraftsStub;
+
+/** 'read' admits viewers (spec 5.5 marks the read viewer-granted); 'member' needs member or above. */
+function bastionRoleAllows(role: string, need: 'read' | 'member'): boolean {
+  if (role === 'guest') return false;
+  if (need === 'member' && role === 'viewer') return false;
+  return true;
+}
+
+async function preflightBastionOrgRow(
+  asker: AskerContext,
+  table: BastionOrgStub,
+  id: string,
+  need: 'read' | 'member',
+): Promise<PreflightResult> {
+  const rows = await db
+    .select({ id: table.id, organization_id: table.organization_id })
+    .from(table)
+    .where(eq(table.id, id))
+    .limit(1);
+  const row = rows[0];
+  if (!row) return { allowed: false, reason: 'not_found' };
+  if (row.organization_id !== asker.org_id) return { allowed: false, reason: 'not_found' };
+  if (!asker.is_superuser && !bastionRoleAllows(asker.role, need)) {
+    return { allowed: false, reason: 'bastion_role_not_granted', entity_org_id: row.organization_id };
+  }
+  return { allowed: true, reason: 'ok', entity_org_id: row.organization_id };
+}
+
+async function preflightBastionManualEvidence(asker: AskerContext, id: string): Promise<PreflightResult> {
+  const rows = await db
+    .select({
+      id: bastionManualEvidenceStub.id,
+      organization_id: bastionManualEvidenceStub.organization_id,
+      sensitivity: bastionManualEvidenceStub.sensitivity,
+      owner_user_id: bastionManualEvidenceStub.owner_user_id,
+      uploaded_by: bastionManualEvidenceStub.uploaded_by,
+    })
+    .from(bastionManualEvidenceStub)
+    .where(eq(bastionManualEvidenceStub.id, id))
+    .limit(1);
+  const row = rows[0];
+  if (!row) return { allowed: false, reason: 'not_found' };
+  if (row.organization_id !== asker.org_id) return { allowed: false, reason: 'not_found' };
+  if (asker.is_superuser) return { allowed: true, reason: 'ok', entity_org_id: row.organization_id };
+  if (!bastionRoleAllows(asker.role, 'read')) {
+    return { allowed: false, reason: 'bastion_role_not_granted', entity_org_id: row.organization_id };
+  }
+  if (row.sensitivity === 'restricted' && !isOrgAdmin(asker.role) && row.owner_user_id !== asker.id && row.uploaded_by !== asker.id) {
+    return { allowed: false, reason: 'bastion_restricted_evidence', entity_org_id: row.organization_id };
+  }
+  return { allowed: true, reason: 'ok', entity_org_id: row.organization_id };
+}
+
 export const __test__ = {
+  preflightBastionOrgRow,
+  preflightBastionManualEvidence,
   preflightBurnEngagement,
   preflightBurnDeliverable,
   loadAsker,

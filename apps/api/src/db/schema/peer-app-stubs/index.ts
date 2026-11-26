@@ -700,3 +700,43 @@ export const bursarMismatchesStub = pgTable(
   },
   (table) => [index('pas_bursar_mismatches_org_idx').on(table.organization_id)],
 );
+
+// ---------------------------------------------------------------------------
+// bastion - controls / manual evidence / policies / questionnaires / fix drafts / exceptions
+// ---------------------------------------------------------------------------
+// Real schema: apps/bastion-api/src/db/schema/bastion-*.ts (spec 4.1; visibility registration
+// spec 8.4, M6). Every bastion_* row is org-scoped by organization_id. Only the columns the
+// can_access branches read are declared: the org, and for manual evidence its sensitivity and the
+// two people who may always see a restricted item.
+export const bastionControlsStub = pgTable('bastion_controls', {
+  id: uuid('id').primaryKey(),
+  organization_id: uuid('organization_id').notNull(),
+});
+
+export const bastionManualEvidenceStub = pgTable('bastion_manual_evidence', {
+  id: uuid('id').primaryKey(),
+  organization_id: uuid('organization_id').notNull(),
+  sensitivity: varchar('sensitivity', { length: 16 }).notNull(),
+  owner_user_id: uuid('owner_user_id'),
+  uploaded_by: uuid('uploaded_by'),
+});
+
+export const bastionPoliciesStub = pgTable('bastion_policies', {
+  id: uuid('id').primaryKey(),
+  organization_id: uuid('organization_id').notNull(),
+});
+
+export const bastionQuestionnairesStub = pgTable('bastion_questionnaires', {
+  id: uuid('id').primaryKey(),
+  organization_id: uuid('organization_id').notNull(),
+});
+
+export const bastionFixDraftsStub = pgTable('bastion_fix_drafts', {
+  id: uuid('id').primaryKey(),
+  organization_id: uuid('organization_id').notNull(),
+});
+
+export const bastionExceptionsStub = pgTable('bastion_exceptions', {
+  id: uuid('id').primaryKey(),
+  organization_id: uuid('organization_id').notNull(),
+});

@@ -71,13 +71,33 @@ returns `allowed: false, reason: 'unsupported_entity_type'` (with a
 | `bill.invoice`       | `bill_invoices`         | same org                                                                           |
 | `blank.form`         | `blank_forms`           | visibility public / org / project (project member when `project_id` is set)        |
 | `bolt.rule`          | `bolt_automations`      | same org (automations are org-level infrastructure)                                |
+| `bin.asset`, `bin.folder` | `bin_assets`, `bin_folders` | per-app rule in `preflightBinAsset` / `preflightBinFolder`                  |
+| `bay.asset`          | `bay_assets`            | per-app rule in `preflightBayAsset`                                                |
+| `blip.tracked_app`, `blip.saved_view` | `blip_tracked_apps`, `blip_saved_views` | per-app rule in `preflightBlipTrackedApp` / `preflightBlipSavedView` |
+| `bill.client`, `bill.expense` | `bill_clients`, `bill_expenses` | same org                                                                  |
+| `book.event_attendee` | `book_event_attendees` | inherits the event's access                                                        |
+| `braid.profile`, `braid.identity` | `braid_profiles`, `braid_identities` | per-app rule in `preflightBraidProfile` / `preflightBraidIdentity`  |
+| `bulwark.contract`, `bulwark.obligation`, `bulwark.deadline` | `bulwark_*` | project member for job-scoped contracts, else same org; org admin/owner always |
+| `burn.engagement`, `burn.deliverable` | `burn_engagements`, `burn_deliverables` | org admin/owner, or member of a linked project                 |
+| `bursar.vendor`, `bursar.request`, `bursar.offer`, `bursar.award`, `bursar.mismatch` | `bursar_*` | same org                          |
+| `bastion.control`, `bastion.policy`, `bastion.exception` | `bastion_controls`, `bastion_policies`, `bastion_exceptions` | same org, any role except guest (viewers hold these reads, spec 5.5) |
+| `bastion.questionnaire`, `bastion.fix_draft` | `bastion_questionnaires`, `bastion_fix_drafts` | same org, member or above (viewers and guests hold no fix or questionnaire read) |
+| `bastion.manual_evidence` | `bastion_manual_evidence` | same org, any role except guest; a `restricted` item only for org admin/owner, its owner and its uploader |
 
-The bottom 11 rows landed with the Banter Feed entity-type registration
-(`docs/plans/banter-feed-design-document.md` §16), extending the original
+The Banter Feed entity-type registration
+(`docs/plans/banter-feed-design-document.md` §16) extended the original
 Wave 2 set so the Feed's `can_access` gate admits cross-app entities instead
-of denying-by-default. The `SUPPORTED_ENTITY_TYPES` export in
-`apps/api/src/services/visibility.service.ts` remains the single source of
-truth; this table is documentation that must be kept in lockstep with it.
+of denying-by-default; later apps added their own rows above. The list
+itself has ONE home: `VISIBILITY_ENTITY_TYPES` in
+`packages/shared/src/visibility-entity-types.ts`. The api re-exports it as
+`SUPPORTED_ENTITY_TYPES` (`apps/api/src/services/visibility.service.ts`)
+and the MCP `can_access` description is generated from it
+(`node scripts/gen-can-access-description.mjs`; a test in
+`apps/mcp-server/test/visibility-tools.test.ts` fails on drift). This table
+is documentation that must be kept in lockstep with it.
+
+Bastion denial reasons: `bastion_role_not_granted` (guest, or a viewer
+asking for a fix draft or questionnaire) and `bastion_restricted_evidence`.
 
 ## 3. Determining `asker_user_id`
 
@@ -157,9 +177,10 @@ that a human other than the asker needs to approve.
 
 - `AGENTIC_TODO.md` - the capability-vs-tool gap analysis, including this
   section (§11).
+- `packages/shared/src/visibility-entity-types.ts` - the single source of
+  truth for the allowlist above (`VISIBILITY_ENTITY_TYPES`).
 - `apps/api/src/services/visibility.service.ts` - authoritative preflight
-  logic. The `SUPPORTED_ENTITY_TYPES` export is the single source of
-  truth for the allowlist above.
+  logic, re-exporting the list as `SUPPORTED_ENTITY_TYPES`.
 - `apps/mcp-server/src/tools/visibility-tools.ts` - MCP tool wrapper.
 - `apps/brief-api/src/services/document.service.ts::documentVisibilityPredicate`
   and
