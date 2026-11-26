@@ -11,10 +11,16 @@ import * as schema from './schema/index.js';
 // raw tagged-template query on that client cannot bind a Date or an object and reads timestamps
 // back as strings. The evidence engines (src/engine/*) speak raw SQL, so they get their own
 // client that drizzle never touches (`engineConnection`), carved out of the same budget:
-// 6 for drizzle, 4 for the engines. Found by the M4 live rehearsal; pinned by
+// 4 for drizzle, 6 for the engines. Found by the M4 live rehearsal; pinned by
 // test/db/m4-restore.test.ts against the production clients.
-const DRIZZLE_POOL_MAX = 6;
-const ENGINE_POOL_MAX = 4;
+//
+// The engine pool is sized ABOVE one worker replica's evaluate-run concurrency (4, worker.ts)
+// plus the sweeps that share it (outbox drain, tick, reaper, POST /internal/events), so a slice
+// does not queue client-side for a connection behind its siblings (issue #201). A wait that does
+// happen is caught by SLICE_WRITE_CUTOFF_MS in the evaluator. The drizzle pool only serves the
+// owner-facing routes, which are light.
+export const DRIZZLE_POOL_MAX = 4;
+export const ENGINE_POOL_MAX = 6;
 const opts = (max: number) => ({ max, idle_timeout: 20, connect_timeout: 10, onnotice: () => {} });
 
 const queryClient = postgres(env.DATABASE_URL, opts(DRIZZLE_POOL_MAX));

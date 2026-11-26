@@ -138,9 +138,43 @@ describe('bastion-evaluate-run loop', () => {
     });
     expect(r).toBe('requeued');
     const [, data, opts] = add.mock.calls[0]!;
-    expect(data).toEqual({ organization_id: 'o', run_id: 'r', resume_count: 2 });
+    // The successor inherits this job's claimant, so the live claim transfers (#201).
+    expect(data).toEqual({ organization_id: 'o', run_id: 'r', resume_count: 2, claimant: 'worker:j1' });
     expect(opts.jobId).toMatch(/^r-r2-g\d+$/);
     expect(opts.removeOnComplete).toEqual({ count: 100 });
+  });
+
+  it('the handover successor drives under the inherited claimant, never its own job id (#201)', async () => {
+    const post = vi.fn().mockResolvedValue(ok(slice(true)));
+    const successor = job({ organization_id: 'o', run_id: 'r', resume_count: 2, claimant: 'worker:j1' }, 'r-r2-g123');
+    expect(await processBastionEvaluateRunJob(successor, silent, { post, sleep: async () => {}, queue: { add: vi.fn() } })).toBe('done');
+    expect(post.mock.calls[0]![1]).toEqual({ organization_id: 'o', run_id: 'r', claimant: 'worker:j1' });
+  });
+
+  it('a timeout or 5xx polls again as the same claimant instead of failing the job (#201)', async () => {
+    const timeout = Object.assign(new Error('The operation was aborted due to timeout'), { name: 'TimeoutError' });
+    const post = vi
+      .fn()
+      .mockRejectedValueOnce(timeout)
+      .mockResolvedValueOnce({ ok: false, status: 503 })
+      .mockResolvedValueOnce(ok(slice(true)));
+    const sleep = vi.fn().mockResolvedValue(undefined);
+    expect(await processBastionEvaluateRunJob(job({ organization_id: 'o', run_id: 'r', resume_count: 0 }), silent, { post, sleep, queue: { add: vi.fn() } })).toBe('done');
+    expect(post).toHaveBeenCalledTimes(3);
+    expect(new Set(post.mock.calls.map((c) => (c[1] as { claimant: string }).claimant))).toEqual(new Set(['worker:j1']));
+    expect(sleep).toHaveBeenCalledTimes(2);
+  });
+
+  it('persistent transient failures eventually throw; a configuration error throws at once', async () => {
+    const post = vi.fn().mockResolvedValue({ ok: false, status: 502 });
+    await expect(
+      processBastionEvaluateRunJob(job({ organization_id: 'o', run_id: 'r', resume_count: 0 }), silent, { post, sleep: async () => {}, queue: { add: vi.fn() } }),
+    ).rejects.toThrow(/6 times in a row/);
+    const bad = vi.fn().mockRejectedValue(new Error('INTERNAL_SERVICE_SECRET is empty'));
+    await expect(
+      processBastionEvaluateRunJob(job({ organization_id: 'o', run_id: 'r', resume_count: 0 }), silent, { post: bad, sleep: async () => {}, queue: { add: vi.fn() } }),
+    ).rejects.toThrow(/INTERNAL_SERVICE_SECRET/);
+    expect(bad).toHaveBeenCalledTimes(1);
   });
 });
 

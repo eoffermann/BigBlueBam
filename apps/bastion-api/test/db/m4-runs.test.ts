@@ -114,6 +114,38 @@ describe.skipIf(!DATABASE_URL)('M4 evaluation runs and the outbox (live database
     expect(nights).toHaveLength(2);
   });
 
+  it('poll-cap handover: the successor under the inherited claimant continues a LIVE claim at once, resume_count unchanged (#201)', async () => {
+    const s = await seedOrg(sql, 'handover', 1, 3);
+    orgs.push(s.org);
+    const c = clock();
+    const deps = makeDeps(sql, { clock: c });
+    const t0 = await evaluateTick(deps, { organization_id: s.org });
+    const runId = t0.runs[0]!.run_id;
+
+    // The predecessor job drove one slice and stopped polling at the cap; its heartbeat is fresh.
+    const slow = fakeBucket();
+    let puts = 0;
+    const realPut = slow.put.bind(slow);
+    slow.put = async (k, b, o) => {
+      puts += 1;
+      if (puts > 1) throw new Error('slow bucket (test)');
+      return realPut(k, b, o);
+    };
+    const first = await runEvaluationSlice(makeDeps(sql, { clock: c, bucket: slow }), { organization_id: s.org, run_id: runId, claimant: 'worker:j1' });
+    expect(first).toMatchObject({ done: false, assertions_done: 1 });
+
+    // A job under a DIFFERENT claimant (the old per-job-id behavior) is refused, not stale.
+    await expect(runEvaluationSlice(deps, { organization_id: s.org, run_id: runId, claimant: 'worker:r-r0-g99' })).rejects.toMatchObject({
+      name: 'RunLeaseHeldError',
+      heartbeatStale: false,
+    });
+    // The successor carrying the inherited claimant takes over immediately and finishes.
+    const done = await drive(deps, s.org, runId, 'worker:j1');
+    expect(done).toMatchObject({ done: true, status: 'succeeded', assertions_done: 3 });
+    const [row] = await sql`SELECT resume_count FROM bastion_evaluation_runs WHERE id = ${runId}`;
+    expect(Number(row!.resume_count)).toBe(0);
+  });
+
   it('a partial nightly run resumes in place only via bastion_resume_partial_run, never against a live full run (#187)', async () => {
     const s = await seedOrg(sql, 'resume');
     orgs.push(s.org);

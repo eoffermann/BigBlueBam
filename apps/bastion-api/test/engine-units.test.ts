@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { BASTION_PROBE_KEYS, bastionEvaluateRunJobId, type BastionProbeResult } from '@bigbluebam/shared';
 import {
@@ -11,6 +13,7 @@ import {
   PUT_TIMEOUT_MS,
   RUN_LEASE_MS,
   SLICE_START_CUTOFF_MS,
+  SLICE_WRITE_CUTOFF_MS,
   worstCaseProbeSliceMs,
 } from '../src/engine/budgets.js';
 import { replicaLagMs } from '../src/engine/read-scope.js';
@@ -26,6 +29,21 @@ describe('time budgets (spec 7.3)', () => {
     expect(PROBE_TIMEOUT_MS + PUT_TIMEOUT_MS + LEDGER_LOCK_TIMEOUT_MS).toBe(16_000);
     expect(worstCaseProbeSliceMs()).toBe(28_000);
     expect(worstCaseProbeSliceMs()).toBeLessThan(ENGINE_TIMEOUT_MS);
+  });
+
+  it('the write cutoff admits every probe started before the start cutoff, and still fits the engine timeout (#201)', () => {
+    expect(SLICE_WRITE_CUTOFF_MS).toBeGreaterThanOrEqual(SLICE_START_CUTOFF_MS + PROBE_TIMEOUT_MS);
+    expect(SLICE_WRITE_CUTOFF_MS + PUT_TIMEOUT_MS + LEDGER_LOCK_TIMEOUT_MS).toBeLessThan(ENGINE_TIMEOUT_MS);
+  });
+
+  it('the engine pool is larger than one worker replica\'s evaluate-run concurrency (#201)', () => {
+    const db = readFileSync(join(__dirname, '../src/db/index.ts'), 'utf8');
+    const worker = readFileSync(join(__dirname, '../../worker/src/worker.ts'), 'utf8');
+    const pool = Number(/ENGINE_POOL_MAX = (\d+)/.exec(db)?.[1]);
+    const block = worker.slice(worker.indexOf('const bastionEvaluateRunWorker'));
+    const concurrency = Number(/concurrency:\s*(\d+)/.exec(block)?.[1]);
+    expect(concurrency).toBeGreaterThan(0);
+    expect(pool).toBeGreaterThan(concurrency);
   });
 
   it('an LLM slice fits inside the run lease', () => {

@@ -21,7 +21,7 @@ import { withStorageTimeout } from '@bigbluebam/storage';
 import { canonicalJson, sha256Hex } from '../lib/ledger-canonical.js';
 import { decide, probeDefinition, probeWindow } from '../probes/definitions.js';
 import { runProbe } from '../probes/run-probe.js';
-import { SLICE_START_CUTOFF_MS, STALE_HEARTBEAT_MS } from './budgets.js';
+import { SLICE_START_CUTOFF_MS, SLICE_WRITE_CUTOFF_MS, STALE_HEARTBEAT_MS } from './budgets.js';
 import { type EngineDeps, orgTx, sqlstateOf, type Tx } from './context.js';
 import { appendLedger, AppendBlockedError, LedgerLockTimeoutError, RestoreDetectedError } from './ledger.js';
 import { enqueueBastionEvent } from './outbox.js';
@@ -642,6 +642,16 @@ export async function runEvaluationSlice(
     // Stop STARTING probes at the cutoff: worst case 12 + probe 8 + put 5 + lock 3 < 30 s.
     if (Date.now() - started >= SLICE_START_CUTOFF_MS) return finish({ continue: true });
     const ev = await evaluateAssertion(deps, run, a);
+    // A probe can come back late when it waited for an engine connection (that wait is outside
+    // the statement timeout). Writing it now could outrun the worker's engine timeout, so it is
+    // dropped and re-run in the next slice (issue #201).
+    if (Date.now() - started >= SLICE_WRITE_CUTOFF_MS) {
+      deps.log.warn(
+        { run_id: run.id, assertion_id: a.id, elapsed_ms: Date.now() - started },
+        'bastion-evaluate: a check finished past the write cutoff (likely a connection wait); re-running it next slice',
+      );
+      return finish({ continue: true });
+    }
     if (ev.error) deps.log.warn({ run_id: run.id, assertion_id: a.id, probe_key: ev.probe_key, error: ev.error }, 'bastion-evaluate: a check could not run');
     try {
       await writeSnapshot(deps, run, a, ev, highest);

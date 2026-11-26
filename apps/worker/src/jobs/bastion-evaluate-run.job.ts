@@ -12,6 +12,14 @@
  *   409 stale       another claimant's heartbeat is stale: wait 30 s and retry (spec 7),
  *                   because that claim will be taken over at the lease, not abandoned.
  *   409 live        another worker is driving it; end this attempt.
+ *   5xx / timeout   transient (bastion-api restarting, the engine call outran its 30 s bound):
+ *                   wait and poll again under the SAME claimant, which bastion-api lets re-claim
+ *                   at once; after TRANSIENT_MAX_CONSECUTIVE in a row the job throws.
+ *
+ * Claim handover (issue #201): the poll-cap successor carries the predecessor's claimant in its
+ * job data and drives under it, so the live claim transfers instead of stranding the run behind
+ * it until the 300 s lease expires (which used to burn a resume_count per handover). Only a
+ * genuinely abandoned run reaches the reaper and counts against MAX_RESUMES.
  *
  * Progress: one line per slice with the counts bastion-api also writes on the run row.
  */
@@ -24,6 +32,14 @@ import { bodyData, postBastion } from './bastion-shared.js';
 export const EVALUATE_POLL_INTERVAL_MS = 10_000;
 export const EVALUATE_MAX_POLLS = 540;
 export const STALE_CLAIM_WAIT_MS = 30_000;
+/** Consecutive 5xx / timeout / network failures tolerated before the job throws. */
+export const TRANSIENT_MAX_CONSECUTIVE = 6;
+export const TRANSIENT_WAIT_MS = 10_000;
+
+/** The claimant a job drives under: inherited on a handover, else derived from the job id. */
+export function evaluateRunClaimant(job: Pick<Job<BastionEvaluateRunJobData>, 'id' | 'data'>): string {
+  return job.data.claimant ?? `worker:${job.id ?? job.data.run_id}`;
+}
 
 interface Slice {
   done: boolean;
@@ -56,14 +72,41 @@ export async function processBastionEvaluateRunJob(
   deps: EvaluateRunDeps,
 ): Promise<'done' | 'ended' | 'requeued'> {
   const { organization_id, run_id, resume_count } = job.data;
-  const claimant = `worker:${job.id ?? run_id}`;
+  const claimant = evaluateRunClaimant(job);
   const started = Date.now();
   const sleep = deps.sleep ?? realSleep;
   const maxPolls = deps.maxPolls ?? EVALUATE_MAX_POLLS;
-  logger.info({ jobId: job.id, organization_id, run_id, resume_count }, 'bastion-evaluate: starting run');
+  logger.info({ jobId: job.id, organization_id, run_id, resume_count, claimant }, 'bastion-evaluate: starting run');
+
+  let transient = 0;
+  const transientFailure = async (poll: number, detail: string): Promise<void> => {
+    transient += 1;
+    if (transient >= TRANSIENT_MAX_CONSECUTIVE) {
+      throw new Error(`bastion-evaluate: evaluate-run failed ${transient} times in a row (last: ${detail})`);
+    }
+    logger.warn(
+      { run_id, poll, transient, detail },
+      `bastion-evaluate: engine call failed (${detail}); retrying as the same claimant in ${TRANSIENT_WAIT_MS / 1000} s (${transient}/${TRANSIENT_MAX_CONSECUTIVE})`,
+    );
+    await sleep(TRANSIENT_WAIT_MS);
+  };
 
   for (let poll = 0; poll < maxPolls; poll++) {
-    const res = await deps.post('/v1/internal/engines/evaluate-run', { organization_id, run_id, claimant });
+    let res: Awaited<ReturnType<typeof postBastion>>;
+    try {
+      res = await deps.post('/v1/internal/engines/evaluate-run', { organization_id, run_id, claimant });
+    } catch (err) {
+      // A timeout (AbortSignal.timeout) or a network error. Configuration errors still throw.
+      const e = err as Error;
+      if (e.name !== 'TimeoutError' && e.name !== 'AbortError' && !(e instanceof TypeError)) throw err;
+      await transientFailure(poll, `${e.name}: ${e.message}`);
+      continue;
+    }
+    if (res.status >= 500) {
+      await transientFailure(poll, `HTTP ${res.status}`);
+      continue;
+    }
+    transient = 0;
     if (res.status === 404) {
       logger.warn({ run_id }, 'bastion-evaluate: run not found; ending');
       return 'ended';
@@ -93,9 +136,10 @@ export async function processBastionEvaluateRunJob(
     }
   }
 
-  // Still live after the poll cap: hand over to a fresh job (a new jobId, never deduplicated).
+  // Still live after the poll cap: hand over to a fresh job (a new jobId, never deduplicated)
+  // that inherits this job's claimant, so it continues the run at once.
   const generation = Math.floor(Date.now() / 1000);
-  await deps.queue.add('run', job.data, {
+  await deps.queue.add('run', { ...job.data, claimant }, {
     jobId: bastionEvaluateRunJobId(run_id, resume_count, generation),
     ...SCHEDULED_JOB_RETENTION,
   });

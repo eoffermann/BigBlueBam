@@ -850,6 +850,12 @@ export interface BastionEvaluateRunJobData {
   organization_id: string;
   run_id: string;
   resume_count: number;
+  /**
+   * Set only on the worker's own poll-cap handover: the claimant the predecessor job drove the
+   * run as. The successor drives under the same claimant, so the live claim transfers to it at
+   * once instead of stranding the run until the lease expires (issue #201).
+   */
+  claimant?: string;
 }
 
 /** Scheduled sweep jobs carry nothing (or one org for an operator re-run). */

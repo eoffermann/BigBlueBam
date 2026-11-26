@@ -12,6 +12,15 @@ export const PUT_TIMEOUT_MS = 5_000;
 export const LEDGER_LOCK_TIMEOUT_MS = 3_000;
 /** The worker's bound on one engine call (BASTION_ENGINE_TIMEOUT_MS). */
 export const ENGINE_TIMEOUT_MS = 30_000;
+/** Headroom past the write for what no timeout bounds: the heartbeat, finish()'s counts, the reply. */
+export const SLICE_TAIL_MARGIN_MS = 2_000;
+/**
+ * Do not START writing a snapshot after this point in a slice. The start cutoff alone does not
+ * bound a probe that waited for an engine connection (that wait is not under the statement
+ * timeout), so a probe that comes back this late is discarded and re-run in the next slice
+ * rather than written past the worker's engine timeout (issue #201).
+ */
+export const SLICE_WRITE_CUTOFF_MS = ENGINE_TIMEOUT_MS - PUT_TIMEOUT_MS - LEDGER_LOCK_TIMEOUT_MS - SLICE_TAIL_MARGIN_MS;
 /** Run lease: a claim whose heartbeat is older than this may be taken over or released. */
 export const RUN_LEASE_MS = 300_000;
 /** A 409 naming a claim whose heartbeat is older than this is treated as stale by the worker. */
