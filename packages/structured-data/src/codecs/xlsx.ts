@@ -83,11 +83,19 @@ export function decodeXmlText(s: string): string {
   });
 }
 
-/** Characters XML 1.0 forbids (C0 controls other than tab, LF, CR), removed on write. */
-const INVALID_XML_CHARS = /[\u0000-\u0008\u000B\u000C\u000E-\u001F￾￿]/g;
+/** Drop characters XML 1.0 forbids (C0 controls other than tab, LF and CR; U+FFFE and U+FFFF). */
+export function stripInvalidXmlChars(s: string): string {
+  let out = '';
+  for (let i = 0; i < s.length; i++) {
+    const c = s.charCodeAt(i);
+    const forbidden = (c < 0x20 && c !== 0x09 && c !== 0x0a && c !== 0x0d) || c === 0xfffe || c === 0xffff;
+    if (!forbidden) out += s[i];
+  }
+  return out;
+}
 
 export function escapeXmlText(s: string): string {
-  return s.replace(INVALID_XML_CHARS, '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  return stripInvalidXmlChars(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
 /** Attributes of one start tag (`<c r="A1" t="s">` -> { r: 'A1', t: 's' }). Namespace prefixes kept. */
@@ -326,7 +334,7 @@ export function decodeXlsx(bytes: Uint8Array, limitsIn: XlsxReadLimits = {}): Xl
 
 /** A sheet tab name Excel accepts: 1-31 chars, none of []:*?/\, unique in the workbook. */
 export function safeSheetName(name: string, taken: Set<string>): string {
-  let base = name.replace(/[[\]:*?/\\]/g, ' ').replace(INVALID_XML_CHARS, '').trim().slice(0, 31) || 'Sheet';
+  let base = stripInvalidXmlChars(name.replace(/[[\]:*?/\\]/g, ' ')).trim().slice(0, 31) || 'Sheet';
   if (base.startsWith("'")) base = base.slice(1) || 'Sheet';
   let candidate = base;
   let n = 2;
