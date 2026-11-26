@@ -26,13 +26,28 @@ export interface EngineJobDeps {
 }
 
 /** A scheduled job that calls one engine and logs its summary. */
+/** Upper bound on resume calls in one job (about 20 s each), so a job never runs unbounded. */
+const MAX_RESUME_ROUNDS = 30;
+
 export function makeBastionEngineJob(engine: Exclude<BastionEngineName, 'evaluate-run' | 'evaluate-tick'>, deps: EngineJobDeps) {
   return async function processBastionEngineJob(job: Job<BastionSweepJobData>, logger: Logger): Promise<unknown> {
     const started = Date.now();
     logger.info({ jobId: job.id, engine }, `bastion-${engine}: starting`);
-    const res = await deps.post(`/v1/internal/engines/${engine}`, job.data?.organization_id ? { organization_id: job.data.organization_id } : {});
+    const body = job.data?.organization_id ? { organization_id: job.data.organization_id } : {};
+    let res = await deps.post(`/v1/internal/engines/${engine}`, body);
     if (!res.ok) throw new Error(`bastion-${engine}: engine returned ${res.status}`);
-    const summary = bodyData<Record<string, unknown>>(res);
+    let summary = bodyData<Record<string, unknown>>(res);
+    // A budgeted engine (gap-rank, #230) answers complete: false when it stopped on its time
+    // budget; each call resumes from its cursor and stays inside the engine timeout.
+    for (let round = 2; summary?.complete === false && round <= MAX_RESUME_ROUNDS; round++) {
+      logger.info({ jobId: job.id, engine, round, elapsedMs: Date.now() - started }, `bastion-${engine}: paused on its time budget; continuing (call ${round})`);
+      res = await deps.post(`/v1/internal/engines/${engine}`, body);
+      if (!res.ok) throw new Error(`bastion-${engine}: engine returned ${res.status}`);
+      summary = bodyData<Record<string, unknown>>(res);
+    }
+    if (summary?.complete === false) {
+      logger.warn({ jobId: job.id, engine }, `bastion-${engine}: still not complete after ${MAX_RESUME_ROUNDS} calls; the next scheduled run resumes`);
+    }
     if (engine === 'outbox-drain' && summary && Number(summary.dead ?? 0) > 0) {
       deps.recordError?.(`bastion-outbox: ${summary.dead} deliveries gave up and are dead`, { dead_ids: summary.dead_ids });
     }

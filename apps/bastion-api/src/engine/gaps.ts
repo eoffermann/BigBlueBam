@@ -274,11 +274,35 @@ export interface GapRankOrgResult {
 }
 
 /**
+ * The per-org gap-ranking lock (#230), transaction-scoped. Every re-rank (the daily pass, the
+ * post-run pass, exception approval, exception expiry) takes it before reading, so passes for one
+ * org run one at a time and each reads what the previous one committed: an older read can never
+ * commit last, and two passes never lock the same gap rows in opposite orders. A caller that also
+ * takes other locks (exception approval takes the ledger's) takes this one FIRST, so the order is
+ * always gap-rank lock, then everything else. Re-entrant within one transaction.
+ */
+export async function lockOrgGapRank(tx: Tx, orgId: string): Promise<void> {
+  await tx`SELECT pg_advisory_xact_lock(hashtextextended(${`bastion_gap_rank:${orgId}`}, 0))`;
+}
+
+/** As lockOrgGapRank, but answers false at once when another pass holds it. */
+async function tryLockOrgGapRank(tx: Tx, orgId: string): Promise<boolean> {
+  const r = await tx`SELECT pg_try_advisory_xact_lock(hashtextextended(${`bastion_gap_rank:${orgId}`}, 0)) AS ok`;
+  return r[0]?.ok === true;
+}
+
+/**
  * Reconcile the stored gaps of one org inside the caller's transaction: new gaps are inserted
  * `open`; a `resolved` gap that comes back reopens; `open`/`proposed`/`dismissed` keep their status
  * and get the new score; a gap that is no longer present and was `open` or `proposed` resolves.
+ * Serialized per org by lockOrgGapRank, taken before the inputs are read.
  */
 export async function rankOrgGaps(tx: Tx, orgId: string, now: Date): Promise<GapRankOrgResult> {
+  await lockOrgGapRank(tx, orgId);
+  return rankOrgGapsLocked(tx, orgId, now);
+}
+
+async function rankOrgGapsLocked(tx: Tx, orgId: string, now: Date): Promise<GapRankOrgResult> {
   const input = await loadGapInputs(tx, orgId, now);
   const candidates = computeGaps(input.controls, input.exceptions, input.settings, now);
   const existing = await tx`SELECT id, control_id, assertion_id, gap_kind, status FROM bastion_gaps WHERE organization_id = ${orgId}`;
@@ -319,29 +343,69 @@ export async function rankOrgGaps(tx: Tx, orgId: string, now: Date): Promise<Gap
   return r;
 }
 
-/** The bastion-gap-rank engine (spec 7): every org with Bastion set up, one transaction each. */
-export async function gapRank(deps: EngineDeps, opts: { organization_id?: string } = {}) {
+/**
+ * The all-org pass stops after this long and resumes from a cursor on the next call (#230), so
+ * one request always answers well inside the worker's 30 s engine timeout and a timed-out job can
+ * never leave a second full pass running behind its retry.
+ */
+export const GAP_RANK_BUDGET_MS = 20_000;
+const GAP_RANK_CURSOR = 'bastion:gap-rank:all';
+
+/**
+ * The bastion-gap-rank engine (spec 7). With organization_id (the post-run pass): that org,
+ * waiting for any pass already ranking it so this one reads what it committed. Without (the daily
+ * pass): every org with Bastion set up in id order, one transaction each, from the resume cursor,
+ * until GAP_RANK_BUDGET_MS; an org another pass is ranking right now is skipped (that pass is
+ * already doing it). `complete: false` means call again to continue (the worker does).
+ */
+export async function gapRank(deps: EngineDeps, opts: { organization_id?: string; budgetMs?: number } = {}) {
   const started = Date.now();
+  const budgetMs = opts.budgetMs ?? GAP_RANK_BUDGET_MS;
+  const only = opts.organization_id;
+  const single = !!only;
+  const after = single ? '' : ((await deps.cursors.get(GAP_RANK_CURSOR)) ?? '');
   const orgs = (
     await deps.sql`SELECT organization_id FROM bastion_org_settings
-                    ${opts.organization_id ? deps.sql`WHERE organization_id = ${opts.organization_id}` : deps.sql``}`
+                    ${only ? deps.sql`WHERE organization_id = ${only}` : after ? deps.sql`WHERE organization_id > ${after}::uuid` : deps.sql``}
+                    ORDER BY organization_id`
   ).map((r) => String(r.organization_id));
-  deps.log.info({ orgs: orgs.length }, `bastion-gap-rank: ranking gaps for ${orgs.length} org(s)`);
-  const totals = { orgs: orgs.length, open: 0, inserted: 0, reopened: 0, resolved: 0, failed: 0, elapsed_ms: 0 };
+  deps.log.info(
+    { orgs: orgs.length, resumed_after: after || null },
+    `bastion-gap-rank: ranking gaps for ${orgs.length} org(s)${after ? ` (resuming after ${after})` : ''}`,
+  );
+  const totals = { orgs: orgs.length, ranked: 0, skipped_busy: 0, open: 0, inserted: 0, reopened: 0, resolved: 0, failed: 0, complete: true, elapsed_ms: 0 };
   for (const [i, orgId] of orgs.entries()) {
+    // At least one org per call, so a pass always makes progress.
+    if (!single && i > 0 && Date.now() - started >= budgetMs) {
+      totals.complete = false;
+      deps.log.info({ done: i, of: orgs.length, budget_ms: budgetMs }, `bastion-gap-rank: time budget used after ${i}/${orgs.length} org(s); the next call resumes`);
+      break;
+    }
     try {
-      const r = await orgTx(deps.sql, orgId, (tx) => rankOrgGaps(tx, orgId, deps.now()));
-      totals.open += r.open;
-      totals.inserted += r.inserted;
-      totals.reopened += r.reopened;
-      totals.resolved += r.resolved;
-      deps.log.info({ organization_id: orgId, ...r }, `bastion-gap-rank: org ${i + 1}/${orgs.length} open ${r.open} new ${r.inserted} resolved ${r.resolved}`);
+      const r = await orgTx(deps.sql, orgId, async (tx) => {
+        if (single) return rankOrgGaps(tx, orgId, deps.now());
+        if (!(await tryLockOrgGapRank(tx, orgId))) return null;
+        return rankOrgGapsLocked(tx, orgId, deps.now());
+      });
+      if (!r) {
+        totals.skipped_busy += 1;
+        deps.log.info({ organization_id: orgId }, `bastion-gap-rank: org ${i + 1}/${orgs.length} is being ranked by another pass; skipped`);
+      } else {
+        totals.ranked += 1;
+        totals.open += r.open;
+        totals.inserted += r.inserted;
+        totals.reopened += r.reopened;
+        totals.resolved += r.resolved;
+        deps.log.info({ organization_id: orgId, ...r }, `bastion-gap-rank: org ${i + 1}/${orgs.length} open ${r.open} new ${r.inserted} resolved ${r.resolved}`);
+      }
     } catch (err) {
       totals.failed += 1;
       deps.log.error({ organization_id: orgId, err: (err as Error).message }, 'bastion-gap-rank: ranking failed for this org; the next run retries');
     }
+    if (!single) await deps.cursors.set(GAP_RANK_CURSOR, orgId);
   }
+  if (!single && totals.complete) await deps.cursors.set(GAP_RANK_CURSOR, '');
   totals.elapsed_ms = Date.now() - started;
-  deps.log.info(totals, 'bastion-gap-rank: complete');
+  deps.log.info(totals, totals.complete ? 'bastion-gap-rank: complete' : 'bastion-gap-rank: paused (budget); call again to continue');
   return totals;
 }

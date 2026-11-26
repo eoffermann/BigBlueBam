@@ -239,4 +239,21 @@ describe('bastion-evaluate-tick and engine jobs', () => {
     const seal = makeBastionEngineJob('ledger-seal', { post: vi.fn().mockResolvedValue({ ok: false, status: 500 }) });
     await expect(seal(job({}), silent)).rejects.toThrow(/ledger-seal/);
   });
+
+  it('a budgeted engine that answers complete: false is called again until it completes (#230)', async () => {
+    const post = vi
+      .fn()
+      .mockResolvedValueOnce({ ok: true, status: 200, data: { data: { ranked: 40, complete: false } } })
+      .mockResolvedValueOnce({ ok: true, status: 200, data: { data: { ranked: 40, complete: false } } })
+      .mockResolvedValueOnce({ ok: true, status: 200, data: { data: { ranked: 7, complete: true } } });
+    const rank = makeBastionEngineJob('gap-rank', { post });
+    const out = (await rank(job({}), silent)) as { ranked: number; complete: boolean };
+    expect(post).toHaveBeenCalledTimes(3);
+    expect(post.mock.calls.every((c) => c[0] === '/v1/internal/engines/gap-rank')).toBe(true);
+    expect(out).toEqual({ ranked: 7, complete: true });
+    // An engine that reports no `complete` is called once.
+    const once = vi.fn().mockResolvedValue({ ok: true, status: 200, data: { data: { pruned: 1 } } });
+    await makeBastionEngineJob('retention', { post: once })(job({}), silent);
+    expect(once).toHaveBeenCalledTimes(1);
+  });
 });

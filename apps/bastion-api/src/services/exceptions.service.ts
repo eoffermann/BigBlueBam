@@ -27,7 +27,7 @@ import { auditRaw } from '../lib/audit-raw.js';
 import { ConflictError, ForbiddenError, NotFoundError, ValidationFailure } from '../lib/errors.js';
 import { canonicalJson, sha256Hex } from '../lib/ledger-canonical.js';
 import { type EngineDeps, orgTx, type Tx } from '../engine/context.js';
-import { rankOrgGaps } from '../engine/gaps.js';
+import { lockOrgGapRank, rankOrgGaps } from '../engine/gaps.js';
 import { appendLedger } from '../engine/ledger.js';
 import { loadControlStates, verdictOf } from '../engine/numbers.js';
 import { enqueueBastionEvent } from '../engine/outbox.js';
@@ -215,6 +215,9 @@ export async function decideException(d: DecisionDeps, viewer: Viewer, id: strin
   const highest = approve ? await beginLedgerBatch(engine, viewer.org_id) : null;
   try {
     await orgTx(engine.sql, viewer.org_id, async (tx) => {
+      // An approval re-ranks the org's gaps (below). Take the gap-rank lock FIRST, before the row
+      // lock and the ledger, so the lock order is the same as every other re-rank (#230).
+      if (approve) await lockOrgGapRank(tx, viewer.org_id);
       const e = (await tx`SELECT * FROM bastion_exceptions WHERE organization_id = ${viewer.org_id} AND id = ${id} FOR UPDATE`)[0];
       if (!e) throw new NotFoundError('We could not find that exception.');
       await assertHumanDecider(tx, viewer);
@@ -330,6 +333,8 @@ export interface ExceptionExpiryResult {
  * expired on {date}"). exception.expired is published either way.
  */
 export async function expireExceptions(tx: Tx, orgId: string, now: Date): Promise<ExceptionExpiryResult> {
+  // The expiry re-ranks the gaps at the end: take that lock before any write (#230).
+  await lockOrgGapRank(tx, orgId);
   const due = await tx`SELECT id, control_id, expires_at FROM bastion_exceptions
                         WHERE organization_id = ${orgId} AND status = 'active' AND expires_at <= ${now} ORDER BY expires_at`;
   if (due.length === 0) return { expired: 0, drifted: 0 };
