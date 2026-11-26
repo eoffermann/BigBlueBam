@@ -1,9 +1,9 @@
 # Bastion - App Design Specification
 
-> **STATUS: DRAFT, review rounds 1 and 2 folded in.** This document is the build input for
-> Bastion. Where it disagrees with the session submission, this document wins. Where it disagrees
-> with the monorepo, the monorepo wins and section 15 records the discrepancy. Every round 1 and
-> round 2 finding has a disposition line in section 16.
+> **STATUS: BUILD-READY, review rounds 1-3 folded in (final round under the three-round cap).**
+> This document is the build input for Bastion. Where it disagrees with the session submission,
+> this document wins. Where it disagrees with the monorepo, the monorepo wins and section 15
+> records the discrepancy. Every round 1-3 finding has a disposition line in section 16.
 
 **Session:** 2026_11_25_20_03
 **Winner:** Seat B's compliance and GRC submission (29 points; runner-up Bevy at 28), with
@@ -145,7 +145,9 @@ requirement has an applicability decision (unit-tested).
 
 **Archiving a framework** retires every control whose only links were to that framework
 (`lifecycle = 'retired'`): retired controls leave all numbers, gaps, and evaluation, and keep
-their history.
+their history. A control whose derived applicability is `not_applicable` (every requirement link
+excluded) is treated the same way: its assertions are **not evaluated** and produce no snapshots
+until a link becomes applicable again.
 
 Why the shared-control model (round-1 option b) fits: the library already carries a per-control
 key and per-requirement `ref_code`, the second framework is the stated customer journey, and the
@@ -236,6 +238,8 @@ audit_proximity = 1 + max(0, 90 - days_to_nearest_audit_target) / 90
 
 Fix template costs: `confirm_check` 1 (deterministic link to the review screen), `config_change`
 1, `connect_source` 2, `bolt_rule` 2, `evidence_request` 2, `policy_draft` 3, `process_change` 5.
+One override: a `population_review` gap carries cost 2 although its template is `confirm_check`,
+so 180-day re-confirmations do not outrank real failures under "Quick wins".
 Sort by risk descending, cost ascending; "Quick wins" sorts by `risk / cost`. The LLM never sets
 risk or picks the template.
 
@@ -265,7 +269,8 @@ prompt. Citations pass `can_access` at write and at read.
 
 ### 2.5 Drift handling
 
-Worsening stored status for a non-infrastructure reason writes a `bastion_drift_events` row and,
+Worsening stored status for a non-infrastructure reason, or a worsening of effective state caused
+by an exception expiring or being revoked (section 2.6), writes a `bastion_drift_events` row and,
 in the same transaction, outbox rows (`ordering_key = 'control:<id>'`) for `control.drifted` and
 the Bam task upsert. One task per control (`external_id = 'bastion:control:<control_id>'`); if
 it sits in a terminal phase (`phases.is_terminal`), the route moves it to the start phase and
@@ -296,8 +301,14 @@ reason, a compensating-control note, and `expires_at`. **Scope and limits:**
 counted under **Not met** with the "risk accepted" sub-count, never as proof. It creates no
 `failing` gap but appears under "Accepted risks". The owner and expiry are shown on every surface
 that shows the control. The questionnaire caps answers citing it at `medium` and the draft names
-the exception. The auditor room and `exceptions.csv` show it. Expiry publishes
-`exception.expired` and the effective state reverts.
+the exception. The auditor room and `exceptions.csv` show it.
+
+**Approval and expiry reach the task queue.** On approval, Bastion comments on the control's Bam
+task ("Risk accepted until {date}: {reason}") through the outbox. When an exception expires (or is
+revoked) and the control's effective state worsens, `bastion-evidence-expiry` writes a
+`bastion_drift_events` row with reason `exception_expired` and, in the same transaction, outbox
+rows for `control.drifted` and the task upsert, using the reopen-to-start-phase rule with the
+comment "Accepted risk expired on {date}". It also publishes `exception.expired`.
 
 ### 2.7 Security-questionnaire autofill
 
@@ -376,22 +387,34 @@ params jsonb) RETURNS jsonb`. These are the first definer functions in the repo 
 precedent deliberately avoids them), so each one, in the same file:
 
 - is `STABLE` with `SET search_path = pg_catalog, public, pg_temp` (`pg_temp` last);
-- is followed by `REVOKE ALL ON FUNCTION ... FROM PUBLIC` and `GRANT EXECUTE ... TO` the app role;
+- is followed by `REVOKE ALL ON FUNCTION ... FROM PUBLIC`, leaving owner execute (the owner is
+  the migrating `POSTGRES_USER`, which is also the role every service connects as today), and a
+  guarded grant for the future non-superuser role, which does not exist yet (`bam_app` is only a
+  default name in `apps/api/src/boot/rls-boot.ts`, created by nothing):
+  `DO $$ BEGIN IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'bam_app') THEN GRANT EXECUTE ON
+  FUNCTION ... TO bam_app; END IF; END $$;` so `0268` never aborts on a database without that role;
 - raises unless `org = current_setting('app.current_org_id', true)::uuid`, so callers must be
   inside `runInOrgScope` for that same org and a definer function cannot be pointed at another
   tenant;
 - carries an explicit org predicate in every query.
 
-An integration test asserts `proconfig` and `proacl` on every `pg_proc` row named `bastion_%`.
+An integration test asserts `proconfig` (the search_path) on every `pg_proc` row named
+`bastion_%`, and that `proacl` grants no `PUBLIC` execute; it accepts the owner-only ACL (today's
+real posture) and an ACL that additionally grants `bam_app` when that role exists.
 A new probe version is a new function in a new migration. `query_fingerprint` is the SHA-256 of
 `pg_get_functiondef(oid)` read at boot. (The round-1 "visibility floor" compared the definer path
 with itself and could never fail; it is removed.)
 
 The TypeScript side (`apps/bastion-api/src/probes/<key>.ts`) exports `{ key, version,
-paramsSchema, preconditions(), explain(result, detailAllowed) }` and calls the function in a
-`READ ONLY` transaction with `SET LOCAL statement_timeout = BASTION_PROBE_TIMEOUT_MS`. On
-`DATABASE_READ_URL`, it first measures replica lag (`as_of - pg_last_xact_replay_timestamp()`);
-above 30 seconds it runs on the primary. A replica recovery-conflict cancellation is a
+paramsSchema, preconditions(), explain(result, detailAllowed) }` and calls the function through
+**`runInOrgScopeRead(orgId, fn)`**, a read-pool twin of `runInOrgScope`
+(`apps/bursar-api/src/plugins/rls.ts:58-68` binds only the primary pool): it runs `BEGIN READ
+ONLY`, `set_config('app.current_org_id', org, true)`, and `SET LOCAL statement_timeout =
+BASTION_PROBE_TIMEOUT_MS` on the `DATABASE_READ_URL` pool (falling back to the primary pool when
+unset), so the org guard passes on the read connection. It first measures replica lag (`as_of -
+pg_last_xact_replay_timestamp()`); a NULL replay timestamp (the read URL is the primary, as the
+Railway hint at `env-hints.mjs:90-94` sets it) counts as zero lag; above 30 seconds it runs on the
+primary. A replica recovery-conflict cancellation is a
 non-drifting infrastructure failure. Replica lag is recorded on the snapshot. Every probe reads
 `run.as_of`, never `now()`.
 
@@ -451,8 +474,14 @@ yet**; the effective state `pass_with_exception` reads **Not met, risk accepted*
 | `evaluation_stale` (computed) | "This hasn't been checked since {date}, so we can't vouch for it." |
 
 **`effectiveStatus(control, now)`** is the only way any reader obtains a status. It returns
-`unprovable/evaluation_stale` when `last_evaluated_at` is older than `stale_after_hours` (36),
-else `pass_with_exception` when exceptions cover every failing ref, else the stored status.
+`unprovable/evaluation_stale` when `last_evaluated_at` is older than `stale_after_hours` (36).
+Otherwise it works **per assertion, then aggregates**: each confirmed assertion's latest outcome
+becomes `pass_with_exception` when it failed and active exceptions cover all of its failing refs
+(or the whole assertion, within `frozen_refs`); the control's effective state is the worst over
+its assertions in the order `fail` > `unprovable` > `pass_with_exception` > `pass`. So a covered
+failure next to an unprovable sibling reads **Can't prove yet**, and gaps are computed per
+assertion from the same per-assertion states (the sibling's `manual_missing` gap stays on the
+list).
 
 **Infrastructure failures do not drift.** A `probe_error`, storage write failure, lock timeout, or
 replica conflict keeps the previous stored status and sets `stale_reason`.
@@ -517,14 +546,23 @@ entry_hash = hex_lower( sha256( canonical_json({
 
 Sorted keys, no whitespace, integers as JSON integers, `recorded_at` set in the application and
 stored truncated to milliseconds as UTC ISO with `Z`, `prev` lowercase hex (genesis: 64 zeros).
-`epoch` starts at 1 and increments only on an acknowledged restore. A golden test round-trips
+`epoch` starts at 1 and increments when a restore is detected (a provisional epoch, below). A golden test round-trips
 rows through Postgres.
 
 - Appends are serialized per org with `pg_advisory_xact_lock`, under `SET LOCAL lock_timeout =
   '3s'` (a timeout ends the slice cleanly), with no outbound HTTP inside.
-- **Four-path immutability** (`0249_bursar_awards_baseline.sql` pattern) on snapshots, evidence
-  objects, manual evidence content columns, feed records, attestations, exceptions content
-  columns, ledger entries, and seal content columns.
+- **Four-path immutability** (`0249_bursar_awards_baseline.sql` pattern: `BEFORE UPDATE` with a
+  `WHEN` clause naming the protected columns, `BEFORE DELETE`, `ON DELETE RESTRICT`, `BEFORE
+  TRUNCATE`). Protected columns per table: `bastion_evidence_snapshots` (all);
+  `bastion_evidence_objects` (`content_sha256`, `object_key`, `size_bytes`, `content_type`,
+  `created_at`; `holder_count`, `mirrored_at`, `bytes_redacted_at` change in normal operation);
+  `bastion_manual_evidence` (every column except `status`, `blocked_reason`, `attempts`,
+  `next_attempt_at`, `superseded_by_id`, `withdrawn_*`, `redacted_at`, `updated_at`);
+  `bastion_feed_records` (all); `bastion_policy_attestations` (all); `bastion_exceptions` (every
+  column except `status` and `updated_at` once `active`); `bastion_ledger_entries` (all);
+  `bastion_ledger_seals` (every column except `object_written_at`, `published_at`). DELETE is
+  rejected on all of them, except that `bastion_evidence_objects` rows are never deleted (redaction
+  sets `bytes_redacted_at`).
 - **Shared objects are reference-counted.** `bastion_evidence_objects` is content-addressed, so
   identical bytes are stored once; redaction deletes bytes only when the last non-redacted holder
   of that object is redacted.
@@ -536,23 +574,50 @@ rows through Postgres.
 object survives a database restore. `GET /ledger/seals` and the packet publish **every**
 `signing_key_id` with its public key, so old seals stay verifiable after a key change.
 
-**Restore detection (never automatically benign).** At boot and in each seal run, bastion-api
-compares the database ledger head with the newest seal **object in the bucket**:
+**Restore detection (by identity, never automatically benign).** The check compares
+**identity, not position**: the database entry at the highest bucket-sealed `(epoch, head_seq)`
+must exist and its `entry_hash` must equal that seal object's `head_hash`. The highest seal is
+taken across **all** seal objects for the org, not the newest by date. The check runs:
 
-1. Head at or after the bucket seal: normal.
-2. Head behind the bucket seal: a `bastion_ledger_restores` row is opened with the lost range
-   (`lost_from_seq`, `lost_to_seq`), `ledger.restore_detected` is published, the object sweep
-   pauses for the org, and evaluation keeps running.
-3. If a completed `platform_restores` row lines up with the gap (its `completed_at` after the
-   bucket seal and its restored snapshot before it), the row is `pending_ack`. A non-impersonating
-   **owner** acknowledges it (`POST /ledger/restores/:id/acknowledge`). Only then is a `restore`
-   ledger entry appended, `epoch` increments, `seq` continues from `bucket_seal.head_seq + 1` (a
-   sealed `seq` is never reused), and `ledger.restored` is published.
-4. With no matching restore record, the row is `unmatched` and `evidence.integrity_failed` is
-   published. It cannot be acknowledged away.
+- at boot;
+- at the start of **every ledger-append batch** (an evaluation slice, a manual-evidence or feed
+  write, an attestation, an exception), cheaply: the verified seal is cached per org and
+  re-checked when a newer seal object appears or when `max(platform_restores.completed_at)`
+  changes, so an in-place restore from the Backup app (`apps/worker/src/worker.ts:2676-2706`, no
+  bastion-api restart) is caught on the next append;
+- in every seal run.
 
-The auditor room and packet show every lost range as "History lost by restore, seq X-Y" (or
-"Unexplained gap, seq X-Y").
+On a mismatch or a missing entry:
+
+1. A `bastion_ledger_restores` row is opened with the lost range, and the range is also written as
+   an object `restores/<org>/<id>.json` in the Bastion bucket, so it survives a further database
+   rewrite. `ledger.restore_detected` is published; the object sweep pauses for the org.
+2. **A provisional epoch opens immediately**, whatever the eventual status: the next entry uses
+   `epoch = highest_sealed_epoch + 1` and `seq = highest bucket-sealed head_seq + 1`, so no sealed
+   `(epoch, seq)` is ever reused, even while waiting for acknowledgement and even if the gap is
+   never explained.
+3. **While a restore row is `pending_ack` or `unmatched` and not yet reconciled, ledger appends
+   for that org are blocked**: the running evaluation slice ends and the run goes `partial` with
+   reason `restore_pending`, which the normal resume logic picks up once the row is resolved.
+   Reads, verification, and the auditor room keep working.
+4. If a completed `platform_restores` row lines up with the gap, the row is `pending_ack`. A
+   non-impersonating **owner** acknowledges it (`POST /ledger/restores/:id/acknowledge`); a
+   `restore` ledger entry is appended as the first entry of the provisional epoch,
+   `ledger.restored` is published, and appends resume. Acknowledgement changes the label from
+   "Unexplained gap" to "History lost by restore"; it never changes numbering.
+5. With no matching restore record, the row is `unmatched` and `evidence.integrity_failed` is
+   published. An owner can **resume appends** under the provisional epoch (a separate,
+   confirm-gated, non-impersonated action on the same route with `resolution = 'continue_unexplained'`),
+   but the gap stays labelled "Unexplained gap" forever.
+
+**The seal run refuses to sign a head below the highest bucket-sealed `(epoch, head_seq)`**, so a
+rewound ledger can never produce a "newer" seal that makes the gap look normal. The auditor room
+and packet show every lost range, read from the bucket objects, as "History lost by restore,
+epoch E seq X-Y" or "Unexplained gap, epoch E seq X-Y".
+
+Expected behavior, recorded so nobody files it as a bug: seal objects are written through the
+outbox, so if the database is restored before the newest seal object was delivered, detection
+works against the previous seal object and reports a wider lost range.
 
 **Verification** walks from an entry to the next seal and reports `intact`, `hash_mismatch`,
 `object_missing`, `redacted`, `pd_mismatch` (personal-data commitment no longer matches), or
@@ -717,8 +782,11 @@ All tables prefixed `bastion_`, org-scoped by `organization_id`, Drizzle schema 
   `signature`, `signing_key_id`, `object_written_at`, `published_at`. PK `(organization_id,
   seal_date)`.
 - **`bastion_ledger_restores`**: `id`, `organization_id`, `detected_at`, `db_head_seq`,
-  `bucket_seal_date`, `bucket_head_seq`, `lost_from_seq`, `lost_to_seq`, `platform_restore_id`,
-  `status` (`pending_ack`,`acknowledged`,`unmatched`), `acknowledged_by`, `acknowledged_at`.
+  `bucket_seal_date`, `bucket_epoch`, `bucket_head_seq`, `bucket_head_hash`, `lost_from_seq`,
+  `lost_to_seq`, `provisional_epoch`, `object_key` (the `restores/<org>/<id>.json` copy),
+  `platform_restore_id`, `status` (`pending_ack`,`acknowledged`,`unmatched`), `resolution`
+  (`restore_acknowledged`,`continue_unexplained`, null while appends are blocked),
+  `resolved_by`, `resolved_at`.
 
 **Gaps, drift, fixes, exceptions**
 
@@ -843,14 +911,14 @@ Anchor: **current tip + 1, observed at authoring time** (tip today: `0259`).
 | # | File | Contents |
 | --- | --- | --- |
 | 0260 | `0260_bolt_trigger_source_values.sql` | **#124.** `ALTER TYPE bolt_trigger_source ADD VALUE IF NOT EXISTS` for each source the enum lacks today, listed explicitly: `'basis'`, `'braid'`, `'bulwark'`, `'burn'`, `'bursar'`, `'blueprint'`, `'bureau'`, `'bin'`, `'bay'`, `'blip'`, `'bastion'` (re-verify against `BOLT_SOURCES` at authoring). No new value is used in the same file |
-| 0261 | `0261_agent_proposals_decider.sql` | **#128.** `ADD COLUMN IF NOT EXISTS decided_by uuid`, `decided_by_kind`, `decided_impersonator_id uuid`, `owning_app text`, `require_human_decider boolean NOT NULL DEFAULT false` on `agent_proposals` |
+| 0261 | `0261_agent_proposals_decider.sql` | **#128.** `ADD COLUMN IF NOT EXISTS decided_by uuid`, `decided_by_kind` (the existing `actor_type` enum), `decided_impersonator_id uuid`, `owning_app text`, `require_human_decider boolean NOT NULL DEFAULT false` on `agent_proposals`; plus `bastion_mirror_status text` and `bastion_mirror_cursor timestamptz` on `platform_backups` (both additive, both with Drizzle updates in apps/api) |
 | 0262 | `0262_github_pr_events.sql` | **Bam-owned.** `github_pr_events` and `github_integrations.subscribed_events text[]` |
 | 0263 | `0263_bastion_core.sql` | tables 1-7; Bastion System sentinel user `...0000b5` |
 | 0264 | `0264_bastion_evidence.sql` | tables 8-22; immutability triggers; partitioning note |
 | 0265 | `0265_bastion_gaps_policies.sql` | tables 23-28 |
 | 0266 | `0266_bastion_questionnaires.sql` | tables 29-31 |
 | 0267 | `0267_bastion_sharing.sql` | tables 32-35; the age-guarded access-log DELETE trigger and purge function (header states the age predicate is the guard) |
-| 0268 | `0268_bastion_probe_functions.sql` | probe functions v1 and the two resolvers, each hardened (search_path, REVOKE, GRANT, org guard) |
+| 0268 | `0268_bastion_probe_functions.sql` | probe functions v1 and the two resolvers, each hardened (search_path, REVOKE from PUBLIC, owner execute, `bam_app` grant only inside an `IF EXISTS` guard, org guard) |
 | 0269 | `0269_bastion_rls.sql` | generated RLS loop |
 | M10 | `<observed>_permissions_seed_actions_delta_025.sql` | emitted by the delta generator; number observed |
 | M10 | `<observed + 1>_bastion_builtin_group_defaults.sql` | authored only after the delta applies |
@@ -924,7 +992,7 @@ operations; `?framework_id=` on lists and the summary.
 | 28 | `GET /evidence/:id/download` | `evidence.read_detail` | skip: binary download |
 | 29 | `GET /ledger/seals` (all keys) | `evidence.read` | skip: verification material |
 | 30 | `GET /ledger/restores` | `evidence.read` | skip: integrity admin surface |
-| 31 | `POST /ledger/restores/:id/acknowledge` (confirm, owner) | `ledger.acknowledge_restore` | skip: human integrity act |
+| 31 | `POST /ledger/restores/:id/acknowledge` (confirm, owner; `resolution` = `restore_acknowledged` or `continue_unexplained`) | `ledger.acknowledge_restore` | skip: human integrity act |
 | 32 | `POST /manual-evidence` | `evidence.upload` | skip: a human attests |
 | 33 | `GET /manual-evidence` | `evidence.read` | `bastion_list_manual_evidence` |
 | 34 | `GET /manual-evidence/:id` | `evidence.read` (+ restricted) | `bastion_list_manual_evidence` |
@@ -1047,11 +1115,15 @@ Polling on run rows. (Bursar's `/bursar/ws` has no server, issue #121.)
 ### 5.4 MCP tools
 
 `apps/mcp-server/src/tools/bastion-tools.ts`, client shaped like `createBursarClient`, every tool
-with a top-level `returns:` schema. **The module is built and unit-tested in M10 but registered in
-`apps/mcp-server/src/server.ts` only in M11**, in the same merge unit as `APP_TOOL_MODULES`, the
-published tool counts, `pnpm docs:catalog`, the CLAUDE.md count line, and the Launchpad entry
-(`build-docs-catalog.mjs` builds its app list only from `LAUNCHPAD_CATALOG`, line 64, so
-registering earlier would make the catalog and the published counts disagree).
+with a top-level `returns:` schema. **The file `bastion-tools.ts` is created only in the M11 merge
+unit**, together with its `server.ts` registration, `APP_TOOL_MODULES`, the published tool counts,
+`pnpm docs:catalog`, the CLAUDE.md count line, and the Launchpad entry. Two checks read the tools
+directory rather than `server.ts`: `scripts/check-tool-return-coverage.mjs` counts
+`registerTool(server, {` in every `*-tools.ts` file, and `listAllToolModules()`
+(`scripts/docs/lib/tool-source.mjs:397-403`) files any unmapped module under "platform". So at M10
+the HTTP client and the tool handlers are built and unit-tested at
+`apps/mcp-server/src/clients/bastion-client.ts` and `apps/mcp-server/src/tools-pending/bastion.ts`
+(paths that match neither check), and M11 moves the handlers into `bastion-tools.ts`.
 
 | # | Tool | Backing rows |
 | --- | --- | --- |
@@ -1221,18 +1293,21 @@ Registered with `registerBastionSweep` (copied from `registerBursarSweep`,
 `apps/worker/src/worker.ts:2605-2625`), wrapping every scheduler in `withRetention` with `tz:
 'UTC'`; every producer `add` passes `jobId` and `SCHEDULED_JOB_RETENTION`; a scanning unit test
 enforces both. Queue contracts in `packages/shared/src/schemas/bastion.ts`. `bastion-shared.ts`
-throws when `BASTION_API_INTERNAL_URL` is unset. Worker jobs that touch the Bastion bucket build
-their driver with `createBootstrapDriver({ S3_BUCKET: env.BASTION_S3_BUCKET, ... })`, never
-`apps/worker/src/utils/storage.ts`.
+throws when `BASTION_API_INTERNAL_URL` is unset. The only worker job that touches the Bastion
+bucket directly is `bastion-export-packet`, which builds its driver with
+`createBootstrapDriver({ S3_BUCKET: env.BASTION_S3_BUCKET, ... })`, never
+`apps/worker/src/utils/storage.ts`. The object sweep and the off-site mirror are thin worker
+callers into bastion-api engines (`object-sweep`, `mirror-objects`), so the backup credentials stay
+in bastion-api.
 
 | Job | Schedule | Does |
 | --- | --- | --- |
-| `bastion-evaluate-tick` | `*/5 * * * *` | claims due nightly runs; **re-queues a `partial` nightly run for today in place** (`resume_count` < 3, same `as_of`, `jobId = run.id + ':' + resume_count`) |
-| `bastion-evaluate-run` | event, concurrency 4 | drives a run (`bursar-level.job.ts` loop); slices skip assertions already snapshotted in the run |
-| `bastion-compile` | event | async-start LLM slices, resumable |
-| `bastion-questionnaire-autofill` | event | async-start LLM slices, resumable |
+| `bastion-evaluate-tick` | `*/5 * * * *` | claims due nightly runs; **re-queues a `partial` nightly run for today in place** (`resume_count` < 3, same `as_of`); **re-enqueues every `queued` run (any kind: evaluation, compile, autofill) whose `updated_at` is more than 2 minutes old**, so a released run is never orphaned |
+| `bastion-evaluate-run` | event, concurrency 4 | drives a run with the `bursar-level.job.ts` loop, polling every 10 s with `MAX_POLLS = 540` (90 minutes; the job re-enqueues itself under a new `jobId` if the run is still live); slices skip assertions already snapshotted in the run; a 409 against a claim whose `heartbeat_at` is stale waits 30 s and retries instead of ending the attempt |
+| `bastion-compile` | event | async-start LLM slices, resumable; polls every 15 s, `MAX_POLLS = 960` (4 hours, above the 1-2 hour compile estimate), then re-enqueues itself |
+| `bastion-questionnaire-autofill` | event | async-start LLM slices, resumable; polls every 10 s, `MAX_POLLS = 360` (1 hour, above the 16-32 minute estimate), then re-enqueues itself |
 | `bastion-evidence-ingest` | event + `*/10 * * * *` | backoff, 24 h cap then daily, `recordWorkerError` on failure |
-| `bastion-outbox-drain` | `* * * * *` | delivers the **oldest pending row per `ordering_key`** only (a backing-off row blocks those behind it); backoff 30 s to 6 h, then `dead` with a worker error and a `/metrics` counter |
+| `bastion-outbox-drain` | `* * * * *` | delivers the **oldest pending row per `ordering_key`** only (a backing-off row blocks those behind it); backoff 30 s to 6 h, then `dead` with a worker error and a `/metrics` counter. **A `dead` row stops blocking its key**, so later rows proceed; an operator re-drive replays it only if no newer row of the same kind for that key has been delivered, otherwise it is marked `superseded` |
 | `bastion-gap-rank` | after each run + `30 6 * * *` | recomputes stored gaps |
 | `bastion-evidence-expiry` | `10 6 * * *` | expiring evidence and exceptions; control-scope runs |
 | `bastion-attestation-nudge` | `0 14 * * *` | due attestations |
@@ -1240,12 +1315,12 @@ their driver with `createBootstrapDriver({ S3_BUCKET: env.BASTION_S3_BUCKET, ...
 | `bastion-ledger-seal` | `55 23 * * *` | seals, seal objects via the outbox, restore detection |
 | `bastion-ledger-verify` | `40 4 * * 0` | budgeted re-hash, resume cursor |
 | `bastion-evaluation-missed` | `0 * * * *` | idempotent per org and `last_completed_at` |
-| `bastion-object-sweep` | `15 4 * * *` | scans only `bastion_object_intents` older than 24 h (cost bounded by failed writes); paused for an org with an open restore row |
-| `bastion-object-backup` | event, triggered by `backup-database.job.ts` before it records status | mirrors objects with `mirrored_at IS NULL` to the off-site destination, sets `mirrored_at`, and returns the cursor the backup record stores |
-| `bastion-run-reaper` | `*/5 * * * *` | releases claims (`claimed_by = NULL`, `queued`) on resumable runs with `resume_count` < 3; only then `partial`; unwedges frameworks and questionnaires |
+| `bastion-object-sweep` | `15 4 * * *` | calls bastion-api's `object-sweep` engine, which scans only `bastion_object_intents` older than 24 h (cost bounded by failed writes); paused for an org with an open restore row |
+| `bastion-object-backup` | event, **enqueued by `backup-database.job.ts` after the backup has recorded `completed`**, `jobId = backup.id` | calls bastion-api's `mirror-objects` engine (async-start, polled), which mirrors objects with `mirrored_at IS NULL` to the off-site destination within a per-run budget (5,000 objects or 2 GiB) with a resume cursor and progress lines, sets `mirrored_at`, and writes `platform_backups.bastion_mirror_status` and `bastion_mirror_cursor`; a mirror failure never changes the backup's own status |
+| `bastion-run-reaper` | `*/5 * * * *` | releases claims on resumable runs whose heartbeat exceeded the lease (`claimed_by = NULL`, status `queued`, **`resume_count` incremented on every release**) up to `resume_count` 3; only then `partial`; unwedges frameworks and questionnaires |
 | `bastion-weekly-readiness` | `0 13 * * 1` | via the outbox |
 | `bastion-retention` | `20 5 * * *` | prunes processed ingest and delivered outbox rows older than 30 days; calls the access-log purge |
-| `bastion-export-packet` | event | the packet, in the worker |
+| `bastion-export-packet` | event | the packet, in the worker; personal-data commitments are verified by calling bastion-api's `POST /v1/internal/engines/verify-commitments` (row 106), so the HMAC key lives only in bastion-api |
 
 **19 jobs.**
 
@@ -1274,7 +1349,10 @@ with `pdf-lib` (one page per control keeps it small) and added as one entry. Con
 (file hashes, every seal with every public key, restore notices), `controls.csv`/`.jsonl`,
 evidence JSON, selected manual files, `attestations.csv`, `exceptions.csv`, `drift.csv`,
 `statement_of_applicability.csv` for ISO, `summary.pdf`. Caps: `max_packet_bytes` and a 400-day
-period.
+period. The worker never holds `BASTION_PD_HMAC_KEY`: it sends batches of `{holder_kind,
+holder_id}` to bastion-api's internal `verify-commitments` engine (row 106), which returns
+`intact`, `pd_mismatch`, `key_changed`, or `redacted` per holder, and the packet records those
+results in the manifest.
 
 ### 7.3 Time budgets, resumption, and fairness
 
@@ -1294,9 +1372,16 @@ the control's confirmed assertions). Status writes are conditional on `last_eval
 $as_of`, drift only when the row changed, run-row writes fenced on `claimed_by`.
 
 **Resumption.** `partial` nightly runs resume in place (tick above). On SIGTERM, bastion-api stops
-starting LLM calls, lets the current call finish, and releases its claims (`queued`); the reaper
-re-queues abandoned resumable runs up to `resume_count` 3, keeping and skipping completed items,
-so a deploy does not send a questionnaire back to mapping.
+starting LLM calls, lets the current call finish, and releases its claims (status `queued`,
+`resume_count` incremented). Compose sets **`stop_grace_period: 75s`** on bastion-api (Docker's
+default 10 s would kill a 60 s LLM call), and Railway gets the equivalent
+`RAILWAY_DEPLOYMENT_DRAINING_SECONDS=75` as a `literal` hint. Every release increments
+`resume_count`, and every re-enqueue uses `jobId = run.id + ':' + resume_count`, so it is never
+deduplicated against a completed job still retained by `removeOnComplete`. The tick re-enqueues
+any `queued` run idle for more than 2 minutes, so a released run is never orphaned and never
+holds the partial unique index against tomorrow's nightly run. Completed items are kept and
+skipped, so a deploy does not send a questionnaire back to mapping. A `restore_pending` partial
+(section 3.4) resumes only after the restore row is resolved.
 
 **LLM fairness (leased permits).** Copied from `admitLlmCall` in
 `apps/api/src/routes/internal-llm.routes.ts`: Redis sorted sets (`bastion:llm:svc`, and
@@ -1374,15 +1459,15 @@ Written in the same transaction as the row they describe, `ON CONFLICT DO NOTHIN
 | **#123** | `/files/*` serves only `avatars/` | M0 |
 | **#126** | `syncNew` propagates to existing services **only hints marked `propagate: true`** (initially the `*_API_INTERNAL_URL` and `*_API_URL` computed hints), never overwrites a present variable, prints the planned diff in CI, and upserts with `skipDeploys` then one redeploy per service | M0 |
 | **#127** | the five missing apps in the `index.html` no-cache regex | M0 |
-| **#128** | migration `0261`; `proposals.routes.ts` sets `decided_by`, `decided_by_kind`, `decided_impersonator_id`, enforces `require_human_decider`, returns 409 `DECIDE_IN_APP` for `owning_app` | M0 |
+| **#128** | migration `0261`; the Drizzle schema `apps/api/src/db/schema/agent-proposals.ts` gains the five columns (`decided_by_kind` reuses `actorTypeEnum`) so `db:check` stays green; `proposals.routes.ts` sets `decided_by`, `decided_by_kind`, `decided_impersonator_id`, enforces `require_human_decider`, returns 409 `DECIDE_IN_APP` for `owning_app` | M0 |
 | Railway generator | `scripts/gen-railway-configs.mjs` also rewrites `set $<var> <host>:<port>;` for known services to `.railway.internal:8080`, and replaces any location-level `resolver 127.0.0.11` with `__RESOLVER__`; unit test | M0 |
 | Deploy secrets | `scripts/deploy/shared/secrets.mjs` `generateSecrets()` gains a **stable secret** class: generated only when no live value exists (existing `.env`, or live service variables on Railway), never rehydrated from `[REDACTED]` state (`scripts/deploy/main.mjs:151-165`) | M0 |
 | GitHub | `ping` stores `hook.events`; `pull_request_review` handled; every merge and review appended to `github_pr_events` | M2 |
-| `apps/api/src/routes/internal-bastion.routes.ts` | `POST /internal/bastion/tasks/upsert` (reopen semantics), `POST /internal/bastion/tasks/comment` (by `external_id`, idempotency key), `POST /internal/bastion/proposals/:id/close` (records the Bastion decider in the #128 columns and emits `proposal.decided`); `requireServiceAuth`; `BASTION_SYSTEM_USER_ID` | M6 |
+| `apps/api/src/routes/internal-bastion.routes.ts` | `POST /internal/bastion/tasks/upsert` (reopen semantics), `POST /internal/bastion/tasks/comment` (by `external_id`, idempotency key), `POST /internal/bastion/proposals/:id/close` (accepts only proposals with `owning_app = 'bastion'` whose named decider is a `kind = 'human'` member of the proposal's org; records the decider in the #128 columns and emits `proposal.decided`); `requireServiceAuth`; `BASTION_SYSTEM_USER_ID` | M6 |
 | Visibility | six `bastion.*` types; generated `can_access` description in `visibility-tools.ts:28`; `agent-conventions.md` | M10 |
 | Search | `search_everything` fetcher | M10 |
 | bolt-api | `bastion-subscriptions.ts`, `bastion-dispatch-hook.ts`, `BASTION_API_INTERNAL_URL` | M4 |
-| Backup | `backup-database.job.ts` triggers `bastion-object-backup` and records its cursor | M9 |
+| Backup | `backup-database.job.ts` records its own `completed` status first (unchanged), then enqueues `bastion-object-backup` with `jobId = backup.id`; `platform_backups` gains `bastion_mirror_status` and `bastion_mirror_cursor` (migration `0261`, Drizzle `platform-backups.ts`) | M9 |
 | xlsx | `packages/structured-data/src/codecs/xlsx.ts` | M8 |
 
 ### 8.5 Unified activity and search
@@ -1426,9 +1511,14 @@ already runs `max_connections=200`; Redis is verify-only (512mb, `noeviction`). 
   a put, stat, delete check on its bucket and records `bucket_check_status`; readiness stays
   Postgres and Redis only.
 
-**worker** gains `BASTION_S3_BUCKET`, the backup-destination variables, `BASTION_API_INTERNAL_URL`,
-and `BASTION_PD_HMAC_KEY` (the packet verifies commitments). **frontend** gets `bastion-api:
-condition: service_started`. The Dockerfile adds the four `packages/storage` lines from
+bastion-api also sets **`stop_grace_period: 75s`** so a SIGTERM drain can finish an in-flight LLM
+call (section 7.3).
+
+**worker** gains `BASTION_S3_BUCKET` and `BASTION_API_INTERNAL_URL` only. It does **not** get
+`BASTION_PD_HMAC_KEY` or the `BASTION_BACKUP_S3_*` credentials: the packet verifies commitments
+through bastion-api's internal engine, and the off-site mirror and object sweep run as bastion-api
+engines that worker jobs merely trigger, so each secret lives in exactly one service.
+**frontend** gets `bastion-api: condition: service_started`. The Dockerfile adds the four `packages/storage` lines from
 `apps/bin-api/Dockerfile:16,31,41,58`.
 
 **Bucket naming on AWS S3 and R2.** The deploy storage prompt (`promptStorageChoice`) asks for the
@@ -1482,6 +1572,7 @@ same commit as its env hints:
     optional: ['DATABASE_READ_URL', 'S3_ENDPOINT', 'S3_ACCESS_KEY', 'S3_SECRET_KEY', 'S3_REGION',
                'CORS_ORIGIN', 'LOG_LEVEL', 'BASTION_TRUST_PROXY_HOPS', 'BASTION_LLM_TIMEOUT_MS',
                'BASTION_ENGINE_TIMEOUT_MS', 'BASTION_PROBE_TIMEOUT_MS',
+               'RAILWAY_DEPLOYMENT_DRAINING_SECONDS',
                'BASTION_BACKUP_S3_ENDPOINT', 'BASTION_BACKUP_S3_BUCKET',
                'BASTION_BACKUP_S3_ACCESS_KEY', 'BASTION_BACKUP_S3_SECRET_KEY'],
   },
@@ -1490,15 +1581,21 @@ same commit as its env hints:
 
 Also: `bastion-api` in the frontend entry's `needs`; `BASTION_API_INTERNAL_URL` on the bolt-api
 and worker entries; `BASTION_API_URL` on mcp-server's `env.optional`; the **worker** entry gains
-`BASTION_S3_BUCKET`, the four `BASTION_BACKUP_S3_*` vars, and `BASTION_PD_HMAC_KEY` in
-`env.optional`. On Railway, internal URLs use port 8080.
+only `BASTION_S3_BUCKET` in `env.optional` (the packet job needs it; the worker already has the
+shared `S3_*` credentials). The off-site backup credentials and the HMAC key stay on bastion-api
+alone, because the mirror and sweep run as bastion-api engines and commitment checks go through
+bastion-api (env hints are one flat global map, so a secret cannot be generated on one service and
+referenced on another). On Railway, internal URLs use port 8080. **M1 gate:** the `syncNew`
+dry-run plan shows `BASTION_S3_BUCKET` and `BASTION_API_INTERNAL_URL` being added to the existing
+worker service.
 
 `env-hints.mjs` (landed with the catalog entry):
 
 ```js
 BASTION_API_INTERNAL_URL:  { kind: 'computed', value: internal('bastion-api'), propagate: true },
 BASTION_API_URL:           { kind: 'computed', value: `${internal('bastion-api')}/v1`, propagate: true },
-BASTION_S3_BUCKET:         { kind: 'literal', value: 'bigbluebam-bastion' },
+BASTION_S3_BUCKET:         { kind: 'literal', value: 'bigbluebam-bastion', propagate: true },
+RAILWAY_DEPLOYMENT_DRAINING_SECONDS: { kind: 'literal', value: '75' },   // bastion-api SIGTERM drain
 BASTION_LLM_TIMEOUT_MS:    { kind: 'literal', value: '60000' },
 BASTION_ENGINE_TIMEOUT_MS: { kind: 'literal', value: '30000' },
 BASTION_PROBE_TIMEOUT_MS:  { kind: 'literal', value: '8000' },
@@ -1545,19 +1642,30 @@ replica lag is under 30 seconds.
 
 ### 9.7 Backup, keys, and DR
 
-- **Off-site evidence mirror.** `bastion-object-backup` copies objects with `mirrored_at IS NULL`
-  to the separately configured `BASTION_BACKUP_S3_*` destination (ideally another provider or
-  host; never the shared bucket). It runs **as part of `backup-database.job.ts`** before the
-  backup records status, so there is no schedule race. The backup record stores the mirror cursor.
+- **Off-site evidence mirror.** `backup-database.job.ts` records the database backup's own
+  `completed` status first, exactly as today, then enqueues `bastion-object-backup` with `jobId =
+  backup.id`. That job triggers bastion-api's `mirror-objects` engine, which copies objects with
+  `mirrored_at IS NULL` to the separately configured `BASTION_BACKUP_S3_*` destination (ideally
+  another provider or host; never the shared bucket) within a per-run budget of 5,000 objects or
+  2 GiB, resuming from a cursor with progress lines, and writes
+  `platform_backups.bastion_mirror_status` and `bastion_mirror_cursor`. **A mirror failure,
+  timeout, or a long first pass never fails, delays, or changes the database backup.** Because the
+  mirror follows each backup, there is no schedule race.
 - **"Current" defined:** every object created before the backup's `started_at` minus 1 hour has
-  `mirrored_at` set.
+  `mirrored_at` set, as recorded by that backup's `bastion_mirror_cursor`; `ops.backup_fresh`
+  reads both the backup status and the mirror status.
 - **When the destination is unset**, the job logs "No off-site evidence backup is configured" and
   `ops.backup_fresh` reports `unprovable / source_not_connected`, never `pass`.
-- **Object restore runbook:** `docker compose exec worker node dist/cli.js
-  bastion-restore-objects --from-backup` copies the mirror back into the Bastion bucket (a
-  restore-job extension, M9).
-- **Seals** are objects in the Bastion bucket and therefore mirrored too; restore detection is
-  section 3.4.
+- **Object restore runbook.** The worker has no CLI, so bastion-api ships one
+  (`apps/bastion-api/src/cli.ts`, built to `dist/cli.js`) with a `restore-objects --from-backup`
+  command that copies the mirror back into the Bastion bucket, logging `objects n/N` as it goes.
+  Compose: `docker compose exec bastion-api node dist/cli.js restore-objects --from-backup`.
+  Railway: `railway ssh --service bastion-api -- node dist/cli.js restore-objects --from-backup`.
+  (M9.)
+- **Seals and restore records** are objects in the Bastion bucket and therefore mirrored too;
+  restore detection is section 3.4. Bucket objects can be deleted by anyone holding the shared S3
+  credentials, which is inside the stated honest limit; the guide tells auditors to keep their own
+  copies of the signed seals and packets they receive.
 - **Key escrow.** `BASTION_SEAL_SIGNING_KEY`, `BASTION_PD_HMAC_KEY`, and `BASTION_FEED_KEY_PEPPER`
   must be exported and escrowed with the database backup; a rebuilt host without them cannot sign
   new seals under the old key id, verify commitments, or accept existing feed keys. Each row
@@ -1622,7 +1730,12 @@ hashing, fragment parsing, passcode lockout and unlock, creator-authority re-che
 allowlist, id scoping; content-type allowlist and download headers; questionnaire banding;
 citation verification; csv neutralization; `bin-asset-access` refusal cases; claim fencing;
 reaper behavior; feed key HMAC verification, quota 429, batch byte cap; no bare
-`upsertJobScheduler` or `add`; `rls-coverage`. Plus the round 2 cases: `effectiveStatus` (pass_with_exception, staleness precedence); the
+`upsertJobScheduler` or `add`; `rls-coverage`; per-assertion exception aggregation (**a covered
+fail plus an unprovable sibling gives Can't prove yet, and the `manual_missing` gap is present**);
+a not-applicable control is not evaluated; `population_review` cost 2; dead outbox rows stop
+blocking and re-drive marks superseded rows; poll caps exceed the stated run durations; a NULL
+replay timestamp counts as zero lag; the proposal-close route rejects non-Bastion proposals and
+non-human or non-member deciders; seal refusal below the highest bucket-sealed head; `effectiveStatus` (pass_with_exception, staleness precedence); the
 numbers table including the not-set-up count and the risk-accepted sub-count; the full gap mapping
 (12 stored kinds, derived `stale`, grace period, all-rejected without grace); exception scope
 (`frozen_refs` ignores a new failure), 90 and 365 day caps, approver-differs-from-proposer and
@@ -1640,8 +1753,9 @@ reject agents, impersonators, and the proposer; env refusal messages for each mi
 
 ### 11.2 Integration
 
-Real Postgres in the CI service container. **Probe goldens**, run twice (as today, and with
-`BBB_RLS_ENFORCE=1`), asserting identical outcomes, including `access.departed_still_holding`
+Real Postgres in the CI service container. **Probe goldens**, run three times (as today, with
+`BBB_RLS_ENFORCE=1`, and with `DATABASE_READ_URL` pointing at a separate pool so the org guard is
+exercised through `runInOrgScopeRead`), asserting identical outcomes, including `access.departed_still_holding`
 catching a user whose membership was removed, a missing-population repo, and a NULL
 `subscribed_events`. **Immutability:** UPDATE of content columns, DELETE, cascade, and TRUNCATE
 raise on every immutable table. **Bolt ingest:** a Bastion event posted to `/events/ingest`
@@ -1649,12 +1763,22 @@ returns 2xx. **Cross-app:** `ping` stores `subscribed_events`; review and merge 
 `github_pr_events`; evaluation, drift, outbox, task upsert; drift, close the task, drift again:
 the task is open with a "Drifted again" comment; the recovery comment is posted once across a
 forced retry; a fix decided in Bastion closes its mirrored proposal; a feed push with a repeated
-idempotency key is a no-op. **Files route:** a non-avatar key through `/files/` returns 404.
+idempotency key is a no-op; **exception approved, task closed, exception expires: the task is open
+with "Accepted risk expired"**; **kill bastion-api mid-slice: the run completes after the tick
+re-enqueues it, and the next night's run is created**; the packet's commitment checks go through
+bastion-api with no HMAC key in the worker; a failing mirror leaves the backup `completed`.
+**Files route:** a non-avatar key through `/files/` returns 404.
 **Proxy:** two forwarded clients have independent lockout counters. Also: definer functions' `proconfig` and `proacl` (search_path, no PUBLIC execute)
 and the org guard raising for a foreign org; a direct `SET LOCAL bastion.purge_access_log='on'` +
-DELETE of a recent row fails; resolvers work with `BBB_RLS_ENFORCE=1`; **restore**: seal, `pg_dump`,
-append, seal, restore the dump, boot, expect `ledger.restore_detected`, `pending_ack` only when a
-matching `platform_restores` row exists, `unmatched` plus `evidence.integrity_failed` without it;
+DELETE of a recent row fails; resolvers work with `BBB_RLS_ENFORCE=1`; **restore with restart**:
+seal, `pg_dump`, append, seal, restore the dump, boot, expect `ledger.restore_detected`,
+`pending_ack` only when a matching `platform_restores` row exists, `unmatched` plus
+`evidence.integrity_failed` without it; then append after detection (blocked until resolved),
+resolve, append, seal again, and assert no sealed `(epoch, seq)` is reused, the seal run refused
+any head below the highest bucket seal, and the gap is still reported the next day from the
+`restores/` bucket object; **restore in place with no restart**: seal, append, restore the dump
+through the platform restore job while bastion-api runs, run an evaluation, and assert a restore
+row exists, the run went `partial` with `restore_pending`, and no sequence number was reused;
 partial nightly resumes the same day; the platform decide route returns 409 `DECIDE_IN_APP` for a
 Bastion proposal and records `decided_by_kind` for others; a Bolt rule on `bastion` source
 triggers (enum value present); the `db-drift` enum check fails when a value is missing; packet
@@ -1716,22 +1840,24 @@ from M11.
 
 | M | Scope | Done when |
 | --- | --- | --- |
-| **M0** | **Platform prerequisites, fixing the fact:** #124 (shared `BOLT_SOURCES`, `0260` with the explicit list, catalog check, `db-drift` enum check); #125; #123; #126 scoped (`propagate: true`, no overwrite, diff, `skipDeploys`); #127; **#128** (`0261`, decide route, 409 `DECIDE_IN_APP`); Railway generator handles `set $var host:port` and the resolver; stable-secret class in `generateSecrets()` | Bursar and Bastion events ingest 2xx; enum check green; `/files/<non-avatar>` 404; `syncNew` dry-run shows only `propagate` additions; a generic decide of an `owning_app` proposal returns 409 and other decides record `decided_by_kind`; generator unit test green |
-| **M1** | Scaffold, own bucket with boot check, `BASTION_TRUST_PROXY_HOPS`, compose (`:-` secrets, refusal messages), worker env, nginx with runtime resolver and internal deny, generated Railway conf, catalog + hints, SPA by direct URL | `/bastion/` serves; health 200; internal path 404 through nginx; the two Railway grep gates; stopping bastion-api leaves other apps up; `check:env-hints` green; a fresh `.env` without the keys gives the plain refusal, not a suite abort |
+| **M0** | **Platform prerequisites, fixing the fact:** #124 (shared `BOLT_SOURCES`, `0260` with the explicit list, catalog check, `db-drift` enum check); #125; #123; #126 scoped (`propagate: true`, no overwrite, diff, `skipDeploys`); #127; **#128** (`0261`, decide route, 409 `DECIDE_IN_APP`); Railway generator handles `set $var host:port` and the resolver; stable-secret class in `generateSecrets()` | Bursar and Bastion events ingest 2xx; enum check green; `/files/<non-avatar>` 404; `syncNew` dry-run shows only `propagate` additions; a generic decide of an `owning_app` proposal returns 409 and other decides record `decided_by_kind`; generator unit test green; `pnpm db:check` (0 drift, including the `agent_proposals` and `platform_backups` Drizzle updates) and `pnpm lint:migrations` green for `0260` and `0261` |
+| **M1** | Scaffold, own bucket with boot check, `BASTION_TRUST_PROXY_HOPS`, compose (`:-` secrets, refusal messages), worker env, nginx with runtime resolver and internal deny, generated Railway conf, catalog + hints, SPA by direct URL | `/bastion/` serves; health 200; internal path 404 through nginx; the two Railway grep gates; stopping bastion-api leaves other apps up; `check:env-hints` green; a fresh `.env` without the keys gives the plain refusal, not a suite abort; the `syncNew` dry-run adds `BASTION_S3_BUCKET` and `BASTION_API_INTERNAL_URL` to the existing worker |
 | **M2** | Migrations 0262-0269, Drizzle, RLS loop, hardened probe and resolver functions; GitHub change | `db:check` 0 drift; definer-function assertion green; `ping` stores `subscribed_events` |
 | **M3** | Library, crosswalk, per-requirement applicability, setup wizard, deterministic compile, seeder started | SOC 2 then ISO share controls; SoA completeness test green |
-| **M4** | Probes, evaluator (budgets, resumption, staleness), ledger, seals with bucket objects, restore detection, outbox with ordering, **`bastionEvents` registered**, bolt-api dispatch hook | probe goldens twice; restore integration test; outbox ordering test |
+| **M4** | Probes (with `runInOrgScopeRead`), evaluator (budgets, resumption, orphan re-enqueue, staleness), ledger, seals with bucket objects, identity-based restore detection with provisional epochs and append blocking, outbox with ordering, **`bastionEvents` registered**, bolt-api dispatch hook, `stop_grace_period: 75s` | probe goldens three times (RLS off, RLS on, separate read pool); both restore integration tests (restart and in place); the kill-mid-slice test; outbox ordering test |
 | **M5** | Manual evidence, personal data and redaction, feeds, coverage, Readiness | Playwright 1-3 |
 | **M6** | Gaps, fixes, exceptions, decide routes, internal Bam routes (tasks, comments, proposal close), proposal reconcile | Playwright 4-6 |
 | **M7** | LLM tailoring with populations; policies and attestation | compiler gates |
 | **M8** | Questionnaires and the xlsx codec | questionnaire gates; Playwright 7 |
-| **M9** | Auditor room, packet, object sweep (intents), off-site mirror via the backup job, object-restore command, help | Playwright 8-11; packet smoke test with differing buckets |
-| **M10** | Permission chain; MCP tools built and tested (not registered); visibility; search; surface map | Playwright 12-15; section 4.6 probe matches section 5.5 |
-| **M11** | **One merge unit:** MCP registration, docs catalog, published counts, CLAUDE.md, Launchpad, marketing section, screenshots, README | Playwright 16; `check:app-completeness` and `docs:catalog:check` green |
+| **M9** | Auditor room, packet (commitments verified via bastion-api), object sweep engine (intents), off-site mirror enqueued after a successful backup, the bastion-api `restore-objects` CLI, help | Playwright 8-11; packet smoke test with differing buckets; **Railway staging smoke test: one packet built and downloaded**; a failing mirror leaves the backup `completed` |
+| **M10** | Permission chain; MCP client and handlers built and tested at `src/clients/bastion-client.ts` and `src/tools-pending/bastion.ts` (no `*-tools.ts` file yet); visibility; search; surface map | Playwright 12-15; section 4.6 probe matches section 5.5; `check-tool-return-coverage` and `docs:catalog:check` still green |
+| **M11** | **One merge unit:** create `bastion-tools.ts` and register it, docs catalog, published counts, CLAUDE.md, Launchpad, marketing section, screenshots, README | Playwright 16; `check:app-completeness`, `check-tool-return-coverage`, and `docs:catalog:check` green |
 
-Changes from round 1: M0 adds #128, the generator change, the stable-secret class, and the
-enum check; event registration moves to M4; MCP registration moves to M11 with the other
-publication pieces.
+Milestone history: round 2 added #128, the generator change, the stable-secret class, and the
+enum check to M0, moved event registration to M4, and moved MCP registration to M11. Round 3
+added the `db:check`/`lint:migrations` gate to M0, the worker propagation gate to M1, the
+restore and kill-mid-slice tests to M4, the Railway packet smoke test to M9, and kept the
+`bastion-tools.ts` file itself out of the tree until M11.
 
 ---
 
@@ -1953,3 +2079,72 @@ destination, `unprovable` when unset.
   in `.env.example` and lockout keyed by (IP, room) (5.2, 9.4); secret hints with value and note
   (9.4); bastion-api starts without storage and shows a banner (9.1); confirm the `nginx.conf`
   stack before the runtime resolver (9.2).
+
+### Round 3 (1 blocker and 9 majors: 8 accepted, 2 adapted, 0 rejected; 14 minors: all folded in, none deferred)
+
+**Orchestrator notes applied:** the guarded `bam_app` grant plus owner execute, with an
+owner-only-tolerant `proacl` test; identity-based restore detection at every append batch with
+provisional epochs, append blocking, seal refusal, bucket restore objects, and an in-place restore
+test; the HMAC key kept in bastion-api with packet verification through an internal engine and
+`BASTION_S3_BUCKET` propagated; the mirror enqueued after the backup records success, with its own
+status and cursor columns and a budget; `bastion-tools.ts` created only in M11.
+
+- design-1 accepted: exceptions apply per assertion, then aggregate with `fail` > `unprovable` >
+  `pass_with_exception` > `pass`; gaps are computed per assertion; unit case added (sections 3.2,
+  11.1).
+- design-2 accepted: exception expiry or revocation that worsens effective state writes a drift
+  row with reason `exception_expired`, `control.drifted`, and a task upsert with reopen; approval
+  comments "Risk accepted until {date}"; integration case added (sections 2.5, 2.6, 11.2).
+- security-1 accepted: a provisional epoch opens at detection regardless of status, `seq`
+  continues from the highest bucket-sealed head, acknowledgement only relabels, the seal run
+  refuses a head below the highest bucket seal, lost ranges are written as `restores/` bucket
+  objects, and the restore test now appends and seals after detection (sections 3.4, 4.1, 11.2).
+- stability-1 accepted: the tick re-enqueues any `queued` run idle over 2 minutes; `resume_count`
+  increments on every release and is part of the `jobId`; a 409 against a stale heartbeat waits and
+  retries; `stop_grace_period: 75s` and `RAILWAY_DEPLOYMENT_DRAINING_SECONDS=75`; kill-mid-slice
+  test (sections 7, 7.3, 9.1, 9.4, 11.2).
+- stability-2 accepted: identity comparison (`entry_hash` at the highest sealed seq), checked at
+  the start of every append batch with a per-org cache invalidated by a newer seal object or a
+  changed `max(platform_restores.completed_at)`; appends blocked while a restore row is
+  unresolved, with runs going `partial` / `restore_pending`; in-place restore test with no restart
+  (sections 3.4, 7.3, 11.2).
+- best-practices-1 (blocker) adapted per the orchestrator: REVOKE from PUBLIC, owner execute, and
+  `GRANT ... TO bam_app` only inside an `IF EXISTS (SELECT 1 FROM pg_roles ...)` guard; the
+  `proacl` test accepts the owner-only posture (sections 3.1, 4.4).
+- best-practices-2 accepted: `runInOrgScopeRead` binds the GUC, `READ ONLY`, and the timeout on the
+  read pool; a NULL replay timestamp is zero lag; goldens run a third time against a separate read
+  pool (sections 3.1, 11.2, 12).
+- best-practices-3 accepted: `bastion-tools.ts` is created only in the M11 merge unit; M10 builds
+  and tests under `src/clients/bastion-client.ts` and `src/tools-pending/bastion.ts`, which neither
+  `check-tool-return-coverage.mjs` nor `listAllToolModules()` reads (sections 5.4, 12).
+- infrastructure-R3-1 adapted: beyond the requested fix (HMAC key only in bastion-api, packet
+  verification through the internal `verify-commitments` engine, `BASTION_S3_BUCKET` with
+  `propagate: true`, M1 propagation gate, M9 Railway packet smoke test), the off-site mirror and
+  object sweep also became bastion-api engines that worker jobs trigger, because the
+  `BASTION_BACKUP_S3_*` secrets would otherwise hit the same flat-hint propagation gap on the
+  worker (sections 7, 7.2, 9.1, 9.4, 12).
+- infrastructure-R3-2 accepted: the backup records `completed` first, then enqueues the mirror with
+  `jobId = backup.id`; `platform_backups.bastion_mirror_status` and `bastion_mirror_cursor`
+  (migration `0261`); a 5,000 object or 2 GiB per-run budget with a resume cursor; a mirror failure
+  never changes the backup's status (sections 7, 8.4, 9.7).
+
+**Minors**
+- Design: not-applicable controls are not evaluated (2.1); `population_review` carries cost 2
+  (2.3).
+- Security: the proposal-close route accepts only `owning_app = 'bastion'` proposals with a human
+  member decider (8.4); the org guard on the read pool (same fix as best-practices-2, 3.1); the
+  guide tells auditors to keep their own copies of seals (9.7).
+- Infrastructure: the restore command is a real bastion-api CLI with compose and Railway forms
+  (9.7); the job table and section 9.7 now agree on how the mirror runs (7, 9.7).
+- Stability: the exact protected columns per immutable table, including the operational columns
+  on `bastion_evidence_objects` (3.4); a dead outbox row stops blocking its key (7); poll intervals
+  and caps sized above the stated durations, with self re-enqueue (7); the mirror budget and
+  non-failing behavior (9.7); the wider lost range when a seal object was not yet delivered is
+  documented as expected (3.4).
+- Best practices: the Drizzle update for the five `agent_proposals` columns with `decided_by_kind`
+  on `actorTypeEnum` (4.4, 8.4); `pnpm db:check` and `pnpm lint:migrations` in the M0 gate (12).
+
+**Counts after round 3:** unchanged from round 2 (35 tables; 106 REST endpoints plus 3 health
+routes, 34 with a tool and 72 skips; 24 tools; 50 permissions; 24 events; 19 jobs; 12 migration
+files). The new engines (`verify-commitments`, `mirror-objects`, `object-sweep`) run behind the
+existing row 106, and the new columns live in existing tables and migrations.
