@@ -41,6 +41,9 @@ export const APP_SERVICES = [
       optional: [
         'CORS_ORIGIN', 'LOG_LEVEL', 'PUBLIC_URL',
         'INTERNAL_SERVICE_SECRET',
+        // The assignment notification's Banter DM (notification-fanout.service.ts, #278). Without
+        // it the api falls back to http://banter-api:4002, the wrong host and port on Railway.
+        'BANTER_API_URL',
         'S3_ENDPOINT', 'S3_ACCESS_KEY', 'S3_SECRET_KEY', 'S3_BUCKET', 'S3_REGION',
         'OAUTH_GITHUB_CLIENT_ID', 'OAUTH_GITHUB_CLIENT_SECRET',
         'OAUTH_GOOGLE_CLIENT_ID', 'OAUTH_GOOGLE_CLIENT_SECRET',

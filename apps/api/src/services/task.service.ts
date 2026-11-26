@@ -990,6 +990,8 @@ export async function updateTask(taskId: string, data: UpdateTaskInput, actorId?
             url: `/b3/tasks/${task.id}`,
             org_id: orgId,
             actor_name: actor?.name ?? undefined,
+            // The Banter DM comes from the person who made the assignment (#278).
+            actor_user_id: actorId ?? undefined,
           },
           ['email', 'banter_dm'],
         ).catch(() => {});
