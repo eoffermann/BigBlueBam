@@ -261,6 +261,31 @@ describe('ownership is required for collaborator writes and archive on every dia
   });
 });
 
+describe('changing visibility is owner-only (#179)', () => {
+  it('an editor collaborator cannot widen a private diagram to the organization', async () => {
+    const res = await call(EDITOR, 'PATCH', `/v1/diagrams/${PRIVATE}`, { visibility: 'organization' });
+    expect(res.statusCode).toBe(403);
+    expect(state.writes).toEqual([]);
+  });
+
+  it('a member cannot lock everyone out of an organization-visible diagram', async () => {
+    const res = await call(MEMBER, 'PATCH', `/v1/diagrams/${SHARED}`, { visibility: 'private' });
+    expect(res.statusCode).toBe(403);
+    expect(state.writes).toEqual([]);
+  });
+
+  it('an editor may still rename, and may resend the unchanged visibility', async () => {
+    expect((await call(EDITOR, 'PATCH', `/v1/diagrams/${PRIVATE}`, { name: 'Renamed' })).statusCode).toBe(200);
+    expect((await call(EDITOR, 'PATCH', `/v1/diagrams/${PRIVATE}`, { name: 'Again', visibility: 'private' })).statusCode).toBe(200);
+  });
+
+  it('the creator, an owner collaborator and an org admin can change visibility', async () => {
+    expect((await call(OWNER, 'PATCH', `/v1/diagrams/${PRIVATE}`, { visibility: 'organization' })).statusCode).toBe(200);
+    expect((await call(CO_OWNER, 'PATCH', `/v1/diagrams/${PRIVATE}`, { visibility: 'project' })).statusCode).toBe(200);
+    expect((await call(ADMIN, 'PATCH', `/v1/diagrams/${SHARED}`, { visibility: 'private' })).statusCode).toBe(200);
+  });
+});
+
 describe('comment edits are author-or-owner', () => {
   it("a member cannot rewrite another user's comment on a shared diagram", async () => {
     const res = await call(MEMBER, 'PATCH', `/v1/diagrams/${SHARED}/comments/${C_SHARED}`, { body: 'rewritten' });

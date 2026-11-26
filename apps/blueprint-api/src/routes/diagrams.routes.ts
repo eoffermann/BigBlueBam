@@ -148,7 +148,13 @@ export default async function diagramRoutes(fastify: FastifyInstance) {
       const orgId = request.user!.org_id;
       const userId = request.user!.id;
       try {
-        await svc.assertCanEdit(orgId, userId, request.params.id);
+        const current = await svc.assertCanEdit(orgId, userId, request.params.id);
+        // Changing who can see a diagram is a sharing decision, the same as
+        // adding a collaborator: owner-only (#179). An editor may still change
+        // every other field, and may resend the current visibility unchanged.
+        if (body.visibility !== undefined && body.visibility !== current.visibility) {
+          await acl.manage(request);
+        }
         const row = await svc.updateDiagram(orgId, request.params.id, body);
         emitBolt('diagram.updated', { 'diagram.id': row.id, changed_fields: Object.keys(body) }, orgId, userId);
         await broadcastToDiagram(fastify.redis, row.id, {
