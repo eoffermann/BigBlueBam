@@ -86,20 +86,20 @@ export async function copyFromBin(
  * intent row stays until that delete succeeds, so the sweep finds it if the delete fails).
  */
 export async function recordObject(tx: Tx, orgId: string, stored: StoredBytes): Promise<{ object_key: string; duplicate_key: string | null }> {
-  const existing = (await tx`
-    SELECT object_key, bytes_redacted_at FROM bastion_evidence_objects
-     WHERE organization_id = ${orgId} AND content_sha256 = ${stored.content_sha256} FOR UPDATE`)[0];
-  if (existing?.bytes_redacted_at) {
+  // One atomic upsert (#210): a SELECT ... FOR UPDATE locks nothing while the row does not exist,
+  // so two identical uploads arriving together both inserted and the loser failed 23505. The
+  // second now waits on the first and shares its row (holder_count + 1). A redacted object refuses
+  // (the throw rolls the increment back with the rest of the transaction).
+  const row = (await tx`
+    INSERT INTO bastion_evidence_objects (organization_id, content_sha256, object_key, size_bytes, content_type, holder_count)
+    VALUES (${orgId}, ${stored.content_sha256}, ${stored.object_key}, ${stored.size_bytes}, ${stored.content_type}, 1)
+    ON CONFLICT (organization_id, content_sha256) DO UPDATE SET holder_count = bastion_evidence_objects.holder_count + 1
+    RETURNING object_key, bytes_redacted_at, (xmax <> 0) AS existed`)[0];
+  if (!row) throw new Error('bastion-evidence: object upsert returned no row');
+  if (row.bytes_redacted_at) {
     throw new ConflictError('These exact bytes were redacted earlier and cannot be uploaded again as evidence.', 'BYTES_REDACTED');
   }
-  if (existing) {
-    await tx`UPDATE bastion_evidence_objects SET holder_count = holder_count + 1
-              WHERE organization_id = ${orgId} AND content_sha256 = ${stored.content_sha256}`;
-    return { object_key: existing.object_key as string, duplicate_key: stored.object_key };
-  }
-  await tx`
-    INSERT INTO bastion_evidence_objects (organization_id, content_sha256, object_key, size_bytes, content_type, holder_count)
-    VALUES (${orgId}, ${stored.content_sha256}, ${stored.object_key}, ${stored.size_bytes}, ${stored.content_type}, 1)`;
+  if (row.existed) return { object_key: row.object_key as string, duplicate_key: stored.object_key };
   await tx`DELETE FROM bastion_object_intents WHERE object_key = ${stored.object_key}`;
   return { object_key: stored.object_key, duplicate_key: null };
 }

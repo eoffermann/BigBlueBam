@@ -5,7 +5,7 @@ import { runEvaluationSlice } from '../../src/engine/evaluator.js';
 import type { EngineDeps } from '../../src/engine/context.js';
 import type { QueuedRun } from '../../src/engine/evidence-store.js';
 import type { BinAccessDeps } from '../../src/lib/bin-asset-access.js';
-import { ForbiddenError, NotFoundError, RateLimitedError } from '../../src/lib/errors.js';
+import { ConflictError, ForbiddenError, NotFoundError, RateLimitedError } from '../../src/lib/errors.js';
 import { coverageMap, readinessSummary } from '../../src/services/coverage.service.js';
 import type { EvidenceDeps } from '../../src/services/evidence-deps.js';
 import { evidenceExpiry, evidenceIngest } from '../../src/services/evidence-engines.js';
@@ -406,6 +406,17 @@ describe.skipIf(!DATABASE_URL)('M5 manual evidence, personal data, feeds and the
     expect((await evidenceExpiry(d2, { organization_id: o.org })).expired_notified).toBe(1);
     expect(runs).toHaveLength(1);
     expect((await evidenceExpiry(d2, { organization_id: o.org })).expired_notified).toBe(0);
+
+    // Retention prunes delivered outbox rows after 30 days. The marker lives on the row, so a run
+    // 31 days on sends nothing and queues nothing (#220).
+    await sql`DELETE FROM bastion_outbox WHERE organization_id = ${o.org}`;
+    const muchLater = makeDeps(sql, { clock: { offsetMs: 45 * DAY, now: () => new Date(Date.now() + 45 * DAY) } });
+    const d3 = evidenceDepsFor(muchLater, bin, runs);
+    expect(await evidenceExpiry(d3, { organization_id: o.org })).toMatchObject({ expiring_notified: 0, expired_notified: 0 });
+    expect(runs).toHaveLength(1);
+    const marks = (await sql`SELECT expiring_notified_at, expired_notified_at FROM bastion_manual_evidence WHERE id = ${id}`)[0]!;
+    expect(marks.expiring_notified_at).not.toBeNull();
+    expect(marks.expired_notified_at).not.toBeNull();
   });
 
   it('restricted evidence is not found by link, unlink, review, withdraw, check-again or supersede without read_restricted (#209)', async () => {
@@ -450,6 +461,64 @@ describe.skipIf(!DATABASE_URL)('M5 manual evidence, personal data, feeds and the
     const linked = (await linkManualEvidence(d, viewer(o, o.owner, 'owner'), id, o.assertions.manual, true)).data as Record<string, unknown>;
     expect(linked.title).toBe(secretTitle);
     expect(linked.masked).toBe(false);
+  });
+
+  it('races: a stale review is 409, a double supersede makes one replacement, identical uploads share one object (#216, #213, #210)', async () => {
+    const o = await seed(sql, 'races', 3);
+    orgs.push(o.org);
+    const engine = makeDeps(sql);
+    const bin: FakeBin = { assets: new Map(), versions: new Map(), bucket: fakeBucket() };
+    const d = evidenceDepsFor(engine, bin, []);
+    const uploader = viewer(o, o.others[0]!);
+    const reviewerA = viewer(o, o.owner, 'owner');
+    const reviewerB = viewer(o, o.others[1]!, 'admin');
+
+    // #216: A marks a problem; B's Accept from a stale page (it saw "pending") is refused.
+    const f = await putBinFile(bin, o.org, 'access review export');
+    const id = ((await createManualEvidence(d, uploader, fileBody(o, f.asset))).data as Record<string, unknown>).id as string;
+    await reviewManualEvidence(d, reviewerA, id, o.assertions.manual, { verdict: 'shows_exception', note: 'two admins never removed', expected_verdict: 'pending' }, true);
+    const stale = await reviewManualEvidence(d, reviewerB, id, o.assertions.manual, { verdict: 'accepted', expected_verdict: 'pending' }, true).then(
+      () => null,
+      (e: unknown) => e,
+    );
+    expect(stale).toBeInstanceOf(ConflictError);
+    expect((stale as ConflictError).code).toBe('REVIEW_CHANGED');
+    const kept = (await sql`SELECT review_verdict, review_note FROM bastion_manual_evidence_links WHERE manual_evidence_id = ${id}`)[0]!;
+    expect(kept).toEqual({ review_verdict: 'shows_exception', review_note: 'two admins never removed' });
+    // Someone who saw the finding may replace it deliberately.
+    await reviewManualEvidence(d, reviewerB, id, o.assertions.manual, { verdict: 'accepted', expected_verdict: 'shows_exception' }, true);
+
+    // #213: a double-submitted supersede creates exactly one active replacement.
+    const n1 = await putBinFile(bin, o.org, 'access review export v2');
+    const n2 = await putBinFile(bin, o.org, 'access review export v2 again');
+    const both = await Promise.allSettled([
+      supersedeManualEvidence(d, uploader, id, fileBody(o, n1.asset, { assertion_ids: [] }), true),
+      supersedeManualEvidence(d, uploader, id, fileBody(o, n2.asset, { assertion_ids: [] }), true),
+    ]);
+    expect(both.filter((r) => r.status === 'fulfilled')).toHaveLength(1);
+    const rejected = both.find((r) => r.status === 'rejected') as PromiseRejectedResult;
+    expect((rejected.reason as ConflictError).code).toBe('NOT_ACTIVE');
+    expect((await sql`SELECT count(*)::int AS n FROM bastion_manual_evidence WHERE organization_id = ${o.org} AND status = 'active'`)[0]!.n).toBe(1);
+
+    // #210: two identical statements at once both succeed and share one object.
+    const statement = (title: string) => ({
+      kind: 'attestation_statement' as const,
+      statement: 'Every laptop has disk encryption on. Checked by the Professor.',
+      title,
+      source_system: 'Device list',
+      owner_user_id: o.owner,
+      produced_on: isoDay(new Date()),
+      valid_until: isoDay(new Date(Date.now() + 300 * DAY)),
+      sensitivity: 'standard' as const,
+      uploader_statement: true as const,
+      assertion_ids: [],
+    });
+    const pair = await Promise.allSettled([createManualEvidence(d, uploader, statement('Disk encryption A')), createManualEvidence(d, uploader, statement('Disk encryption B'))]);
+    expect(pair.map((r) => r.status)).toEqual(['fulfilled', 'fulfilled']);
+    const sha = createHash('sha256').update('Every laptop has disk encryption on. Checked by the Professor.').digest('hex');
+    const shared = await sql`SELECT holder_count FROM bastion_evidence_objects WHERE organization_id = ${o.org} AND content_sha256 = ${sha}`;
+    expect(shared).toHaveLength(1);
+    expect(Number(shared[0]!.holder_count)).toBe(2);
   });
 
   it('feeds: resolver, push, idempotency, wrong feed, quota 429, rotation grace and revoke', async () => {

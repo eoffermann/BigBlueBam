@@ -13,7 +13,13 @@
 //
 // Every change that can move a control re-evaluates the linked controls (control-scope runs).
 
-import { endOfDayInTz, localDateInTz, type BastionManualEvidenceCreate, type BastionManualEvidenceListQuery } from '@bigbluebam/shared';
+import {
+  endOfDayInTz,
+  localDateInTz,
+  type BastionManualEvidenceCreate,
+  type BastionManualEvidenceListQuery,
+  type BastionManualEvidenceReview,
+} from '@bigbluebam/shared';
 import { randomUUID } from 'node:crypto';
 import { withStorageTimeout } from '@bigbluebam/storage';
 import { auditRaw, viewerKind } from '../lib/audit-raw.js';
@@ -133,10 +139,14 @@ async function insertItem(
   body: BastionManualEvidenceCreate,
   p: Prepared,
   highest: SealIdentity | null,
-  supersedes: { id: string; links: Array<{ assertion_id: string; control_id: string }> } | null,
+  supersedeId: string | null,
 ): Promise<{ id: string; duplicate_key: string | null; runs: QueuedRun[] }> {
   const orgId = viewer.org_id;
   const now = d.engine.now();
+  // Supersede (#213): lock the old item in THIS transaction and re-read its live links here, so a
+  // double-submit or a withdraw/redact that landed while the bytes were copying is a 409, never a
+  // second active replacement or a replacement of withdrawn evidence.
+  const supersedes = supersedeId ? await lockSuperseded(tx, orgId, supersedeId) : null;
   const ownerName = await memberName(tx, orgId, body.owner_user_id);
   if (!ownerName) {
     throw new ValidationFailure('The owner must be a member of this organization.', 'OWNER_NOT_MEMBER', [{ field: 'owner_user_id', issue: 'not_member' }]);
@@ -206,9 +216,11 @@ async function insertItem(
 
   let runs: QueuedRun[] = [];
   if (supersedes) {
-    await tx`
+    const moved = await tx`
       UPDATE bastion_manual_evidence SET status = 'superseded', superseded_by_id = ${id}
-       WHERE organization_id = ${orgId} AND id = ${supersedes.id} AND status = 'active'`;
+       WHERE organization_id = ${orgId} AND id = ${supersedes.id} AND status = 'active'
+      RETURNING id`;
+    if (moved.length !== 1) throw new ConflictError(NOT_ACTIVE_FOR_SUPERSEDE, 'NOT_ACTIVE');
     await tx`UPDATE bastion_manual_evidence_links SET unlinked_at = ${now}
               WHERE organization_id = ${orgId} AND manual_evidence_id = ${supersedes.id} AND unlinked_at IS NULL`;
     const kind = await viewerKind(tx, viewer);
@@ -229,6 +241,20 @@ async function insertItem(
   return { id, duplicate_key: duplicateKey, runs };
 }
 
+const NOT_ACTIVE_FOR_SUPERSEDE = 'Only evidence that is in use can be replaced by a newer copy. It may have just been replaced or withdrawn; refresh to see.';
+
+/** Lock the item being replaced and read its live links (inside the inserting transaction, #213). */
+async function lockSuperseded(tx: Tx, orgId: string, id: string) {
+  const old = (await tx`SELECT status FROM bastion_manual_evidence WHERE organization_id = ${orgId} AND id = ${id} FOR UPDATE`)[0];
+  if (!old) throw new NotFoundError('We could not find that evidence.');
+  if (old.status !== 'active') throw new ConflictError(NOT_ACTIVE_FOR_SUPERSEDE, 'NOT_ACTIVE');
+  const links = await tx`
+    SELECT l.assertion_id, a.control_id FROM bastion_manual_evidence_links l
+      JOIN bastion_assertions a ON a.id = l.assertion_id AND a.organization_id = l.organization_id
+     WHERE l.organization_id = ${orgId} AND l.manual_evidence_id = ${id} AND l.unlinked_at IS NULL`;
+  return { id, links: links.map((l) => ({ assertion_id: String(l.assertion_id), control_id: String(l.control_id) })) };
+}
+
 async function createOrSupersede(
   d: EvidenceDeps,
   viewer: Viewer,
@@ -238,25 +264,20 @@ async function createOrSupersede(
 ) {
   const engine = d.engine;
   const orgId = viewer.org_id;
-  let supersedes: { id: string; links: Array<{ assertion_id: string; control_id: string }> } | null = null;
   if (supersedeId) {
-    supersedes = await orgTx(engine.sql, orgId, async (tx) => {
+    // Early answer before any bytes are copied; insertItem re-checks under a row lock (#213).
+    await orgTx(engine.sql, orgId, async (tx) => {
       const old = (await tx`SELECT id, status, sensitivity FROM bastion_manual_evidence WHERE organization_id = ${orgId} AND id = ${supersedeId}`)[0];
       // Nobody replaces (and takes the links of) restricted evidence they may not read (#209).
       if (!old || (old.sensitivity === 'restricted' && !canRestricted)) throw new NotFoundError('We could not find that evidence.');
-      if (old.status !== 'active') throw new ConflictError('Only evidence that is in use can be replaced by a newer copy.', 'NOT_ACTIVE');
-      const links = await tx`
-        SELECT l.assertion_id, a.control_id FROM bastion_manual_evidence_links l
-          JOIN bastion_assertions a ON a.id = l.assertion_id AND a.organization_id = l.organization_id
-         WHERE l.organization_id = ${orgId} AND l.manual_evidence_id = ${supersedeId} AND l.unlinked_at IS NULL`;
-      return { id: supersedeId, links: links.map((l) => ({ assertion_id: String(l.assertion_id), control_id: String(l.control_id) })) };
+      if (old.status !== 'active') throw new ConflictError(NOT_ACTIVE_FOR_SUPERSEDE, 'NOT_ACTIVE');
     });
   }
   const highest = await beginLedgerBatch(engine, orgId);
   const prepared = await prepareBytes(d, viewer, body);
   let result: { id: string; duplicate_key: string | null; runs: QueuedRun[] };
   try {
-    result = await orgTx(engine.sql, orgId, (tx) => insertItem(d, tx, viewer, body, prepared, highest, supersedes));
+    result = await orgTx(engine.sql, orgId, (tx) => insertItem(d, tx, viewer, body, prepared, highest, supersedeId));
   } catch (err) {
     await abandonStored(engine, orgId, prepared.stored);
     throw mapAppendError(err);
@@ -499,7 +520,7 @@ export async function reviewManualEvidence(
   viewer: Viewer,
   id: string,
   assertionId: string,
-  body: { verdict: 'accepted' | 'shows_exception'; note?: string | null },
+  body: BastionManualEvidenceReview,
   canRestricted: boolean,
 ) {
   const now = d.engine.now();
@@ -521,6 +542,23 @@ export async function reviewManualEvidence(
         throw new ForbiddenError('Someone other than the person who uploaded this evidence has to review it.', 'SECOND_PERSON_REQUIRED');
       }
       selfReview = true;
+    }
+    // Stale check (#216): the item row is locked, so reviews serialize; a link that already has a
+    // verdict is replaced only by a reviewer who saw that verdict. Otherwise 409 with what it is now.
+    const current = (await tx`
+      SELECT l.review_verdict, ru.display_name AS reviewed_by_name FROM bastion_manual_evidence_links l
+        LEFT JOIN users ru ON ru.id = l.reviewed_by
+       WHERE l.organization_id = ${viewer.org_id} AND l.manual_evidence_id = ${id} AND l.assertion_id = ${assertionId} AND l.unlinked_at IS NULL`)[0];
+    if (!current) throw new NotFoundError('This evidence is not linked to that check.');
+    const seen = body.expected_verdict ?? 'pending';
+    if (current.review_verdict !== seen) {
+      const who = current.reviewed_by_name ? ` by ${String(current.reviewed_by_name)}` : '';
+      throw new ConflictError(
+        current.review_verdict === 'pending'
+          ? 'This review was cleared since you opened it. Refresh and review it again.'
+          : `Someone reviewed this since you opened it (${current.review_verdict === 'accepted' ? 'accepted' : 'marked as showing a problem'}${who}). Refresh to see their review before changing it.`,
+        'REVIEW_CHANGED',
+      );
     }
     const rows = await tx`
       UPDATE bastion_manual_evidence_links l

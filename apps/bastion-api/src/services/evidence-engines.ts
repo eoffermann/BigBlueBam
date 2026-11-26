@@ -32,7 +32,7 @@ async function orgsWith(engine: EngineDeps, sqlWhere: 'pending' | 'feeds' | 'evi
                             WHERE source_kind = 'bolt_event' AND status = 'active'
                             ${only ? engine.sql`AND organization_id = ${only}` : engine.sql``}`
         : await engine.sql`SELECT DISTINCT organization_id FROM bastion_manual_evidence
-                            WHERE status = 'active' AND valid_until IS NOT NULL
+                            WHERE status = 'active' AND valid_until IS NOT NULL AND expired_notified_at IS NULL
                             ${only ? engine.sql`AND organization_id = ${only}` : engine.sql``}`;
   return rows.map((r) => String(r.organization_id));
 }
@@ -110,40 +110,47 @@ export async function evidenceExpiry(d: EvidenceDeps, opts: { organization_id?: 
     const r = await orgTx(engine.sql, orgId, async (tx) => {
       const settings = (await tx`SELECT manual_expiry_warn_days FROM bastion_org_settings WHERE organization_id = ${orgId}`)[0];
       const warn = Number(settings?.manual_expiry_warn_days ?? 30);
+      // The once-per-item markers live on the row (#220): outbox rows are pruned after 30 days, so
+      // they cannot be the "already sent" record. An item whose expired notice went out is never
+      // selected again, which also keeps this scan bounded.
       const items = await tx`
-        SELECT id, valid_until, owner_user_id FROM bastion_manual_evidence
-         WHERE organization_id = ${orgId} AND status = 'active' AND valid_until IS NOT NULL
+        SELECT id, valid_until, owner_user_id, expiring_notified_at FROM bastion_manual_evidence
+         WHERE organization_id = ${orgId} AND status = 'active' AND valid_until IS NOT NULL AND expired_notified_at IS NULL
            AND valid_until <= ${new Date(now.getTime() + warn * DAY_MS)}`;
       let soon = 0;
       let gone = 0;
       const controls = new Set<string>();
       for (const it of items) {
         const until = new Date(it.valid_until as string);
+        const id = it.id as string;
         if (until.getTime() > now.getTime()) {
-          if (
-            await enqueueBastionEvent(
-              'evidence.expiring',
-              { manual_evidence_id: it.id, valid_until: until.toISOString(), days_left: daysLeft(until, now), owner_user_id: it.owner_user_id },
-              tx,
-              { orgId, idempotencyKey: `evidence.expiring:${it.id as string}:${until.toISOString()}` },
-            )
-          ) {
-            soon += 1;
-          }
+          if (it.expiring_notified_at) continue;
+          const claimed = await tx`UPDATE bastion_manual_evidence SET expiring_notified_at = ${now}
+                                    WHERE organization_id = ${orgId} AND id = ${id} AND expiring_notified_at IS NULL RETURNING id`;
+          if (claimed.length === 0) continue;
+          await enqueueBastionEvent(
+            'evidence.expiring',
+            { manual_evidence_id: id, valid_until: until.toISOString(), days_left: daysLeft(until, now), owner_user_id: it.owner_user_id },
+            tx,
+            { orgId, idempotencyKey: `evidence.expiring:${id}:${until.toISOString()}` },
+          );
+          soon += 1;
           continue;
         }
-        const fresh = await enqueueBastionEvent(
+        const claimed = await tx`UPDATE bastion_manual_evidence SET expired_notified_at = ${now}
+                                  WHERE organization_id = ${orgId} AND id = ${id} AND expired_notified_at IS NULL RETURNING id`;
+        if (claimed.length === 0) continue;
+        await enqueueBastionEvent(
           'evidence.expired',
-          { manual_evidence_id: it.id, valid_until: until.toISOString(), owner_user_id: it.owner_user_id },
+          { manual_evidence_id: id, valid_until: until.toISOString(), owner_user_id: it.owner_user_id },
           tx,
-          { orgId, idempotencyKey: `evidence.expired:${it.id as string}:${until.toISOString()}` },
+          { orgId, idempotencyKey: `evidence.expired:${id}:${until.toISOString()}` },
         );
-        if (!fresh) continue;
         gone += 1;
         const linked = await tx`
           SELECT DISTINCT a.control_id FROM bastion_manual_evidence_links l
             JOIN bastion_assertions a ON a.id = l.assertion_id AND a.organization_id = l.organization_id
-           WHERE l.organization_id = ${orgId} AND l.manual_evidence_id = ${it.id as string} AND l.unlinked_at IS NULL`;
+           WHERE l.organization_id = ${orgId} AND l.manual_evidence_id = ${id} AND l.unlinked_at IS NULL`;
         for (const c of linked) controls.add(String(c.control_id));
       }
       const queued = await queueControlRuns(tx, orgId, controls, now, null, 'manual');

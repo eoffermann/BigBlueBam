@@ -40,6 +40,9 @@ export const bastionManualEvidence = pgTable(
     personal_data_hmac: varchar('personal_data_hmac', { length: 64 }),
     pd_hmac_key_id: varchar('pd_hmac_key_id', { length: 64 }),
     ledger_seq: bigint('ledger_seq', { mode: 'number' }),
+    // 0284 (#220): the once-per-item expiry notice markers (outbox rows are pruned after 30 days).
+    expiring_notified_at: timestamp('expiring_notified_at', { withTimezone: true }),
+    expired_notified_at: timestamp('expired_notified_at', { withTimezone: true }),
     created_at: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
     updated_at: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
   },

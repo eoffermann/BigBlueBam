@@ -1050,6 +1050,11 @@ export const bastionManualEvidenceReviewSchema = z
   .object({
     verdict: z.enum(['accepted', 'shows_exception']),
     note: z.string().trim().max(2000).nullable().optional(),
+    /**
+     * The verdict the reviewer saw (#216). A link that already has a verdict is only replaced when
+     * this matches it; otherwise 409 REVIEW_CHANGED, so a stale Accept never erases a finding.
+     */
+    expected_verdict: z.enum(['pending', 'accepted', 'shows_exception']).optional(),
   })
   .strict();
 export type BastionManualEvidenceReview = z.infer<typeof bastionManualEvidenceReviewSchema>;

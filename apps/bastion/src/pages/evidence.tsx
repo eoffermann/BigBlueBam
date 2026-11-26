@@ -96,7 +96,7 @@ function EvidenceCard({ item, canReview, canWithdraw }: { item: EvidenceItem; ca
                     type="button"
                     className={secondary}
                     disabled={impersonating || review.isPending}
-                    onClick={() => review.mutate({ id: item.id, assertion_id: l.assertion_id, verdict: 'accepted' })}
+                    onClick={() => review.mutate({ id: item.id, assertion_id: l.assertion_id, verdict: 'accepted', expected_verdict: l.review_verdict })}
                   >
                     Accept
                   </button>
@@ -104,7 +104,7 @@ function EvidenceCard({ item, canReview, canWithdraw }: { item: EvidenceItem; ca
                     type="button"
                     className={secondary}
                     disabled={impersonating || review.isPending}
-                    onClick={() => review.mutate({ id: item.id, assertion_id: l.assertion_id, verdict: 'shows_exception' })}
+                    onClick={() => review.mutate({ id: item.id, assertion_id: l.assertion_id, verdict: 'shows_exception', expected_verdict: l.review_verdict })}
                   >
                     Shows a problem
                   </button>

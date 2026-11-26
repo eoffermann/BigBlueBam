@@ -109,8 +109,15 @@ export function useWithdrawEvidence() {
 export function useReviewEvidence() {
   const invalidate = useInvalidate();
   return useMutation({
-    mutationFn: (args: { id: string; assertion_id: string; verdict: 'accepted' | 'shows_exception' }) =>
-      api.post(`/manual-evidence/${args.id}/links/${args.assertion_id}/review`, { verdict: args.verdict }),
+    // expected_verdict is what the reviewer saw (#216): a stale review gets 409 REVIEW_CHANGED
+    // instead of silently replacing someone else's verdict.
+    mutationFn: (args: {
+      id: string;
+      assertion_id: string;
+      verdict: 'accepted' | 'shows_exception';
+      expected_verdict: 'pending' | 'accepted' | 'shows_exception';
+    }) =>
+      api.post(`/manual-evidence/${args.id}/links/${args.assertion_id}/review`, { verdict: args.verdict, expected_verdict: args.expected_verdict }),
     onSuccess: invalidate,
   });
 }
