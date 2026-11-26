@@ -226,6 +226,163 @@ export interface ControlRow {
   requirements: Array<{ id: string; framework_name: string; ref_code: string; applicability: string }>;
 }
 
+/* ------------------------------------------------------------------ */
+/*  M5: Readiness, Evidence map, Evidence locker, feeds                */
+/* ------------------------------------------------------------------ */
+
+export interface ReadinessNumbers {
+  proven_by_suite: number;
+  proven_by_evidence: number;
+  not_met: number;
+  risk_accepted: number;
+  cant_prove: number;
+  not_set_up: number;
+  checked: number;
+  total: number;
+}
+
+export interface FrameworkOption {
+  id: string;
+  template_key: string;
+  name: string;
+  audit_target_date: string | null;
+}
+
+export interface SummaryResponse {
+  data: {
+    frameworks: FrameworkOption[];
+    selected: FrameworkOption | null;
+    nearest_audit_date: string | null;
+    days_to_audit: number | null;
+    numbers: ReadinessNumbers;
+    headline: string;
+    not_met_label: string;
+    not_applicable: Array<{ control_id: string; control_key: string; title: string }>;
+    banners: Array<{ code: string; message: string; count?: number }>;
+    top_gaps: Array<{ id: string; control_id: string; control_title: string; gap_kind: string; risk_score: number; fix_template: string | null; fix_cost: number | null }>;
+    gaps_ranked: boolean;
+    expiring_evidence: Array<{ id: string; title: string; owner_name: string | null; valid_until: string; days_left: number }>;
+    last_full_run_at: string | null;
+    timezone: string;
+    as_of: string;
+  };
+}
+
+export interface CoverageRow {
+  control_id: string;
+  control_key: string;
+  title: string;
+  category: string | null;
+  owner_name: string | null;
+  set_up: boolean;
+  bucket: string;
+  state: string | null;
+  state_words: string;
+  reason: string | null;
+  reason_words: string | null;
+  risk_accepted: boolean;
+  columns: { native: number; feed: number; manual_file: number; self_attested: number };
+  coverage_kind: string;
+  manual_expires_at: string | null;
+  manual_days_left: number | null;
+  last_evaluated_at: string | null;
+}
+
+export interface CoverageResponse {
+  data: CoverageRow[];
+  totals: { native: number; feed: number; manual_file: number; self_attested: number; none: number };
+  numbers: ReadinessNumbers;
+  headline: string;
+  not_applicable: Array<{ control_id: string; control_key: string; title: string }>;
+  frameworks: FrameworkOption[];
+}
+
+export interface EvidenceLink {
+  assertion_id: string;
+  control_id: string;
+  control_title: string;
+  plain_statement: string;
+  review_verdict: 'pending' | 'accepted' | 'shows_exception';
+  reviewed_by: string | null;
+  reviewed_by_name: string | null;
+  reviewed_at: string | null;
+  review_note: string | null;
+  small_team_self_review: boolean;
+  linked_at: string;
+}
+
+export interface EvidenceItem {
+  id: string;
+  kind: 'file' | 'attestation_statement';
+  title: string;
+  description: string | null;
+  source_system: string | null;
+  owner_name: string | null;
+  uploaded_by: string;
+  uploaded_by_name: string | null;
+  produced_on: string | null;
+  period_start: string | null;
+  period_end: string | null;
+  valid_until: string | null;
+  sensitivity: 'standard' | 'restricted';
+  status: 'pending_scan' | 'active' | 'superseded' | 'withdrawn' | 'blocked';
+  blocked_reason: string | null;
+  withdrawn_reason: string | null;
+  personal_data_id: string | null;
+  restricted: boolean;
+  masked: boolean;
+  trust_label: string;
+  scan_note: string | null;
+  days_left: number | null;
+  stuck_scan: boolean;
+  links: EvidenceLink[];
+  created_at: string;
+}
+
+export interface EvidenceListResponse {
+  data: EvidenceItem[];
+  counts: { active: number; pending_scan: number; stuck: number; blocked: number; not_scanned: number };
+  next_cursor: string | null;
+}
+
+export interface FeedRow {
+  id: string;
+  feed_key: string;
+  label: string;
+  source_kind: 'api_push' | 'bolt_event';
+  cadence_days: number;
+  daily_record_quota: number;
+  status: string;
+  last_record_at: string | null;
+  records_today: number;
+  quota_remaining_today: number;
+  fresh: boolean;
+  freshness: string;
+  active_keys: number;
+  record_count: number;
+}
+
+export interface FeedKeyRow {
+  id: string;
+  feed_id: string;
+  last4: string | null;
+  label: string | null;
+  status: 'active' | 'grace' | 'revoked';
+  grace_expires_at: string | null;
+  created_at: string;
+  last_used_at: string | null;
+  usable: boolean;
+}
+
+export interface MintedKey {
+  id: string;
+  feed_id: string;
+  last4: string;
+  token: string;
+  push_path: string;
+  grace_expires_at: string | null;
+}
+
 export interface ControlsResponse {
   data: ControlRow[];
   counts: SetupCounts;

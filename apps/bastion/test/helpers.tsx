@@ -13,6 +13,23 @@ export const ALL_BASTION_PERMISSIONS: Record<string, boolean> = {
   'bastion.control.write': true,
   'bastion.assertion.propose': true,
   'bastion.assertion.confirm': true,
+  'bastion.evidence.read': true,
+  'bastion.evidence.upload': true,
+  'bastion.evidence.link': true,
+  'bastion.evidence.review': true,
+  'bastion.evidence.withdraw': true,
+  'bastion.feed.read': true,
+  'bastion.feed.manage': true,
+};
+
+/** A member's matrix for the M5 pages: no floored actions (review, withdraw, feed.manage). */
+export const MEMBER_PERMISSIONS: Record<string, boolean> = {
+  'bastion.framework.read': true,
+  'bastion.control.read': true,
+  'bastion.evidence.read': true,
+  'bastion.evidence.upload': true,
+  'bastion.evidence.link': true,
+  'bastion.feed.read': true,
 };
 
 /** A viewer's matrix (spec 5.5): reads only. */
