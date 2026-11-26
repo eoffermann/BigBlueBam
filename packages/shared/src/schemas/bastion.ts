@@ -800,6 +800,9 @@ export const BASTION_ENGINE_NAMES = [
   'evaluation-missed',
   'weekly-readiness',
   'retention',
+  // M5
+  'evidence-ingest',
+  'evidence-expiry',
 ] as const;
 export const BastionEngineName = z.enum(BASTION_ENGINE_NAMES);
 export type BastionEngineName = z.infer<typeof BastionEngineName>;
@@ -845,6 +848,10 @@ export const BASTION_EVALUATION_MISSED_QUEUE = 'bastion-evaluation-missed';
 export const BASTION_WEEKLY_READINESS_QUEUE = 'bastion-weekly-readiness';
 export const BASTION_RETENTION_QUEUE = 'bastion-retention';
 
+/** M5 (spec 7): pending-scan retries and Bolt-event feeds; expiring evidence. */
+export const BASTION_EVIDENCE_INGEST_QUEUE = 'bastion-evidence-ingest';
+export const BASTION_EVIDENCE_EXPIRY_QUEUE = 'bastion-evidence-expiry';
+
 /** One evaluation run to drive. resume_count goes into the jobId (spec 7.3). */
 export interface BastionEvaluateRunJobData {
   organization_id: string;
@@ -867,3 +874,189 @@ export interface BastionSweepJobData {
 export function bastionEvaluateRunJobId(runId: string, resumeCount: number, generation = 0): string {
   return generation > 0 ? `${runId}-r${resumeCount}-g${generation}` : `${runId}-r${resumeCount}`;
 }
+
+/* ------------------------------------------------------------------ */
+/*  M5: manual evidence, personal data, feeds, coverage               */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Bin scan_status values and what Bastion does with each (spec 3.3). `clean` and `skipped` are
+ * copied at attach (`skipped` is labelled "Not virus-scanned"); `pending` waits; `infected` and
+ * `error` block the item.
+ */
+export const BASTION_BIN_SCAN_OUTCOME = {
+  clean: { action: 'copy', scan_label: 'clean' },
+  skipped: { action: 'copy', scan_label: 'not_scanned' },
+  pending: { action: 'wait', scan_label: null },
+  infected: { action: 'block', blocked_reason: 'infected' },
+  error: { action: 'block', blocked_reason: 'scan_failed' },
+} as const;
+export type BastionBinScanStatus = keyof typeof BASTION_BIN_SCAN_OUTCOME;
+
+/** A pending scan surfaces in the review queue after this long, then retries once a day. */
+export const BASTION_PENDING_SCAN_CAP_HOURS = 24;
+
+const manualCommon = {
+  title: z.string().trim().min(1).max(512),
+  description: z.string().trim().max(4000).nullable().optional(),
+  source_system: z.string().trim().min(1).max(128),
+  owner_user_id: z.string().uuid(),
+  produced_on: isoDate,
+  period_start: isoDate.nullable().optional(),
+  period_end: isoDate.nullable().optional(),
+  /** The last day the evidence is good for; stored as the end of that day in the org's zone. */
+  valid_until: isoDate,
+  sensitivity: BastionEvidenceSensitivity.default('standard'),
+  /** "I confirm this is a true copy of what {source_system} produced." Must be true. */
+  uploader_statement: z.literal(true),
+  /** Manual checks this item proves; each link waits for a second person's review. */
+  assertion_ids: z.array(z.string().uuid()).max(20).optional(),
+};
+
+const periodOrder = (b: { period_start?: string | null; period_end?: string | null; produced_on: string; valid_until: string }) =>
+  (!b.period_start || !b.period_end || b.period_start <= b.period_end) && b.produced_on <= b.valid_until;
+
+/**
+ * POST /manual-evidence and POST /manual-evidence/:id/supersede (spec 5.1 rows 32 and 40). A
+ * file points at a Bin asset the person already uploaded; a statement carries its own text.
+ */
+export const bastionManualEvidenceCreateSchema = z
+  .discriminatedUnion('kind', [
+    z.object({ kind: z.literal('file'), bin_asset_id: z.string().uuid(), ...manualCommon }).strict(),
+    z
+      .object({ kind: z.literal('attestation_statement'), statement: z.string().trim().min(1).max(8000), ...manualCommon })
+      .strict(),
+  ])
+  .refine(periodOrder, { message: 'Check the dates: the period must not end before it starts, and it cannot expire before it was produced', path: ['valid_until'] });
+export type BastionManualEvidenceCreate = z.infer<typeof bastionManualEvidenceCreateSchema>;
+
+/** GET /manual-evidence filters (row 33). `stuck` lists scans pending past the 24 h cap. */
+export const bastionManualEvidenceListQuerySchema = z
+  .object({
+    status: BastionManualEvidenceStatus.optional(),
+    kind: BastionManualEvidenceKind.optional(),
+    assertion_id: z.string().uuid().optional(),
+    control_id: z.string().uuid().optional(),
+    stuck: z.coerce.boolean().optional(),
+    limit: z.coerce.number().int().min(1).max(200).default(100),
+  })
+  .strict();
+export type BastionManualEvidenceListQuery = z.infer<typeof bastionManualEvidenceListQuerySchema>;
+
+/** POST /manual-evidence/:id/links (row 36). */
+export const bastionManualEvidenceLinkSchema = z.object({ assertion_id: z.string().uuid() }).strict();
+export type BastionManualEvidenceLink = z.infer<typeof bastionManualEvidenceLinkSchema>;
+
+/** POST /manual-evidence/:id/links/:assertion_id/review (row 38): a second person's verdict. */
+export const bastionManualEvidenceReviewSchema = z
+  .object({
+    verdict: z.enum(['accepted', 'shows_exception']),
+    note: z.string().trim().max(2000).nullable().optional(),
+  })
+  .strict();
+export type BastionManualEvidenceReview = z.infer<typeof bastionManualEvidenceReviewSchema>;
+
+/** POST /manual-evidence/:id/withdraw (row 39). Destructive: needs confirm. */
+export const bastionManualEvidenceWithdrawSchema = z
+  .object({ confirm: z.literal(true), reason: z.string().trim().max(2000).nullable().optional() })
+  .strict();
+export type BastionManualEvidenceWithdraw = z.infer<typeof bastionManualEvidenceWithdrawSchema>;
+
+/** POST /personal-data/:id/redact (row 41). Owner only, confirm-gated, a reason is required. */
+export const bastionRedactSchema = z
+  .object({ confirm: z.literal(true), reason: z.string().trim().min(1).max(2000) })
+  .strict();
+export type BastionRedact = z.infer<typeof bastionRedactSchema>;
+
+const feedKeySlug = z
+  .string()
+  .regex(/^[a-z0-9][a-z0-9_-]{1,62}$/, 'Use lower-case letters, digits, dashes or underscores');
+
+/** POST /feeds (row 43). */
+export const bastionFeedCreateSchema = z
+  .object({
+    feed_key: feedKeySlug,
+    label: z.string().trim().min(1).max(256),
+    feed_kind: z.string().trim().max(64).nullable().optional(),
+    source_kind: BastionFeedSourceKind.default('api_push'),
+    bolt_source: z.string().trim().min(1).max(32).nullable().optional(),
+    bolt_event_type: z.string().trim().min(1).max(128).nullable().optional(),
+    cadence_days: z.number().int().min(1).max(365).default(1),
+    daily_record_quota: z.number().int().min(1).max(100_000).default(5000),
+  })
+  .strict()
+  .refine((b) => b.source_kind !== 'bolt_event' || (!!b.bolt_source && !!b.bolt_event_type), {
+    message: 'A Bolt-event feed needs the event source and type',
+    path: ['bolt_event_type'],
+  });
+export type BastionFeedCreate = z.infer<typeof bastionFeedCreateSchema>;
+
+/** PATCH /feeds/:id (row 44). */
+export const bastionFeedUpdateSchema = z
+  .object({
+    label: z.string().trim().min(1).max(256).optional(),
+    cadence_days: z.number().int().min(1).max(365).optional(),
+    daily_record_quota: z.number().int().min(1).max(100_000).optional(),
+    status: BastionFeedStatus.optional(),
+  })
+  .strict()
+  .refine((b) => Object.keys(b).length > 0, { message: 'Nothing to change' });
+export type BastionFeedUpdate = z.infer<typeof bastionFeedUpdateSchema>;
+
+/** POST /feeds/:id/keys (row 46). The secret is shown once in the response. */
+export const bastionFeedKeyCreateSchema = z
+  .object({ label: z.string().trim().max(128).nullable().optional() })
+  .strict();
+export type BastionFeedKeyCreate = z.infer<typeof bastionFeedKeyCreateSchema>;
+
+/** Rotation grace for the previous key when a new one is minted (spec 3.5). */
+export const BASTION_FEED_KEY_GRACE_DAYS = 7;
+/** Requests per minute per feed key (spec 3.5). */
+export const BASTION_FEED_KEY_RATE_PER_MINUTE = 60;
+/** Feed key token prefix: `bbf_<key_id>_<secret>`. */
+export const BASTION_FEED_KEY_PREFIX = 'bbf_';
+
+/** GET /feeds/:id/records (row 49). */
+export const bastionFeedRecordListQuerySchema = z
+  .object({
+    limit: z.coerce.number().int().min(1).max(200).default(50),
+    before: z.string().datetime({ offset: true }).optional(),
+  })
+  .strict();
+export type BastionFeedRecordListQuery = z.infer<typeof bastionFeedRecordListQuerySchema>;
+
+/** GET /coverage and GET /summary (rows 50, 94): an optional framework view. */
+export const bastionCoverageQuerySchema = z
+  .object({ framework_id: z.string().uuid().optional() })
+  .strict();
+export type BastionCoverageQuery = z.infer<typeof bastionCoverageQuerySchema>;
+
+/** The Evidence map columns (spec 6.1): where a control's proof comes from. */
+export const BastionEvidenceSourceColumn = z.enum(['native', 'feed', 'manual_file', 'self_attested', 'none']);
+export type BastionEvidenceSourceColumn = z.infer<typeof BastionEvidenceSourceColumn>;
+
+/** Readiness banners (spec 6.1). */
+export const BastionReadinessBanner = z.enum([
+  'no_compliance_project',
+  'checks_stale',
+  'scanning_off',
+  'storage_not_set_up',
+  'offsite_backup_not_configured',
+  'restore_pending',
+  'delivery_problems',
+  'stuck_scans',
+]);
+export type BastionReadinessBanner = z.infer<typeof BastionReadinessBanner>;
+
+/** The four numbers plus "Not set up yet" and the denominator (spec 2.3). */
+export const bastionReadinessNumbersSchema = z.object({
+  proven_by_suite: z.number().int(),
+  proven_by_evidence: z.number().int(),
+  not_met: z.number().int(),
+  risk_accepted: z.number().int(),
+  cant_prove: z.number().int(),
+  not_set_up: z.number().int(),
+  checked: z.number().int(),
+  total: z.number().int(),
+});
+export type BastionReadinessNumbersOut = z.infer<typeof bastionReadinessNumbersSchema>;
