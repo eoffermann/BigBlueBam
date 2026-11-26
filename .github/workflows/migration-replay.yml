@@ -9,6 +9,8 @@ jobs:
   migration-replay:
     name: Replay all migrations on fresh postgres
     runs-on: ubuntu-latest
+    # Normally about 1 min (#235).
+    timeout-minutes: 15
 
     services:
       postgres:

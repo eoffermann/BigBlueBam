@@ -37,6 +37,8 @@ jobs:
   seed-smoke:
     name: Run the seed orchestrator on a fresh DB
     runs-on: ubuntu-latest
+    # Normally about 1 min (#235).
+    timeout-minutes: 20
 
     services:
       postgres:

@@ -21,6 +21,8 @@ jobs:
   tsc:
     name: tsc --noEmit (all packages)
     runs-on: ubuntu-latest
+    # Normally 3 to 4 min; one run hung 27 min in Run typecheck (#235).
+    timeout-minutes: 20
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -40,4 +42,6 @@ jobs:
         run: pnpm -r --filter './packages/*' --if-present run build
 
       - name: Run typecheck
+        # Step-level too, so a hang is attributed to this step in the UI (#235).
+        timeout-minutes: 15
         run: pnpm -r --parallel --if-present typecheck

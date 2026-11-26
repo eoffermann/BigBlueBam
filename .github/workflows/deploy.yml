@@ -43,6 +43,8 @@ concurrency:
 jobs:
   provision:
     runs-on: ubuntu-latest
+    # Usually under a minute; generous for a real Railway provisioning pass (#235).
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
 

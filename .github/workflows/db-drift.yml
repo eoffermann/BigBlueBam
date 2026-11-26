@@ -9,6 +9,8 @@ jobs:
   db-drift:
     name: Drizzle ↔ SQL migration drift check
     runs-on: ubuntu-latest
+    # Normally about 1 min (#235): a hang fails here instead of holding the lane for 6 h.
+    timeout-minutes: 15
 
     services:
       postgres:
@@ -76,6 +78,7 @@ jobs:
   migration-lint:
     name: Migration file lint (header + idempotency)
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -91,6 +94,7 @@ jobs:
   tool-return-coverage:
     name: MCP tool return-schema coverage
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - name: Checkout
         uses: actions/checkout@v7

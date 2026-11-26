@@ -21,6 +21,8 @@ jobs:
   biome:
     name: Lint workspace
     runs-on: ubuntu-latest
+    # Normally about 1 min (#235).
+    timeout-minutes: 15
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -45,6 +47,11 @@ jobs:
 
       - name: Lint migration files
         run: pnpm lint:migrations
+
+      # Issue #235: every workflow job sets timeout-minutes, so a hang fails fast instead of
+      # holding its lane (and the next push's run) for GitHub's 360-minute default.
+      - name: Workflow job timeouts
+        run: pnpm check:workflow-timeouts
 
       - name: Check permission catalog drift
         run: pnpm check:permission-catalog
