@@ -27,7 +27,7 @@ import { delimitAsData, scanLabel } from '../lib/injection-prescan.js';
 import { boltRuleShapeFor } from '../library/fix-templates.js';
 import { REWORD_PROMPT_VERSION, REWORDABLE_TEMPLATES } from '../library/fix-reword.js';
 import { orgTx, type Tx } from '../engine/context.js';
-import { sortGaps } from '../engine/gaps.js';
+import { lockOrgGapRank, sortGaps } from '../engine/gaps.js';
 import { loadControlStates } from '../engine/numbers.js';
 import { enqueueBastionEvent, enqueueOutbox } from '../engine/outbox.js';
 import { enqueueProposalClose, remediationSettings } from '../engine/remediation.js';
@@ -171,6 +171,7 @@ async function loadGap(tx: Tx, orgId: string, id: string) {
 
 export async function dismissGap(d: DecisionDeps, viewer: Viewer, id: string, reason: string) {
   return orgTx(d.engine.sql, viewer.org_id, async (tx) => {
+    await lockOrgGapRank(tx, viewer.org_id); // #255: the gap-rank lock first, like every gap writer
     const g = await loadGap(tx, viewer.org_id, id);
     if (g.status === 'dismissed') throw new ConflictError('This gap was already dismissed.', 'GAP_ALREADY_DISMISSED');
     if (g.status === 'resolved') throw new ConflictError('This gap is already fixed.', 'GAP_RESOLVED');
@@ -369,6 +370,7 @@ function processChange(base: Draft, control: string, statement: string | null): 
 export async function proposeFix(d: DecisionDeps, viewer: Viewer, gapId: string, note: string | null) {
   const now = d.engine.now();
   const draftId = await orgTx(d.engine.sql, viewer.org_id, async (tx) => {
+    await lockOrgGapRank(tx, viewer.org_id); // #255: the gap-rank lock first, like every gap writer
     const g = await loadGap(tx, viewer.org_id, gapId);
     if (g.status !== 'open') {
       throw new ConflictError(
@@ -517,6 +519,9 @@ export async function getFixDraft(d: DecisionDeps, viewer: Viewer, id: string) {
 export async function decideFix(d: DecisionDeps, viewer: Viewer, id: string, body: BastionFixDecide, canControlWrite: boolean) {
   const now = d.engine.now();
   await orgTx(d.engine.sql, viewer.org_id, async (tx) => {
+    // #255: the gap-rank lock first (this reopens the gap and row-locks the draft), the same order
+    // as the reconcile, exception approval and every re-rank.
+    await lockOrgGapRank(tx, viewer.org_id);
     const r = (
       await tx`
         SELECT d.*, g.gap_kind, g.control_id, g.assertion_id, c.owner_user_id, c.title AS control_title
