@@ -8,6 +8,7 @@ import type {
   BastionAssertionPropose,
   BastionAssertionReject,
   BastionAssertionRevise,
+  BastionPopulationKind,
 } from '@bigbluebam/shared';
 import { runInOrgScope } from '../plugins/rls.js';
 import type { DbTx } from '../db/index.js';
@@ -41,6 +42,60 @@ async function loadActiveControl(tx: DbTx, orgId: string, id: string) {
   return c;
 }
 
+const REPO_RE = /^[^/\s]+\/[^/\s]+$/;
+
+/**
+ * The members of a revised population with the label people see for each (issue #195; spec 6.2:
+ * never a raw id). Blip apps must be tracked apps of the caller's org (an unknown or foreign id is
+ * refused) and are labelled with the app's name. Repositories may be ones not yet connected
+ * (that is why a person adds them), so they are checked for the `owner/name` shape, compared
+ * lower-cased as the probe compares them, and labelled with the connected spelling, the earlier
+ * label, or what the person typed.
+ */
+export async function resolvePopulation(
+  tx: DbTx,
+  orgId: string,
+  kind: BastionPopulationKind,
+  members: string[],
+  previousLabels: Record<string, string>,
+): Promise<{ values: string[]; labels: Record<string, string> }> {
+  const connected = await connectedPopulations(tx, orgId);
+  const labels: Record<string, string> = {};
+  if (kind === 'blip_apps') {
+    const known = new Map(connected.blip_apps.map((a) => [a.value.toLowerCase(), a]));
+    const values: string[] = [];
+    for (const raw of members) {
+      const app = known.get(raw.trim().toLowerCase());
+      if (!app) {
+        throw new ValidationFailure(
+          'One of those apps is not tracked in your organization. Choose apps from the list.',
+          'UNKNOWN_POPULATION_MEMBER',
+          [{ field: 'expected_population', issue: 'unknown_app' }],
+        );
+      }
+      if (!labels[app.value]) values.push(app.value);
+      labels[app.value] = app.label;
+    }
+    return { values, labels };
+  }
+  const connectedLabel = new Map(connected.github_repos.map((r) => [r.value, r.label]));
+  const values: string[] = [];
+  for (const raw of members) {
+    const typed = raw.trim();
+    if (!REPO_RE.test(typed)) {
+      throw new ValidationFailure(
+        'Write each repository as owner/name, for example castaways/rescue-radio-firmware.',
+        'INVALID_POPULATION_MEMBER',
+        [{ field: 'expected_population', issue: 'not_owner_slash_name' }],
+      );
+    }
+    const v = typed.toLowerCase();
+    if (!labels[v]) values.push(v);
+    labels[v] = connectedLabel.get(v) ?? previousLabels[v] ?? typed;
+  }
+  return { values, labels };
+}
+
 /** Population confirmation fields never carry over to a new proposal: a person confirms again. */
 function withoutConfirmation(params: Record<string, unknown>): Record<string, unknown> {
   const { population_confirmed_at: _a, population_confirmed_by: _b, ...rest } = params;
@@ -54,8 +109,22 @@ export async function proposeAssertion(viewer: Viewer, controlId: string, body: 
     const proposed_by = kind === 'human' ? 'human' : 'agent';
     let values: Partial<typeof bastionAssertions.$inferInsert>;
     if (body.kind === 'probe') {
+      const params = withoutConfirmation(body.params ?? {});
+      const entry = probeEntry(body.probe_key);
+      if (entry?.population_kind && Array.isArray(params.expected_population)) {
+        // A proposer-supplied list gets the same org check and human labels as a revision.
+        const resolved = await resolvePopulation(
+          tx,
+          viewer.org_id,
+          entry.population_kind,
+          params.expected_population.map(String),
+          {},
+        );
+        params.expected_population = resolved.values;
+        params.population_labels = resolved.labels;
+      }
       const v = validateProbeSuggestion(
-        { probe_key: body.probe_key, params: withoutConfirmation(body.params ?? {}), plain_statement: body.plain_statement },
+        { probe_key: body.probe_key, params, plain_statement: body.plain_statement },
         await connectedPopulations(tx, viewer.org_id),
       );
       if (!v.ok) throw new ValidationFailure(v.reason, 'INVALID_PROBE');
@@ -118,10 +187,15 @@ export async function reviseAssertion(viewer: Viewer, id: string, body: BastionA
         if (!entry?.population_kind) {
           throw new ValidationFailure('This check does not take a list of systems.', 'NOT_A_POPULATION_CHECK');
         }
-        const labels = (params.population_labels ?? {}) as Record<string, string>;
-        const values = [...new Set(body.expected_population.map((v) => (entry.population_kind === 'github_repos' ? v.toLowerCase() : v)))];
-        params.expected_population = values;
-        params.population_labels = Object.fromEntries(values.map((v) => [v, labels[v] ?? v]));
+        const resolved = await resolvePopulation(
+          tx,
+          viewer.org_id,
+          entry.population_kind,
+          body.expected_population,
+          (params.population_labels ?? {}) as Record<string, string>,
+        );
+        params.expected_population = resolved.values;
+        params.population_labels = resolved.labels;
       }
       const v = validateProbeSuggestion({
         probe_key: old.probe_key as never,

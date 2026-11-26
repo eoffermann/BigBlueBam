@@ -14,7 +14,7 @@ import { bastionAssertions, bastionCompileRuns, bastionControls, bastionOrgSetti
 import { NotFoundError, one } from '../lib/errors.js';
 import { audit } from '../lib/audit.js';
 import { frameworkTemplate } from '../library/index.js';
-import { ensureSettings, liveFrameworks } from './shared.js';
+import { connectedPopulations, ensureSettings, liveFrameworks } from './shared.js';
 import { getFramework } from './frameworks.service.js';
 import { assertionView } from './controls.service.js';
 import type { Viewer } from './types.js';
@@ -22,6 +22,27 @@ import type { Viewer } from './types.js';
 async function projectInOrg(tx: DbTx, orgId: string, projectId: string) {
   const rows = (await tx.execute(sql`
     SELECT id, name, is_archived FROM projects WHERE id = ${projectId} AND org_id = ${orgId} LIMIT 1
+  `)) as unknown as Array<{ id: string; name: string; is_archived: boolean }>;
+  return rows[0] ?? null;
+}
+
+/**
+ * The project, if the viewer may use it in Bam (issue #191): in the org AND the viewer has a
+ * project_memberships row, the rule Bam's requireProjectAccess applies to every non-SuperUser
+ * (org owners and admins included). SuperUsers bypass membership, as in Bam. Anything else is
+ * null, so "not a member" and "no such project" look the same to the caller.
+ */
+export async function projectVisibleTo(tx: DbTx, viewer: Viewer, projectId: string) {
+  const rows = (await tx.execute(sql`
+    SELECT p.id, p.name, p.is_archived
+      FROM projects p
+     WHERE p.id = ${projectId}
+       AND p.org_id = ${viewer.org_id}
+       AND (
+         ${viewer.is_superuser}::boolean
+         OR EXISTS (SELECT 1 FROM project_memberships pm WHERE pm.project_id = p.id AND pm.user_id = ${viewer.id})
+       )
+     LIMIT 1
   `)) as unknown as Array<{ id: string; name: string; is_archived: boolean }>;
   return rows[0] ?? null;
 }
@@ -58,7 +79,17 @@ export async function getSetup(viewer: Viewer) {
       .innerJoin(bastionControls, eq(bastionControls.id, bastionAssertions.control_id))
       .where(and(eq(bastionAssertions.organization_id, viewer.org_id), eq(bastionAssertions.review_status, 'proposed')))
       .orderBy(bastionControls.title, bastionAssertions.created_at);
-    return { settings, frameworks, project, runs, proposed: proposed.filter((p) => p.control_lifecycle === 'active') };
+    // The connected sets, so the wizard can offer people (by name) the apps and repositories a
+    // population check may list (issue #195).
+    const connected = await connectedPopulations(tx, viewer.org_id);
+    return {
+      settings,
+      frameworks,
+      project,
+      runs,
+      connected,
+      proposed: proposed.filter((p) => p.control_lifecycle === 'active'),
+    };
   });
 
   const frameworkViews = [];
@@ -100,6 +131,7 @@ export async function getSetup(viewer: Viewer) {
       compliance_project: base.project ? { id: base.project.id, name: base.project.name, archived: base.project.is_archived } : null,
       remediation_tasks: base.settings.remediation_tasks,
       proposed_checks: reviews,
+      connected_populations: base.connected,
       steps,
       // Required to finish setup: a framework, a Compliance project, a finished compile, and (for
       // ISO) every Annex A requirement decided. Reviewing every proposed check is not required:
@@ -127,11 +159,12 @@ export async function saveCompanyProfile(viewer: Viewer, profile: BastionCompany
  * POST /setup/compliance-project. The project itself is created through the existing Bam API
  * (`POST /b3/api/projects`, by the person in the wizard, so Bam applies its own permission and
  * membership rules); Bastion records which project its tasks go to, after checking it belongs to
- * this organization.
+ * this organization and the caller is a member of it (the same rule Bam applies to "Use an
+ * existing project"; SuperUsers bypass). Not a member answers the same 404 as no such project.
  */
 export async function setComplianceProject(viewer: Viewer, body: BastionSetupComplianceProject) {
   return runInOrgScope(viewer.org_id, async (tx) => {
-    const project = await projectInOrg(tx, viewer.org_id, body.project_id);
+    const project = await projectVisibleTo(tx, viewer, body.project_id);
     if (!project || project.is_archived) throw new NotFoundError('We could not find that project in your organization.');
     await ensureSettings(tx, viewer.org_id);
     await tx
