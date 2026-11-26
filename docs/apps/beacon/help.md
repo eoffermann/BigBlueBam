@@ -25,7 +25,7 @@ verified, or retired.
 
 ### Key concepts
 
-- **Beacon** - A single knowledge article. Has a globally unique slug, a title,
+- **Beacon** - A single knowledge article. Has a slug that is unique within your organization, a title,
   a summary (up to 500 characters), a Markdown body, a version number, a status,
   a visibility, an owner, an optional project, and an expiry date.
 - **Status** - The article's place in its lifecycle. The five statuses you will

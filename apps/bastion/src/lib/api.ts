@@ -180,6 +180,95 @@ export interface CompileRun {
   used_fallback?: boolean;
 }
 
+/* ------------------------------ M8: questionnaires ------------------------------ */
+
+export interface QuestionnaireSheetMap {
+  sheet_name: string;
+  header_row: number | null;
+  first_row: number;
+  question_column: number;
+  answer_column: number | null;
+  yes_no_column: number | null;
+  section_column: number | null;
+  answer_kind: 'yes_no' | 'text' | 'yes_no_text';
+}
+
+/** One questionnaire (shapeQuestionnaire in apps/bastion-api/src/services/questionnaires.service.ts). */
+export interface QuestionnaireRow {
+  id: string;
+  title: string;
+  requester_label: string | null;
+  format: 'xlsx' | 'csv';
+  status: 'uploaded' | 'mapping' | 'answering' | 'in_review' | 'approved' | 'exported' | 'failed';
+  injection_suspected: boolean;
+  row_count: number;
+  rows_done: number;
+  high_count: number;
+  medium_count: number;
+  low_count: number;
+  due_date: string | null;
+  owner_name: string | null;
+  approved_by_name: string | null;
+  approved_at: string | null;
+  drafting_now: boolean;
+  created_at: string;
+  column_map: { sheets: QuestionnaireSheetMap[]; guessed: boolean } | null;
+  source_truncated: boolean;
+  sheet_preview?: Array<{ name: string; row_count: number; column_count: number; rows: string[][] }>;
+  counts_label: string | null;
+}
+
+export interface QuestionnaireCitation {
+  entity_type: string;
+  entity_id: string;
+  label: string | null;
+  state_words?: string | null;
+}
+
+export interface QuestionnaireItemRow {
+  id: string;
+  sheet_name: string;
+  row_index: number;
+  section: string | null;
+  question_text: string;
+  answer_kind: 'yes_no' | 'text' | 'yes_no_text';
+  draft_answer: string | null;
+  draft_yes_no: boolean | null;
+  final_answer: string | null;
+  final_yes_no: boolean | null;
+  cited_refs: QuestionnaireCitation[];
+  hidden_citation_count: number;
+  confidence_band: 'high' | 'medium' | 'low' | null;
+  confidence_words: string | null;
+  band_reasons: Array<{ code: string; words: string }>;
+  review_status: 'pending' | 'accepted' | 'edited' | 'needs_owner';
+  assigned_to_name: string | null;
+  reviewed_by_name: string | null;
+  needs_review: boolean;
+}
+
+export interface QuestionnaireApproval {
+  low_unreviewed: number;
+  waiting_on_owner: number;
+  undrafted: number;
+  medium_unreviewed: number;
+  can_approve: boolean;
+  blocked_because: string[];
+}
+
+export interface AnswerLibraryRow {
+  id: string;
+  question_text: string;
+  answer_text: string;
+  yes_no: boolean | null;
+  cited_refs: QuestionnaireCitation[];
+  approved_by_name: string | null;
+  approved_at: string | null;
+  stale: boolean;
+  stale_words: string | null;
+  retired_at: string | null;
+}
+
 /* ------------------------------ M7: policies ------------------------------ */
 
 export type PolicyAudience = { kind: 'all' } | { kind: 'users'; user_ids: string[] };

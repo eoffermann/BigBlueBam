@@ -171,7 +171,8 @@ export const beaconEntries = pgTable('beacon_entries', {
     .notNull()
     .references(() => organizations.id),
   title: varchar('title', { length: 512 }).notNull(),
-  slug: varchar('slug', { length: 256 }).unique().notNull(),
+  // Unique per org (beacon_entries_org_slug_key, migration 0289), not globally.
+  slug: varchar('slug', { length: 256 }).notNull(),
   body_markdown: text('body_markdown').notNull(),
   body_html: text('body_html'),
   status: varchar('status', { length: 50 }).default('Draft').notNull(),

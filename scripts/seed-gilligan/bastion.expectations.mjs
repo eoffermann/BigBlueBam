@@ -190,6 +190,32 @@ export const BASTION_SEED_EXPECTATIONS = {
     },
   },
 
+  // M8 rows (spec 10.2): Howell Industries' vendor security review (an xlsx in Bin, 24 questions),
+  // autofilled. Story 7: the laptop-encryption row is "Needs an expert" ("We cannot currently prove
+  // this", nothing proves laptops are encrypted), the Radio Relay row is "Check this" and names the
+  // accepted exception, and Approve stays disabled until the "Needs an expert" rows are reviewed.
+  m8: {
+    questionnaire: {
+      title: 'Howell Industries Vendor Security Review',
+      requester: 'Howell Industries',
+      fileName: 'howell-vendor-security-review.xlsx',
+      sheet: 'Security Review',
+      rows: 24,
+      encryption: {
+        question: 'Are all company laptops encrypted at rest?',
+        band: 'low',
+        words: 'Needs an expert',
+        answerStartsWith: 'We cannot currently prove this.',
+      },
+      radioRelay: {
+        question: 'Do you replace API keys and service credentials at least once a year?',
+        band: 'medium',
+        words: 'Check this',
+        mentions: 'Accepted exception',
+      },
+    },
+  },
+
   companyProfile: {
     company_size: '1-10',
     work_style: 'office',

@@ -13,6 +13,7 @@ import { GapsPage } from '@/pages/gaps';
 import { ReviewPage } from '@/pages/review';
 import { PoliciesPage } from '@/pages/policies';
 import { AttestPage } from '@/pages/attest';
+import { QuestionnaireDetailPage, QuestionnairesPage } from '@/pages/questionnaires';
 
 // Grows one variant per page as later milestones land (spec 6.1).
 type Route =
@@ -25,7 +26,9 @@ type Route =
   | { page: 'gaps' }
   | { page: 'review' }
   | { page: 'policies' }
-  | { page: 'attest' };
+  | { page: 'attest' }
+  | { page: 'questionnaires' }
+  | { page: 'questionnaire'; id: string };
 
 const BASE_PATH = '/bastion';
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -43,11 +46,16 @@ export function parseRoute(path: string): Route {
   if (clean === '/review') return { page: 'review' };
   if (clean === '/policies') return { page: 'policies' };
   if (clean === '/attest') return { page: 'attest' };
+  if (clean === '/questionnaires') return { page: 'questionnaires' };
+  const qId = /^\/questionnaires\/([^/]+)$/.exec(clean)?.[1];
+  if (qId && UUID_RE.test(qId)) return { page: 'questionnaire', id: qId };
   return { page: 'home' };
 }
 
 function toActiveRoute(route: Route): ActiveRoute {
-  return { page: route.page === 'control' ? 'controls' : route.page };
+  if (route.page === 'control') return { page: 'controls' };
+  if (route.page === 'questionnaire') return { page: 'questionnaires' };
+  return { page: route.page };
 }
 
 export function App() {
@@ -149,6 +157,10 @@ export function App() {
         return <PoliciesPage />;
       case 'attest':
         return <AttestPage />;
+      case 'questionnaires':
+        return <QuestionnairesPage onNavigate={navigate} />;
+      case 'questionnaire':
+        return <QuestionnaireDetailPage key={route.id} questionnaireId={route.id} onNavigate={navigate} />;
       default:
         return null;
     }

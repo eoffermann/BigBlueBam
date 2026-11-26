@@ -35,6 +35,18 @@ import {
   bastionFeedUpdateSchema,
   bastionManualEvidenceListQuerySchema,
 } from '@bigbluebam/shared';
+// M8 questionnaire tools (registerBastionQuestionnaireTools at the very end).
+import {
+  BastionAnswerKind,
+  BastionConfidenceBand,
+  BastionQuestionnaireStatus,
+  bastionAnswerLibraryUpdateSchema,
+  bastionDraftAnswerSchema,
+  bastionQuestionnaireColumnMapSchema,
+  bastionQuestionnaireCreateSchema,
+  bastionQuestionnaireItemReviewSchema,
+  bastionQuestionnaireUpdateSchema,
+} from '@bigbluebam/shared';
 // M7 policy tools (registerBastionPolicyTools at the very end).
 import { bastionPolicyAudienceSchema, bastionPolicyCreateFields, bastionPolicyCreateSchema, bastionPolicyUpdateSchema } from '@bigbluebam/shared';
 import {
@@ -123,6 +135,7 @@ export function registerBastionTools(
   registerBastionEvidenceTools(server, client);
   registerBastionDecisionTools(server, client);
   registerBastionPolicyTools(server, client);
+  registerBastionQuestionnaireTools(server, client);
 
   // ── 1. bastion_list_frameworks (rows 1, 2, 4, 7) ───────────────────────────
   registerTool(server, {
@@ -1079,6 +1092,215 @@ export function registerBastionPolicyTools(server: McpServer, client: BastionCli
     handler: async ({ policy_id, user_ids }) => {
       const r = await client.requestAttestations(policy_id, user_ids ? { user_ids } : {});
       return r.ok ? ok(r.data) : err('asking people to read the policy', r.data);
+    },
+  });
+}
+
+/**
+ * M8 questionnaire and answer-library tools (spec 5.1 rows 72-83, 5.4 tools 17-20 and 22, plus
+ * the #196 parity writes: create, mapping and details, item review, library edit).
+ *
+ * Deliberately NO tool for row 79 (POST /questionnaires/:id/approve): category "auth: session
+ * required (spec 2.8, #136)". Approving releases answers to a customer; only a person signed in to
+ * Bastion, not impersonated, may do it. None for row 80 (the answered file): multipart/binary.
+ */
+export const BASTION_QUESTIONNAIRE_TOOL_NAMES = [
+  'bastion_list_questionnaires',
+  'bastion_get_questionnaire',
+  'bastion_create_questionnaire',
+  'bastion_update_questionnaire',
+  'bastion_questionnaire_autofill',
+  'bastion_answer_questionnaire_item',
+  'bastion_draft_answer',
+  'bastion_search_answer_library',
+  'bastion_update_answer_library',
+] as const;
+
+export function registerBastionQuestionnaireTools(server: McpServer, client: BastionClient): void {
+  const strip = (o: Record<string, unknown>) => Object.fromEntries(Object.entries(o).filter(([, v]) => v !== undefined));
+
+  // Q1. bastion_list_questionnaires (row 72)
+  registerTool(server, {
+    name: 'bastion_list_questionnaires',
+    description:
+      'Security questionnaires in Bastion, newest first (GET /questionnaires): title, who asked, status (mapping, answering, in_review, approved, exported, failed), how many rows are drafted and how many are "Sure" (high), "Check this" (medium) and "Needs an expert" (low). Read-only; needs bastion.questionnaire.read (members and above).',
+    input: {
+      status: BastionQuestionnaireStatus.optional(),
+      limit: z.number().int().min(1).max(200).optional(),
+    },
+    returns: z.record(z.unknown()),
+    handler: async ({ status, limit }) => {
+      const r = await client.listQuestionnaires({ status, limit });
+      return r.ok ? ok(r.data) : err('listing questionnaires', r.data);
+    },
+  });
+
+  // Q2. bastion_get_questionnaire (rows 74, 77)
+  registerTool(server, {
+    name: 'bastion_get_questionnaire',
+    description:
+      'One questionnaire (GET /questionnaires/:id) and, with include_items (default true), its answer grid (GET /questionnaires/:id/items): each question, the drafted answer and yes/no, the confidence band and why, the citations (controls and policies, re-checked with can_access for the caller and, with asker_user_id, for that person too), the review state, and what still blocks approval ("N Needs an expert answers still to review"). Read-only; needs bastion.questionnaire.read.',
+    input: {
+      questionnaire_id: z.string().uuid(),
+      include_items: z.boolean().optional(),
+      band: BastionConfidenceBand.optional(),
+      needs_review: z.boolean().optional().describe('Only "Needs an expert" rows nobody reviewed yet.'),
+      asker_user_id: z.string().uuid().optional().describe('The person you are acting for; narrows, never widens.'),
+    },
+    returns: z.record(z.unknown()),
+    handler: async ({ questionnaire_id, include_items, band, needs_review, asker_user_id }) => {
+      const head = await client.getQuestionnaire(questionnaire_id, { asker_user_id });
+      if (!head.ok) return err('reading the questionnaire', head.data);
+      if (include_items === false) return ok(head.data);
+      const items = await client.listQuestionnaireItems(questionnaire_id, { band, needs_review, asker_user_id });
+      if (!items.ok) return err('reading the answers', items.data);
+      return ok({ questionnaire: (head.data as { data?: unknown })?.data ?? head.data, items: items.data });
+    },
+  });
+
+  // Q3. bastion_create_questionnaire (row 73, JSON intake)
+  registerTool(server, {
+    name: 'bastion_create_questionnaire',
+    description:
+      'Add a security questionnaire (POST /questionnaires) from a Bin file (xlsx or csv; give bin_asset_id, the file must already be in Bin and virus-scanned) or from pasted rows (pasted_text; tab-separated as copied from a spreadsheet, or csv). Bastion guesses which column holds the questions; check it with bastion_get_questionnaire and fix it with bastion_update_questionnaire before drafting. Optionally link a Bond deal. 409 FILE_NOT_SCANNED_YET, 400 QUESTIONNAIRE_TOO_LARGE (over the per-questionnaire row limit). Needs bastion.questionnaire.write.',
+    input: {
+      title: z.string().min(1).max(512),
+      bin_asset_id: z.string().uuid().optional(),
+      pasted_text: z.string().min(1).max(500_000).optional(),
+      pasted_format: z.enum(['tsv', 'csv']).optional(),
+      requester_label: z.string().max(256).optional(),
+      bond_deal_id: z.string().uuid().optional(),
+      due_date: z.string().optional().describe('YYYY-MM-DD'),
+      owner_user_id: z.string().uuid().optional(),
+      column_map: bastionQuestionnaireColumnMapSchema.optional(),
+    },
+    returns: z.record(z.unknown()),
+    handler: async ({ bin_asset_id, pasted_text, pasted_format, ...rest }) => {
+      if (!bin_asset_id === !pasted_text) return err('adding the questionnaire', { code: 'VALIDATION_ERROR', message: 'Give exactly one of bin_asset_id or pasted_text.' });
+      const source = bin_asset_id ? { kind: 'bin_asset' as const, bin_asset_id } : { kind: 'pasted' as const, text: pasted_text as string, format: pasted_format ?? 'tsv' };
+      const parsed = bastionQuestionnaireCreateSchema.safeParse(strip({ ...rest, source }));
+      if (!parsed.success) return err('adding the questionnaire', { code: 'VALIDATION_ERROR', message: parsed.error.errors[0]?.message });
+      const r = await client.createQuestionnaire(parsed.data);
+      return r.ok ? ok(r.data) : err('adding the questionnaire', r.data);
+    },
+  });
+
+  // Q4. bastion_update_questionnaire (row 75)
+  registerTool(server, {
+    name: 'bastion_update_questionnaire',
+    description:
+      'Change a questionnaire\'s title, requester, due date, owner or Bond deal, or its column mapping (PATCH /questionnaires/:id). The mapping can only change before answers are drafted (409 MAPPING_LOCKED); changing it rebuilds the question list. Needs bastion.questionnaire.write.',
+    input: {
+      questionnaire_id: z.string().uuid(),
+      title: z.string().min(1).max(512).optional(),
+      requester_label: z.string().max(256).nullable().optional(),
+      due_date: z.string().nullable().optional(),
+      owner_user_id: z.string().uuid().nullable().optional(),
+      bond_deal_id: z.string().uuid().nullable().optional(),
+      column_map: bastionQuestionnaireColumnMapSchema.optional(),
+    },
+    returns: z.record(z.unknown()),
+    handler: async ({ questionnaire_id, ...rest }) => {
+      const parsed = bastionQuestionnaireUpdateSchema.safeParse(strip(rest));
+      if (!parsed.success) return err('changing the questionnaire', { code: 'VALIDATION_ERROR', message: parsed.error.errors[0]?.message });
+      const r = await client.updateQuestionnaire(questionnaire_id, parsed.data);
+      return r.ok ? ok(r.data) : err('changing the questionnaire', r.data);
+    },
+  });
+
+  // Q5. bastion_questionnaire_autofill (row 76)
+  registerTool(server, {
+    name: 'bastion_questionnaire_autofill',
+    description:
+      'Ask Bastion to draft every answer (POST /questionnaires/:id/autofill, 202). The worker drafts in the background from the organization\'s own controls, checks, policies and approved answers (about 10-20 s a question; a 96-row questionnaire takes roughly 16-32 minutes); poll bastion_get_questionnaire. A failing or unprovable control makes an answer "Needs an expert" with "We cannot currently prove this"; an accepted exception caps it at "Check this" and is named. redraft true drafts again every row nobody reviewed. Drafting never approves anything. Needs bastion.questionnaire.write.',
+    input: {
+      questionnaire_id: z.string().uuid(),
+      redraft: z.boolean().optional(),
+    },
+    returns: z.record(z.unknown()),
+    handler: async ({ questionnaire_id, redraft }) => {
+      const r = await client.autofillQuestionnaire(questionnaire_id, { redraft: redraft ?? false });
+      return r.ok ? ok(r.data) : err('starting the drafting', r.data);
+    },
+  });
+
+  // Q6. bastion_answer_questionnaire_item (row 78). Named for what it records (the answer a person
+  // settles on), and kept apart from the evidence-review vouching act, which has no tool.
+  registerTool(server, {
+    name: 'bastion_answer_questionnaire_item',
+    description:
+      'Review one drafted answer (PATCH /questionnaire-items/:id): accepted (take the draft), edited (give final_answer and/or final_yes_no), needs_owner (assigned_to: the member who should answer it) or pending (undo). Reviewing is not approving: approval is a person\'s act in Bastion. Needs bastion.questionnaire.write.',
+    input: {
+      item_id: z.string().uuid(),
+      review_status: z.enum(['accepted', 'edited', 'needs_owner', 'pending']),
+      final_answer: z.string().max(8000).nullable().optional(),
+      final_yes_no: z.boolean().nullable().optional(),
+      assigned_to: z.string().uuid().nullable().optional(),
+    },
+    returns: z.record(z.unknown()),
+    handler: async ({ item_id, ...rest }) => {
+      const parsed = bastionQuestionnaireItemReviewSchema.safeParse(strip(rest));
+      if (!parsed.success) return err('reviewing the answer', { code: 'VALIDATION_ERROR', message: parsed.error.errors[0]?.message });
+      const r = await client.reviewQuestionnaireItem(item_id, parsed.data);
+      return r.ok ? ok(r.data) : err('reviewing the answer', r.data);
+    },
+  });
+
+  // Q7. bastion_draft_answer (row 81)
+  registerTool(server, {
+    name: 'bastion_draft_answer',
+    description:
+      'Draft one answer now, nothing saved (POST /answers/draft): the drafted answer and yes/no, the confidence band ("Sure", "Check this", "Needs an expert") with the reasons, and the citations that passed can_access for the caller. Same hard rules as the autofill. Needs bastion.questionnaire.write.',
+    input: {
+      question: z.string().min(3).max(4000),
+      answer_kind: BastionAnswerKind.optional(),
+    },
+    returns: z.record(z.unknown()),
+    handler: async ({ question, answer_kind }) => {
+      const parsed = bastionDraftAnswerSchema.safeParse(strip({ question, answer_kind }));
+      if (!parsed.success) return err('drafting the answer', { code: 'VALIDATION_ERROR', message: parsed.error.errors[0]?.message });
+      const r = await client.draftAnswer(parsed.data);
+      return r.ok ? ok(r.data) : err('drafting the answer', r.data);
+    },
+  });
+
+  // Q8. bastion_search_answer_library (row 82)
+  registerTool(server, {
+    name: 'bastion_search_answer_library',
+    description:
+      'Search the approved answers (GET /answer-library): full-text over question and answer, best first, with who approved each and its citations (re-checked with can_access, and for asker_user_id too). An answer is marked stale when a control it relies on changed its status since approval; include_stale false hides those, include_retired true shows retired ones. Read-only; needs bastion.answer_library.read.',
+    input: {
+      q: z.string().max(500).optional(),
+      include_stale: z.boolean().optional(),
+      include_retired: z.boolean().optional(),
+      limit: z.number().int().min(1).max(100).optional(),
+      asker_user_id: z.string().uuid().optional(),
+    },
+    returns: z.record(z.unknown()),
+    handler: async (q) => {
+      const r = await client.searchAnswerLibrary(q);
+      return r.ok ? ok(r.data) : err('searching the answer library', r.data);
+    },
+  });
+
+  // Q9. bastion_update_answer_library (row 83)
+  registerTool(server, {
+    name: 'bastion_update_answer_library',
+    description:
+      'Curate one approved answer (PATCH /answer-library/:id): reword it, change its yes/no, mark it checked after its control changed (stale false), or retire it (retired true; false brings it back). Needs bastion.answer_library.write (owners and admins).',
+    input: {
+      answer_id: z.string().uuid(),
+      answer_text: z.string().min(1).max(8000).optional(),
+      yes_no: z.boolean().nullable().optional(),
+      stale: z.literal(false).optional(),
+      retired: z.boolean().optional(),
+    },
+    returns: z.record(z.unknown()),
+    handler: async ({ answer_id, ...rest }) => {
+      const parsed = bastionAnswerLibraryUpdateSchema.safeParse(strip(rest));
+      if (!parsed.success) return err('changing the answer', { code: 'VALIDATION_ERROR', message: parsed.error.errors[0]?.message });
+      const r = await client.updateAnswerLibrary(answer_id, parsed.data);
+      return r.ok ? ok(r.data) : err('changing the answer', r.data);
     },
   });
 }

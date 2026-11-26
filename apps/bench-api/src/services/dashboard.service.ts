@@ -14,14 +14,19 @@ export function setDashboardCacheService(svc: CacheService): void {
   cacheService = svc;
 }
 
-async function invalidateWidgetsForDashboard(dashboardId: string): Promise<void> {
+/**
+ * Drop every cached widget result on a dashboard. `orgId` is required because
+ * widget cache keys are org-namespaced (#246); both callers resolve the
+ * dashboard org-scoped first, so its widgets are in that org.
+ */
+async function invalidateWidgetsForDashboard(dashboardId: string, orgId: string): Promise<void> {
   if (!cacheService) return;
   const widgets = await db
     .select({ id: benchWidgets.id })
     .from(benchWidgets)
     .where(eq(benchWidgets.dashboard_id, dashboardId));
   for (const w of widgets) {
-    await cacheService.invalidate(w.id);
+    await cacheService.invalidate(w.id, orgId);
   }
 }
 
@@ -226,7 +231,7 @@ export async function updateDashboard(
   if (!updated) throw notFound('Dashboard not found');
 
   // Invalidate cached query results for all widgets on this dashboard
-  await invalidateWidgetsForDashboard(id);
+  await invalidateWidgetsForDashboard(id, orgId);
 
   return getDashboard(id, orgId);
 }
@@ -250,7 +255,7 @@ export async function deleteDashboard(id: string, orgId: string, userId?: string
   }
 
   // Invalidate cached query results before deletion removes widget rows
-  await invalidateWidgetsForDashboard(id);
+  await invalidateWidgetsForDashboard(id, orgId);
   const [deleted] = await db
     .delete(benchDashboards)
     .where(and(eq(benchDashboards.id, id), eq(benchDashboards.organization_id, orgId)))

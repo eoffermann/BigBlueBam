@@ -13,6 +13,7 @@ import {
   bastionQuestionnaireUpdateSchema,
 } from '@bigbluebam/shared';
 import { rejectWhenImpersonating, requireAuth, requireSession } from '../plugins/auth.js';
+import { askerUserIdOf } from '../lib/asker.js';
 import { downloadHeaders } from '../lib/download.js';
 import { handled, idParam, notFound, validationError, viewerOf } from '../lib/http.js';
 import { autofillDeps, questionnaireDeps } from '../services/questionnaire-runtime.js';
@@ -26,9 +27,14 @@ import * as questionnaires from '../services/questionnaires.service.js';
 export default async function questionnaireRoutes(fastify: FastifyInstance) {
   const can = (p: string) => fastify.requireCan(p);
   const deps = () => questionnaireDeps(fastify.log, fastify.redis);
+  // asker_user_id (#217) is read by requireAskerCan and askerOf, never by the strict query schemas.
   const query = (request: { query: unknown }) => {
     const raw = (request.query ?? {}) as Record<string, string | undefined>;
-    return Object.fromEntries(Object.entries(raw).filter(([, v]) => v !== undefined && v !== ''));
+    return Object.fromEntries(Object.entries(raw).filter(([k, v]) => k !== 'asker_user_id' && v !== undefined && v !== ''));
+  };
+  const askerOf = (request: { query: unknown }) => {
+    const a = askerUserIdOf(request.query);
+    return a === 'invalid' ? null : a;
   };
 
   // Row 72.
@@ -49,12 +55,16 @@ export default async function questionnaireRoutes(fastify: FastifyInstance) {
     });
   });
 
-  // Row 74.
-  fastify.get('/questionnaires/:id', { preHandler: [requireAuth, can('bastion.questionnaire.read')] }, async (request, reply) => {
-    const id = idParam(request);
-    if (!id) return notFound(request, reply);
-    return handled(request, reply, () => questionnaires.getQuestionnaire(deps(), viewerOf(request), id));
-  });
+  // Row 74. Question text is customer data: with asker_user_id the asker must hold questionnaire.read too.
+  fastify.get(
+    '/questionnaires/:id',
+    { preHandler: [requireAuth, can('bastion.questionnaire.read'), fastify.requireAskerCan('bastion.questionnaire.read')] },
+    async (request, reply) => {
+      const id = idParam(request);
+      if (!id) return notFound(request, reply);
+      return handled(request, reply, () => questionnaires.getQuestionnaire(deps(), viewerOf(request), id));
+    },
+  );
 
   // Row 75.
   fastify.patch('/questionnaires/:id', { preHandler: [requireAuth, can('bastion.questionnaire.write')] }, async (request, reply) => {
@@ -78,14 +88,18 @@ export default async function questionnaireRoutes(fastify: FastifyInstance) {
     });
   });
 
-  // Row 77.
-  fastify.get('/questionnaires/:id/items', { preHandler: [requireAuth, can('bastion.questionnaire.read')] }, async (request, reply) => {
-    const id = idParam(request);
-    if (!id) return notFound(request, reply);
-    const parsed = bastionQuestionnaireItemListQuerySchema.safeParse(query(request));
-    if (!parsed.success) return validationError(request, reply, parsed.error);
-    return handled(request, reply, () => questionnaires.listItems(deps(), viewerOf(request), id, parsed.data));
-  });
+  // Row 77. Citations pass can_access for the reader, and for the asker too when one is named (#217).
+  fastify.get(
+    '/questionnaires/:id/items',
+    { preHandler: [requireAuth, can('bastion.questionnaire.read'), fastify.requireAskerCan('bastion.questionnaire.read')] },
+    async (request, reply) => {
+      const id = idParam(request);
+      if (!id) return notFound(request, reply);
+      const parsed = bastionQuestionnaireItemListQuerySchema.safeParse(query(request));
+      if (!parsed.success) return validationError(request, reply, parsed.error);
+      return handled(request, reply, () => questionnaires.listItems(deps(), viewerOf(request), id, parsed.data, askerOf(request)));
+    },
+  );
 
   // Row 78.
   fastify.patch('/questionnaire-items/:id', { preHandler: [requireAuth, can('bastion.questionnaire.write')] }, async (request, reply) => {
@@ -130,11 +144,15 @@ export default async function questionnaireRoutes(fastify: FastifyInstance) {
   });
 
   // Row 82.
-  fastify.get('/answer-library', { preHandler: [requireAuth, can('bastion.answer_library.read')] }, async (request, reply) => {
-    const parsed = bastionAnswerLibraryQuerySchema.safeParse(query(request));
-    if (!parsed.success) return validationError(request, reply, parsed.error);
-    return handled(request, reply, () => questionnaires.listAnswerLibrary(deps(), viewerOf(request), parsed.data));
-  });
+  fastify.get(
+    '/answer-library',
+    { preHandler: [requireAuth, can('bastion.answer_library.read'), fastify.requireAskerCan('bastion.answer_library.read')] },
+    async (request, reply) => {
+      const parsed = bastionAnswerLibraryQuerySchema.safeParse(query(request));
+      if (!parsed.success) return validationError(request, reply, parsed.error);
+      return handled(request, reply, () => questionnaires.listAnswerLibrary(deps(), viewerOf(request), parsed.data, askerOf(request)));
+    },
+  );
 
   // Row 83.
   fastify.patch('/answer-library/:id', { preHandler: [requireAuth, can('bastion.answer_library.write')] }, async (request, reply) => {

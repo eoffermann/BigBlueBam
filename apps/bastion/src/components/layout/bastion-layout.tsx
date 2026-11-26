@@ -10,7 +10,7 @@ import { BastionSidebar } from '@/components/layout/bastion-sidebar';
 import { useAuthStore } from '@/stores/auth.store';
 
 // Grows one variant per page as later milestones land (spec 6.1).
-export type ActiveRoute = { page: 'home' | 'setup' | 'controls' | 'coverage' | 'evidence' | 'gaps' | 'review' | 'policies' | 'attest' };
+export type ActiveRoute = { page: 'home' | 'setup' | 'controls' | 'coverage' | 'evidence' | 'gaps' | 'review' | 'policies' | 'attest' | 'questionnaires' };
 
 interface BastionLayoutProps {
   children: ReactNode;
@@ -40,6 +40,8 @@ function breadcrumbsFor(route: ActiveRoute): Crumb[] {
       return [{ label: 'Readiness', href: '/' }, { label: 'Policies' }];
     case 'attest':
       return [{ label: 'Readiness', href: '/' }, { label: 'Policies to read' }];
+    case 'questionnaires':
+      return [{ label: 'Readiness', href: '/' }, { label: 'Questionnaires' }];
     default:
       return [{ label: 'Bastion' }];
   }

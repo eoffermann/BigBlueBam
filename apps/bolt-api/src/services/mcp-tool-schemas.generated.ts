@@ -7248,7 +7248,7 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
   },
   {
     "mcp_tool": "beacon_upsert_by_slug",
-    "description": "Idempotent create-or-update of a Beacon entry by slug. Natural key is the globally-unique slug. On update, bumps version and writes a beacon_versions snapshot. Returns { data, created, idempotency_key } — `created` is true on insert, false on update.",
+    "description": "Idempotent create-or-update of a Beacon entry by slug. Natural key is the slug within your organization (another org may use the same slug; its entry is never touched). On update, bumps version and writes a beacon_versions snapshot. Returns { data, created, idempotency_key } — `created` is true on insert, false on update.",
     "source": "beacon",
     "parameters": [
       {

@@ -33,6 +33,11 @@
  *     organization), linked as a policy for the seven castaways, and read and acknowledged by five
  *     of them (each in their own session: acknowledging is a vouching act); Gilligan and Ginger
  *     have not, so the Policies page reads "5 of 7 have read the current version".
+ * M8 rows (spec 10.2):
+ *   - Howell Industries' vendor security review (an xlsx in Bin, 24 questions) added as a
+ *     questionnaire with the guessed columns and autofilled; the laptop-encryption row is "Needs an
+ *     expert" ("We cannot currently prove this") and the Radio Relay row is "Check this" naming the
+ *     accepted exception. Nothing is approved: approving is a person's act (story 7).
  * Uploading and accepting are vouching acts too, so the Professor, Mary Ann and Skipper each sign
  * in for theirs.
  *
@@ -155,10 +160,26 @@ async function adoptAndCompile(templateKey) {
   return fw.id;
 }
 
+/**
+ * One way to find a GILLIGAN Bam project by name. Bam's `GET /projects` lists only the projects
+ * the caller is a member of, and an org owner is not a member of the projects other castaways
+ * created (the Professor's "Fix the Radio", Mary Ann's "Island Infrastructure"), so the list
+ * cannot answer "does this project exist". The org-scoped table can; the project routes Skipper
+ * then calls admit him as org owner.
+ */
+async function bamProjectByName(name) {
+  return (
+    await withDb(
+      (sql) => sql`SELECT p.id, p.name FROM projects p JOIN organizations o ON o.id = p.org_id
+                   WHERE o.slug = ${EXP.org.slug} AND p.name = ${name} AND p.is_archived = false
+                   ORDER BY p.created_at LIMIT 1`,
+    )
+  )[0] ?? null;
+}
+
 async function ensureComplianceProject() {
   log('Compliance project...');
-  const list = must(await bam('GET', '/projects'), 'GET /projects').data ?? [];
-  let project = list.find((p) => p.name === EXP.complianceProject.name);
+  let project = await bamProjectByName(EXP.complianceProject.name);
   if (!project) {
     project = must(
       await bam('POST', '/projects', {
@@ -578,9 +599,8 @@ async function seedRadioRelayKey() {
 async function seedGithubHistory() {
   const g = EXP.m6.codeReview;
   log('GitHub: Rescue Radio Firmware and Coral Reef Booking connected; PR #42 merged without review...');
-  const projects = must(await bam('GET', '/projects'), 'GET /projects').data ?? [];
   for (const i of g.integrations) {
-    const p = projects.find((x) => x.name === i.project);
+    const p = await bamProjectByName(i.project);
     if (!p) throw new Error(`project "${i.project}" is missing; run the Bam seed first`);
     const cur = await bam('GET', `/projects/${p.id}/github-integration`);
     if (cur.ok && cur.json?.data?.repo_name === i.repo) continue;
@@ -752,7 +772,14 @@ The Skipper reviews this policy every year, or sooner after anything goes wrong.
 /** The policy article in Gilligan's Beacon: created once (an upsert would add a version each run). */
 async function ensurePolicyArticle() {
   const m = EXP.m7.policy;
-  const existing = (await withDb((sql) => sql`SELECT id, status::text AS status, visibility::text AS visibility FROM beacon_entries WHERE slug = ${m.slug}`))[0];
+  // Org-scoped: a slug is a per-org key, never a global one.
+  const existing = (
+    await withDb(
+      (sql) => sql`SELECT e.id, e.status::text AS status, e.visibility::text AS visibility
+                   FROM beacon_entries e JOIN organizations o ON o.id = e.organization_id
+                   WHERE o.slug = ${EXP.org.slug} AND e.slug = ${m.slug}`,
+    )
+  )[0];
   if (existing) {
     log(`  "${m.title}" already in Beacon (${existing.status}, shared with ${existing.visibility})`);
     return existing.id;
@@ -822,8 +849,205 @@ async function verifyM7() {
   if (problems.length) throw new Error(`seeded M7 rows do not match BASTION_SEED_EXPECTATIONS: ${problems.join('; ')}`);
 }
 
+// ── M8: Howell Industries' vendor security review, autofilled ────────────────────────────
+
+/** CRC-32 (IEEE) for the zip writer below. */
+function crc32(buf) {
+  let c = ~0;
+  for (let i = 0; i < buf.length; i++) {
+    c ^= buf[i];
+    for (let k = 0; k < 8; k++) c = c & 1 ? (c >>> 1) ^ 0xedb88320 : c >>> 1;
+  }
+  return ~c >>> 0;
+}
+
+/** A stored (uncompressed) zip: enough for an xlsx, with no dependency inside the api container. */
+function storedZip(files) {
+  const locals = [];
+  const centrals = [];
+  let offset = 0;
+  for (const [name, text] of Object.entries(files)) {
+    const nameBuf = Buffer.from(name, 'utf8');
+    const data = Buffer.from(text, 'utf8');
+    const crc = crc32(data);
+    const local = Buffer.alloc(30);
+    local.writeUInt32LE(0x04034b50, 0);
+    local.writeUInt16LE(20, 4);
+    local.writeUInt16LE(0x0800, 6);
+    local.writeUInt32LE(crc, 14);
+    local.writeUInt32LE(data.length, 18);
+    local.writeUInt32LE(data.length, 22);
+    local.writeUInt16LE(nameBuf.length, 26);
+    const central = Buffer.alloc(46);
+    central.writeUInt32LE(0x02014b50, 0);
+    central.writeUInt16LE(20, 4);
+    central.writeUInt16LE(20, 6);
+    central.writeUInt16LE(0x0800, 8);
+    central.writeUInt32LE(crc, 16);
+    central.writeUInt32LE(data.length, 20);
+    central.writeUInt32LE(data.length, 24);
+    central.writeUInt16LE(nameBuf.length, 28);
+    central.writeUInt32LE(offset, 42);
+    locals.push(local, nameBuf, data);
+    centrals.push(central, nameBuf);
+    offset += 30 + nameBuf.length + data.length;
+  }
+  const centralBuf = Buffer.concat(centrals);
+  const end = Buffer.alloc(22);
+  end.writeUInt32LE(0x06054b50, 0);
+  end.writeUInt16LE(Object.keys(files).length, 8);
+  end.writeUInt16LE(Object.keys(files).length, 10);
+  end.writeUInt32LE(centralBuf.length, 12);
+  end.writeUInt32LE(offset, 16);
+  return Buffer.concat([...locals, centralBuf, end]);
+}
+
+const xmlEscape = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+/** A one-sheet xlsx of inline strings (what a customer's spreadsheet app saves, minus styling). */
+function xlsxOf(sheetName, rows) {
+  const col = (i) => String.fromCharCode(65 + i);
+  const sheet =
+    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>' +
+    rows
+      .map((r, ri) => `<row r="${ri + 1}">${r.map((v, ci) => (v ? `<c r="${col(ci)}${ri + 1}" t="inlineStr"><is><t>${xmlEscape(v)}</t></is></c>` : '')).join('')}</row>`)
+      .join('') +
+    '</sheetData></worksheet>';
+  return storedZip({
+    '[Content_Types].xml':
+      '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/></Types>',
+    '_rels/.rels':
+      '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>',
+    'xl/workbook.xml': `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="${xmlEscape(sheetName)}" sheetId="1" r:id="rId1"/></sheets></workbook>`,
+    'xl/_rels/workbook.xml.rels':
+      '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/></Relationships>',
+    'xl/worksheets/sheet1.xml': sheet,
+  });
+}
+
+/** The 24 questions Howell Industries asks (two of them are story 7's rows, from the expectations). */
+function howellQuestions(m) {
+  return [
+    ['Access', 'Do you require two-step sign-in for every staff account?'],
+    ['Access', 'Is access removed promptly when someone leaves the company?'],
+    ['Access', 'Are administrator accounts limited to the people who need them?'],
+    ['Access', m.radioRelay.question],
+    ['Access', 'Are unused API keys removed?'],
+    ['Devices', m.encryption.question],
+    ['Devices', 'Do company laptops lock automatically when left unattended?'],
+    ['Devices', 'Are lost or stolen devices reported and handled?'],
+    ['Change management', 'Is every code change reviewed by a second person before it is merged?'],
+    ['Change management', 'Can every production change be traced to a ticket?'],
+    ['Change management', 'Do you scan your code dependencies for known vulnerabilities?'],
+    ['Operations', 'Do you back up customer data and test that backups can be restored?'],
+    ['Operations', 'Are security events logged and kept for review?'],
+    ['Operations', 'Do you monitor your public applications for outages and errors?'],
+    ['People', 'Do new staff pass a background check before they start?'],
+    ['People', 'Do all staff read and acknowledge your information security policy every year?'],
+    ['People', 'Do staff receive security awareness training?'],
+    ['Vendors', 'Do you review the security of critical vendors before you sign with them?'],
+    ['Vendors', 'Do you keep a list of the vendors that hold customer data?'],
+    ['Data', 'Is customer data encrypted in transit?'],
+    ['Data', 'Do you have a written incident response plan?'],
+    ['Data', 'Do you notify customers of a security incident that affects their data?'],
+    ['Data', 'Do you hold a current SOC 2 Type II report?'],
+    ['Data', 'Do you carry cyber insurance?'],
+  ];
+}
+
+async function uploadBytesToBin(role, name, bytes, contentType) {
+  const auth = { Authorization: `Bearer ${KEYS[role]}` };
+  const cr = await fetch(`${BIN}/assets`, {
+    method: 'POST',
+    headers: { ...auth, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name, content_type: contentType, visibility: 'organization', tags: ['compliance', 'questionnaire'] }),
+  });
+  const cd = await cr.json().catch(() => ({}));
+  if (!cr.ok) throw new Error(`Bin POST /assets -> ${cr.status} ${JSON.stringify(cd).slice(0, 200)}`);
+  const fd = new FormData();
+  fd.append('file', new Blob([bytes], { type: contentType }), name);
+  const ur = await fetch(`${BIN}/assets/${cd.data.id}/upload`, { method: 'POST', headers: auth, body: fd });
+  const ud = await ur.json().catch(() => ({}));
+  if (!ur.ok) throw new Error(`Bin upload -> ${ur.status} ${JSON.stringify(ud).slice(0, 200)}`);
+  await withDb((sql) => sql`UPDATE bin_assets SET scan_status = 'clean' WHERE id = ${cd.data.id}`);
+  return cd.data.id;
+}
+
+/**
+ * Drive the autofill engine directly when no worker picks the questionnaire up within 20 s (as the
+ * M5 seed drives the evaluation). Each AI answer takes a few seconds; progress is logged.
+ */
+async function driveAutofill(orgId, qid, total) {
+  const secret = process.env.INTERNAL_SERVICE_SECRET;
+  const started = Date.now();
+  for (;;) {
+    const q = must(await bastion('GET', `/questionnaires/${qid}`), 'GET questionnaire').data;
+    if (q.status !== 'answering') return q;
+    if (Date.now() - started > 20 * 60_000) throw new Error('drafting the Howell questionnaire took more than 20 minutes');
+    if (secret && Date.now() - started > 20_000 && !q.drafting_now) {
+      await fetch(`${BASTION_INTERNAL}/engines/questionnaire-autofill`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Internal-Secret': secret },
+        body: JSON.stringify({ organization_id: orgId, questionnaire_id: qid, claimant: 'seed:bastion' }),
+      }).catch(() => undefined);
+    }
+    log(`  drafting: ${q.rows_done}/${total} (high ${q.high_count}, medium ${q.medium_count}, low ${q.low_count}); each answer takes a few seconds...`);
+    await new Promise((r) => setTimeout(r, 10_000));
+  }
+}
+
+/** Howell's xlsx goes into Bin, becomes a questionnaire with the guessed columns, and is autofilled. */
+async function seedQuestionnaire(orgId) {
+  const m = EXP.m8.questionnaire;
+  log('M8: Howell Industries Vendor Security Review...');
+  const listed = await bastion('GET', '/questionnaires');
+  if (listed.status === 404) {
+    log('  WARNING: this bastion-api predates M8 (no /questionnaires); rebuild bastion-api to seed the questionnaire rows');
+    return null;
+  }
+  let q = must(listed, 'GET /questionnaires').data.find((x) => x.title === m.title);
+  if (!q) {
+    const rows = [['Howell Industries: vendor security review'], [], ['Section', 'Question', 'Yes/No', 'Comments'], ...howellQuestions(m).map(([s, text]) => [s, text, '', ''])];
+    const assetId = await uploadBytesToBin('skipper', m.fileName, xlsxOf(m.sheet, rows), 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    q = must(await bastion('POST', '/questionnaires', { title: m.title, requester_label: m.requester, source: { kind: 'bin_asset', bin_asset_id: assetId } }), 'add the questionnaire').data;
+    log(`  added from Bin with ${q.row_count} questions (columns guessed)`);
+  }
+  if (q.status === 'mapping') {
+    must(await bastion('POST', `/questionnaires/${q.id}/autofill`, { redraft: false }), 'start drafting');
+    q = await driveAutofill(orgId, q.id, m.rows);
+  } else if (q.status === 'answering') {
+    q = await driveAutofill(orgId, q.id, m.rows);
+  }
+  log(`  drafted: high ${q.high_count}, medium ${q.medium_count}, low ${q.low_count}`);
+  return q;
+}
+
+async function verifyM8(q) {
+  if (!q) return;
+  const m = EXP.m8.questionnaire;
+  const items = must(await bastion('GET', `/questionnaires/${q.id}/items`), 'GET items');
+  const find = (text) => items.data.find((i) => i.question_text === text);
+  const problems = [];
+  if (q.row_count !== m.rows) problems.push(`${q.row_count} questions, expected ${m.rows}`);
+  const enc = find(m.encryption.question);
+  if (!enc) problems.push('the laptop-encryption question is missing');
+  else {
+    if (enc.confidence_band !== m.encryption.band) problems.push(`the laptop-encryption row is ${enc.confidence_band}, expected ${m.encryption.band}`);
+    if (!String(enc.draft_answer ?? '').startsWith(m.encryption.answerStartsWith)) problems.push(`the laptop-encryption row reads "${enc.draft_answer}"`);
+  }
+  const rr = find(m.radioRelay.question);
+  if (!rr) problems.push('the Radio Relay question is missing');
+  else {
+    if (rr.confidence_band !== m.radioRelay.band) problems.push(`the Radio Relay row is ${rr.confidence_band}, expected ${m.radioRelay.band} (${JSON.stringify(rr.band_reasons)})`);
+    if (!String(rr.draft_answer ?? '').includes(m.radioRelay.mentions)) problems.push(`the Radio Relay row does not name the exception: "${rr.draft_answer}"`);
+  }
+  if (items.approval.can_approve) problems.push('Approve is available before the "Needs an expert" rows are reviewed');
+  log(`M8: ${q.title}: ${items.approval.blocked_because.join('; ')}`);
+  if (problems.length) throw new Error(`seeded M8 rows do not match BASTION_SEED_EXPECTATIONS: ${problems.join('; ')}`);
+}
+
 async function main() {
-  log('Bastion seed (M3, M5, M6 and M7) starting...');
+  log('Bastion seed (M3, M5, M6, M7 and M8) starting...');
   await login();
   const ids = {};
   ids.soc2 = await adoptAndCompile('soc2');
@@ -860,6 +1084,8 @@ async function main() {
   // M7: the security policy, read and acknowledged by five castaways (each with their own session).
   await seedPolicy();
   await verifyM7();
+  // M8: Howell's questionnaire, autofilled from what Bastion can prove (an AI answer per question).
+  await verifyM8(await seedQuestionnaire(orgId));
   log('Bastion seed done');
 }
 

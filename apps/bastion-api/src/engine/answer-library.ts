@@ -12,10 +12,12 @@ export function libraryStaleReason(from: string, to: string): string {
 
 export async function markAnswersStaleForControl(tx: Tx, orgId: string, controlId: string, from: string, to: string): Promise<number> {
   if (from === to) return 0;
+  // Bound as text and cast (the M2 hazard): a bare `${string}::jsonb` makes postgres.js send a
+  // JSON-encoded string scalar, and the containment test then matches nothing.
   const cited = JSON.stringify([{ entity_type: 'bastion.control', entity_id: controlId }]);
   const r = await tx`
     UPDATE bastion_answer_library SET stale = true, stale_reason = ${libraryStaleReason(from, to)}
-     WHERE organization_id = ${orgId} AND retired_at IS NULL AND NOT stale AND cited_refs @> ${cited}::jsonb
+     WHERE organization_id = ${orgId} AND retired_at IS NULL AND NOT stale AND cited_refs @> ${cited}::text::jsonb
     RETURNING id`;
   return r.length;
 }
