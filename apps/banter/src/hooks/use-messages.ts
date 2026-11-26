@@ -79,7 +79,8 @@ export function useMessages(channelId: string) {
  */
 export interface NewMessageAttachment {
   key: string;
-  url: string;
+  /** Always null since issue #142; the server builds the authorized URL. */
+  url: string | null;
   filename: string;
   content_type: string;
   size_bytes: number;

@@ -45,9 +45,14 @@ describe('classifyFilesKey', () => {
   it('avatars are public, legacy capability prefixes are private', () => {
     expect(classifyFilesKey('avatars/u-1.png')).toBe('public');
     expect(classifyFilesKey('uploads/abc-file.pdf')).toBe('private');
-    expect(classifyFilesKey('banter/uploads/abc-x.png')).toBe('private');
     expect(classifyFilesKey('helpdesk/abc-x.png')).toBe('private');
-    expect(classifyFilesKey('bill/receipts/abc.pdf')).toBe('private');
+  });
+
+  it('prefixes moved to their app routes are no longer served (issues #142, #145)', () => {
+    // Banter attachments: banter-api GET /v1/channels/:id/attachments/:attId.
+    expect(classifyFilesKey('banter/uploads/abc-x.png')).toBeNull();
+    // Expense receipts: bill-api GET /v1/expenses/:id/receipt.
+    expect(classifyFilesKey('bill/receipts/abc.pdf')).toBeNull();
   });
 
   it('org-prefixed, unknown and traversal keys are refused', () => {
@@ -100,9 +105,19 @@ describe('GET /files/*', () => {
 
   it('serves a legacy attachment key without public caching', async () => {
     const app = await build();
-    const res = await app.inject({ method: 'GET', url: '/files/banter/uploads/abc-x.png' });
+    const res = await app.inject({ method: 'GET', url: '/files/uploads/abc-x.png' });
     expect(res.statusCode).toBe(200);
     expect(res.headers['cache-control']).toBe('private, no-store');
+    await app.close();
+  });
+
+  it('404s a Banter attachment or expense receipt key without reading storage (#142)', async () => {
+    const app = await build();
+    for (const key of ['banter/uploads/abc-x.png', 'bill/receipts/abc.pdf']) {
+      const res = await app.inject({ method: 'GET', url: `/files/${key}` });
+      expect(res.statusCode).toBe(404);
+    }
+    expect(getFileStream).not.toHaveBeenCalled();
     await app.close();
   });
 });

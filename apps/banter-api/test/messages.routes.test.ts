@@ -215,4 +215,23 @@ describe('malformed :id is rejected with 400 (not a 500 from Postgres 22P02)', (
     expect(mockDb.select).not.toHaveBeenCalled();
     await app.close();
   });
+
+  it('POST refuses an attachment key Banter did not write (issue #142)', async () => {
+    // This harness has no error handler, so the schema's ZodError surfaces as a
+    // 500 here (the server's handler maps it to 400 VALIDATION_ERROR); what
+    // matters is that the key refinement rejects it before any insert.
+    const app = await buildApp();
+    for (const key of [`${ORG}/bin/assets/secret.pdf`, 'uploads/abc-x.png', 'banter/uploads/../../avatars/x']) {
+      const res = await app.inject({
+        method: 'POST',
+        url: `/v1/channels/${CH}/messages`,
+        headers: auth,
+        payload: { content: 'see file', attachments: [{ key, filename: 'x', content_type: 'image/png', size_bytes: 1 }] },
+      });
+      expect(res.statusCode).toBeGreaterThanOrEqual(400);
+      expect(res.body).toContain('attachment key must come from POST /v1/files/upload');
+    }
+    expect(mockDb.insert).not.toHaveBeenCalled();
+    await app.close();
+  });
 });

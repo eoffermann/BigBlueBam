@@ -31,23 +31,26 @@ const BLOCKED_MIME_TYPES = ['image/svg+xml'];
  * - FILES_PUBLIC_PREFIXES: the prefix this route exists for. Avatars are shown to
  *   other users and are safe to cache publicly.
  * - FILES_LEGACY_PRIVATE_PREFIXES: keys that existing features still hand out as
- *   `/files/<key>` URLs today. Every one ends in a random UUID (or a record UUID) chosen
- *   at write time, so the URL works as a capability; they are served with
- *   `Cache-Control: private, no-store` and must move to their app's own authorized
- *   download route (tracked as follow-up work, see the #123 commit):
- *     uploads/          apps/api POST /upload (Bam attachments, Bureau floor underlays)
- *     banter/uploads/   banter-api POST /v1/files/upload (message attachments)
- *     helpdesk/         helpdesk-api uploads (ticket attachments)
- *     bill/receipts/    bill-api expense receipts
+ *   `/files/<key>` URLs today. Every one ends in a random UUID chosen at write time, so
+ *   the URL works as a capability (no revocation, no tenant check); they are served with
+ *   `Cache-Control: private, no-store`. Issue #142 tracks moving each to its app's own
+ *   authorized download route:
+ *     bill/receipts/    REMOVED (#145): bill-api GET /v1/expenses/:id/receipt.
+ *     banter/uploads/   REMOVED (#142): banter-api GET /v1/channels/:id/attachments/:attId,
+ *                       authorized by channel membership.
+ *     uploads/          STILL HERE. apps/api POST /upload; the `/files/uploads/...` URL is
+ *                       embedded in persisted content (task descriptions, comments and
+ *                       subtask bodies as rich-text images, task attachment rows, Bureau
+ *                       floor underlay settings, image-upload fields), so moving it needs
+ *                       an attachment-ownership record per upload plus a content rewrite.
+ *     helpdesk/         STILL HERE. helpdesk-api POST /upload; the URL is embedded in ticket
+ *                       descriptions and message bodies written before a ticket id exists,
+ *                       and is read by both helpdesk portal customers and Bam agents, so
+ *                       it needs an ownership record and dual-auth route in helpdesk-api.
  * Do not add a prefix here for new work; serve new objects from the owning app.
  */
 export const FILES_PUBLIC_PREFIXES = ['avatars/'] as const;
-export const FILES_LEGACY_PRIVATE_PREFIXES = [
-  'uploads/',
-  'banter/uploads/',
-  'helpdesk/',
-  'bill/receipts/',
-] as const;
+export const FILES_LEGACY_PRIVATE_PREFIXES = ['uploads/', 'helpdesk/'] as const;
 
 /** Returns how a /files/ key may be served, or null when it must 404. */
 export function classifyFilesKey(key: string): 'public' | 'private' | null {

@@ -1,9 +1,9 @@
 {
   "counts": {
-    "total": 1489,
+    "total": 1490,
     "mcp_tools_scanned": 885,
-    "rest_routes_scanned": 888,
-    "read_permissions": 577,
+    "rest_routes_scanned": 889,
+    "read_permissions": 578,
     "destructive_permissions": 144
   },
   "permissions": [
@@ -6395,6 +6395,23 @@
           "source": "rest",
           "ref": "GET /v1/channels/:id/agent-subscriptions",
           "file": "agent-subscriptions.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "banter.channel_attachment.get",
+      "app": "banter",
+      "resource": "channel_attachment",
+      "verb": "get",
+      "is_destructive": false,
+      "is_read": true,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "GET /v1/channels/:id/attachments/:attachmentId",
+          "file": "file.routes.ts"
         }
       ]
     },

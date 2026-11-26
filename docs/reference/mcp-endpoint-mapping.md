@@ -41,7 +41,7 @@ A tool/command "corresponds" to the endpoint(s) its handler calls. Sections are 
 |---|--:|--:|--:|--:|
 | Bam — Work management | 93 | 86 | 7 | 2 |
 | Bam — Org, auth, admin & integrations | 156 | 37 | 119 | 0 |
-| Banter | 113 | 75 | 38 | 0 |
+| Banter | 114 | 75 | 39 | 0 |
 | Beacon | 40 | 38 | 2 | 0 |
 | Brief | 54 | 48 | 6 | 0 |
 | Bond | 72 | 70 | 2 | 0 |
@@ -65,7 +65,7 @@ A tool/command "corresponds" to the endpoint(s) its handler calls. Sections are 
 | Burn | 48 | 19 | 29 | 0 |
 | Bursar | 79 | 22 | 57 | 0 |
 | Cross-app platform | 43 | 32 | 11 | 6 |
-| **Total** | **1263** | **874** | **389** | **17** |
+| **Total** | **1264** | **874** | **390** | **17** |
 
 _Counts are summed from the per-section tables (each row's REST endpoint counted once even when several MCP tools share it). After the `feat/mcp-endpoint-parity` build the "with an MCP tool" total roughly doubled (≈334 → ≈690). Of the ~247 endpoints still tool-less, the large majority are now annotated `— _(skip: …)_` with a reason — auth/OAuth/session, public-inbound (forms/booking/portal/tracking), multipart/binary upload, binary export (PDF/SVG/CSV/.ics), raw credential/API-key admin, SuperUser/permission/account admin (Bam org/admin held to a deliberately conservative scope this pass), Yjs/scene/WebSocket realtime sync, internal/service-to-service routes, and slug/name resolvers done internally — plus the deferred Helpdesk `X-Agent-Key` agent routes. Some endpoints are shared by multiple MCP tools and many are internal / webhook / public-inbound (not user-facing), so treat the totals as close approximations of the surface size, not an exact public-API inventory. The remaining intentional gaps cluster in **Bam org/admin** (SuperUser & permissions admin, integrations, credentials — UI/CLI-only) and a few per-app binary/upload/realtime tails._
 
@@ -291,7 +291,7 @@ Notes:
 | `GET /tasks/:id/attachments` | — _(skip: covered by cross-app `attachment_list`)_ | List a task's attachments | `apps/frontend/src/components/tasks/task-detail-drawer.tsx` |
 | `DELETE /attachments/:id` | — _(skip: binary/attachment lifecycle)_ | Delete an attachment | `apps/frontend/src/components/tasks/task-detail-drawer.tsx` |
 | `POST /upload` | — _(skip: multipart binary upload)_ | Multipart upload to MinIO | `apps/frontend/src/components/common/image-upload.tsx` |
-| `GET /files/*` | — _(skip: binary download proxy)_ | Proxy file download from MinIO. Allowlisted prefixes only (#123): `avatars/` (public cache) plus legacy capability prefixes `uploads/`, `banter/uploads/`, `helpdesk/`, `bill/receipts/` (`Cache-Control: private, no-store`); any other key, including org-prefixed objects, returns 404 | `apps/frontend/src/components/common/image-upload.tsx` |
+| `GET /files/*` | — _(skip: binary download proxy)_ | Proxy file download from MinIO. Allowlisted prefixes only (#123): `avatars/` (public cache) plus legacy capability prefixes `uploads/` and `helpdesk/` (`Cache-Control: private, no-store`; still to move to owning-app routes, #142); `banter/uploads/` and `bill/receipts/` moved to their apps' authorized routes (#142, #145); any other key, including org-prefixed objects, returns 404 | `apps/frontend/src/components/common/image-upload.tsx` |
 | `GET /version` | — _(skip: build/version probe, not agent surface)_ | Public version info | `apps/frontend/src/hooks/use-version.ts` |
 | `POST /version/check` | — _(skip: SuperUser break-glass)_ | Force version check (SuperUser) | — |
 
@@ -809,7 +809,8 @@ All write endpoints return HTTP 410 Gone (calling moved to the Bureau docked-box
 | `POST /v1/admin/settings/test-stt` | — _(skip: org/provider-credential admin — UI-only)_ | Test STT provider connectivity | `apps/banter/src/pages/admin-calling-settings.tsx` |
 | `POST /v1/admin/settings/test-tts` | — _(skip: org/provider-credential admin — UI-only)_ | Test TTS provider connectivity | `apps/banter/src/pages/admin-calling-settings.tsx` |
 | `POST /v1/admin/settings/push-voice-config` | — _(skip: org/provider-credential admin — UI-only)_ | Push voice config to voice agent | `apps/banter/src/pages/admin-calling-settings.tsx` |
-| `POST /v1/files/upload` | — _(skip: multipart binary upload)_ | Multipart upload to MinIO | `apps/banter/src/components/messages/message-compose.tsx` |
+| `POST /v1/files/upload` | — _(skip: multipart binary upload)_ | Multipart upload to MinIO; returns the `banter/uploads/...` key with `url: null` (#142: the file is served only once attached, by the route below) | `apps/banter/src/components/messages/message-compose.tsx` |
+| `GET /v1/channels/:id/attachments/:attachmentId` | — _(skip: multipart/binary download)_ | Download a message attachment (#142); channel read rule (`requireChannelMember`), attachment must be on a live message in that channel, only Banter-written keys served; attachment `url` fields in message responses point here | `apps/banter/src/components/messages/message-item.tsx` |
 | `POST /v1/files/presigned-upload` | — _(skip: binary upload presign)_ | Generate a presigned PUT URL | `apps/banter/src/components/messages/message-compose.tsx` |
 
 

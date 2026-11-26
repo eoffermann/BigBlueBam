@@ -42,6 +42,7 @@ import {
 } from '../services/scheduled-post.service.js';
 // Banter Feed fan-in (docs/plans/banter-feed-design-document.md §10)
 import { enqueueFeedFanin } from '../services/feed-queue.js';
+import { BANTER_UPLOAD_PREFIX, attachmentDownloadUrl } from '../lib/attachment-download.js';
 import { RELATIONSHIP_FLAGS, type FeedDirectRecipient } from '@bigbluebam/shared';
 
 // Attachment descriptors handed back by POST /v1/files/upload. There is no
@@ -49,11 +50,24 @@ import { RELATIONSHIP_FLAGS, type FeedDirectRecipient } from '@bigbluebam/shared
 // its storage key + metadata. We turn each descriptor into a
 // banter_message_attachments row after the message insert.
 const messageAttachmentSchema = z.object({
-  key: z.string().min(1).max(1024),
+  // Issue #142: only keys our own upload routes write. Attachments are served by
+  // a channel-authorized route, so accepting any key would let a poster expose
+  // an arbitrary object (another app's or another org's) to their channel.
+  key: z
+    .string()
+    .min(1)
+    .max(1024)
+    .refine(
+      (k) =>
+        k.startsWith(BANTER_UPLOAD_PREFIX) &&
+        !k.split('/').some((seg) => seg === '..' || seg === '.' || seg === ''),
+      { message: `attachment key must come from POST /v1/files/upload (${BANTER_UPLOAD_PREFIX}...)` },
+    ),
   filename: z.string().min(1).max(255),
   content_type: z.string().min(1).max(100),
   size_bytes: z.number().int().nonnegative(),
-  url: z.string().max(2048).optional(),
+  // Ignored (the server builds the authorized URL); null since issue #142.
+  url: z.string().max(2048).nullable().optional(),
   thumbnail_key: z.string().max(1024).optional(),
 });
 
@@ -263,7 +277,7 @@ export default async function messageRoutes(fastify: FastifyInstance) {
             filename: a.filename,
             mime_type: a.content_type,
             size: a.size_bytes,
-            url: `/files/${a.storage_key}`,
+            url: attachmentDownloadUrl(id, a.id),
           });
           attachmentsByMessage.set(a.message_id, list);
         }
@@ -577,7 +591,7 @@ export default async function messageRoutes(fastify: FastifyInstance) {
           filename: a.filename,
           mime_type: a.content_type,
           size: a.size_bytes,
-          url: `/files/${a.storage_key}`,
+          url: attachmentDownloadUrl(id, a.id),
         }));
       }
 
@@ -1048,7 +1062,7 @@ export default async function messageRoutes(fastify: FastifyInstance) {
             filename: a.filename,
             mime_type: a.content_type,
             size: a.size_bytes,
-            url: `/files/${a.storage_key}`,
+            url: attachmentDownloadUrl(row.message.channel_id, a.id),
           })),
         },
       });

@@ -4,8 +4,13 @@ import multipart from '@fastify/multipart';
 import { randomUUID } from 'node:crypto';
 import * as Minio from 'minio';
 import { env } from '../env.js';
+import { and, eq } from 'drizzle-orm';
 import { requireAuth, requireScope } from '../plugins/auth.js';
+import { requireChannelMember } from '../middleware/channel-auth.js';
 import { getBanterSettingsCached } from '../services/settings-cache.js';
+import { db } from '../db/index.js';
+import { banterMessageAttachments, banterMessages } from '../db/schema/index.js';
+import { dispositionFor, isServableAttachmentKey } from '../lib/attachment-download.js';
 
 const DEFAULT_MAX_FILE_SIZE_MB = 25;
 // Absolute cap: the multipart plugin needs a static ceiling. Org-specific
@@ -125,17 +130,78 @@ export default async function fileRoutes(fastify: FastifyInstance) {
         'Content-Type': contentType,
       });
 
-      const url = `/files/${key}`;
-
+      // Issue #142: no /files/ URL any more. The object is only reachable after it
+      // is attached to a message, through the channel-authorized download route
+      // (each attachment in a message response carries that `url`).
       return reply.status(201).send({
         data: {
-          url,
+          url: null,
           key,
           filename: file.filename,
           content_type: contentType,
           size_bytes: buffer.length,
         },
       });
+    },
+  );
+
+  // GET /v1/channels/:id/attachments/:attachmentId — authorized attachment
+  // download (issue #142). requireChannelMember applies the message list's read
+  // rule (org match, archived hidden, public readable by the org, private only
+  // for members, 404 otherwise), so removing someone from a channel revokes
+  // their access to its files. The attachment must belong to a live message in
+  // THIS channel, and only keys Banter itself writes are served.
+  fastify.get(
+    '/v1/channels/:id/attachments/:attachmentId',
+    { preHandler: [requireAuth, requireChannelMember] },
+    async (request, reply) => {
+      const params = z
+        .object({ id: z.string().uuid(), attachmentId: z.string().uuid() })
+        .safeParse(request.params);
+      const notFound = () =>
+        reply.status(404).send({
+          error: { code: 'NOT_FOUND', message: 'Attachment not found', details: [], request_id: request.id },
+        });
+      if (!params.success) return notFound();
+
+      const [row] = await db
+        .select({
+          filename: banterMessageAttachments.filename,
+          content_type: banterMessageAttachments.content_type,
+          storage_key: banterMessageAttachments.storage_key,
+          is_stub: banterMessageAttachments.is_stub,
+        })
+        .from(banterMessageAttachments)
+        .innerJoin(banterMessages, eq(banterMessages.id, banterMessageAttachments.message_id))
+        .where(
+          and(
+            eq(banterMessageAttachments.id, params.data.attachmentId),
+            eq(banterMessages.channel_id, params.data.id),
+            eq(banterMessages.is_deleted, false),
+          ),
+        )
+        .limit(1);
+
+      const orgId = request.user?.org_id ?? '';
+      if (!row || row.is_stub || !isServableAttachmentKey(row.storage_key, orgId)) {
+        return notFound();
+      }
+
+      try {
+        const client = getMinioClient();
+        const stat = await client.statObject(env.S3_BUCKET, row.storage_key);
+        const stream = await client.getObject(env.S3_BUCKET, row.storage_key);
+        return reply
+          .header('Content-Type', row.content_type)
+          .header('Content-Length', stat.size)
+          .header('Content-Disposition', dispositionFor(row.content_type, row.filename))
+          .header('Cache-Control', 'private, no-store')
+          .header('X-Content-Type-Options', 'nosniff')
+          .header('Content-Security-Policy', 'sandbox')
+          .send(stream);
+      } catch {
+        return notFound();
+      }
     },
   );
 

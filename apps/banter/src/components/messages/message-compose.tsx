@@ -35,7 +35,8 @@ interface MessageComposeProps {
  */
 interface UploadedAttachment {
   key: string;
-  url: string;
+  /** Always null since issue #142: the file is served only once attached. */
+  url: string | null;
   filename: string;
   content_type: string;
   size_bytes: number;
