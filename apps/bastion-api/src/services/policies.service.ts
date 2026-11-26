@@ -31,6 +31,7 @@ import { queueControlRuns, type QueuedRun } from '../engine/evidence-store.js';
 import type { CanAccess } from './decisions.service.js';
 import { cannotOpen, entriesOpenTo } from '../lib/policy-access.js';
 import { beginLedgerBatch, mapAppendError } from './ledger-batch.js';
+import { isUniqueViolation } from './shared.js';
 import type { Viewer } from './types.js';
 
 export interface PolicyDeps {
@@ -452,6 +453,11 @@ export async function attest(d: PolicyDeps, viewer: Viewer, id: string, body: Ba
       if (b.version !== body.beacon_version || b.body_sha256 !== body.body_sha256) {
         throw new ConflictError('This policy changed while you were reading it. Read the new version, then acknowledge it.', 'POLICY_CHANGED');
       }
+      // Serialize one person's attests on one policy (#245) BEFORE the existence check: a
+      // double-click or a client retry waits here for the first to commit, then finds its row and
+      // answers created: false, instead of both passing the check and the loser hitting the unique
+      // index (a 500) after appending a ledger entry it then rolls back.
+      await tx`SELECT pg_advisory_xact_lock(hashtextextended(${`bastion_attest:${id}:${viewer.id}`}, 0))`;
       const existing = (await tx`
         SELECT id FROM bastion_policy_attestations
          WHERE organization_id = ${viewer.org_id} AND policy_id = ${id} AND beacon_version = ${b.version} AND user_id = ${viewer.id}`)[0];
@@ -499,7 +505,16 @@ export async function attest(d: PolicyDeps, viewer: Viewer, id: string, body: Ba
       created = true;
     });
   } catch (err) {
-    throw mapAppendError(err);
+    // Belt and braces for the lock above: a duplicate that still reaches the unique index is the
+    // same idempotent answer, never a 500.
+    if (!isUniqueViolation(err)) throw mapAppendError(err);
+    const won = (await orgTx(engine.sql, viewer.org_id, (tx) => tx`
+      SELECT id FROM bastion_policy_attestations
+       WHERE organization_id = ${viewer.org_id} AND policy_id = ${id} AND user_id = ${viewer.id} AND beacon_version = ${body.beacon_version}`))[0];
+    if (!won) throw err;
+    attestationId = String(won.id);
+    created = false;
+    runs = [];
   }
   if (runs.length > 0) await d.enqueueRuns(runs).catch(() => undefined);
   const row = await orgTx(engine.sql, viewer.org_id, (tx) => tx`

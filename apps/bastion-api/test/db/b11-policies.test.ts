@@ -1,0 +1,95 @@
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import postgres from 'postgres';
+import { attest, createPolicy, getPolicyBody, type PolicyDeps } from '../../src/services/policies.service.js';
+import type { Viewer } from '../../src/services/types.js';
+import { clock, DATABASE_URL, makeDeps, seedOrg, wipeOrg } from './engine-harness.js';
+
+/**
+ * Review batch 11, policies (live database): attesting is idempotent under a double submit
+ * (#245).
+ */
+
+if (!DATABASE_URL) console.warn('[bastion-api/b11-policies] SKIPPING: DATABASE_URL is not set. Point it at a migrated database.');
+
+vi.setConfig({ testTimeout: 120_000, hookTimeout: 60_000 });
+
+const viewer = (org: string, id: string): Viewer => ({
+  id,
+  org_id: org,
+  role: 'owner',
+  is_superuser: false,
+  impersonator_id: null,
+  auth_method: 'session',
+});
+
+describe.skipIf(!DATABASE_URL)('batch 11: policies and attestation (live database)', () => {
+  let sql: postgres.Sql;
+  const orgs: string[] = [];
+  const entries: string[] = [];
+
+  beforeAll(() => {
+    sql = postgres(DATABASE_URL!, { max: 8, onnotice: () => {} });
+  });
+
+  afterAll(async () => {
+    if (!sql) return;
+    for (const org of orgs) await sql`DELETE FROM entity_links WHERE org_id = ${org}`;
+    for (const e of entries) {
+      await sql`DELETE FROM beacon_versions WHERE beacon_id = ${e}`;
+      await sql`DELETE FROM beacon_entries WHERE id = ${e}`;
+    }
+    for (const org of orgs) await wipeOrg(sql, org);
+    await sql.end();
+  });
+
+  async function setUp(tag: string) {
+    const s = await seedOrg(sql, `b11-${tag}`, 1, 1);
+    orgs.push(s.org);
+    const people: string[] = [];
+    for (let i = 0; i < 2; i++) {
+      const [u] = await sql`INSERT INTO users (org_id, email, display_name, password_hash, kind)
+                            VALUES (${s.org}, ${`b11-${tag}-${i}-${Date.now()}@bigbluebam.internal`}, ${`Castaway ${i}`}, '!', 'human') RETURNING id`;
+      people.push(u!.id as string);
+      await sql`INSERT INTO organization_memberships (user_id, org_id) VALUES (${u!.id as string}, ${s.org})`;
+    }
+    const [e] = await sql`
+      INSERT INTO beacon_entries (slug, title, body_markdown, version, status, visibility, created_by, owned_by, organization_id, expires_at, last_verified_at)
+      VALUES (${`b11-policy-${tag}-${Date.now()}`}, 'Lagoon Acceptable Use Policy', 'live', 1, 'Active', 'Organization',
+              ${s.owner}, ${s.owner}, ${s.org}, now() + interval '200 days', now())
+      RETURNING id`;
+    const entry = e!.id as string;
+    entries.push(entry);
+    await sql`INSERT INTO beacon_versions (beacon_id, version, title, body_markdown)
+              VALUES (${entry}, 1, 'Lagoon Acceptable Use Policy', ${'# Lagoon policy\n\nNo swimming after dark.'})`;
+    return { ...s, people, entry };
+  }
+
+  function deps(): PolicyDeps {
+    return {
+      engine: makeDeps(sql, { clock: clock() }),
+      canAccess: async () => true,
+      enqueueRuns: async () => {},
+    };
+  }
+
+  it('a double submit of one attestation answers both requests, once created and once not, never a 500 (#245)', async () => {
+    const s = await setUp('double');
+    const d = deps();
+    const owner = viewer(s.org, s.owner);
+    const policyId = (await createPolicy(d, owner, { beacon_entry_id: s.entry, audience: { kind: 'all' }, cadence_days: 365 })).data.id;
+    const body = await getPolicyBody(d, owner, policyId);
+    const good = { beacon_version: 1, body_sha256: body.data.body_sha256 };
+
+    const results = await Promise.allSettled([attest(d, owner, policyId, good), attest(d, owner, policyId, good), attest(d, owner, policyId, good)]);
+    const failures = results.filter((r) => r.status === 'rejected').map((r) => String((r as PromiseRejectedResult).reason));
+    expect(failures).toEqual([]);
+    const values = results.map((r) => (r as PromiseFulfilledResult<Awaited<ReturnType<typeof attest>>>).value.data);
+    expect(values.filter((v) => v.created)).toHaveLength(1);
+    expect(new Set(values.map((v) => (v as { id?: string }).id)).size).toBe(1);
+    const rows = await sql`SELECT id FROM bastion_policy_attestations WHERE organization_id = ${s.org} AND policy_id = ${policyId}`;
+    expect(rows).toHaveLength(1);
+    // Exactly one ledger entry for the one attestation.
+    const ledger = await sql`SELECT 1 FROM bastion_ledger_entries WHERE organization_id = ${s.org} AND entry_kind = 'attestation'`;
+    expect(ledger).toHaveLength(1);
+  });
+});
