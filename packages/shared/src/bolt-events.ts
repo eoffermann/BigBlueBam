@@ -59,45 +59,21 @@ export async function publishBoltEvent(
   actorId?: string,
   actorType?: BoltActorType,
 ): Promise<void> {
-  const timeoutMs = resolveBoltPublishTimeoutMs();
-  try {
-    const resolvedActorType: BoltActorType =
-      actorType ?? (actorId ? 'user' : 'system');
-    const url = `${resolveBoltUrl()}/v1/events/ingest`;
-    const res = await fetch(url, {
-      method: 'POST',
-      signal: AbortSignal.timeout(timeoutMs),
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Internal-Secret': resolveInternalSecret(),
-      },
-      body: JSON.stringify({
+  // Fire-and-forget over the one place the ingest request is built (issue #200). Never
+  // throws, so the source operation is not broken if Bolt is down. A timeout is logged
+  // because it means bolt-api is accepting connections but not answering.
+  const outcome = await publishBoltEventChecked(eventType, source, payload, orgId, actorId, actorType);
+  if (outcome.timedOut) {
+    console.warn(
+      JSON.stringify({
+        level: 'warn',
+        msg: 'publishBoltEvent timed out; event dropped',
         event_type: eventType,
         source,
-        payload,
         org_id: orgId,
-        actor_id: actorId,
-        actor_type: resolvedActorType,
+        timeout_ms: outcome.timeoutMs,
       }),
-    });
-    // Drain the body so the connection is released; a hung body read is bounded by
-    // the same signal.
-    await res.arrayBuffer().catch(() => undefined);
-  } catch (err) {
-    // Fire-and-forget. Do not break the source operation if Bolt is down. A timeout is
-    // logged because it means bolt-api is accepting connections but not answering.
-    if (isTimeoutError(err)) {
-      console.warn(
-        JSON.stringify({
-          level: 'warn',
-          msg: 'publishBoltEvent timed out; event dropped',
-          event_type: eventType,
-          source,
-          org_id: orgId,
-          timeout_ms: timeoutMs,
-        }),
-      );
-    }
+    );
   }
 }
 
@@ -106,12 +82,18 @@ export interface BoltPublishOutcome {
   ok: boolean;
   status: number | null;
   error?: string;
+  /** True when the call was cut off by the publish timeout (bolt-api connected but silent). */
+  timedOut?: boolean;
+  /** The timeout that applied, reported with `timedOut`. */
+  timeoutMs?: number;
 }
 
 /**
  * The same positional call as publishBoltEvent, for callers that own a durable retry (an
  * outbox): it never throws, but it reports whether bolt-api accepted the event, so the caller
- * can back off and retry instead of losing the event. Same URL, secret and timeout.
+ * can back off and retry instead of losing the event. The ONLY place the ingest request is
+ * built: publishBoltEvent is a wrapper over it. check-bolt-catalog.mjs scans literal calls to
+ * both (scripts/lib/bolt-publish-calls.mjs).
  */
 export async function publishBoltEventChecked(
   eventType: string,
@@ -140,13 +122,13 @@ export async function publishBoltEventChecked(
         actor_type: resolvedActorType,
       }),
     });
+    // Drain the body so the connection is released; a hung body read is bounded by the same signal.
     await res.arrayBuffer().catch(() => undefined);
     return res.ok ? { ok: true, status: res.status } : { ok: false, status: res.status, error: `bolt-api ingest returned ${res.status}` };
   } catch (err) {
-    return {
-      ok: false,
-      status: null,
-      error: isTimeoutError(err) ? `bolt-api ingest timed out after ${timeoutMs} ms` : (err as Error).message,
-    };
+    if (isTimeoutError(err)) {
+      return { ok: false, status: null, error: `bolt-api ingest timed out after ${timeoutMs} ms`, timedOut: true, timeoutMs };
+    }
+    return { ok: false, status: null, error: (err as Error).message };
   }
 }

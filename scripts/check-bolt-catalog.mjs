@@ -7,7 +7,7 @@
  *      of declared `{ source, event_type }` pairs.
  *   2. Walks every .ts file under apps (excluding node_modules, dist, build,
  *      __tests__, *.d.ts, and *.test.ts), finds each publishBoltEvent(...)
- *      call, extracts the first two string-literal arguments (event name,
+ *      and publishBoltEventChecked(...) call (scripts/lib/bolt-publish-calls.mjs), extracts the first two string-literal arguments (event name,
  *      source), and verifies the pair is in the catalog AND that the event
  *      name is bare (no dotted source prefix).
  *   3. Treats every `enqueueBastionEvent('<event>', ...)` call as a `bastion`
@@ -27,6 +27,7 @@ import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
 import { BOLT_SOURCES_FILE, loadBoltSources } from './lib/bolt-sources.mjs';
 import { checkBastionEnqueues } from './lib/bolt-bastion-enqueues.mjs';
+import { checkPublishCalls } from './lib/bolt-publish-calls.mjs';
 
 const ROOT = resolve(new URL('..', import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, '$1'));
 const CATALOG_FILE = join(ROOT, 'apps', 'bolt-api', 'src', 'services', 'event-catalog.ts');
@@ -97,102 +98,6 @@ function walkTsFiles(dir, out) {
   }
 }
 
-/**
- * Balanced-paren walker: given `src` and a start index pointing at the `(`
- * after `publishBoltEvent`, returns the slice of arguments between `(` and the
- * matching `)`. Tracks string/template literals so parens inside them do not
- * confuse the walker.
- */
-function extractArgs(src, openIdx) {
-  let depth = 0;
-  let i = openIdx;
-  let inString = null;
-  let escaped = false;
-  for (; i < src.length; i++) {
-    const c = src[i];
-    if (escaped) {
-      escaped = false;
-      continue;
-    }
-    if (inString) {
-      if (c === '\\') {
-        escaped = true;
-      } else if (c === inString) {
-        inString = null;
-      }
-      continue;
-    }
-    if (c === "'" || c === '"' || c === '`') {
-      inString = c;
-      continue;
-    }
-    if (c === '(') depth += 1;
-    else if (c === ')') {
-      depth -= 1;
-      if (depth === 0) return src.slice(openIdx + 1, i);
-    }
-  }
-  return null;
-}
-
-/**
- * Top-level comma-aware argument splitter. Respects nested parens/brackets/
- * braces and strings so `{ foo: bar(1, 2) }` counts as a single argument.
- */
-function splitTopLevelArgs(argText) {
-  const out = [];
-  let depth = 0;
-  let inString = null;
-  let escaped = false;
-  let start = 0;
-  for (let i = 0; i < argText.length; i++) {
-    const c = argText[i];
-    if (escaped) {
-      escaped = false;
-      continue;
-    }
-    if (inString) {
-      if (c === '\\') escaped = true;
-      else if (c === inString) inString = null;
-      continue;
-    }
-    if (c === "'" || c === '"' || c === '`') {
-      inString = c;
-      continue;
-    }
-    if (c === '(' || c === '[' || c === '{') depth += 1;
-    else if (c === ')' || c === ']' || c === '}') depth -= 1;
-    else if (c === ',' && depth === 0) {
-      out.push(argText.slice(start, i));
-      start = i + 1;
-    }
-  }
-  if (start < argText.length) out.push(argText.slice(start));
-  return out.map((s) => s.trim());
-}
-
-/**
- * Parse a string literal argument: returns { ok, value } where value is the
- * string content if the arg is a plain single/double-quoted literal, else
- * null. Template literals with `${}` interpolation are rejected (we cannot
- * verify them statically). Simple backtick literals without interpolation
- * are accepted.
- */
-function parseStringLiteralArg(arg) {
-  if (arg.length < 2) return { ok: false, value: null };
-  const first = arg[0];
-  const last = arg[arg.length - 1];
-  if ((first === "'" || first === '"') && last === first) {
-    return { ok: true, value: arg.slice(1, -1) };
-  }
-  if (first === '`' && last === '`') {
-    const inner = arg.slice(1, -1);
-    if (inner.includes('${')) return { ok: false, value: null };
-    return { ok: true, value: inner };
-  }
-  return { ok: false, value: null };
-}
-
 function checkCalls(catalog) {
   const files = [];
   walkTsFiles(APPS_DIR, files);
@@ -210,85 +115,8 @@ function checkCalls(catalog) {
     // publishBoltEvent call is dynamic, so the literal lives at the enqueue site.
     if (text.includes('enqueueBastionEvent')) violations.push(...checkBastionEnqueues(file, text, catalog));
 
-    // Fast reject before the slower walker.
-    if (!text.includes('publishBoltEvent')) continue;
-
-    let idx = 0;
-    while ((idx = text.indexOf('publishBoltEvent', idx)) !== -1) {
-      // Require word boundary on the left so we don't match something like
-      // `xpublishBoltEvent`. Right-side: expect optional whitespace then `(`.
-      const before = idx === 0 ? ' ' : text[idx - 1];
-      if (/[A-Za-z0-9_$]/.test(before)) {
-        idx += 'publishBoltEvent'.length;
-        continue;
-      }
-      let after = idx + 'publishBoltEvent'.length;
-      while (after < text.length && /\s/.test(text[after])) after += 1;
-      if (text[after] !== '(') {
-        idx = after;
-        continue;
-      }
-
-      const argText = extractArgs(text, after);
-      idx = after + 1;
-      if (argText === null) continue;
-
-      const args = splitTopLevelArgs(argText);
-      if (args.length < 2) continue; // malformed; skip quietly
-
-      const eventLit = parseStringLiteralArg(args[0]);
-      const sourceLit = parseStringLiteralArg(args[1]);
-
-      // If either arg is not a static literal, we cannot check it. This
-      // keeps the guard conservative (dynamic callers are allowed) at the
-      // cost of not catching every drift. Flag only when we're certain.
-      if (!eventLit.ok || !sourceLit.ok) continue;
-
-      const eventName = eventLit.value;
-      const source = sourceLit.value;
-      const key = `${source}:${eventName}`;
-
-      // Rule 1: event name must be bare (no dotted source prefix).
-      if (
-        catalog.sources.has(eventName.split('.')[0]) &&
-        eventName.split('.').length > 2 &&
-        !LEGACY_PREFIXED_ALLOWLIST.has(key)
-      ) {
-        violations.push({
-          file,
-          eventName,
-          source,
-          reason: `event name "${eventName}" looks source-prefixed; use bare event name (e.g. "deal.rotting" not "bond.deal.rotting")`,
-        });
-        continue;
-      }
-
-      // Allowlisted legacy-prefixed events bypass the catalog lookup too —
-      // they are tracked as TODOs, not new drift.
-      if (LEGACY_PREFIXED_ALLOWLIST.has(key)) continue;
-
-      // Rule 2a (issue #124): the source must be in the shared BOLT_SOURCES list, or
-      // bolt-api ingest 400-rejects it and publishBoltEvent swallows the failure.
-      if (catalog.boltSources && !catalog.boltSources.has(source)) {
-        violations.push({
-          file,
-          eventName,
-          source,
-          reason: `source "${source}" is not in BOLT_SOURCES (packages/shared/src/bolt-sources.ts); bolt-api ingest would reject it`,
-        });
-        continue;
-      }
-
-      // Rule 2: (source, eventName) pair must exist in the catalog.
-      if (!catalog.pairs.has(key)) {
-        violations.push({
-          file,
-          eventName,
-          source,
-          reason: `(source="${source}", event_type="${eventName}") not found in event-catalog.ts`,
-        });
-      }
-    }
+    // Every positional publisher (publishBoltEvent and publishBoltEventChecked, issue #200).
+    violations.push(...checkPublishCalls(file, text, catalog, LEGACY_PREFIXED_ALLOWLIST));
   }
 
   return violations;

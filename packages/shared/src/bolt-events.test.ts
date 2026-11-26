@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   BOLT_PUBLISH_TIMEOUT_DEFAULT_MS,
   publishBoltEvent,
+  publishBoltEventChecked,
   resolveBoltPublishTimeoutMs,
 } from './bolt-events.js';
 
@@ -86,5 +87,26 @@ describe('publishBoltEvent timeout', () => {
   it('never throws when bolt-api is unreachable', async () => {
     process.env.BOLT_API_INTERNAL_URL = 'http://127.0.0.1:1';
     await expect(publishBoltEvent('thing.happened', 'bam', {}, ORG)).resolves.toBeUndefined();
+  });
+
+  it('publishBoltEvent and publishBoltEventChecked send the identical ingest request (#200)', async () => {
+    process.env.BOLT_API_INTERNAL_URL = 'http://bolt-api:4006';
+    process.env.INTERNAL_SERVICE_SECRET = 's'.repeat(32);
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async () => new Response('{}', { status: 202 }));
+    await publishBoltEvent('thing.happened', 'bam', { a: 1 }, ORG, 'u1');
+    expect(await publishBoltEventChecked('thing.happened', 'bam', { a: 1 }, ORG, 'u1')).toEqual({ ok: true, status: 202 });
+    expect(fetchSpy).toHaveBeenCalledTimes(2);
+    const [a, b] = fetchSpy.mock.calls.map(([url, init]) => ({ url, headers: init?.headers, body: init?.body, method: init?.method }));
+    expect(a).toEqual(b);
+    expect(JSON.parse(String(a!.body))).toEqual({ event_type: 'thing.happened', source: 'bam', payload: { a: 1 }, org_id: ORG, actor_id: 'u1', actor_type: 'user' });
+  });
+
+  it('publishBoltEventChecked reports a timeout as timedOut with no status', async () => {
+    server = createServer(() => {
+      // never answers
+    });
+    process.env.BOLT_API_INTERNAL_URL = await listen(server);
+    process.env.BOLT_PUBLISH_TIMEOUT_MS = '100';
+    expect(await publishBoltEventChecked('thing.happened', 'bam', {}, ORG)).toMatchObject({ ok: false, status: null, timedOut: true, timeoutMs: 100 });
   });
 });
