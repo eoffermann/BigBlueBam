@@ -34,6 +34,7 @@
     "help:check": "node scripts/help/build-help-index.mjs --check",
     "check:bolt-catalog": "node scripts/check-bolt-catalog.mjs",
     "check:bolt-enum": "node scripts/check-bolt-enum.mjs",
+    "check:nginx-spa": "node scripts/check-nginx-spa-lists.mjs",
     "test:scripts": "node --test \"scripts/lib/*.test.mjs\" \"scripts/deploy/shared/*.node.test.mjs\"",
     "check:permission-catalog": "node scripts/check-permission-catalog.mjs",
     "check:env-hints": "node scripts/check-env-hints.mjs",

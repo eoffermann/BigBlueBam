@@ -60,6 +60,11 @@ jobs:
       - name: Script unit tests (node:test)
         run: pnpm test:scripts
 
+      # Issue #127: the index.html no-cache and assets-cache regexes in every nginx
+      # config must list exactly the SPAs that config serves (and every Launchpad app).
+      - name: Check nginx SPA lists
+        run: pnpm check:nginx-spa
+
       # Guards scripts/deploy/shared/env-hints.mjs against catalog vars that have
       # no hint. An unhinted OPTIONAL var is silently dropped from the Railway
       # service (the integration is just absent in prod, with no signal); an
