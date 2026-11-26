@@ -2,6 +2,9 @@ import { describe, it, expect } from 'vitest';
 import { crosswalk, LIBRARY_CONTROLS, requirementsForControl, templateControlKeys } from '../src/library/index.js';
 import { SOC2 } from '../src/library/soc2.js';
 import { ISO27001 } from '../src/library/iso27001.js';
+import { TEMPLATE_BY_GAP_KIND } from '../src/library/fix-templates.js';
+import { probeDefinition } from '../src/probes/definitions.js';
+import { GAP_WORDS } from '../src/services/fixes.service.js';
 // @ts-expect-error plain .mjs with no type declarations in this package
 import { BASTION_SEED_EXPECTATIONS as EXP } from '../../../scripts/seed-gilligan/bastion.expectations.mjs';
 
@@ -103,5 +106,47 @@ describe('BASTION_SEED_EXPECTATIONS matches the library', () => {
     const laptops = LIBRARY_CONTROLS.find((x) => x.control_key === EXP.m5.laptopEncryption.controlKey);
     expect(laptops?.suggested_manual_evidence.length).toBeGreaterThan(0);
     expect(left).not.toContain(EXP.m5.laptopEncryption.controlKey);
+  });
+
+  it('M6: the story controls, titles, owners, weights and the gap mapping the stories rely on', () => {
+    const m6 = EXP.m6;
+    const byKey = (k: string) => LIBRARY_CONTROLS.find((x) => x.control_key === k);
+    // Story 6: the key control carries exactly the two key checks the seed revises.
+    const keys = byKey(m6.radioRelay.controlKey);
+    expect(keys?.title).toBe(m6.radioRelay.controlTitle);
+    expect(keys?.suggested_assertions.map((a) => a.probe_key).sort()).toEqual(['keys.max_age', 'keys.unused_active']);
+    expect(m6.radioRelay.ageDays).toBeGreaterThan(m6.keyPolicyDays);
+    // A single-item exception lasts up to 365 days.
+    expect(m6.radioRelay.expiresInDays).toBeLessThanOrEqual(365);
+    // Story 4: laptops weigh 5 and have only a manual check, so the gap is manual_missing with an
+    // evidence request (spec 2.3 table), and nothing the seed recalibrates outweighs them.
+    const laptop = byKey(m6.laptop.controlKey);
+    expect(laptop?.title).toBe(m6.laptop.title);
+    expect(laptop?.risk_weight).toBe(5);
+    expect(laptop?.suggested_assertions).toHaveLength(0);
+    expect(TEMPLATE_BY_GAP_KIND.manual_missing).toBe(m6.laptop.fixTemplate);
+    for (const [k, w] of Object.entries(m6.riskWeights as Record<string, number>)) {
+      expect(byKey(k), k).toBeDefined();
+      expect(w).toBeLessThan(5);
+    }
+    // The seeded evidence request: the 2-Step report's 12 days sit inside the 30-day warning window.
+    expect(m6.evidenceRequest.controlKey).toBe(EXP.m5.twoStep.controlKey);
+    expect(EXP.m5.twoStep.daysLeft).toBeLessThan(30);
+    expect(TEMPLATE_BY_GAP_KIND.manual_expiring).toBe('evidence_request');
+    for (const k of m6.professorOwns) {
+      expect(byKey(k), k).toBeDefined();
+      expect(left).not.toContain(k);
+    }
+    // Story 5: the code-review control is the merge-reviewed population check from M3.
+    expect(EXP.githubPopulation.controlKeys).toContain(m6.codeReview.controlKey);
+    expect(byKey(m6.codeReview.controlKey)?.suggested_assertions.map((a) => a.probe_key)).toContain('change.merge_reviewed');
+    expect(EXP.githubPopulation.repos).toContain(m6.codeReview.listedNotConnected);
+    expect(EXP.githubPopulation.repos).not.toContain(m6.codeReview.unlisted);
+    expect(EXP.githubPopulation.repos).toContain(`${m6.codeReview.owner}/${m6.codeReview.prRepo}`);
+    expect(GAP_WORDS.population_drift).toBe(m6.codeReview.populationGapWords);
+    expect(probeDefinition('change.merge_reviewed')!.explain(
+      { probe_key: 'change.merge_reviewed', probe_version: 1, as_of: '', summary: { merges: 1, unreviewed_merges: 1, window_days: 90, repos: [{ reviews_subscribed: null }] }, cited_refs: [], cited_count: 1, overflow_count: 0, population_checked: ['a'] } as never,
+      true,
+    )).toContain(m6.codeReview.pingNote);
   });
 });

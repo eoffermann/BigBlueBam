@@ -18,6 +18,16 @@
  *   - laptop encryption gets nothing, so it stays "Can't prove yet";
  *   - the "Crew roster export" feed gets a key and one record per castaway;
  *   - one full evaluation so Readiness shows real numbers.
+ * M6 rows (spec 10.2):
+ *   - Gilligan replaces API keys yearly (both key checks revised to 365 days); the long-lived
+ *     "Radio Relay" service key is older than that, so it is the one failing item;
+ *   - Rescue Radio Firmware and Coral Reef Booking are connected to Bam's GitHub integration; PR #42
+ *     merged without a second review; Lagoon Booking Site is on the list but not connected, and
+ *     Coral Reef Booking is connected but not on it (a population gap);
+ *   - the Professor owns the technical controls; the Professor proposes the Radio Relay exception
+ *     and Skipper approves it in Bastion ("Not met, risk accepted"); Skipper drafts the evidence
+ *     request for the expiring 2-Step report (to the Professor); drift tasks reach the Compliance
+ *     project through the outbox; laptop encryption is the top gap.
  * Uploading and accepting are vouching acts too, so the Professor, Mary Ann and Skipper each sign
  * in for theirs.
  *
@@ -505,8 +515,206 @@ async function verifyM5(ids) {
   if (problems.length) throw new Error(`seeded M5 numbers do not match BASTION_SEED_EXPECTATIONS: ${problems.join('; ')}`);
 }
 
+// ── M6: the key policy, the Radio Relay key, GitHub history, owners, exception, fixes ──────
+
+async function controlByKey(controlKey) {
+  const controls = must(await bastion('GET', '/controls'), 'GET /controls').data;
+  const c = controls.find((x) => x.control_key === controlKey);
+  if (!c) throw new Error(`control ${controlKey} is missing; run the M3 part first`);
+  return c;
+}
+
+async function userIdByEmail(email) {
+  return (await withDb((sql) => sql`SELECT id FROM users WHERE email = ${email}`))[0]?.id ?? null;
+}
+
+/** Gilligan replaces API keys yearly: revise both key checks to 365 days and confirm (session). */
+async function seedKeyPolicy() {
+  const m = EXP.m6;
+  log(`key policy: keys are replaced and used at least every ${m.keyPolicyDays} days...`);
+  const c = await controlByKey(m.radioRelay.controlKey);
+  const list = must(await bastion('GET', `/controls/${c.id}/assertions`), 'GET assertions').data;
+  const wanted = {
+    'keys.max_age': { params: { max_age_days: m.keyPolicyDays }, plain_statement: `No API key is older than ${m.keyPolicyDays} days.` },
+    'keys.unused_active': { params: { unused_days: m.keyPolicyDays }, plain_statement: `No working API key has gone unused for ${m.keyPolicyDays} days.` },
+  };
+  for (const [probe, body] of Object.entries(wanted)) {
+    const cur = list.find((a) => a.probe_key === probe && (a.review_status === 'confirmed' || a.review_status === 'proposed'));
+    if (!cur) continue;
+    const key = probe === 'keys.max_age' ? 'max_age_days' : 'unused_days';
+    let id = cur.id;
+    if (Number(cur.params?.[key]) !== m.keyPolicyDays) {
+      id = must(await bastion('POST', `/assertions/${cur.id}/revise`, body), `revise ${probe}`).data.id;
+    }
+    const r = await bastion('POST', `/assertions/${id}/confirm`, {}, { session: true });
+    if (!(r.status === 409 && r.code === 'ASSERTION_NOT_PROPOSED')) must(r, `confirm ${probe}`);
+  }
+}
+
+/** The long-lived "Radio Relay" service key (spec 10.2): older than the yearly policy. */
+async function seedRadioRelayKey() {
+  const m = EXP.m6.radioRelay;
+  log(`"${m.keyName}" key (${m.ageDays} days old)...`);
+  const owner = await userIdByEmail(m.proposerEmail);
+  await withDb(async (sql) => {
+    const org = (await sql`SELECT id FROM organizations WHERE slug = ${EXP.org.slug}`)[0].id;
+    const have = await sql`SELECT id FROM api_keys WHERE org_id = ${org} AND name = ${m.keyName}`;
+    if (have.length > 0) return;
+    // A record of the radio's key, not a usable credential (the hash verifies nothing).
+    await sql`INSERT INTO api_keys (user_id, name, key_hash, key_prefix, org_id, created_at, last_used_at)
+              VALUES (${owner}, ${m.keyName}, 'radio-relay-not-a-usable-key', 'bbam_radio', ${org},
+                      now() - make_interval(days => ${m.ageDays}), now() - interval '1 day')`;
+  });
+}
+
+/** Two repositories connected to Bam, one merge without a second review (spec 10.2, story 5). */
+async function seedGithubHistory() {
+  const g = EXP.m6.codeReview;
+  log('GitHub: Rescue Radio Firmware and Coral Reef Booking connected; PR #42 merged without review...');
+  const projects = must(await bam('GET', '/projects'), 'GET /projects').data ?? [];
+  for (const i of g.integrations) {
+    const p = projects.find((x) => x.name === i.project);
+    if (!p) throw new Error(`project "${i.project}" is missing; run the Bam seed first`);
+    const cur = await bam('GET', `/projects/${p.id}/github-integration`);
+    if (cur.ok && cur.json?.data?.repo_name === i.repo) continue;
+    must(await bam('PUT', `/projects/${p.id}/github-integration`, { repo_owner: g.owner, repo_name: i.repo }), `connect ${i.repo}`);
+  }
+  // Deliveries GitHub sent (the webhook stores them in github_pr_events); idempotent on delivery id.
+  await withDb(async (sql) => {
+    const org = (await sql`SELECT id FROM organizations WHERE slug = ${EXP.org.slug}`)[0].id;
+    const integ = (await sql`SELECT gi.id, gi.project_id FROM github_integrations gi WHERE gi.repo_owner = ${g.owner} AND gi.repo_name = ${g.prRepo}`)[0];
+    const rows = [
+      // PR #41: reviewed by the Professor before it merged.
+      { delivery: 'gilligan-seed-pr-41-review', type: 'pull_request_review', action: 'submitted', n: 41, title: 'Add the battery gauge', author: 'gilligan', merged: false, mergedAgo: null, review: 'approved', reviewer: 'professor-hinkley', at: 12 },
+      { delivery: 'gilligan-seed-pr-41', type: 'pull_request', action: 'closed', n: 41, title: 'Add the battery gauge', author: 'gilligan', merged: true, mergedAgo: 11, review: null, reviewer: null, at: 11 },
+      // PR #42: merged without anyone else approving it.
+      { delivery: 'gilligan-seed-pr-42', type: 'pull_request', action: 'closed', n: g.prNumber, title: g.prTitle, author: 'gilligan', merged: true, mergedAgo: 10, review: null, reviewer: null, at: 10 },
+    ];
+    for (const r of rows) {
+      await sql`
+        INSERT INTO github_pr_events (org_id, integration_id, project_id, repo_owner, repo_name, delivery_id, event_type, action, pr_number,
+                                      pr_title, pr_author_login, base_ref, default_branch, merged, merged_at, review_id, review_state,
+                                      reviewer_login, review_submitted_at, occurred_at)
+        VALUES (${org}, ${integ?.id ?? null}, ${integ?.project_id ?? null}, ${g.owner}, ${g.prRepo}, ${r.delivery}, ${r.type}, ${r.action}, ${r.n},
+                ${r.title}, ${r.author}, 'main', 'main', ${r.merged}, ${r.mergedAgo === null ? null : new Date(Date.now() - r.mergedAgo * 86_400_000)},
+                ${r.review ? 4100 + r.n : null}, ${r.review}, ${r.reviewer}, ${r.review ? new Date(Date.now() - r.at * 86_400_000) : null},
+                ${new Date(Date.now() - r.at * 86_400_000)})
+        ON CONFLICT (repo_owner, repo_name, delivery_id) WHERE delivery_id IS NOT NULL DO NOTHING`;
+    }
+  });
+}
+
+/** The Professor owns the technical controls the M6 stories use; Skipper's risk calibration. */
+async function seedOwnersAndWeights() {
+  const m = EXP.m6;
+  const professor = await userIdByEmail(m.laptop.ownerEmail);
+  for (const key of m.professorOwns) {
+    const c = await controlByKey(key);
+    must(await bastion('PATCH', `/controls/${c.id}`, { owner_user_id: professor }), `owner of ${key}`);
+  }
+  for (const [key, weight] of Object.entries(m.riskWeights)) {
+    const c = await controlByKey(key);
+    must(await bastion('PATCH', `/controls/${c.id}`, { risk_weight: weight }), `risk weight of ${key}`);
+  }
+}
+
+async function internalEngine(name, orgId) {
+  const secret = process.env.INTERNAL_SERVICE_SECRET;
+  if (!secret) return null;
+  const r = await fetch(`${BASTION_INTERNAL}/engines/${name}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-Internal-Secret': secret },
+    body: JSON.stringify({ organization_id: orgId }),
+  });
+  return r.ok ? (await r.json().catch(() => ({}))).data : null;
+}
+
+/** The Professor proposes the Radio Relay exception; Skipper approves it in Bastion (session). */
+async function seedRadioRelayException() {
+  const m = EXP.m6.radioRelay;
+  log('Radio Relay exception (the Professor proposes, Skipper approves in Bastion)...');
+  const c = await controlByKey(m.controlKey);
+  const existing = must(await bastion('GET', `/exceptions?control_id=${c.id}`), 'GET /exceptions').data;
+  let ex = existing.find((e) => e.reason === m.reason && (e.status === 'active' || e.status === 'proposed'));
+  if (!ex) {
+    const evidence = must(await bastion('GET', `/controls/${c.id}/evidence?limit=20`), 'GET evidence').data;
+    const item = evidence
+      .filter((s) => s.outcome === 'fail')
+      .flatMap((s) => s.cited_items ?? [])
+      .find((i) => i.label === `API key "${m.keyName}"`);
+    if (!item) throw new Error(`the "${m.keyName}" key is not among the failing items of ${m.controlKey}; is the key policy ${EXP.m6.keyPolicyDays} days?`);
+    ex = must(
+      await bastion(
+        'POST',
+        '/exceptions',
+        {
+          control_id: c.id,
+          scope: 'entity',
+          cited_entity_type: item.entity_type,
+          cited_entity_id: item.entity_id,
+          reason: m.reason,
+          compensating_note: m.compensatingNote,
+          expires_on: await localDatePlus(m.expiresInDays),
+        },
+        { as: m.proposerRole },
+      ),
+      'propose the Radio Relay exception',
+    ).data;
+  }
+  if (ex.status === 'proposed') {
+    must(await bastion('POST', `/exceptions/${ex.id}/decide`, { decision: 'approve', confirm: true }, { session: true }), 'approve the exception');
+  }
+}
+
+/** Skipper drafts the evidence request for the expiring 2-Step report (to the Professor). */
+async function seedEvidenceRequestFix() {
+  const m = EXP.m6.evidenceRequest;
+  const c = await controlByKey(m.controlKey);
+  const gaps = must(await bastion('GET', `/gaps?control_id=${c.id}&status=all`), 'GET /gaps').data;
+  const gap = gaps.find((g) => g.gap_kind === m.gapKind);
+  if (!gap) throw new Error(`no ${m.gapKind} gap on ${m.controlKey}; gaps are ranked after the evaluation`);
+  if (gap.status === 'open') {
+    log('evidence request for the 2-Step report (to the Professor)...');
+    must(await bastion('POST', `/gaps/${gap.id}/propose-fix`, {}), 'draft the evidence request');
+  }
+}
+
+/** Gilligan weighs laptops highest: lower any other gap ranked above them (Skipper's calibration). */
+async function calibrateTopGap() {
+  const m = EXP.m6.laptop;
+  for (let i = 0; i < 10; i++) {
+    const top = must(await bastion('GET', '/gaps?limit=1'), 'GET /gaps').data[0];
+    if (!top || top.control_title === m.title) return;
+    const c = must(await bastion('GET', `/controls/${top.control_id}`), 'GET control').data;
+    if (c.control_key === m.controlKey || (c.risk_weight ?? 3) <= 3) return;
+    log(`  Skipper rates "${c.title}" below laptops (risk weight 3)`);
+    must(await bastion('PATCH', `/controls/${c.id}`, { risk_weight: 3 }), 'calibrate risk weight');
+    await internalEngine('gap-rank', (await withDb((sql) => sql`SELECT id FROM organizations WHERE slug = ${EXP.org.slug}`))[0].id);
+  }
+}
+
+async function verifyM6() {
+  const m = EXP.m6;
+  const problems = [];
+  const relay = await controlByKey(m.radioRelay.controlKey);
+  const map = must(await bastion('GET', '/coverage'), 'GET /coverage').data;
+  const row = map.find((r) => r.control_id === relay.id);
+  if (row?.state_words !== m.radioRelay.stateWords) problems.push(`${m.radioRelay.controlKey} reads "${row?.state_words}", expected "${m.radioRelay.stateWords}"`);
+  const s = must(await bastion('GET', '/summary'), 'GET /summary').data;
+  if (s.numbers.risk_accepted !== m.riskAccepted) problems.push(`risk accepted ${s.numbers.risk_accepted}, expected ${m.riskAccepted}`);
+  const top = must(await bastion('GET', '/gaps?limit=1'), 'GET /gaps').data[0];
+  if (top?.control_title !== m.laptop.title) problems.push(`top gap is "${top?.control_title}", expected "${m.laptop.title}"`);
+  const code = await controlByKey(m.codeReview.controlKey);
+  const codeGaps = must(await bastion('GET', `/gaps?control_id=${code.id}`), 'GET /gaps').data.map((g) => g.gap_kind);
+  if (!codeGaps.includes('population_drift')) problems.push(`no population_drift gap on ${m.codeReview.controlKey} (gaps: ${codeGaps.join(', ')})`);
+  const drift = must(await bastion('GET', '/drift?limit=50'), 'GET /drift').data;
+  if (!drift.some((d) => d.bam_task_human_id)) problems.push('no drift row has a Bam task yet (is the worker draining the outbox?)');
+  log(`M6: ${s.not_met_label}; top gap "${top?.control_title}"; ${drift.length} drift rows`);
+  if (problems.length) throw new Error(`seeded M6 rows do not match BASTION_SEED_EXPECTATIONS: ${problems.join('; ')}`);
+}
+
 async function main() {
-  log('Bastion seed (M3 and M5) starting...');
+  log('Bastion seed (M3, M5 and M6) starting...');
   await login();
   const ids = {};
   ids.soc2 = await adoptAndCompile('soc2');
@@ -517,11 +725,29 @@ async function main() {
   await decideIsoApplicability(ids.iso27001);
   await confirmChecks();
   await verify(ids);
+  // M6 rows that must exist before the evaluation sees them.
+  await seedKeyPolicy();
+  await seedRadioRelayKey();
+  await seedGithubHistory();
+  await seedOwnersAndWeights();
   await seedTwoStep();
   await seedBackgroundChecks();
   await seedFeed();
   await evaluateNow();
   await verifyM5(ids);
+  // M6 rows that need the evaluation: rank, deliver the drift tasks, exception, fixes.
+  const orgId = (await withDb((sql) => sql`SELECT id FROM organizations WHERE slug = ${EXP.org.slug}`))[0].id;
+  log('ranking gaps and delivering drift tasks to the Compliance project...');
+  await internalEngine('gap-rank', orgId);
+  await seedRadioRelayException();
+  await seedEvidenceRequestFix();
+  await calibrateTopGap();
+  for (let i = 0; i < 5; i++) {
+    const d = await internalEngine('outbox-drain', orgId);
+    if (!d || d.candidates === 0) break;
+    log(`  delivered ${d.delivered}, waiting ${d.failed}, dead ${d.dead}`);
+  }
+  await verifyM6();
   log('Bastion seed done');
 }
 

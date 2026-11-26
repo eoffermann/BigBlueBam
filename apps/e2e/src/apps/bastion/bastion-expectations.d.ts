@@ -46,6 +46,40 @@ interface BastionSeedExpectations {
     provenByEvidence: number;
     feed: { feedKey: string; label: string; feedKind: string; cadenceDays: number; keyLabel: string; records: string[] };
   };
+  m6: {
+    keyPolicyDays: number;
+    radioRelay: {
+      keyName: string;
+      ageDays: number;
+      controlKey: string;
+      controlTitle: string;
+      proposerEmail: string;
+      proposerRole: string;
+      approverEmail: string;
+      ownerName: string;
+      reason: string;
+      compensatingNote: string;
+      expiresInDays: number;
+      stateWords: string;
+    };
+    riskAccepted: number;
+    laptop: { controlKey: string; title: string; ownerEmail: string; gapKind: string; fixTemplate: string };
+    evidenceRequest: { controlKey: string; gapKind: string };
+    professorOwns: string[];
+    riskWeights: Record<string, number>;
+    codeReview: {
+      controlKey: string;
+      owner: string;
+      prRepo: string;
+      prNumber: number;
+      prTitle: string;
+      integrations: Array<{ repo: string; project: string }>;
+      listedNotConnected: string;
+      unlisted: string;
+      pingNote: string;
+      populationGapWords: string;
+    };
+  };
   companyProfile: Record<string, string | boolean>;
 }
 

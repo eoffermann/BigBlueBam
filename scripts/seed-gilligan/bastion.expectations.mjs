@@ -104,6 +104,63 @@ export const BASTION_SEED_EXPECTATIONS = {
     },
   },
 
+  // M6 rows (spec 10.2) and stories 4-6 (spec 11.4).
+  m6: {
+    // Gilligan replaces API keys yearly; both key checks are revised to this many days.
+    keyPolicyDays: 365,
+    // Story 6: the Radio Relay key is the one failing item on the key control; the Professor
+    // proposes accepting it, Skipper approves it in Bastion, so the control reads
+    // "Not met, risk accepted" and counts under Not met with one risk accepted.
+    radioRelay: {
+      keyName: 'Radio Relay',
+      ageDays: 400,
+      controlKey: 'keys.rotation',
+      controlTitle: 'API keys are replaced and unused ones removed',
+      proposerEmail: 'professor@gilligantravel.example',
+      proposerRole: 'professor',
+      approverEmail: 'skipper@gilligantravel.example',
+      ownerName: 'The Professor',
+      reason: 'The Radio Relay bridge only accepts a key typed in at the mast, so it is changed by hand at every radio service.',
+      compensatingNote: 'The key only works from the island network, and the Professor checks it at every service.',
+      expiresInDays: 120,
+      stateWords: 'Not met, risk accepted',
+    },
+    riskAccepted: 1,
+    // Story 4: nothing uploaded for laptop encryption, so it is the top gap; drafting its fix files
+    // an evidence request the Review queue decides.
+    laptop: {
+      controlKey: 'assets.device_encryption',
+      title: 'Laptops are encrypted',
+      ownerEmail: 'professor@gilligantravel.example',
+      gapKind: 'manual_missing',
+      fixTemplate: 'evidence_request',
+    },
+    // The seeded evidence request: the 2-Step report expires in 12 days (manual_expiring).
+    evidenceRequest: { controlKey: 'auth.mfa', gapKind: 'manual_expiring' },
+    // The Professor owns the technical controls the stories use.
+    professorOwns: ['assets.device_encryption', 'keys.rotation', 'auth.mfa', 'change.peer_review'],
+    // Skipper's risk calibration: these weigh less than laptops for a firm whose crew carries
+    // laptops between islands.
+    riskWeights: { 'vuln.management': 4, 'access.offboarding': 4, 'change.peer_review': 4 },
+    // Story 5: the code-review control cites PR #42, names the repository on the list that is not
+    // connected, carries the ping note, and Coral Reef Booking is a population gap.
+    codeReview: {
+      controlKey: 'change.peer_review',
+      owner: 'gilligan-travel',
+      prRepo: 'rescue-radio-firmware',
+      prNumber: 42,
+      prTitle: 'Bump the radio firmware to 2.1',
+      integrations: [
+        { repo: 'rescue-radio-firmware', project: 'Fix the Radio' },
+        { repo: 'coral-reef-booking', project: 'Island Infrastructure' },
+      ],
+      listedNotConnected: 'gilligan-travel/lagoon-booking-site',
+      unlisted: 'gilligan-travel/coral-reef-booking',
+      pingNote: 'Redeliver on the ping',
+      populationGapWords: 'Something new is not on the list',
+    },
+  },
+
   companyProfile: {
     company_size: '1-10',
     work_style: 'office',
