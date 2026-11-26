@@ -11,7 +11,7 @@
 --   bastion_purge_access_log(org) is the documented caller, but it is not what protects the
 --   log: any session can set a custom GUC, and every service shares one database role today,
 --   so a caller check would be theatre. A direct DELETE of a recent row fails regardless of
---   session settings (asserted by apps/bastion-api/test/db/sharing-access-log.test.ts).
+--   session settings (asserted by apps/bastion-api/test/db/immutability.test.ts).
 
 -- ──────────────────────────────────────────────────────────────────────
 -- 32. bastion_auditor_rooms. The bearer token is stored only as SHA-256; passcode is argon2.
