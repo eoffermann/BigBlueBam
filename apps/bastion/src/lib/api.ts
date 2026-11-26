@@ -1,5 +1,16 @@
 import { impersonateHeader } from '@bigbluebam/ui/impersonation-banner';
-import type { BastionEvidenceSourceColumn, BastionReadinessBanner, BastionReadinessNumbersOut } from '@bigbluebam/shared';
+import type {
+  BastionDriftTaskStatus,
+  BastionEvidenceSourceColumn,
+  BastionExceptionScope,
+  BastionExceptionStatus,
+  BastionFixDraftStatus,
+  BastionFixTemplate,
+  BastionGapKind,
+  BastionGapStatus,
+  BastionReadinessBanner,
+  BastionReadinessNumbersOut,
+} from '@bigbluebam/shared';
 
 // ---------------------------------------------------------------------------
 // Typed Bastion API client. bastion-api routes are mounted under /v1 and proxied
@@ -253,7 +264,7 @@ export interface SummaryResponse {
     not_met_label: string;
     not_applicable: Array<{ control_id: string; control_key: string; title: string }>;
     banners: Array<{ code: BastionReadinessBanner; message: string; count?: number }>;
-    top_gaps: Array<{ id: string; control_id: string; control_title: string; gap_kind: string; risk_score: number; fix_template: string | null; fix_cost: number | null }>;
+    top_gaps: Array<{ id: string; control_id: string; control_title: string; gap_kind: BastionGapKind; risk_score: number; fix_template: BastionFixTemplate | null; fix_cost: number | null }>;
     gaps_ranked: boolean;
     expiring_evidence: Array<{ id: string; title: string; owner_name: string | null; valid_until: string; days_left: number }>;
     last_full_run_at: string | null;
@@ -394,13 +405,13 @@ export interface GapRow {
   owner_name: string | null;
   assertion_id: string | null;
   assertion_statement: string | null;
-  gap_kind: string;
+  gap_kind: BastionGapKind;
   gap_words: string;
   risk_score: number;
-  fix_template: string | null;
+  fix_template: BastionFixTemplate | null;
   fix_words: string | null;
   fix_cost: number | null;
-  status: string;
+  status: BastionGapStatus;
   dismissed_reason: string | null;
   latest_fix_draft_id: string | null;
 }
@@ -409,7 +420,7 @@ export interface AcceptedRisk {
   id: string;
   control_id: string;
   control_title: string;
-  scope: 'entity' | 'assertion';
+  scope: BastionExceptionScope;
   reason: string;
   expires_at: string;
   owner_name: string | null;
@@ -428,20 +439,20 @@ export interface GapsResponse {
 export interface FixDraftRow {
   id: string;
   gap_id: string | null;
-  template: string;
+  template: BastionFixTemplate;
   template_words: string;
   title: string;
   body_markdown: string | null;
   payload: Record<string, unknown>;
   cited_refs: Array<{ entity_type: string; entity_id: string }>;
   hidden_citation_count: number;
-  status: string;
+  status: BastionFixDraftStatus;
   decided_by_name: string | null;
   decided_at: string | null;
   created_by_name: string | null;
   created_by_kind: string | null;
   created_at: string;
-  gap_kind: string | null;
+  gap_kind: BastionGapKind | null;
   gap_words: string | null;
   control_id: string | null;
   control_title: string | null;
@@ -458,12 +469,12 @@ export interface ExceptionRow {
   owner_name: string | null;
   assertion_id: string | null;
   assertion_statement: string | null;
-  scope: 'entity' | 'assertion';
+  scope: BastionExceptionScope;
   cited_entity_type: string | null;
   cited_entity_id: string | null;
   reason: string;
   compensating_note: string | null;
-  status: 'proposed' | 'active' | 'expired' | 'rejected';
+  status: BastionExceptionStatus;
   proposed_by: string;
   proposed_by_name: string | null;
   decided_by_name: string | null;
@@ -483,7 +494,7 @@ export interface DriftRow {
   to_words: string;
   reason: string;
   reason_words: string;
-  task_status: string;
+  task_status: BastionDriftTaskStatus;
   task_words: string;
   bam_task_human_id: string | null;
   acknowledged_by_name: string | null;

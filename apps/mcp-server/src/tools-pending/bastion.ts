@@ -9,15 +9,18 @@ import {
   bastionRunEvaluationSchema,
 } from '@bigbluebam/shared';
 // M6 decision tools (registerBastionDecisionTools at the very end).
+// Every M6 tool input is taken from the route's own shared schema (#231): the tool advertises
+// exactly what the route enforces, and a bound changed in shared changes both.
 import {
-  BastionExceptionScope,
-  BastionExceptionStatus,
-  BastionFixAppliedEntityType,
-  BastionFixDraftStatus,
-  BastionGapKind,
+  bastionDriftAcknowledgeSchema,
+  bastionDriftListQuerySchema,
+  bastionExceptionListQuerySchema,
   bastionExceptionProposeSchema,
+  bastionFixDraftListQuerySchema,
+  bastionFixMarkAppliedSchema,
   bastionGapDismissSchema,
   bastionGapListQuerySchema,
+  bastionProposeFixSchema,
 } from '@bigbluebam/shared';
 import type { ApiClient } from '../middleware/api-client.js';
 import { registerTool } from '../lib/register-tool.js';
@@ -803,14 +806,7 @@ export function registerBastionDecisionTools(server: McpServer, client: BastionC
     name: 'bastion_coverage_gaps',
     description:
       'What to fix first (GET /gaps): stored gaps ranked by risk (control weight x severity x how close the audit is), or sort "quick_wins" for risk per unit of effort. Each gap names its control, owner, kind in plain words (Not met, Evidence not uploaded yet, Something new is not on the list, ...), its fix template and cost, and any drafted fix. Also returns the org-level "checks are stale" row (never stored per control) and "Accepted risks" (active exceptions with owner and expiry). status defaults to "active" (open plus waiting on a decided fix). Read-only.',
-    input: {
-      framework_id: z.string().uuid().optional(),
-      control_id: z.string().uuid().optional(),
-      status: bastionGapListQuerySchema.shape.status.optional(),
-      gap_kind: BastionGapKind.optional(),
-      sort: z.enum(['risk', 'quick_wins']).optional(),
-      limit: z.number().int().min(1).max(500).optional(),
-    },
+    input: { ...bastionGapListQuerySchema.shape },
     returns: z.record(z.unknown()),
     handler: async (q) => {
       const r = await client.listGaps(q);
@@ -825,7 +821,7 @@ export function registerBastionDecisionTools(server: McpServer, client: BastionC
       'Draft the fix for one open gap (POST /gaps/:id/propose-fix). The template comes from the gap (nobody picks it): confirm a check, ask the owner for evidence, change a setting, connect a source, add a Bolt automation (created turned off, only create_task in the Compliance project or a Banter post), draft a policy, or start a short procedure. The draft is filed as a platform proposal that a PERSON decides inside Bastion (the generic proposal decide answers DECIDE_IN_APP); there is no tool to decide it. Cited items you cannot see are dropped. 409 FIX_ALREADY_PROPOSED, GAP_NOT_OPEN or NO_FIX_FOR_GAP. Needs bastion.fix.draft.',
     input: {
       gap_id: z.string().uuid(),
-      note: z.string().trim().max(2000).optional(),
+      note: bastionProposeFixSchema.shape.note,
     },
     returns: z.record(z.unknown()),
     handler: async ({ gap_id, note }) => {
@@ -857,10 +853,7 @@ export function registerBastionDecisionTools(server: McpServer, client: BastionC
       'Drafted fixes (the review queue). Without fix_draft_id: newest first, filtered by status (proposed, approved, rejected, expired, applied, decision_rejected), gap or control (GET /fix-drafts). With fix_draft_id: one draft (GET /fix-drafts/:id). Each draft has its title, plain body, template, control, who drafted it, the mirrored proposal and its expiry, and cited items the caller may see (others are counted, not shown). decision_rejected means the proposal was decided outside Bastion and that decision was ignored. Read-only; needs bastion.fix.read.',
     input: {
       fix_draft_id: z.string().uuid().optional(),
-      status: BastionFixDraftStatus.optional(),
-      gap_id: z.string().uuid().optional(),
-      control_id: z.string().uuid().optional(),
-      limit: z.number().int().min(1).max(200).optional(),
+      ...bastionFixDraftListQuerySchema.shape,
     },
     returns: z.record(z.unknown()),
     handler: async ({ fix_draft_id, ...q }) => {
@@ -876,9 +869,7 @@ export function registerBastionDecisionTools(server: McpServer, client: BastionC
       'Record that an approved fix was carried out elsewhere (POST /fix-drafts/:id/mark-applied), optionally naming what was made: the Beacon policy draft (beacon.entry) or the Bolt automation (bolt.rule). The named item must be visible to the caller; a link from the fix to it is recorded. 409 FIX_NOT_APPROVED unless a person approved the fix first. Needs bastion.fix.mark_applied.',
     input: {
       fix_draft_id: z.string().uuid(),
-      applied_entity_type: BastionFixAppliedEntityType.optional(),
-      applied_entity_id: z.string().uuid().optional(),
-      note: z.string().trim().max(2000).optional(),
+      ...bastionFixMarkAppliedSchema.innerType().shape,
     },
     returns: z.record(z.unknown()),
     handler: async ({ fix_draft_id, applied_entity_type, applied_entity_id, note }) => {
@@ -898,9 +889,7 @@ export function registerBastionDecisionTools(server: McpServer, client: BastionC
       'Accepted risks (exceptions). Without exception_id: newest first, filtered by status (proposed, active, expired, rejected) or control (GET /exceptions). With exception_id: one exception (GET /exceptions/:id). Each shows the control and its owner, scope (one item for up to 365 days, or a whole check for up to 90 days covering only the items failing when it was approved), reason, compensating note, who proposed and who approved it ("approved by the proposer (small team)" when a team of fewer than three self-approved), expiry and days left. An active exception makes the control read "Not met, risk accepted"; it still counts under Not met, never as proof. Read-only.',
     input: {
       exception_id: z.string().uuid().optional(),
-      status: BastionExceptionStatus.optional(),
-      control_id: z.string().uuid().optional(),
-      limit: z.number().int().min(1).max(200).optional(),
+      ...bastionExceptionListQuerySchema.shape,
     },
     returns: z.record(z.unknown()),
     handler: async ({ exception_id, ...q }) => {
@@ -914,16 +903,9 @@ export function registerBastionDecisionTools(server: McpServer, client: BastionC
     name: 'bastion_propose_exception',
     description:
       'Propose accepting a risk on a control (POST /exceptions). scope "entity" covers one cited item (cited_entity_type + cited_entity_id, for example the long-lived "Radio Relay" key) for up to 365 days; scope "assertion" covers one whole check (assertion_id) for up to 90 days and, once approved, only the items failing at that moment. expires_on is a date in the organization\'s time zone. A PERSON other than the proposer decides it inside Bastion (fewer than three people: the proposer may, labelled); there is no tool to decide it. 400 EXPIRY_TOO_LONG, CITATION_NOT_VISIBLE, NOT_A_CONTROL_CHECK. Needs bastion.exception.propose.',
-    input: {
-      control_id: z.string().uuid(),
-      scope: BastionExceptionScope,
-      assertion_id: z.string().uuid().optional(),
-      cited_entity_type: z.string().max(48).optional(),
-      cited_entity_id: z.string().uuid().optional(),
-      reason: z.string().trim().min(1).max(2000),
-      compensating_note: z.string().trim().max(2000).optional(),
-      expires_on: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-    },
+    // The object inside the shared refine; the handler re-parses with the full schema for the
+    // cross-field rule (an assertion-wide exception needs its check).
+    input: { ...bastionExceptionProposeSchema.innerType().innerType().shape },
     returns: z.record(z.unknown()),
     handler: async (input) => {
       const parsed = bastionExceptionProposeSchema.safeParse(input);
@@ -938,12 +920,7 @@ export function registerBastionDecisionTools(server: McpServer, client: BastionC
     name: 'bastion_list_drift',
     description:
       'Controls that got worse (GET /drift), newest first: from and to state in plain words, why (the check failed, the accepted risk ran out, evidence expired, ...), what happened to the control\'s Bam task (created, reopened, no Compliance project), and whether someone acknowledged it. Filter by control or unacknowledged=true; page with before = next_cursor. Read-only; needs bastion.drift.read.',
-    input: {
-      control_id: z.string().uuid().optional(),
-      unacknowledged: z.boolean().optional(),
-      limit: z.number().int().min(1).max(200).optional(),
-      before: z.string().datetime({ offset: true }).optional(),
-    },
+    input: { ...bastionDriftListQuerySchema.shape },
     returns: z.record(z.unknown()),
     handler: async (q) => {
       const r = await client.listDrift(q);
@@ -958,7 +935,7 @@ export function registerBastionDecisionTools(server: McpServer, client: BastionC
       'Acknowledge that a control got worse (POST /drift/:id/acknowledge), with an optional note. It does not change the control or its task; it records who has seen it. 409 DRIFT_ALREADY_ACKNOWLEDGED. Needs bastion.drift.acknowledge.',
     input: {
       drift_id: z.string().uuid(),
-      note: z.string().trim().max(2000).optional(),
+      note: bastionDriftAcknowledgeSchema.shape.note,
     },
     returns: z.record(z.unknown()),
     handler: async ({ drift_id, note }) => {

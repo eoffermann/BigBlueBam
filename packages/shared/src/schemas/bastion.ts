@@ -11,6 +11,13 @@ import { z } from 'zod';
 //
 // See docs/brainstorming/2026_11_25_20_03_APP_DESIGN_bastion.md sections 2.3, 3.1-3.5, 4.1.
 
+/**
+ * A boolean query parameter: 'true' / 'false' (or a real boolean) only. Never z.coerce.boolean(),
+ * which turns the string 'false' into true and inverts the filter (#215, #231). bastion.test.ts
+ * fails if z.coerce.boolean appears in this file again.
+ */
+export const boolQueryParam = () => z.preprocess((v) => (v === 'true' ? true : v === 'false' ? false : v), z.boolean());
+
 /* ------------------------------------------------------------------ */
 /*  Frameworks and controls                                           */
 /* ------------------------------------------------------------------ */
@@ -1048,8 +1055,7 @@ export const bastionManualEvidenceListQuerySchema = z
     kind: BastionManualEvidenceKind.optional(),
     assertion_id: z.string().uuid().optional(),
     control_id: z.string().uuid().optional(),
-    // 'true' / 'false' (or a real boolean) only: z.coerce.boolean() turned 'false' into true (#215).
-    stuck: z.preprocess((v) => (v === 'true' ? true : v === 'false' ? false : v), z.boolean()).optional(),
+    stuck: boolQueryParam().optional(),
     limit: z.coerce.number().int().min(1).max(200).default(100),
   })
   .strict();
@@ -1313,7 +1319,7 @@ export type BastionExceptionDecide = z.infer<typeof bastionExceptionDecideSchema
 export const bastionDriftListQuerySchema = z
   .object({
     control_id: z.string().uuid().optional(),
-    unacknowledged: z.coerce.boolean().optional(),
+    unacknowledged: boolQueryParam().optional(),
     limit: z.coerce.number().int().min(1).max(200).default(50),
     before: z.string().datetime({ offset: true }).optional(),
   })

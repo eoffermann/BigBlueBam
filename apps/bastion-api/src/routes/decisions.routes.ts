@@ -136,11 +136,7 @@ export default async function decisionRoutes(fastify: FastifyInstance) {
 
   // Row 62.
   fastify.get('/drift', { preHandler: [requireAuth, can('bastion.drift.read')] }, async (request, reply) => {
-    const raw = query(request);
-    const parsed = bastionDriftListQuerySchema.safeParse({
-      ...raw,
-      unacknowledged: raw.unacknowledged === 'true' ? true : raw.unacknowledged === 'false' ? false : undefined,
-    });
+    const parsed = bastionDriftListQuerySchema.safeParse(query(request));
     if (!parsed.success) return validationError(request, reply, parsed.error);
     return handled(request, reply, () => drift.listDrift(deps().engine, viewerOf(request), parsed.data));
   });

@@ -55,7 +55,25 @@ import {
   bastionFeedRecordSchema,
   bastionPolicyAudienceSchema,
   bastionProbeFunctionName,
+  bastionDriftListQuerySchema,
 } from './bastion.js';
+
+describe('boolean query parameters (#215, #231)', () => {
+  it("'false' parses as false, 'true' as true, anything else is refused", () => {
+    expect(bastionDriftListQuerySchema.parse({ unacknowledged: 'false' }).unacknowledged).toBe(false);
+    expect(bastionDriftListQuerySchema.parse({ unacknowledged: 'true' }).unacknowledged).toBe(true);
+    expect(bastionDriftListQuerySchema.parse({}).unacknowledged).toBeUndefined();
+    expect(bastionDriftListQuerySchema.safeParse({ unacknowledged: 'yes' }).success).toBe(false);
+  });
+
+  it('no Bastion schema uses z.coerce.boolean (it reads the string "false" as true)', () => {
+    const src = readFileSync(join(__dirname, 'bastion.ts'), 'utf8')
+      .split('\n')
+      .filter((l) => !/^\s*(\/\/|\*|\/\*)/.test(l))
+      .join('\n');
+    expect(src).not.toMatch(/z\.coerce\.boolean\s*\(/);
+  });
+});
 
 // The Bastion enums mirror CHECK constraints in the bastion migrations. This suite reads every
 // migration file and fails when the two drift apart, so a new status value cannot land in one

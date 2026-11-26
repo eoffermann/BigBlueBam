@@ -429,6 +429,36 @@ describe('Bastion M5 tools (manual evidence, feeds, coverage)', () => {
     expect((records.limit as { safeParse: (v: unknown) => { success: boolean } }).safeParse(0).success).toBe(false);
   });
 
+  it('the M6 tools take every input from the routes\' shared schemas (#231)', async () => {
+    const tool = await load();
+    const shared = await import('@bigbluebam/shared');
+    const same = (name: string, schema: { shape: Record<string, unknown> }, keys: string[]) => {
+      const input = tool(name).input;
+      for (const k of keys) expect(input[k], `${name}.${k}`).toBe(schema.shape[k]);
+    };
+    same('bastion_coverage_gaps', shared.bastionGapListQuerySchema, ['framework_id', 'control_id', 'status', 'gap_kind', 'sort', 'limit']);
+    same('bastion_propose_fix', shared.bastionProposeFixSchema, ['note']);
+    same('bastion_list_fix_drafts', shared.bastionFixDraftListQuerySchema, ['status', 'gap_id', 'control_id', 'limit']);
+    same('bastion_mark_fix_applied', shared.bastionFixMarkAppliedSchema.innerType(), ['applied_entity_type', 'applied_entity_id', 'note']);
+    same('bastion_list_exceptions', shared.bastionExceptionListQuerySchema, ['status', 'control_id', 'limit']);
+    same('bastion_propose_exception', shared.bastionExceptionProposeSchema.innerType().innerType(), [
+      'control_id',
+      'scope',
+      'assertion_id',
+      'cited_entity_type',
+      'cited_entity_id',
+      'reason',
+      'compensating_note',
+      'expires_on',
+    ]);
+    same('bastion_list_drift', shared.bastionDriftListQuerySchema, ['control_id', 'unacknowledged', 'limit', 'before']);
+    same('bastion_acknowledge_drift', shared.bastionDriftAcknowledgeSchema, ['note']);
+    // unacknowledged=false stays false (the #215 bug, back in M6 as #231).
+    const un = tool('bastion_list_drift').input.unacknowledged as { safeParse: (v: unknown) => { success: boolean; data?: unknown } };
+    expect(un.safeParse('false')).toMatchObject({ success: true, data: false });
+    expect(un.safeParse(false)).toMatchObject({ success: true, data: false });
+  });
+
   it('the detail-bearing reads require asker_user_id (#217)', async () => {
     const tool = await load();
     for (const name of ['bastion_list_manual_evidence', 'bastion_list_feed_records', 'bastion_coverage_summary']) {
