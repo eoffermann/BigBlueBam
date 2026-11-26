@@ -120,3 +120,19 @@ Files the best-practices reviewer checked: `apps/api/src/boot/rls-boot.ts`; `app
 Round-2 verification: of 29 round-2 blockers and majors, 27 confirmed resolved in the text; best-practices-4 and infrastructure-N5 were partly resolved and are carried into this round (best-practices-3, infrastructure R3-1). The blocker and major count fell from 40 (round 1) to 29 (round 2) to 10 (round 3), and every round-3 finding is a concrete, mechanical correction rather than a design gap. Cross-reviewer duplicates: restore detection by identity (security-1, stability-2), probe org guard on the read pool (best-practices-2, security minor), the mirror inside the backup job (infrastructure R3-2, stability minor).
 
 This is the final round under the three-round cap. The orchestrator folds these findings in and then asks each reviewer to verify only its own round-3 fixes in the text; that check is recorded below rather than run as a fourth open-ended review.
+
+## Round 3 fold-in and verification
+
+Fold-in (commit 69d04a6e): of the 10 blockers and majors, 8 accepted and 2 adapted, none rejected; all 14 minors folded in. Adaptations: best-practices-1 (probe functions revoked from PUBLIC with owner execute, the `bam_app` grant inside an `IF EXISTS` guard, owner-only ACL accepted by the test); infrastructure R3-1 (beyond the request, the off-site mirror and the object sweep also moved into bastion-api engines that worker jobs only trigger, so the backup-destination secrets never need to reach the worker).
+
+Each reviewer then verified only its own round-3 items in the section text:
+
+| Reviewer | Items | Result |
+|---|---|---|
+| Design | design-1, design-2, 2 minors | All resolved (§3.2, §2.6, §2.1, §2.3); no new blocker |
+| Security | security-1, 3 minors | All resolved (§3.4, §8.4, §3.1, §9.7); no new blocker |
+| Stability | stability-1, stability-2, 5 minors | All resolved (§7, §7.3, §9.1, §3.4); no new blocker |
+| Best practices | bp-1, bp-2, bp-3, 2 minors | All resolved (§3.1, §11.2, §12, §5.4, §8.4); one cosmetic wording leftover |
+| Infrastructure | R3-1, R3-2, 2 minors | All resolved (§7.2, §9.1, §9.4, §9.7, §12); one stale wording line |
+
+The two wording leftovers (the §3.1 org-guard bullet naming only `runInOrgScope`, and the §11 line describing the `syncNew` dry-run as "only the Bastion URL additions") were corrected by the orchestrator directly. **No blocker or major findings remain. The spec is converged and build-ready.**

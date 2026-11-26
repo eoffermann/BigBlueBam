@@ -1228,8 +1228,31 @@ Orchestrator direction for the fold-in: fix #128 at the platform level in M0 and
 
 **Round 2 dispositions:** of the 29 blockers and majors, 26 accepted and 3 adapted, none rejected; 29 minors folded in and 2 adapted, none deferred. The adaptations: secret hints marked stable with `<generate>` and a what-breaks note, compose uses `:-` and bastion-api refuses to start with a plain message (best-practices-3); #126 variable propagation is opt-in per hint and applied to every app's internal URL hints, never overwriting a set value (N6); the LLM permits copy the proxy's leased, fail-open pattern, and the throughput is restated at about 9 to 18 calls per minute (N7). The access-log purge guard was reworded: every service connects as the same database role, so "only the definer function can purge" was unenforceable; the two-year age rule is the stated guard, with a test. After round 2 the spec has 35 tables, 106 REST endpoints (34 with tools), 24 MCP tools, 50 permission actions, 24 Bolt events, 19 jobs, migrations 0260-0269 plus the M10 permission files. Milestone changes: M0 also carries #128, the Railway generator fix for runtime-resolved upstreams, the stable-secret class and the enum-vs-`BOLT_SOURCES` CI check; Bolt events register at M4 with the outbox; tool registration, docs catalog, published counts and the Launchpad entry ship together at M11.
 
-<!-- ROUND 3 -->
+### Round 3 (final)
+
+The last round under the three-round cap. Full findings: `2026_11_25_20_03_SPEC_REVIEW_bastion_round3.md`. Of the 29 round-2 blockers and majors, 27 were confirmed resolved in the text; two were partly resolved and carried forward.
+
+| Focus | Blocker | Major | Minor |
+|---|---|---|---|
+| Design | 0 | 2 | 2 |
+| Stability | 0 | 2 | 5 |
+| Security | 0 | 1 | 3 |
+| Best practices | 1 | 2 | 2 |
+| Infrastructure | 0 | 2 | 2 |
+| **Total** | **1** | **9** | **14** |
+
+The blocker and major count fell from 40 to 29 to 10 across the three rounds, and the round-3 findings were concrete corrections rather than design gaps: a migration GRANT to a role that does not exist (it would have aborted `migrate` on every fresh database), exceptions applied at the wrong level of aggregation, exception expiry producing no task, restore detection that compared positions rather than identity and missed in-place restores, orphaned queued runs, probes on the read pool missing the org binding, MCP tool files that would have turned two CI gates red at M10, and two Railway propagation and backup-coupling problems.
+
+Fold-in (69d04a6e): 8 accepted, 2 adapted, none rejected; all 14 minors folded in. Each reviewer then verified only its own round-3 items in the text: all resolved, no new blocker, two wording leftovers that the orchestrator corrected directly. **No blocker or major findings remain; the spec is converged.**
+
+Across the three rounds the review also confirmed and filed eight pre-existing platform defects: #121, #122, #123, #124, #125, #126, #127, #128. Five of them (#123 `/files` exposure, #124 Bolt source list, #125 publish timeout, #126 Railway variable propagation, #127 no-cache list) plus #128 (proposal decider) are scheduled as "fix the fact" changes in the build's M0 milestone.
 
 ## Outcome
 
-_(pending)_
+- **Winner:** Bastion (app id `bastion`), continuous compliance and GRC for 2-50 person firms. Seat B's submission (as "Baseline", renamed to avoid Bursar's vocabulary), 29 points.
+- **Runner-up:** Bevy, agent-run HR core (Seat A), 28 points. Then Brace 25, Bullhorn 24, Brick 20, Bellman 19, Bulletin 16.
+- **Strong essentials that did not reach the slate** (candidates for a future session): joiner/mover/leaver handover with access governance (Badge/Baton), learning and enablement (Boost/Bloom), recruiting (Beckon/Billet).
+- **Session log:** `docs/brainstorming/2026_11_25_20_03_BRAINSTORMING_SESSION.md` (this file).
+- **Design spec:** `docs/brainstorming/2026_11_25_20_03_APP_DESIGN_bastion.md`: 35 tables, 106 REST endpoints (34 with MCP tools), 24 MCP tools, 50 permission actions, 24 Bolt events, 19 worker jobs, migrations 0260-0269 plus the M10 permission files, internal port 4024, milestones M0 (platform prerequisites) through M11 (Launchpad registration).
+- **Review record:** `2026_11_25_20_03_SPEC_REVIEW_bastion_round1.md`, `_round2.md`, `_round3.md`.
+- **Next:** handed to `app-build-from-spec` on the `suite-brainstorm` branch.

@@ -394,7 +394,7 @@ precedent deliberately avoids them), so each one, in the same file:
   `DO $$ BEGIN IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'bam_app') THEN GRANT EXECUTE ON
   FUNCTION ... TO bam_app; END IF; END $$;` so `0268` never aborts on a database without that role;
 - raises unless `org = current_setting('app.current_org_id', true)::uuid`, so callers must be
-  inside `runInOrgScope` for that same org and a definer function cannot be pointed at another
+  inside `runInOrgScope` (primary) or `runInOrgScopeRead` (read pool) for that same org and a definer function cannot be pointed at another
   tenant;
 - carries an explicit org predicate in every query.
 
@@ -1783,7 +1783,7 @@ partial nightly resumes the same day; the platform decide route returns 409 `DEC
 Bastion proposal and records `decided_by_kind` for others; a Bolt rule on `bastion` source
 triggers (enum value present); the `db-drift` enum check fails when a value is missing; packet
 built where the worker's `S3_BUCKET` differs from `BASTION_S3_BUCKET`; generator output for the
-runtime-resolved block; `syncNew` dry-run plan contains only the Bastion URL additions.
+runtime-resolved block; `syncNew` dry-run plan contains only `propagate` additions (the Bastion URL hints and `BASTION_S3_BUCKET`).
 
 ### 11.3 LLM corpus gates
 
