@@ -3,7 +3,7 @@
 // REWORD_TIMEOUT_MS; any failure, a busy slot, no provider or a refusal by the injection gate
 // keeps the template's words. Built from injected parts so the gate is tested with recorded answers.
 
-import { type LlmChat } from '../lib/llm-errors.js';
+import type { LlmChat } from '../lib/llm-errors.js';
 import type { LlmPermits } from '../lib/llm-permits.js';
 import { buildRewordMessages, parseReword, type Reworded, type RewordInput } from '../library/fix-reword.js';
 
