@@ -50,6 +50,7 @@ export default defineConfig({
     appProject('b3'),
     appProject('banter'),
     appProject('basis'),
+    appProject('bastion'),
     appProject('beacon'),
     appProject('bearing'),
     appProject('bench'),

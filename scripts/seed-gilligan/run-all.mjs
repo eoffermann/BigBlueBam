@@ -30,6 +30,7 @@ import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import argon2 from 'argon2';
 import { BURSAR_SEED_EXPECTATIONS } from './bursar.expectations.mjs';
+import { BASTION_SEED_EXPECTATIONS } from './bastion.expectations.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const t0 = Date.now();
@@ -54,7 +55,7 @@ const CAST = [
   { role: 'lovey',     id: '0ddd0b3e-4de3-4077-a905-07878dc43960', email: 'lovey@gilligantravel.example',     name: 'Lovey Howell',        group: GROUP.member },
 ];
 
-// ── Seeder run order (8 phases). Phase 1 is fatal; later phases are best-effort
+// ── Seeder run order (9 phases). Phase 1 is fatal; later phases are best-effort
 //    so one app's hiccup doesn't abort the rest. board-luau.mjs is excluded
 //    (it is a base64 asset generator, not a seeder). ──
 const PHASES = [
@@ -82,6 +83,10 @@ const PHASES = [
   // targets must already exist. Its live-path ingest proof is soft internally.
   { name: 'Campaigns & detail', files: ['blast.mjs', 'blast-blueprint-fixup.mjs', 'blip.mjs', 'detail-fixup.mjs'] },
   { name: 'Support & email', files: ['helpdesk.mjs', 'smtp.mjs'] },
+  // bastion.mjs is LAST (spec 10): it reads Bam, Bond, Beacon, Bin, Blip, Bolt and Bursar data
+  // from every earlier phase. It drives bastion-api as Skipper (API key, plus a signed-in session
+  // for the vouching confirm calls) and reads BASTION_EXPECTATIONS, injected below.
+  { name: 'Compliance', files: ['bastion.mjs'] },
 ];
 
 // ── docker compose helpers ────────────────────────────────────────────
@@ -233,6 +238,9 @@ async function main() {
       }
       if (file === 'bursar.mjs') {
         env.BURSAR_EXPECTATIONS = JSON.stringify(BURSAR_SEED_EXPECTATIONS);
+      }
+      if (file === 'bastion.mjs') {
+        env.BASTION_EXPECTATIONS = JSON.stringify(BASTION_SEED_EXPECTATIONS);
       }
       const soft = (phase.soft || []).includes(file);
       const ok = runSeeder(file, env);
