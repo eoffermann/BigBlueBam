@@ -1,17 +1,6 @@
 {
   "_comment": "Payload keys publishers send that the Bolt catalog does not declare yet (scripts/lib/bolt-payload-keys.mjs, #262). Each value is the issue tracking it. This list may only shrink: scripts/check-bolt-catalog.mjs fails on a new undeclared key AND on an entry here that is no longer sent. Fix by declaring the key in apps/bolt-api/src/services/event-catalog.ts (or not sending it), then delete the line.",
   "entries": {
-    "bam:epic.created:org": 287,
-    "bam:epic.status_changed:org": 287,
-    "bam:epic.status_changed:project": 287,
-    "bam:epic.updated:org": 287,
-    "bam:epic.updated:project": 287,
-    "bam:task.overdue:trigger_at": 287,
-    "bam:task.upserted:assignee": 287,
-    "bam:task.upserted:epic": 287,
-    "bam:task.upserted:phase": 287,
-    "bam:task.upserted:reporter": 287,
-    "bam:task.upserted:sprint": 287,
     "bearing:goal.achieved:id": 288,
     "bearing:goal.achieved:name": 288,
     "bearing:goal.achieved:owner": 288,
