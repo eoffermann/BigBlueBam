@@ -1315,7 +1315,7 @@ export type BastionDriftAcknowledge = z.infer<typeof bastionDriftAcknowledgeSche
  * Bolt rule shapes (spec 2.4): the only actions a drafted rule may carry. send_webhook and every
  * send_email* action are refused, so a drafted rule can never send anything outside the suite.
  */
-export const BASTION_BOLT_RULE_ALLOWED_ACTIONS = ['create_task', 'banter_post'] as const;
+export const BASTION_BOLT_RULE_ALLOWED_ACTIONS = ['create_task', 'banter_post_message'] as const;
 export type BastionBoltRuleAction = (typeof BASTION_BOLT_RULE_ALLOWED_ACTIONS)[number];
 
 /** The one Bam task per control (spec 2.5): `bastion:control:<control_id>`. */

@@ -32,6 +32,7 @@ import manualEvidenceRoutes from './routes/manual-evidence.routes.js';
 import feedRoutes from './routes/feeds.routes.js';
 import feedIngestRoutes from './routes/feed-ingest.routes.js';
 import coverageRoutes from './routes/coverage.routes.js';
+import decisionRoutes from './routes/decisions.routes.js';
 import { engineDeps } from './engine/runtime.js';
 import { checkLedgerIdentity } from './engine/restore.js';
 import { closeBastionQueues } from './lib/queue.js';
@@ -125,6 +126,8 @@ await fastify.register(
     await v1.register(feedRoutes);
     await v1.register(feedIngestRoutes);
     await v1.register(coverageRoutes);
+    // M6: gaps, fix drafts, exceptions and drift (both decide routes are session-only).
+    await v1.register(decisionRoutes);
     await v1.register(internalRoutes);
   },
   { prefix: '/v1' },

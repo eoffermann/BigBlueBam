@@ -9,10 +9,12 @@ import { engineDeps } from '../engine/runtime.js';
 import { enqueueEvaluationRun, enqueueEvidenceIngest } from '../lib/queue.js';
 import { createBinStorage } from '../lib/storage.js';
 import { binLookups, type EvidenceDeps } from './evidence-deps.js';
+import type { DecisionDeps } from './decisions.service.js';
 
 let binStorage: ReturnType<typeof createBinStorage> | undefined;
 
-const canAccess = (asker: string, entityType: string, entityId: string) =>
+/** can_access through the api's internal preflight (fail closed). */
+export const canAccess = (asker: string, entityType: string, entityId: string) =>
   preflightAccess(asker, entityType, entityId, {
     apiInternalUrl: env.BBB_API_INTERNAL_URL,
     internalServiceSecret: env.INTERNAL_SERVICE_SECRET,
@@ -32,6 +34,11 @@ export function evidenceDeps(log: FastifyBaseLogger, redis: Redis): EvidenceDeps
       await enqueueEvidenceIngest(orgId, id);
     },
   };
+}
+
+/** M6: what the gap, fix and exception services need (spec 2.4, 2.6). */
+export function decisionDeps(log: FastifyBaseLogger, redis: Redis): DecisionDeps {
+  return { engine: engineDeps(log, redis), canAccess };
 }
 
 /** BASTION_BACKUP_S3_* set (spec 9.7): drives the "off-site backup not configured" banner. */

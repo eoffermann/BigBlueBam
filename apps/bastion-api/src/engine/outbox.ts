@@ -123,11 +123,68 @@ export interface Deliverer {
   deliver(row: OutboxRow): Promise<DeliveryResult>;
 }
 
-/** The production deliverer: Bolt events via publishBoltEventChecked, seal objects to the bucket. */
-export function defaultDeliverer(deps: { sql: EngineDeps['sql']; storage: StorageDriver | null; putTimeoutMs: number }): Deliverer {
+/** Where the Bam internal routes live (spec 8.4) and the secret that opens them. */
+export interface BamTarget {
+  apiUrl: string;
+  secret: string;
+  fetchImpl?: typeof fetch;
+  timeoutMs?: number;
+}
+
+const BAM_PATHS: Record<'bam_task_upsert' | 'bam_task_comment', string> = {
+  bam_task_upsert: '/internal/bastion/tasks/upsert',
+  bam_task_comment: '/internal/bastion/tasks/comment',
+};
+
+/**
+ * Deliver a Bam row (task upsert, comment by external_id, proposal close) to the api-owned route.
+ * After a successful upsert the drift row records the task and what happened to it.
+ */
+export async function deliverToBam(sql: EngineDeps['sql'], bam: BamTarget | undefined, row: OutboxRow): Promise<DeliveryResult> {
+  if (!bam) return { ok: false, error: 'the Bam API is not configured for Bastion' };
+  const p = row.payload;
+  const path =
+    row.kind === 'proposal_close'
+      ? `/internal/bastion/proposals/${String(p.proposal_id)}/close`
+      : BAM_PATHS[row.kind as 'bam_task_upsert' | 'bam_task_comment'];
+  let res: Response;
+  try {
+    res = await (bam.fetchImpl ?? fetch)(`${bam.apiUrl.replace(/\/$/, '')}${path}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Internal-Service-Secret': bam.secret },
+      body: JSON.stringify(p.request ?? {}),
+      signal: AbortSignal.timeout(bam.timeoutMs ?? 10_000),
+    });
+  } catch (err) {
+    return { ok: false, error: (err as Error).message };
+  }
+  const text = await res.text().catch(() => '');
+  if (!res.ok) {
+    return { ok: false, error: `Bam API ${res.status}: ${text.slice(0, 300)}`, status: res.status, permanent: isPermanentHttpFailure(res.status) };
+  }
+  if (row.kind === 'bam_task_upsert' && typeof p.drift_id === 'string') {
+    let data: { task_id?: string; outcome?: string } = {};
+    try {
+      data = (JSON.parse(text) as { data?: typeof data }).data ?? {};
+    } catch {
+      data = {};
+    }
+    if (data.task_id && data.outcome) {
+      await sql`UPDATE bastion_drift_events SET bam_task_id = ${data.task_id}, task_status = ${data.outcome}
+                 WHERE organization_id = ${row.organization_id} AND id = ${p.drift_id}`;
+    }
+  }
+  return { ok: true };
+}
+
+/** The production deliverer: Bolt events, seal objects to the bucket, Bam rows to the api. */
+export function defaultDeliverer(deps: { sql: EngineDeps['sql']; storage: StorageDriver | null; putTimeoutMs: number; bam?: BamTarget }): Deliverer {
   return {
     async deliver(row) {
       const p = row.payload;
+      if (row.kind === 'bam_task_upsert' || row.kind === 'bam_task_comment' || row.kind === 'proposal_close') {
+        return deliverToBam(deps.sql, deps.bam, row);
+      }
       if (row.kind === 'bolt_event') {
         const eventPayload: Record<string, unknown> = { ...((p.payload as Record<string, unknown>) ?? {}), _event_id: row.idempotency_key };
         const res = await publishBoltEventChecked(
@@ -162,9 +219,7 @@ export function defaultDeliverer(deps: { sql: EngineDeps['sql']; storage: Storag
                           AND object_written_at IS NULL`;
         return { ok: true };
       }
-      // bam_task_upsert, bam_task_comment and proposal_close are delivered to the internal Bam
-      // routes that land at M6; nothing writes them before then.
-      return { ok: false, error: `no deliverer for outbox kind ${row.kind} yet` };
+      return { ok: false, error: `no deliverer for outbox kind ${row.kind}`, permanent: true };
     },
   };
 }

@@ -26,6 +26,7 @@ import { type EngineDeps, orgTx, sqlstateOf, type Tx } from './context.js';
 import { appendLedger, AppendBlockedError, LedgerLockTimeoutError, RestoreDetectedError } from './ledger.js';
 import { enqueueBastionEvent } from './outbox.js';
 import { decideManual } from './manual.js';
+import { driftTaskStatus, enqueueDriftTask, enqueueTaskComment, localDate, REASON_PHRASE, remediationSettings } from './remediation.js';
 import { checkLedgerIdentity, type SealIdentity, StorageUnavailableError } from './restore.js';
 import { aggregateStored, coverageKindOf, infraDecision, isWorsening } from './status.js';
 
@@ -526,9 +527,8 @@ export async function aggregateControl(deps: EngineDeps, tx: Tx, run: RunRow, co
      WHERE organization_id = ${run.organization_id} AND id = ${controlId}`;
 
   if (isWorsening(from, to)) {
-    const settings = (await tx`SELECT compliance_project_id, remediation_tasks FROM bastion_org_settings
-                                 WHERE organization_id = ${run.organization_id}`)[0];
-    const taskStatus = !settings?.compliance_project_id ? 'no_project' : settings.remediation_tasks === 'propose' ? 'proposed' : 'pending';
+    const remediation = await remediationSettings(tx, run.organization_id);
+    const taskStatus = driftTaskStatus(remediation);
     const firstBad = snaps.find((s) => s.outcome === to);
     const reason = to === 'fail' ? 'failed' : (agg.reason ?? 'unprovable');
     const inserted = await tx`
@@ -544,6 +544,17 @@ export async function aggregateControl(deps: EngineDeps, tx: Tx, run: RunRow, co
         tx,
         { orgId: run.organization_id, idempotencyKey: `control.drifted:${driftId}`, orderingKey: `control:${controlId}` },
       );
+      // Spec 2.5: the task upsert rides the same transaction as the drift row.
+      if (taskStatus === 'pending') {
+        const day = localDate(asOf, remediation.timezone);
+        await enqueueDriftTask(tx, run.organization_id, remediation, {
+          control_id: controlId,
+          drift_id: driftId,
+          now: asOf,
+          reopen_comment: `Drifted again on ${day}: ${REASON_PHRASE[reason] ?? reason}.`,
+          idempotency_base: `drift:${driftId}`,
+        });
+      }
     }
   } else if (to === 'pass' && from !== 'pass' && control.status_reason !== 'not_yet_confirmed') {
     await enqueueBastionEvent(
@@ -552,6 +563,13 @@ export async function aggregateControl(deps: EngineDeps, tx: Tx, run: RunRow, co
       tx,
       { orgId: run.organization_id, idempotencyKey: `control.recovered:${run.id}:${controlId}`, orderingKey: `control:${controlId}` },
     );
+    // On recovery Bastion comments; it never closes the task (spec 2.5).
+    const remediation = await remediationSettings(tx, run.organization_id);
+    await enqueueTaskComment(tx, run.organization_id, remediation, {
+      control_id: controlId,
+      body: `Back to passing on ${localDate(asOf, remediation.timezone)}. Bastion will keep checking it every night.`,
+      idempotency_key: `recovered:${run.id}:${controlId}:bam_task_comment`,
+    });
   }
 }
 
