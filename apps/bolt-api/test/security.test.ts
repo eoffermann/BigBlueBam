@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { BOLT_SOURCES } from '@bigbluebam/shared';
 
 // ---------------------------------------------------------------------------
 // Mock the database module
@@ -207,7 +208,7 @@ describe('Zod schema input size limits', () => {
     const schema = z.object({
       name: z.string().min(1).max(255),
       actions: z.array(z.object({ sort_order: z.number(), mcp_tool: z.string() })).min(1),
-      trigger_source: z.enum(['bam', 'banter', 'beacon', 'brief', 'helpdesk', 'schedule']),
+      trigger_source: z.enum(BOLT_SOURCES),
       trigger_event: z.string().min(1).max(60),
     });
 

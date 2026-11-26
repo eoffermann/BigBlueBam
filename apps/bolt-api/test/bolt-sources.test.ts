@@ -46,4 +46,22 @@ describe('issue #124: one Bolt source list', () => {
     for (const s of sources) expect(BOLT_SOURCES as readonly string[], s).toContain(s);
     expect(getEventsBySource('bursar').length).toBeGreaterThan(0);
   });
+
+  // Issue #138: the generated MCP tool schemas must carry the full list. A stale
+  // generated file (extractor not re-run after BOLT_SOURCES changed) fails here.
+  it('the generated MCP tool schemas carry exactly BOLT_SOURCES for every bolt source field', async () => {
+    const { MCP_TOOL_SCHEMAS } = await import('../src/services/mcp-tool-schemas.generated.js');
+    const fields: Array<[string, string]> = [
+      ['bolt_list', 'trigger_source'],
+      ['bolt_create', 'trigger_source'],
+      ['bolt_update', 'trigger_source'],
+      ['bolt_events', 'source'],
+    ];
+    for (const [tool, field] of fields) {
+      const schema = MCP_TOOL_SCHEMAS.find((t) => t.mcp_tool === tool);
+      expect(schema, tool).toBeDefined();
+      const param = schema!.parameters.find((p) => p.name === field);
+      expect(param?.enum, `${tool}.${field}`).toEqual([...BOLT_SOURCES]);
+    }
+  });
 });

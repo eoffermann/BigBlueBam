@@ -3,7 +3,9 @@
  * extract-mcp-tool-schemas.mjs
  *
  * Parses every apps/mcp-server/src/tools/*-tools.ts file and extracts each
- * `server.tool('name', 'desc', { ...zod schema }, handler)` registration so
+ * `registerTool(server, { name, description, input: { ...zod schema } })`
+ * registration (and the legacy `server.tool('name', 'desc', {...}, handler)`
+ * form) so
  * the Bolt action editor can present a typed parameter picker instead of
  * forcing users to free-type MCP arguments.
  *
@@ -16,9 +18,32 @@
 import { readFileSync, readdirSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { loadBoltSources } from './lib/bolt-sources.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const TOOLS_DIR = join(ROOT, 'apps/mcp-server/src/tools');
+
+// Shared constants a tool schema may pass to z.enum(...) by name. Each maps to
+// a loader that reads the canonical list from source, so the generated schema
+// carries the real values instead of an empty enum.
+const SHARED_ENUM_CONSTANTS = {
+  BOLT_SOURCES: () => loadBoltSources(),
+};
+
+// `const NAME = ['a', 'b'] as const` declarations in the tool file currently
+// being parsed, so z.enum(NAME) resolves to its values.
+let currentFileConstants = new Map();
+
+function collectFileConstants(source) {
+  const out = new Map();
+  const re = /const\s+([A-Z][A-Z0-9_]*)\s*(?::[^=]+)?=\s*\[([^\]]*)\]/g;
+  let m;
+  while ((m = re.exec(source)) !== null) {
+    const values = [...m[2].matchAll(/['"`]([^'"`]+)['"`]/g)].map((v) => v[1]);
+    if (values.length) out.set(m[1], values);
+  }
+  return out;
+}
 
 // ---------------------------------------------------------------------------
 // Brace-balanced extraction
@@ -28,8 +53,9 @@ const TOOLS_DIR = join(ROOT, 'apps/mcp-server/src/tools');
  * Find every server.tool(...) invocation in the file and return the raw text
  * of the third argument (the zod schema object).
  */
-function extractToolBlocks(source) {
-  const blocks = [];
+function extractToolBlocks(rawSource) {
+  const source = stripComments(rawSource);
+  const blocks = extractRegisterToolBlocks(source);
   const re = /server\.tool\(\s*/g;
   let match;
   while ((match = re.exec(source)) !== null) {
@@ -52,6 +78,92 @@ function extractToolBlocks(source) {
       description: arg2.value,
       schemaText: source.slice(obj.start + 1, obj.end - 1),
     });
+  }
+  return blocks;
+}
+
+/**
+ * Remove // and /* *\/ comments while respecting string and template literals,
+ * so an apostrophe in a comment cannot desynchronize the brace scanner.
+ */
+function stripComments(source) {
+  let out = '';
+  let inString = null;
+  for (let i = 0; i < source.length; i++) {
+    const c = source[i];
+    if (inString) {
+      out += c;
+      if (c === '\\') { out += source[i + 1] ?? ''; i++; continue; }
+      if (c === inString) inString = null;
+      continue;
+    }
+    if (c === '"' || c === "'" || c === '`') { inString = c; out += c; continue; }
+    if (c === '/' && source[i + 1] === '/') {
+      while (i < source.length && source[i] !== '\n') i++;
+      out += '\n';
+      continue;
+    }
+    if (c === '/' && source[i + 1] === '*') {
+      const end = source.indexOf('*/', i + 2);
+      i = end < 0 ? source.length : end + 1;
+      continue;
+    }
+    out += c;
+  }
+  return out;
+}
+
+/**
+ * Parse a run of string literals joined by `+` (descriptions are often split
+ * across lines that way). Returns the concatenated value or null.
+ */
+function parseConcatenatedString(text) {
+  let i = 0;
+  let value = '';
+  let any = false;
+  while (i < text.length) {
+    const lit = parseStringLiteral(text, i);
+    if (!lit) return null;
+    value += lit.value;
+    any = true;
+    i = lit.end;
+    while (i < text.length && /\s/.test(text[i])) i++;
+    if (i >= text.length) break;
+    if (text[i] !== '+') return null;
+    i++;
+  }
+  return any ? value : null;
+}
+
+/**
+ * Find every `registerTool(server, { name, description, input: {...}, ... })`
+ * call (the current registration form; see apps/mcp-server/src/lib/register-tool.ts).
+ */
+function extractRegisterToolBlocks(source) {
+  const blocks = [];
+  const re = /registerTool\(\s*server\s*,\s*/g;
+  let match;
+  while ((match = re.exec(source)) !== null) {
+    const start = match.index + match[0].length;
+    if (source[start] !== '{') continue;
+    const obj = readBalancedBlock(source, start, '{', '}');
+    const props = splitTopLevelCommas(source.slice(obj.start + 1, obj.end - 1));
+    let name;
+    let description = '';
+    let schemaText = '';
+    for (const prop of props) {
+      const colon = findUnquotedColon(prop);
+      if (colon < 0) continue;
+      const key = prop.slice(0, colon).trim();
+      const value = prop.slice(colon + 1).trim();
+      if (key === 'name') name = parseConcatenatedString(value) ?? undefined;
+      else if (key === 'description') description = parseConcatenatedString(value) ?? '';
+      else if (key === 'input' && value.startsWith('{')) {
+        const inner = readBalancedBlock(value, 0, '{', '}');
+        schemaText = value.slice(inner.start + 1, inner.end - 1);
+      }
+    }
+    if (name) blocks.push({ name, description, schemaText });
   }
   return blocks;
 }
@@ -144,7 +256,8 @@ function parseParameter(line) {
   const rawKey = line.slice(0, colonIdx).trim();
   // Strip surrounding quotes if present
   const key = rawKey.replace(/^['"]|['"]$/g, '');
-  const expr = line.slice(colonIdx + 1).trim();
+  // Fold chained calls written one per line (`z\n  .string()\n  .uuid()`) onto one line.
+  const expr = line.slice(colonIdx + 1).trim().replace(/\s*\n\s*\./g, '.');
   if (!expr.startsWith('z.')) return null;
 
   const optional = /\.optional\(\)/.test(expr);
@@ -190,6 +303,16 @@ function parseParameter(line) {
           .split(',')
           .map((s) => s.trim().replace(/^['"`]|['"`]$/g, ''))
           .filter(Boolean);
+      } else {
+        // z.enum(SHARED_CONST): resolve shared constants by name (issue #138).
+        const constMatch = expr.match(/z\.enum\(\s*([A-Z][A-Z0-9_]*)\s*[,)]/);
+        if (constMatch) {
+          // Same-file `const NAME = [...]` first, then the shared constants.
+          const local = currentFileConstants.get(constMatch[1]);
+          const resolver = SHARED_ENUM_CONSTANTS[constMatch[1]];
+          if (local) enumValues = local;
+          else if (resolver) enumValues = resolver();
+        }
       }
       break;
     }
@@ -281,6 +404,7 @@ const allTools = [];
 
 for (const file of files.sort()) {
   const source = readFileSync(join(TOOLS_DIR, file), 'utf8');
+  currentFileConstants = collectFileConstants(stripComments(source));
   const blocks = extractToolBlocks(source);
   const sourceName = deriveSourceFromFilename(file);
   for (const block of blocks) {

@@ -21,17 +21,431 @@ export interface McpToolSchema {
 
 export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
   {
+    "mcp_tool": "activity_by_actor",
+    "description": "Query the unified activity log for everything a specific actor (user) has done across Bam, Bond, and Helpdesk. The target actor must share the caller's active org (404 otherwise). Visibility for individual rows is gated server-side.",
+    "source": "activity",
+    "parameters": [
+      {
+        "name": "actor_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "since",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "ISO-8601 timestamp; only return rows created at or after this time."
+      },
+      {
+        "name": "cursor",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "limit",
+        "type": "number",
+        "format": "integer",
+        "required": false,
+        "nullable": false,
+        "description": "Page size (default 50, max 200)."
+      }
+    ]
+  },
+  {
+    "mcp_tool": "activity_query",
+    "description": "Query the unified activity log for a given entity. Returns rows from Bam activity_log, Bond bond_activities, and Helpdesk ticket_activity_log under a normalized shape. Visibility is gated server-side: you will only see rows your current user/org can access. Paginated by a `<iso-ts>|<uuid>` cursor.",
+    "source": "activity",
+    "parameters": [
+      {
+        "name": "entity_type",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "entity_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Entity UUID to fetch history for."
+      },
+      {
+        "name": "since",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "ISO-8601 timestamp; only return rows created at or after this time."
+      },
+      {
+        "name": "cursor",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "limit",
+        "type": "number",
+        "format": "integer",
+        "required": false,
+        "nullable": false,
+        "description": "Page size (default 50, max 200)."
+      }
+    ]
+  },
+  {
+    "mcp_tool": "agent_audit",
+    "description": "Fetch the activity_log stream for a specific agent (service-account user) in the caller's active org. Paginated by created_at cursor. Wave 1 covers activity_log only; bond/helpdesk/banter audit merges are Wave 2.",
+    "source": "agent",
+    "parameters": [
+      {
+        "name": "agent_user_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "User id of the service account to audit. Must be in the caller's active org."
+      },
+      {
+        "name": "since",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "ISO-8601 timestamp; only return rows created at or after this time."
+      },
+      {
+        "name": "limit",
+        "type": "number",
+        "format": "integer",
+        "required": false,
+        "nullable": false,
+        "description": "Page size (default 50, max 200)."
+      },
+      {
+        "name": "cursor",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Pagination cursor (ISO-8601 created_at of the last row on the prior page)."
+      }
+    ]
+  },
+  {
+    "mcp_tool": "agent_heartbeat",
+    "description": "Service-account only. Register or refresh the calling runner in agent_runners. Upserts by the service-account user id; bumps last_heartbeat_at and merges name/version/capabilities. Callers that are not service accounts get 403 NOT_A_SERVICE_ACCOUNT.",
+    "source": "agent",
+    "parameters": [
+      {
+        "name": "runner_name",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "version",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Runner build version string (semver or git sha). Optional."
+      },
+      {
+        "name": "capabilities",
+        "type": "array",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      }
+    ]
+  },
+  {
+    "mcp_tool": "agent_list",
+    "description": "List the agent runners registered in the caller's active org. Returns one row per service-account user that has ever heartbeat'd, sorted by last_heartbeat_at descending (rows that have never heartbeat'd sort last). Use this to discover which agents exist, their advertised capabilities, version strings, and liveness (a NULL last_heartbeat_at means registered-but-never-seen; a stale timestamp means the runner has gone quiet). Any authenticated user may call this; no service-account gate.",
+    "source": "agent",
+    "parameters": []
+  },
+  {
+    "mcp_tool": "agent_self_report",
+    "description": "Service-account only. Append a self-report entry (action='agent.self_report') to activity_log under the given project. project_id is REQUIRED — the platform does not create sentinel projects in Wave 1. Callers that are not service accounts get 403 NOT_A_SERVICE_ACCOUNT.",
+    "source": "agent",
+    "parameters": [
+      {
+        "name": "summary",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Short free-text description of the run (goals, outcomes, errors)."
+      },
+      {
+        "name": "metrics",
+        "type": "object",
+        "required": false,
+        "nullable": false,
+        "description": "Optional structured metrics JSON (counts, durations, etc)."
+      },
+      {
+        "name": "project_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Project to scope the self-report under. Required."
+      }
+    ]
+  },
+  {
+    "mcp_tool": "agent_policy_get",
+    "description": "Fetch the policy row for a specific agent/service user in the caller's active org. Returns enabled flag, allowed_tools glob list, channel_subscriptions, rate_limit_override, notes, and an updated_by_user join so the caller can see who last touched it. 404 if the user is not in the caller's org or has no policy row yet.",
+    "source": "agent-policy",
+    "parameters": [
+      {
+        "name": "agent_user_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": ""
+      }
+    ]
+  },
+  {
+    "mcp_tool": "agent_policy_list",
+    "description": "List agent/service policy rows in the caller's active org (SuperUsers may pass org_id to list a different org). Each row carries agent_user_id, agent_name (from users.display_name), enabled flag, allowed_tool_count, last_heartbeat_at from agent_runners (null if the agent has never heartbeat), and updated_at. Use enabled_only=true to restrict to currently-enabled rows.",
+    "source": "agent-policy",
+    "parameters": [
+      {
+        "name": "org_id",
+        "type": "string",
+        "format": "uuid",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "enabled_only",
+        "type": "boolean",
+        "required": false,
+        "nullable": false,
+        "description": "If true, restrict to currently-enabled policies."
+      }
+    ]
+  },
+  {
+    "mcp_tool": "agent_policy_set",
+    "description": "Upsert the policy row for an agent/service user. Patch any subset of enabled, allowed_tools, channel_subscriptions, rate_limit_override, notes. allowed_tools uses glob-prefix matching: a single entry '*' allows every tool; entries like 'banter.*' or 'banter_*' allow any tool starting with the prefix; bare entries are exact match. Returns confirmation_required:true when the call flips enabled from true to false on a live agent — the caller is expected to route through confirm_action before committing the kill. 400 if the target is not an agent/service user; 403 if the target is in a different org.",
+    "source": "agent-policy",
+    "parameters": [
+      {
+        "name": "agent_user_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "patch",
+        "type": "object",
+        "required": false,
+        "nullable": true,
+        "description": "Fields to apply. Omit a field to leave it unchanged."
+      }
+    ]
+  },
+  {
+    "mcp_tool": "agent_webhook_configure",
+    "description": "Configure or reconfigure an agent runner's outbound webhook. Accepts the target URL, an event_filter list (entries shaped like 'source:event_type' or 'source:*' or a single '*'), and an optional enabled flag (default true). Generates a fresh HMAC signing secret, hashes it with argon2id for server-side storage, and returns the plaintext secret exactly once; subsequent calls require rotation. Rejects URLs that would hit private/loopback/link-local IPs, cloud metadata endpoints, or *.internal hosts, and requires https in production. Resets webhook_consecutive_failures so a reconfigure lifts any circuit-breaker auto-disable.",
+    "source": "agent-webhook",
+    "parameters": [
+      {
+        "name": "runner_user_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "webhook_url",
+        "type": "string",
+        "format": "url",
+        "required": true,
+        "nullable": false,
+        "description": "Target URL. https:// is required in production; http:// is allowed in dev/test."
+      },
+      {
+        "name": "event_filter",
+        "type": "array",
+        "required": true,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "enabled",
+        "type": "boolean",
+        "required": false,
+        "nullable": false,
+        "description": "Whether the webhook is active after configure. Defaults true."
+      }
+    ]
+  },
+  {
+    "mcp_tool": "agent_webhook_deliveries_list",
+    "description": "List recent webhook deliveries for the caller's active org. Filter by runner_id (limit to one runner), by status (pending | delivered | failed | dead_lettered), and paginate by passing the created_at of the last row as 'before'. Returns attempt_count, last_error, response_status_code, and timestamps so operators can triage failures and redeliver dead-lettered rows. Capped at 200 per call; default limit 50.",
+    "source": "agent-webhook",
+    "parameters": [
+      {
+        "name": "runner_id",
+        "type": "string",
+        "format": "uuid",
+        "required": false,
+        "nullable": false,
+        "description": "Restrict to deliveries for a single runner."
+      },
+      {
+        "name": "status",
+        "type": "enum",
+        "enum": [
+          "pending",
+          "delivered",
+          "failed",
+          "dead_lettered"
+        ],
+        "required": false,
+        "nullable": false,
+        "description": "Filter by delivery state."
+      },
+      {
+        "name": "before",
+        "type": "string",
+        "format": "datetime",
+        "required": false,
+        "nullable": false,
+        "description": "Paginate: pass the created_at of the oldest previously-returned row."
+      },
+      {
+        "name": "limit",
+        "type": "number",
+        "format": "integer",
+        "required": false,
+        "nullable": false,
+        "description": "Max rows to return. Default 50, ceiling 200."
+      }
+    ]
+  },
+  {
+    "mcp_tool": "agent_webhook_redeliver",
+    "description": "Re-enqueue a specific webhook delivery. Resets attempt_count to 0 and status to pending, then queues a fresh dispatcher job. Useful for reviving dead-lettered rows after the operator has fixed the receiver, or for forcing a retry on a pending row without waiting for the backoff to elapse. Fails with RUNNER_WEBHOOK_DISABLED if the runner's webhook has been auto-disabled by the circuit breaker; reconfigure or re-enable the runner first.",
+    "source": "agent-webhook",
+    "parameters": [
+      {
+        "name": "delivery_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Target delivery row id from agent_webhook_deliveries_list."
+      }
+    ]
+  },
+  {
+    "mcp_tool": "agent_webhook_rotate_secret",
+    "description": "Rotate the HMAC signing secret for an agent runner's outbound webhook. Returns a fresh plaintext secret exactly once; the predecessor is invalidated atomically. Fails with WEBHOOK_NOT_CONFIGURED if the runner has no webhook_url yet (use agent_webhook_configure first). Unlike api-key rotation, there is no grace window: the next dispatch will be signed with the new secret, and receivers that cache the old secret will see signature mismatches until they swap.",
+    "source": "agent-webhook",
+    "parameters": [
+      {
+        "name": "runner_user_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Agent/service user id whose runner row owns the webhook."
+      }
+    ]
+  },
+  {
+    "mcp_tool": "attachment_get",
+    "description": "Fetch metadata for a single attachment by id, federated across Bam tasks, Helpdesk tickets, and Beacon entries. Runs a visibility preflight on the parent entity BEFORE reading the attachment table, so callers who cannot see the parent get NOT_FOUND (cross-org) or FORBIDDEN (within-org denial) without leaking existence. Returns `deep_link` as a presigned download URL ONLY when scan_status='clean'; infected / pending / error rows return deep_link=null. Brief documents are NOT supported parents (Brief has no attachment table as of Wave 4). AGENTIC_TODO §17 Wave 4.",
+    "source": "attachment",
+    "parameters": [
+      {
+        "name": "upload_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": ""
+      }
+    ]
+  },
+  {
+    "mcp_tool": "attachment_list",
+    "description": "List attachments attached to a given parent entity, filtered optionally by scan_status. Supported entity_type values: 'bam.task', 'helpdesk.ticket', 'beacon.entry'. Any other entity_type returns UNSUPPORTED_PARENT_TYPE. Visibility preflight runs on the parent BEFORE the attachment table is queried; unauthorized callers get 403 FORBIDDEN with the can_access reason. `limit` defaults to 50 and is capped at 50. Rows are sorted by uploaded_at desc. Deep links are issued only for scan_status='clean' rows. AGENTIC_TODO §17 Wave 4.",
+    "source": "attachment",
+    "parameters": [
+      {
+        "name": "entity_type",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "entity_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Parent entity id (UUID)."
+      },
+      {
+        "name": "limit",
+        "type": "number",
+        "format": "integer",
+        "required": false,
+        "nullable": false,
+        "description": "Max rows to return. Defaults to 50; hard cap is 50."
+      },
+      {
+        "name": "scan_status",
+        "type": "enum",
+        "enum": [
+          "pending",
+          "clean",
+          "infected",
+          "error"
+        ],
+        "required": false,
+        "nullable": false,
+        "description": ""
+      }
+    ]
+  },
+  {
+    "mcp_tool": "attachment_meta",
+    "description": "Discovery endpoint for the federated attachment surface. Returns the static set of supported parent entity_type values, the valid scan_status filter values, and the default/max list limits — so an agent can self-describe attachment_list/attachment_get capabilities without consulting docs or guessing. Read-only; no parameters. AGENTIC_TODO §17 Wave 4.",
+    "source": "attachment",
+    "parameters": []
+  },
+  {
     "mcp_tool": "add_comment",
-    "description": "Add a comment to a task",
+    "description": "Add a comment to a task. Accepts either a task UUID or human_id (e.g. 'FRND-42').",
     "source": "bam",
     "parameters": [
       {
         "name": "task_id",
         "type": "string",
-        "format": "uuid",
         "required": true,
         "nullable": false,
-        "description": "The task ID"
+        "description": ""
       },
       {
         "name": "body",
@@ -43,8 +457,537 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
     ]
   },
   {
+    "mcp_tool": "add_project_member",
+    "description": "Add an existing org member to a project with the given project role. Requires project admin (or org owner/admin). The user must already belong to the org.",
+    "source": "bam",
+    "parameters": [
+      {
+        "name": "project_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "The project ID"
+      },
+      {
+        "name": "user_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "The org member's user UUID to add"
+      },
+      {
+        "name": "role",
+        "type": "enum",
+        "enum": [
+          "admin",
+          "member",
+          "viewer"
+        ],
+        "required": true,
+        "nullable": false,
+        "description": "Project role to grant"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "archive_project",
+    "description": "Archive a project (destructive — the project disappears from active lists). Requires project admin (or org owner/admin). Requires confirm:true — the first call without it returns a confirmation prompt and changes nothing.",
+    "source": "bam",
+    "parameters": [
+      {
+        "name": "project_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "The project ID to archive"
+      },
+      {
+        "name": "confirm",
+        "type": "boolean",
+        "required": true,
+        "nullable": false,
+        "description": "Must be true to confirm archiving"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bam_add_member_to_projects",
+    "description": "Org-admin: add an existing org member to one or more projects in the caller's active org, each with a per-project role (admin / member / viewer). Existing memberships are left untouched (returned in `skipped`), new ones in `added`. The caller must be org admin/owner (or SuperUser) and outrank the target. Every project_id must belong to the active org (400 CROSS_ORG_PROJECT otherwise). 404 if the user is not a member of the active org.",
+    "source": "bam",
+    "parameters": [
+      {
+        "name": "user_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Target user UUID (must be a member of the caller's active org)."
+      },
+      {
+        "name": "assignments",
+        "type": "array",
+        "required": true,
+        "nullable": false,
+        "description": "Project UUID in the caller's active org."
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bam_add_task_parent",
+    "description": "Attach an existing task as a parent of another task. Establishes a many-to-many parent/subtask link in the task_parent_links join table, so a subtask can serve multiple parents (each genuinely dependent on it). Idempotent: re-adding an existing link returns { already_linked: true } without changing state. Refuses self-loops (400 SELF_LOOP) and cycles up to depth 16 (409 CYCLE). Bumps the parent's subtask_count when the link is genuinely new.",
+    "source": "bam",
+    "parameters": [
+      {
+        "name": "task_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "The subtask UUID — the task being attached."
+      },
+      {
+        "name": "parent_task_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "The parent task UUID."
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bam_admin_reset_password",
+    "description": "Org-admin: reset another user's password to a freshly generated 16-character password (or one you supply via `password`). All of that user's active sessions are invalidated in the same transaction. The new password is returned in the response so the operator can hand it off — there is no second chance to retrieve it. The caller must be an org admin/owner or a SuperUser, and must outrank the target. Prefer `bam_send_password_reset_link` when the user can be reached by email; this tool is the right choice when SMTP is unconfigured or the user is locked out without email access.",
+    "source": "bam",
+    "parameters": [
+      {
+        "name": "user_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Target user UUID (must be a member of the caller's active org)."
+      },
+      {
+        "name": "password",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Optional explicit password. Min 12 chars. If omitted, a 16-char strong password is generated."
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bam_find_user",
+    "description": "Fuzzy-search users by display name or email (scoped to the caller's active org). Results are ranked by relevance and capped at 20.",
+    "source": "bam",
+    "parameters": [
+      {
+        "name": "query",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Free-text query matched against display name and email"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bam_find_user_by_email",
+    "description": "Find a user by their exact email address (case-insensitive, scoped to the caller's active org). Returns the user `{ id, email, name, display_name, avatar_url }` or null when no match.",
+    "source": "bam",
+    "parameters": [
+      {
+        "name": "email",
+        "type": "string",
+        "format": "email",
+        "required": true,
+        "nullable": false,
+        "description": "Email address to look up"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bam_get_member_activity",
+    "description": "Org-admin: read a member's activity feed (their authored task/project actions within the caller's active org), newest first, cursor-paginated. Read-only audit view — for cross-app activity prefer activity_by_actor. Requires org admin/owner scope (or SuperUser) and that the caller outranks the target.",
+    "source": "bam",
+    "parameters": [
+      {
+        "name": "user_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Target user UUID (must be a member of the caller's active org)."
+      },
+      {
+        "name": "cursor",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Opaque pagination cursor from a prior response."
+      },
+      {
+        "name": "limit",
+        "type": "number",
+        "format": "integer",
+        "required": false,
+        "nullable": false,
+        "description": "Page size (default 50, max 200)."
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bam_get_org_member",
+    "description": "Org-admin: fetch one member of the caller's active org by user id, including their org role, active/disabled status, join date, last-seen, and their project memberships within this org. Read-only. Use list_members to enumerate, then this for detail. Requires org admin/owner scope (or SuperUser). 404 if the user is not a member of the active org.",
+    "source": "bam",
+    "parameters": [
+      {
+        "name": "user_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Target user UUID (must be a member of the caller's active org)."
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bam_get_task_by_human_id",
+    "description": "Look up a task by its human-readable reference (e.g. 'FRND-42'). The prefix is case-insensitive. Returns the task's id, project_id, human_id, and title. Useful when a prompt or rule refers to a task by its ticket number rather than UUID.",
+    "source": "bam",
+    "parameters": [
+      {
+        "name": "human_id",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": ""
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bam_import_csv",
+    "description": "Import tasks from CSV rows into a Bam project (spreadsheet round-trip). Supports value_maps (per-field cell translation), link_mappings (URL columns -> task Links), custom_field_mapping (opt-in custom fields), and options.duplicate_strategy: 'create' | 'skip' | 'update'. Set dry_run:true to preview (writes nothing). 'update' overwrites matched existing tasks (matched by exported human_id column when mapping.human_id is set, else by exact title) and is gated behind confirmation: call once without confirm_token to stage a token, then again with it to commit.",
+    "source": "bam",
+    "parameters": [
+      {
+        "name": "project_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "The project ID"
+      },
+      {
+        "name": "rows",
+        "type": "array",
+        "required": true,
+        "nullable": false,
+        "description": "Array of row objects (CSV header -> cell value)"
+      },
+      {
+        "name": "mapping",
+        "type": "object",
+        "required": true,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "value_maps",
+        "type": "object",
+        "required": false,
+        "nullable": true,
+        "description": "Per-target-field map of incoming cell value -> Bam value (null = leave unset)"
+      },
+      {
+        "name": "link_mappings",
+        "type": "array",
+        "required": false,
+        "nullable": false,
+        "description": "URL columns to import into task Links"
+      },
+      {
+        "name": "custom_field_mapping",
+        "type": "array",
+        "required": false,
+        "nullable": false,
+        "description": "Opt-in mapping of columns into project custom fields"
+      },
+      {
+        "name": "options",
+        "type": "object",
+        "required": false,
+        "nullable": false,
+        "description": "Date parsing locale"
+      },
+      {
+        "name": "dry_run",
+        "type": "boolean",
+        "required": false,
+        "nullable": false,
+        "description": "When true, preview the import (writes nothing) instead of committing"
+      },
+      {
+        "name": "confirm_token",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bam_invite_member",
+    "description": "Invite a user to the caller's active org. Reuses an existing user by email if one already exists (`was_existing=true`); otherwise creates a brand-new user. Optionally adds the user to one or more projects in the same org at the same time (`project_ids`). When SMTP is configured, the user receives an invitation email — for brand-new users the email carries a 7-day password-onboarding link via the password-reset token machinery; for existing users it's just a 'you have new access' notice. The response reports `email_sent` so the caller knows whether the email actually went out. Errors: 409 ALREADY_MEMBER, 400 CROSS_ORG_PROJECT (one or more project_ids belong to another org).",
+    "source": "bam",
+    "parameters": [
+      {
+        "name": "email",
+        "type": "string",
+        "format": "email",
+        "required": true,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "role",
+        "type": "enum",
+        "enum": [
+          "member",
+          "admin"
+        ],
+        "required": false,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "display_name",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Optional display name; defaults to the local-part of the email for new users."
+      },
+      {
+        "name": "project_ids",
+        "type": "array",
+        "required": false,
+        "nullable": false,
+        "description": "Optional project UUIDs in the caller's org to add the user to as a project member (role defaults to member)."
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bam_list_member_projects",
+    "description": "Org-admin: list the projects a given member belongs to within the caller's active org, with the member's per-project role and join date. Read-only — pair with bam_add_member_to_projects to grant access. Requires org admin/owner scope (or SuperUser). 404 if the user is not a member of the active org.",
+    "source": "bam",
+    "parameters": [
+      {
+        "name": "user_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Target user UUID (must be a member of the caller's active org)."
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bam_list_people",
+    "description": "List people across EVERY org the caller belongs to (a SuperUser sees all non-deleted orgs), deduped, with per-(person, org) capability flags. This is the People Manager v2 surface — broader than `list_members`, which is limited to the caller's single active org. Visibility is scoped: a caller never sees a person who shares no org with them. Each membership row carries `caps` (manage_role, disable, remove, reset_password, manage_projects, manage_keys, transfer_ownership, delete_account) computed server-side from the caller's role in that org and rank vs. the person — use them to decide which follow-up mutation tools (e.g. bam_admin_reset_password) will be permitted. Pass `user_id` to fetch a single person (with their in-scope memberships + caps); a `user_id` outside the caller's visible scope returns an empty list. Supports search (email + display name, case-insensitive), is_active / role / org_id filters, and opaque cursor pagination (limit default 50, max 200).",
+    "source": "bam",
+    "parameters": [
+      {
+        "name": "search",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Case-insensitive substring matched against email and display name."
+      },
+      {
+        "name": "is_active",
+        "type": "boolean",
+        "required": false,
+        "nullable": false,
+        "description": "Filter to active (true) or disabled (false) people only."
+      },
+      {
+        "name": "role",
+        "type": "enum",
+        "enum": [
+          "owner",
+          "admin",
+          "member",
+          "viewer",
+          "guest"
+        ],
+        "required": false,
+        "nullable": false,
+        "description": "Keep only people who hold this role in at least one in-scope org."
+      },
+      {
+        "name": "org_id",
+        "type": "string",
+        "format": "uuid",
+        "required": false,
+        "nullable": false,
+        "description": "Restrict the scan to a single org the caller can see."
+      },
+      {
+        "name": "user_id",
+        "type": "string",
+        "format": "uuid",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "cursor",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Opaque pagination cursor from a prior response."
+      },
+      {
+        "name": "limit",
+        "type": "number",
+        "format": "integer",
+        "required": false,
+        "nullable": false,
+        "description": "Page size (default 50, max 200)."
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bam_list_task_parents",
+    "description": "List every parent task of the given task. Unions the legacy tasks.parent_task_id self-FK with the task_parent_links join table, so a subtask backfilled from before the many-to-many feature still shows its parent.",
+    "source": "bam",
+    "parameters": [
+      {
+        "name": "task_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "The task whose parents you want."
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bam_list_task_subtasks",
+    "description": "List every subtask of the given task. Unions the legacy tasks.parent_task_id self-FK with the task_parent_links join table, so subtasks attached either way show up. Each entry includes completion state so the caller can pre-check the Done-gate before attempting to move the parent into a terminal phase (the API will reject with 409 INCOMPLETE_SUBTASKS if any child is still open).",
+    "source": "bam",
+    "parameters": [
+      {
+        "name": "task_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "The parent task whose subtasks you want."
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bam_remove_member_from_org",
+    "description": "Org-admin: remove a member from the caller's active org (drops their org membership and project memberships in this org; does NOT delete the user account, which keeps authored content intact). Durable membership management, not a credential/account-deletion op. The caller must be org admin/owner (or SuperUser), must outrank the target, and cannot remove themselves. Requires confirm_action=true to proceed — call once without it to preview, then again with confirm_action:true to actually remove. 404 if the user is not a member of the active org.",
+    "source": "bam",
+    "parameters": [
+      {
+        "name": "user_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Target user UUID (must be a member of the caller's active org)."
+      },
+      {
+        "name": "confirm_action",
+        "type": "boolean",
+        "required": false,
+        "nullable": false,
+        "description": "Must be true to actually remove. Omit (or pass false) to preview, then call again with true."
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bam_remove_task_parent",
+    "description": "Remove a parent/child link between two tasks. Drops the row from task_parent_links and, if the legacy tasks.parent_task_id pointer matched this link, nulls it out too. Decrements the parent's subtask_count (and subtask_done_count if the child was already Done). 404 if no such link exists. Neither task is deleted by this operation.",
+    "source": "bam",
+    "parameters": [
+      {
+        "name": "task_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "The subtask UUID."
+      },
+      {
+        "name": "parent_task_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "The parent task UUID to unlink from."
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bam_send_password_reset_link",
+    "description": "Org-admin: mint a one-time password-reset token for another user and email them a 60-minute reset link. The caller must outrank the target (or be a SuperUser). The response reports `email_sent` and `smtp_configured` so the caller knows whether the email actually went out — if SMTP is not configured the token is still minted, but no email is sent and the caller must hand the link off out-of-band (or call `bam_admin_reset_password` instead). This is the gentler alternative to `bam_admin_reset_password` because the operator never sees the password.",
+    "source": "bam",
+    "parameters": [
+      {
+        "name": "user_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Target user UUID (must be a member of the caller's active org)."
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bam_update_member_role",
+    "description": "Org-admin: change a member's organization role (member / admin / viewer) in the caller's active org. Durable membership management, not a credential operation. The caller must be org admin/owner (or SuperUser) and must outrank both the current and target role. 'owner' is not settable here — use the transfer-ownership flow (UI/CLI) instead. Optionally pass `version` for optimistic concurrency: a stale version returns 409 VERSION_CONFLICT echoing the current version. 404 if the user is not a member of the active org.",
+    "source": "bam",
+    "parameters": [
+      {
+        "name": "user_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Target user UUID (must be a member of the caller's active org)."
+      },
+      {
+        "name": "role",
+        "type": "enum",
+        "enum": [
+          "member",
+          "admin",
+          "viewer"
+        ],
+        "required": true,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "version",
+        "type": "number",
+        "format": "integer",
+        "required": false,
+        "nullable": false,
+        "description": "Optional optimistic-concurrency token; omit for last-write-wins."
+      }
+    ]
+  },
+  {
     "mcp_tool": "bulk_update_tasks",
-    "description": "Perform a bulk operation on multiple tasks at once",
+    "description": "Perform a bulk operation on multiple tasks at once. Each task_ids entry may be a UUID or a human_id (e.g. FRND-42).",
     "source": "bam",
     "parameters": [
       {
@@ -52,7 +995,7 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
         "type": "array",
         "required": true,
         "nullable": false,
-        "description": "Array of task IDs to update"
+        "description": "Array of task UUIDs or human_ids (e.g. FRND-42) to update"
       },
       {
         "name": "operation",
@@ -73,7 +1016,22 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
         "type": "object",
         "required": false,
         "nullable": false,
-        "description": "Fields to set (depends on operation): e.g. { priority, assignee_id, phase_id, sprint_id }"
+        "description": ""
+      }
+    ]
+  },
+  {
+    "mcp_tool": "cancel_sprint",
+    "description": "Cancel a planned or active sprint. All tasks in the sprint are returned to the backlog (sprint_id set to null) and the sprint is marked cancelled. Rejects with INVALID_STATE if the sprint is already completed or cancelled.",
+    "source": "bam",
+    "parameters": [
+      {
+        "name": "sprint_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "The sprint UUID"
       }
     ]
   },
@@ -129,7 +1087,7 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
   },
   {
     "mcp_tool": "confirm_action",
-    "description": "Confirm a destructive action using a confirmation token. First call without a token to stage the action and receive a token. Then call again with the token to execute.",
+    "description": "Confirm a destructive action using a confirmation token. First call without a token to stage the action and receive a token. Then call again with the token to execute. TTL is 60 seconds by default; if approver_user_id is supplied and resolves to a human user, TTL is extended to 5 minutes so async human review is feasible (AGENTIC_TODO §9 Wave 2).",
     "source": "bam",
     "parameters": [
       {
@@ -152,12 +1110,20 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
         "required": false,
         "nullable": false,
         "description": "Confirmation token received from the staging call. Omit to stage a new action."
+      },
+      {
+        "name": "approver_user_id",
+        "type": "string",
+        "format": "uuid",
+        "required": false,
+        "nullable": false,
+        "description": "Optional approver user id. If present and the user is a human, TTL is 5 minutes. Otherwise TTL is 60 seconds."
       }
     ]
   },
   {
-    "mcp_tool": "create_from_template",
-    "description": "Create a task from a template, optionally overriding specific fields",
+    "mcp_tool": "create_custom_field",
+    "description": "Create a custom-field definition on a project. For select / multi_select types, pass the choices in `options`.",
     "source": "bam",
     "parameters": [
       {
@@ -169,19 +1135,186 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
         "description": "The project ID"
       },
       {
-        "name": "template_id",
+        "name": "name",
         "type": "string",
-        "format": "uuid",
         "required": true,
         "nullable": false,
-        "description": "The template ID to apply"
+        "description": "Field name"
+      },
+      {
+        "name": "options",
+        "type": "any",
+        "required": false,
+        "nullable": false,
+        "description": "Type-specific options (e.g. choices for select/multi_select)"
+      },
+      {
+        "name": "is_required",
+        "type": "boolean",
+        "required": false,
+        "nullable": false,
+        "description": "Whether the field is required (default false)"
+      },
+      {
+        "name": "is_visible_on_card",
+        "type": "boolean",
+        "required": false,
+        "nullable": false,
+        "description": "Whether to show the field on the board card (default false)"
+      },
+      {
+        "name": "position",
+        "type": "number",
+        "format": "integer",
+        "required": false,
+        "nullable": false,
+        "description": "Display order (default 0)"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "create_from_template",
+    "description": "Create a task from a template, optionally overriding specific fields. Accepts project name and template name in addition to UUIDs.",
+    "source": "bam",
+    "parameters": [
+      {
+        "name": "project_id",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Project name or UUID"
+      },
+      {
+        "name": "template_id",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Template name (scoped to the project) or UUID"
       },
       {
         "name": "overrides",
         "type": "object",
         "required": false,
         "nullable": false,
-        "description": "Field overrides to apply on top of the template (e.g. { title, assignee_id, priority })"
+        "description": ""
+      }
+    ]
+  },
+  {
+    "mcp_tool": "create_label",
+    "description": "Create a label in a project.",
+    "source": "bam",
+    "parameters": [
+      {
+        "name": "project_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "The project ID"
+      },
+      {
+        "name": "name",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Label name"
+      },
+      {
+        "name": "color",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Hex color (e.g. #4F46E5)"
+      },
+      {
+        "name": "description",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Label description"
+      },
+      {
+        "name": "position",
+        "type": "number",
+        "format": "integer",
+        "required": false,
+        "nullable": false,
+        "description": "Display order (default 0)"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "create_phase",
+    "description": "Create a phase (board column) in a project at the given position. Existing phases at or after that position shift down to make room.",
+    "source": "bam",
+    "parameters": [
+      {
+        "name": "project_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "The project ID"
+      },
+      {
+        "name": "name",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Phase name"
+      },
+      {
+        "name": "position",
+        "type": "number",
+        "format": "integer",
+        "required": true,
+        "nullable": false,
+        "description": "Insertion position (0-based)"
+      },
+      {
+        "name": "description",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Phase description"
+      },
+      {
+        "name": "color",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Hex color"
+      },
+      {
+        "name": "wip_limit",
+        "type": "number",
+        "format": "integer",
+        "required": false,
+        "nullable": true,
+        "description": "Work-in-progress limit"
+      },
+      {
+        "name": "is_start",
+        "type": "boolean",
+        "required": false,
+        "nullable": false,
+        "description": "Whether this is the start phase"
+      },
+      {
+        "name": "is_terminal",
+        "type": "boolean",
+        "required": false,
+        "nullable": false,
+        "description": "Whether this is a terminal (done) phase"
+      },
+      {
+        "name": "auto_state_on_enter",
+        "type": "string",
+        "format": "uuid",
+        "required": false,
+        "nullable": true,
+        "description": "State UUID to auto-apply when a task enters this phase"
       }
     ]
   },
@@ -293,16 +1426,15 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
   },
   {
     "mcp_tool": "create_task",
-    "description": "Create a new task in a project",
+    "description": "Create a new task in a project. Accepts natural identifiers (project name, phase name, sprint name, label name, user email) in addition to UUIDs.",
     "source": "bam",
     "parameters": [
       {
         "name": "project_id",
         "type": "string",
-        "format": "uuid",
         "required": true,
         "nullable": false,
-        "description": "The project ID"
+        "description": "Project name or UUID"
       },
       {
         "name": "title",
@@ -314,10 +1446,9 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
       {
         "name": "phase_id",
         "type": "string",
-        "format": "uuid",
         "required": true,
         "nullable": false,
-        "description": "Phase to place the task in"
+        "description": "Phase name (scoped to the project) or UUID"
       },
       {
         "name": "description",
@@ -329,18 +1460,16 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
       {
         "name": "sprint_id",
         "type": "string",
-        "format": "uuid",
         "required": false,
         "nullable": true,
-        "description": "Sprint to assign to"
+        "description": "Sprint name or UUID to assign to"
       },
       {
         "name": "assignee_id",
         "type": "string",
-        "format": "uuid",
         "required": false,
         "nullable": true,
-        "description": "User to assign"
+        "description": "Assignee — UUID, email address, or display name"
       },
       {
         "name": "priority",
@@ -369,7 +1498,7 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
         "type": "array",
         "required": false,
         "nullable": false,
-        "description": "Label IDs to attach"
+        "description": "Labels to attach — each entry may be a label name or UUID"
       },
       {
         "name": "epic_id",
@@ -390,6 +1519,230 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
     ]
   },
   {
+    "mcp_tool": "create_template",
+    "description": "Create a reusable task template in a project. A template captures a title pattern, default description/priority/story points, labels, a default phase, and an ordered list of subtask titles that are auto-generated when the template is applied (via create_from_template). Accepts a project name or UUID.",
+    "source": "bam",
+    "parameters": [
+      {
+        "name": "project_id",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Project name or UUID"
+      },
+      {
+        "name": "name",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Template name (how it appears in the picker)"
+      },
+      {
+        "name": "title_pattern",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Title applied to the created task (falls back to the template name)"
+      },
+      {
+        "name": "description",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Default task description (markdown)"
+      },
+      {
+        "name": "priority",
+        "type": "enum",
+        "enum": [
+          "critical",
+          "high",
+          "medium",
+          "low"
+        ],
+        "required": false,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "labels",
+        "type": "array",
+        "required": false,
+        "nullable": false,
+        "description": "Label UUIDs attached to created tasks"
+      },
+      {
+        "name": "phase_id",
+        "type": "string",
+        "format": "uuid",
+        "required": false,
+        "nullable": false,
+        "description": "Default phase UUID for created tasks"
+      },
+      {
+        "name": "subtasks",
+        "type": "array",
+        "required": false,
+        "nullable": false,
+        "description": "Ordered subtask titles auto-created when the template is applied"
+      },
+      {
+        "name": "story_points",
+        "type": "number",
+        "format": "integer",
+        "required": false,
+        "nullable": false,
+        "description": "Default story-point estimate"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "create_view",
+    "description": "Create a saved view (a named filter/sort/swimlane configuration) in a project. Set is_shared:true to make it visible to the whole project.",
+    "source": "bam",
+    "parameters": [
+      {
+        "name": "project_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "The project ID"
+      },
+      {
+        "name": "name",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "View name"
+      },
+      {
+        "name": "filters",
+        "type": "object",
+        "required": false,
+        "nullable": false,
+        "description": "Filter configuration (field -> value map)"
+      },
+      {
+        "name": "sort",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "swimlane",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Swimlane grouping field"
+      },
+      {
+        "name": "is_shared",
+        "type": "boolean",
+        "required": false,
+        "nullable": false,
+        "description": "Share with the whole project (default false)"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "delete_comment",
+    "description": "Delete one of your OWN comments (destructive). Decrements the parent task's comment_count. The API rejects deleting another author's comment with 403. Requires confirm:true — the first call without it returns a confirmation prompt and changes nothing.",
+    "source": "bam",
+    "parameters": [
+      {
+        "name": "comment_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "The comment UUID to delete"
+      },
+      {
+        "name": "confirm",
+        "type": "boolean",
+        "required": true,
+        "nullable": false,
+        "description": "Must be true to confirm deletion"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "delete_custom_field",
+    "description": "Delete a custom-field definition (destructive). Requires confirm:true — the first call without it returns a confirmation prompt and changes nothing.",
+    "source": "bam",
+    "parameters": [
+      {
+        "name": "custom_field_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "The custom-field definition UUID to delete"
+      },
+      {
+        "name": "confirm",
+        "type": "boolean",
+        "required": true,
+        "nullable": false,
+        "description": "Must be true to confirm deletion"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "delete_label",
+    "description": "Delete a label (destructive). Requires confirm:true — the first call without it returns a confirmation prompt and changes nothing.",
+    "source": "bam",
+    "parameters": [
+      {
+        "name": "label_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "The label UUID to delete"
+      },
+      {
+        "name": "confirm",
+        "type": "boolean",
+        "required": true,
+        "nullable": false,
+        "description": "Must be true to confirm deletion"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "delete_phase",
+    "description": "Delete a phase (destructive). Optionally migrate any tasks in it to another phase first via migrate_to (strongly recommended — tasks left orphaned will reference a missing phase). Requires confirm:true.",
+    "source": "bam",
+    "parameters": [
+      {
+        "name": "phase_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "The phase UUID to delete"
+      },
+      {
+        "name": "migrate_to",
+        "type": "string",
+        "format": "uuid",
+        "required": false,
+        "nullable": false,
+        "description": "Phase UUID to move this phase's tasks into before deleting"
+      },
+      {
+        "name": "confirm",
+        "type": "boolean",
+        "required": true,
+        "nullable": false,
+        "description": "Must be true to confirm deletion"
+      }
+    ]
+  },
+  {
     "mcp_tool": "delete_task",
     "description": "Delete a task (destructive action - will ask for confirmation)",
     "source": "bam",
@@ -401,6 +1754,50 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
         "required": true,
         "nullable": false,
         "description": "The task ID to delete"
+      },
+      {
+        "name": "confirm",
+        "type": "boolean",
+        "required": true,
+        "nullable": false,
+        "description": "Must be true to confirm deletion"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "delete_template",
+    "description": "Delete a task template by UUID (destructive). Tasks previously created from it are unaffected. Requires confirm:true — the first call without it returns a confirmation prompt and changes nothing.",
+    "source": "bam",
+    "parameters": [
+      {
+        "name": "template_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "The task-template UUID to delete"
+      },
+      {
+        "name": "confirm",
+        "type": "boolean",
+        "required": true,
+        "nullable": false,
+        "description": "Must be true to confirm deletion"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "delete_view",
+    "description": "Delete one of your OWN saved views (destructive). The API rejects deleting another user's view with 403. Requires confirm:true.",
+    "source": "bam",
+    "parameters": [
+      {
+        "name": "view_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "The saved-view UUID to delete"
       },
       {
         "name": "confirm",
@@ -452,6 +1849,51 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
         "required": false,
         "nullable": false,
         "description": "Whether to also duplicate subtasks (default false)"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "edit_comment",
+    "description": "Edit one of your OWN comments. The prior body is preserved as a revision (history is queryable via list_comment_revisions) and the comment is flagged edited. A no-op edit (body unchanged) does not burn a revision. The API rejects editing another author's comment with 403.",
+    "source": "bam",
+    "parameters": [
+      {
+        "name": "comment_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "The comment UUID"
+      },
+      {
+        "name": "body",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "New comment body (markdown supported)"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "get_board",
+    "description": "Get the full Kanban board for a project: the project record, every phase (board column) with its tasks, and the active sprint (or a specific sprint when sprint_id is supplied). This is the one-shot read an agent uses to understand the current shape of a board before reasoning about moves.",
+    "source": "bam",
+    "parameters": [
+      {
+        "name": "project_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "The project UUID"
+      },
+      {
+        "name": "sprint_id",
+        "type": "string",
+        "format": "uuid",
+        "required": false,
+        "nullable": false,
+        "description": "Optional sprint UUID to scope the board to; defaults to the active sprint"
       }
     ]
   },
@@ -515,8 +1957,20 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
     ]
   },
   {
+    "mcp_tool": "get_launchpad_apps",
+    "description": "Get the resolved Launchpad app list for the caller's active org. Returns the catalog (every app id), the enabled subset, the source layer that won (org override, platform default, or built-in default which means \"all enabled\"), and the raw values at each layer for debugging visibility.",
+    "source": "bam",
+    "parameters": []
+  },
+  {
     "mcp_tool": "get_me",
     "description": "Get the authenticated user profile (display name, email, avatar, timezone, notification preferences, active org, superuser flag).",
+    "source": "bam",
+    "parameters": []
+  },
+  {
+    "mcp_tool": "get_my_org",
+    "description": "Read the caller's active organization metadata — name, slug, plan, logo, free-form settings JSONB, plus live counts (active_owner_count, member_count) used by the People UI. This is the org-level analog of get_me: it tells you which org downstream calls are scoped to and basic facts about it. Read-only; use platform_get_org (SuperUser) for a different org by id, or switch_active_org first to change scope.",
     "source": "bam",
     "parameters": []
   },
@@ -574,6 +2028,27 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
     ]
   },
   {
+    "mcp_tool": "get_my_time_entries",
+    "description": "List the calling user's own time entries across all tasks, optionally filtered to a [start_date, end_date] inclusive range. Useful for self-reporting and timesheet rollups.",
+    "source": "bam",
+    "parameters": [
+      {
+        "name": "start_date",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Inclusive lower bound (ISO date, YYYY-MM-DD)"
+      },
+      {
+        "name": "end_date",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Inclusive upper bound (ISO date, YYYY-MM-DD)"
+      }
+    ]
+  },
+  {
     "mcp_tool": "get_overdue_tasks",
     "description": "Get a report of all overdue tasks in a project",
     "source": "bam",
@@ -590,7 +2065,7 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
   },
   {
     "mcp_tool": "get_platform_settings",
-    "description": "SuperUser only. Fetch platform-wide settings (public signup toggle, etc).",
+    "description": "SuperUser only. Fetch platform-wide settings. As of B3 Frndo Launch the response contains two independent signup kill switches: `public_signup_disabled` gates the BigBlueBam internal /auth/register endpoint; `helpdesk_signup_disabled` gates the Helpdesk customer /helpdesk/auth/register endpoint. The flags are deliberately decoupled — closing internal signup during beta should not also block customers from filing tickets.",
     "source": "bam",
     "parameters": []
   },
@@ -620,6 +2095,21 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
     "description": "Get information about this MCP server including version, available tools, authenticated user, and rate limit status",
     "source": "bam",
     "parameters": []
+  },
+  {
+    "mcp_tool": "get_sprint",
+    "description": "Get a single sprint by UUID, including its status, dates, goal, and (after completion) velocity.",
+    "source": "bam",
+    "parameters": [
+      {
+        "name": "sprint_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "The sprint UUID"
+      }
+    ]
   },
   {
     "mcp_tool": "get_sprint_report",
@@ -785,10 +2275,84 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
     ]
   },
   {
+    "mcp_tool": "import_jira",
+    "description": "Import Jira-export rows into a project as tasks. Each row is a flat object of Jira CSV column -> value (e.g. Summary, Description, Status, Priority, Assignee). Unmatched statuses/labels are auto-created. Returns { imported, skipped, errors }.",
+    "source": "bam",
+    "parameters": [
+      {
+        "name": "project_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "The project ID"
+      },
+      {
+        "name": "rows",
+        "type": "array",
+        "required": true,
+        "nullable": false,
+        "description": "Array of Jira-export row objects (column header -> cell value)"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "import_trello",
+    "description": "Import a Trello board export (JSON) into a project as tasks. Each list becomes a phase (auto-created if missing); each card becomes a task, with Trello labels mapped to project labels and checklist items mapped to subtasks. Returns { imported, skipped, errors }.",
+    "source": "bam",
+    "parameters": [
+      {
+        "name": "project_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "The project ID"
+      },
+      {
+        "name": "lists",
+        "type": "array",
+        "required": false,
+        "nullable": true,
+        "description": "List name (becomes a phase)"
+      }
+    ]
+  },
+  {
     "mcp_tool": "list_beta_signups",
     "description": "SuperUser only. List notify-me submissions from the public beta-gate form, newest first.",
     "source": "bam",
     "parameters": []
+  },
+  {
+    "mcp_tool": "list_comment_reactions",
+    "description": "List all reactions on a comment, grouped by emoji with the reacting users named.",
+    "source": "bam",
+    "parameters": [
+      {
+        "name": "comment_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "The comment UUID"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "list_comment_revisions",
+    "description": "List the edit history of a comment — every superseded body, newest first, with who revised it and when. Readable by anyone who can read the comment.",
+    "source": "bam",
+    "parameters": [
+      {
+        "name": "comment_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "The comment UUID"
+      }
+    ]
   },
   {
     "mcp_tool": "list_comments",
@@ -817,6 +2381,21 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
         "required": false,
         "nullable": false,
         "description": "Number of results"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "list_custom_fields",
+    "description": "List the custom-field definitions for a project, ordered by display position.",
+    "source": "bam",
+    "parameters": [
+      {
+        "name": "project_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "The project ID"
       }
     ]
   },
@@ -900,6 +2479,21 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
     "parameters": []
   },
   {
+    "mcp_tool": "list_project_members",
+    "description": "List the members of a project, with their per-project role.",
+    "source": "bam",
+    "parameters": [
+      {
+        "name": "project_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "The project ID"
+      }
+    ]
+  },
+  {
     "mcp_tool": "list_projects",
     "description": "List all projects the current user has access to",
     "source": "bam",
@@ -950,8 +2544,37 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
     ]
   },
   {
+    "mcp_tool": "list_task_time_entries",
+    "description": "List all logged time entries for a task, ordered by date ascending. Pairs with log_time (the writer).",
+    "source": "bam",
+    "parameters": [
+      {
+        "name": "task_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "The task UUID"
+      }
+    ]
+  },
+  {
     "mcp_tool": "list_templates",
-    "description": "List available task templates for a project",
+    "description": "List available task templates for a project. Accepts project name or UUID.",
+    "source": "bam",
+    "parameters": [
+      {
+        "name": "project_id",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Project name or UUID"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "list_views",
+    "description": "List the saved views in a project visible to the caller: their own views plus any shared views.",
     "source": "bam",
     "parameters": [
       {
@@ -1044,24 +2667,22 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
   },
   {
     "mcp_tool": "move_task",
-    "description": "Move a task to a different phase and/or position on the board",
+    "description": "Move a task to a different phase and/or position on the board. Accepts natural identifiers for task and phase.",
     "source": "bam",
     "parameters": [
       {
         "name": "task_id",
         "type": "string",
-        "format": "uuid",
         "required": true,
         "nullable": false,
-        "description": "The task ID"
+        "description": ""
       },
       {
         "name": "phase_id",
         "type": "string",
-        "format": "uuid",
         "required": true,
         "nullable": false,
-        "description": "Target phase ID"
+        "description": "Target phase name (scoped to the task's project) or UUID"
       },
       {
         "name": "position",
@@ -1074,10 +2695,155 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
       {
         "name": "sprint_id",
         "type": "string",
-        "format": "uuid",
         "required": false,
         "nullable": true,
-        "description": "Optionally change sprint"
+        "description": "Optionally change sprint — name or UUID"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "platform_create_org",
+    "description": "SuperUser only. Create a brand-new organization. The slug is auto-derived from the name (lowercased, non-alphanumeric collapsed to '-'). Does NOT create a membership for the caller — use switch_active_org or the /superuser/context/switch endpoint to enter the new org afterwards.",
+    "source": "bam",
+    "parameters": [
+      {
+        "name": "name",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Display name of the organization."
+      },
+      {
+        "name": "plan",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      }
+    ]
+  },
+  {
+    "mcp_tool": "platform_delete_org",
+    "description": "SuperUser only. Soft-delete an organization: it is stamped deleted and hidden from every read path (list, get, the org switcher), its memberships are dropped and member sessions revoked so no one can access it, but the org row and all authored content are kept for audit (a hard delete is impossible — the FK web into users.id is NO ACTION/RESTRICT). Requires confirm_action=true to proceed.",
+    "source": "bam",
+    "parameters": [
+      {
+        "name": "org_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Organization id to delete."
+      },
+      {
+        "name": "confirm_action",
+        "type": "boolean",
+        "required": true,
+        "nullable": false,
+        "description": "Must be true to actually delete. Call once with false (or omit) to preview the action, then call again with true."
+      }
+    ]
+  },
+  {
+    "mcp_tool": "platform_get_org",
+    "description": "SuperUser only. Fetch a single organization by id, including live member count. Differs from account_view in that it is platform-admin-scoped and returns raw org fields without aggregation across apps.",
+    "source": "bam",
+    "parameters": [
+      {
+        "name": "org_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Organization id."
+      }
+    ]
+  },
+  {
+    "mcp_tool": "platform_list_orgs",
+    "description": "SuperUser only. List every organization on the server with live member counts. Supports server-wide name search and paging. Use platform_create_org to provision a new one.",
+    "source": "bam",
+    "parameters": [
+      {
+        "name": "search",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Case-insensitive ILIKE match on organization name."
+      },
+      {
+        "name": "limit",
+        "type": "number",
+        "format": "integer",
+        "required": false,
+        "nullable": false,
+        "description": "Page size (default 50, max 100)."
+      },
+      {
+        "name": "offset",
+        "type": "number",
+        "format": "integer",
+        "required": false,
+        "nullable": false,
+        "description": "Offset for paging; orderBy is created_at DESC."
+      }
+    ]
+  },
+  {
+    "mcp_tool": "platform_update_org",
+    "description": "SuperUser only. Update an organization. Renaming regenerates the slug. settings is a shallow JSONB replacement — pass the full object you want stored.",
+    "source": "bam",
+    "parameters": [
+      {
+        "name": "org_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Organization id."
+      },
+      {
+        "name": "name",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "New display name. Slug is regenerated from this."
+      },
+      {
+        "name": "plan",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Billing plan identifier."
+      },
+      {
+        "name": "settings",
+        "type": "object",
+        "required": false,
+        "nullable": false,
+        "description": "Full JSONB replacement for organizations.settings."
+      }
+    ]
+  },
+  {
+    "mcp_tool": "reorder_phases",
+    "description": "Reorder all phases in a project. Pass the complete ordered array of phase UUIDs; positions are reassigned to match the array order.",
+    "source": "bam",
+    "parameters": [
+      {
+        "name": "project_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "The project ID"
+      },
+      {
+        "name": "phase_ids",
+        "type": "array",
+        "required": true,
+        "nullable": false,
+        "description": "Phase UUIDs in the desired order"
       }
     ]
   },
@@ -1092,7 +2858,7 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
         "format": "uuid",
         "required": true,
         "nullable": false,
-        "description": "The project ID"
+        "description": "The project UUID"
       },
       {
         "name": "q",
@@ -1107,7 +2873,7 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
         "format": "uuid",
         "required": false,
         "nullable": false,
-        "description": "Filter by phase"
+        "description": "Filter by phase UUID"
       },
       {
         "name": "sprint_id",
@@ -1115,7 +2881,7 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
         "format": "uuid",
         "required": false,
         "nullable": false,
-        "description": "Filter by sprint"
+        "description": "Filter by sprint UUID"
       },
       {
         "name": "assignee_id",
@@ -1123,7 +2889,7 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
         "format": "uuid",
         "required": false,
         "nullable": false,
-        "description": "Filter by assignee"
+        "description": "Filter by assignee UUID"
       },
       {
         "name": "priority",
@@ -1172,8 +2938,50 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
     ]
   },
   {
+    "mcp_tool": "set_helpdesk_signup_disabled",
+    "description": "SuperUser only. Toggle the Helpdesk customer signup kill switch. When true, POST /helpdesk/auth/register returns 403 SIGNUP_DISABLED and the Helpdesk login page hides 'Create one'. Independent of `set_public_signup_disabled` — closing BigBlueBam internal signup during beta should not also block customers from filing tickets. Both flags are returned in the response so the caller can see the resulting state.",
+    "source": "bam",
+    "parameters": [
+      {
+        "name": "helpdesk_signup_disabled",
+        "type": "boolean",
+        "required": true,
+        "nullable": false,
+        "description": "true to freeze Helpdesk customer signup; false to open it back up."
+      }
+    ]
+  },
+  {
+    "mcp_tool": "set_org_launchpad_apps",
+    "description": "Org admin/owner only. Set or clear the active org's Launchpad override. Pass `apps: null` to clear the override and fall back to the platform default. Pass an array of app ids to override. Affects every member of the org.",
+    "source": "bam",
+    "parameters": [
+      {
+        "name": "apps",
+        "type": "array",
+        "required": true,
+        "nullable": true,
+        "description": "Array of app ids to enable for this org, or null to clear the override and inherit the platform default."
+      }
+    ]
+  },
+  {
+    "mcp_tool": "set_platform_launchpad_defaults",
+    "description": "SuperUser only. Set or clear the server-wide Launchpad default. Pass `apps: null` to clear the default (meaning \"all apps enabled\" for orgs that have no override). Pass an array of app ids to constrain the default. Per-org overrides set via set_org_launchpad_apps still take precedence.",
+    "source": "bam",
+    "parameters": [
+      {
+        "name": "apps",
+        "type": "array",
+        "required": true,
+        "nullable": true,
+        "description": ""
+      }
+    ]
+  },
+  {
     "mcp_tool": "set_public_signup_disabled",
-    "description": "SuperUser only. Toggle the platform-wide public signup kill switch. When true, POST /auth/register and POST /helpdesk/auth/register return 403 SIGNUP_DISABLED and the login pages' 'Create one' link routes to the beta-gate page.",
+    "description": "SuperUser only. Toggle the BigBlueBam (internal) public signup kill switch. When true, POST /auth/register returns 403 SIGNUP_DISABLED and the /b3/login page's 'Create one' link routes to the beta-gate. Does NOT affect Helpdesk customer signup — use `set_helpdesk_signup_disabled` for that. Both flags are returned in the response so the caller can see the resulting state of the platform settings row.",
     "source": "bam",
     "parameters": [
       {
@@ -1181,7 +2989,7 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
         "type": "boolean",
         "required": true,
         "nullable": false,
-        "description": "true to freeze new-account creation; false to open signup back up."
+        "description": "true to freeze BigBlueBam new-account creation; false to open it back up."
       }
     ]
   },
@@ -1267,6 +3075,148 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
     ]
   },
   {
+    "mcp_tool": "task_upsert_by_external_id",
+    "description": "Idempotent create-or-update of a task by (project_id, external_id). Natural key is the partial unique index on (project_id, external_id). On insert, allocates a new human_id and accepts the full create payload. On update, patches the supplied fields; human_id is preserved. Returns { data, created, idempotency_key } — `created` is true on insert, false on update.",
+    "source": "bam",
+    "parameters": [
+      {
+        "name": "project_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Project UUID"
+      },
+      {
+        "name": "external_id",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "External idempotency key (e.g. upstream ticket id). Globally unique within the project."
+      },
+      {
+        "name": "title",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Task title"
+      },
+      {
+        "name": "description",
+        "type": "string",
+        "required": false,
+        "nullable": true,
+        "description": "Task description (Markdown)"
+      },
+      {
+        "name": "phase_id",
+        "type": "string",
+        "format": "uuid",
+        "required": false,
+        "nullable": true,
+        "description": "Phase UUID (defaults to first phase by position on insert)"
+      },
+      {
+        "name": "state_id",
+        "type": "string",
+        "format": "uuid",
+        "required": false,
+        "nullable": true,
+        "description": "State UUID (defaults to the phase auto-state on insert)"
+      },
+      {
+        "name": "sprint_id",
+        "type": "string",
+        "format": "uuid",
+        "required": false,
+        "nullable": true,
+        "description": "Sprint UUID"
+      },
+      {
+        "name": "epic_id",
+        "type": "string",
+        "format": "uuid",
+        "required": false,
+        "nullable": true,
+        "description": "Epic UUID"
+      },
+      {
+        "name": "assignee_id",
+        "type": "string",
+        "format": "uuid",
+        "required": false,
+        "nullable": true,
+        "description": "Assignee user UUID"
+      },
+      {
+        "name": "priority",
+        "type": "enum",
+        "enum": [
+          "critical",
+          "high",
+          "medium",
+          "low",
+          "none"
+        ],
+        "required": false,
+        "nullable": false,
+        "description": "Priority level"
+      },
+      {
+        "name": "story_points",
+        "type": "number",
+        "format": "integer",
+        "required": false,
+        "nullable": true,
+        "description": "Story points estimate"
+      },
+      {
+        "name": "time_estimate_minutes",
+        "type": "number",
+        "format": "integer",
+        "required": false,
+        "nullable": true,
+        "description": "Time estimate in minutes"
+      },
+      {
+        "name": "start_date",
+        "type": "string",
+        "required": false,
+        "nullable": true,
+        "description": "ISO date string (YYYY-MM-DD)"
+      },
+      {
+        "name": "due_date",
+        "type": "string",
+        "required": false,
+        "nullable": true,
+        "description": "ISO date string (YYYY-MM-DD)"
+      },
+      {
+        "name": "labels",
+        "type": "array",
+        "required": false,
+        "nullable": false,
+        "description": "Label UUIDs to attach"
+      },
+      {
+        "name": "custom_fields",
+        "type": "object",
+        "required": false,
+        "nullable": false,
+        "description": "Custom field values"
+      },
+      {
+        "name": "parent_task_id",
+        "type": "string",
+        "format": "uuid",
+        "required": false,
+        "nullable": true,
+        "description": "Parent task UUID for subtasks"
+      }
+    ]
+  },
+  {
     "mcp_tool": "test_slack_webhook",
     "description": "Send a test message to the Slack webhook configured for a project. Requires project admin or org admin role.",
     "source": "bam",
@@ -1278,6 +3228,123 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
         "required": true,
         "nullable": false,
         "description": "The project ID"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "toggle_comment_reaction",
+    "description": "Toggle an emoji reaction on a comment for the calling user. If the user has already reacted with this emoji it is removed; otherwise it is added. Returns the updated per-emoji counts for the comment.",
+    "source": "bam",
+    "parameters": [
+      {
+        "name": "comment_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "The comment UUID"
+      },
+      {
+        "name": "emoji",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": ""
+      }
+    ]
+  },
+  {
+    "mcp_tool": "update_custom_field",
+    "description": "Update a custom-field definition. Only the supplied fields change.",
+    "source": "bam",
+    "parameters": [
+      {
+        "name": "custom_field_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "The custom-field definition UUID"
+      },
+      {
+        "name": "name",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "New name"
+      },
+      {
+        "name": "options",
+        "type": "any",
+        "required": false,
+        "nullable": false,
+        "description": "New type-specific options"
+      },
+      {
+        "name": "is_required",
+        "type": "boolean",
+        "required": false,
+        "nullable": false,
+        "description": "New required flag"
+      },
+      {
+        "name": "is_visible_on_card",
+        "type": "boolean",
+        "required": false,
+        "nullable": false,
+        "description": "New show-on-card flag"
+      },
+      {
+        "name": "position",
+        "type": "number",
+        "format": "integer",
+        "required": false,
+        "nullable": false,
+        "description": "New display order"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "update_label",
+    "description": "Update a label. Only the supplied fields change.",
+    "source": "bam",
+    "parameters": [
+      {
+        "name": "label_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "The label UUID"
+      },
+      {
+        "name": "name",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "New label name"
+      },
+      {
+        "name": "color",
+        "type": "string",
+        "required": false,
+        "nullable": true,
+        "description": "New hex color (null clears it)"
+      },
+      {
+        "name": "description",
+        "type": "string",
+        "required": false,
+        "nullable": true,
+        "description": "New description (null clears it)"
+      },
+      {
+        "name": "position",
+        "type": "number",
+        "format": "integer",
+        "required": false,
+        "nullable": false,
+        "description": "New display order"
       }
     ]
   },
@@ -1318,17 +3385,191 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
     ]
   },
   {
+    "mcp_tool": "update_phase",
+    "description": "Update a phase. Only the supplied fields change.",
+    "source": "bam",
+    "parameters": [
+      {
+        "name": "phase_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "The phase UUID"
+      },
+      {
+        "name": "name",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "New phase name"
+      },
+      {
+        "name": "description",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "New description"
+      },
+      {
+        "name": "color",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "New hex color"
+      },
+      {
+        "name": "position",
+        "type": "number",
+        "format": "integer",
+        "required": false,
+        "nullable": false,
+        "description": "New position"
+      },
+      {
+        "name": "wip_limit",
+        "type": "number",
+        "format": "integer",
+        "required": false,
+        "nullable": true,
+        "description": "New WIP limit (null clears it)"
+      },
+      {
+        "name": "is_start",
+        "type": "boolean",
+        "required": false,
+        "nullable": false,
+        "description": "New start-phase flag"
+      },
+      {
+        "name": "is_terminal",
+        "type": "boolean",
+        "required": false,
+        "nullable": false,
+        "description": "New terminal-phase flag"
+      },
+      {
+        "name": "auto_state_on_enter",
+        "type": "string",
+        "format": "uuid",
+        "required": false,
+        "nullable": true,
+        "description": "New auto-state UUID (null clears it)"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "update_project",
+    "description": "Update a project's editable fields (name, description, slug, icon, color, default sprint duration). Only the supplied fields change. Requires project admin (or org owner/admin).",
+    "source": "bam",
+    "parameters": [
+      {
+        "name": "project_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "The project ID"
+      },
+      {
+        "name": "name",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "New project name"
+      },
+      {
+        "name": "description",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "New description"
+      },
+      {
+        "name": "slug",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "New URL-friendly slug"
+      },
+      {
+        "name": "icon",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "New emoji icon"
+      },
+      {
+        "name": "color",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "New hex color"
+      },
+      {
+        "name": "default_sprint_duration_days",
+        "type": "number",
+        "format": "integer",
+        "required": false,
+        "nullable": false,
+        "description": "Default sprint length in days"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "update_sprint",
+    "description": "Update a sprint's name, goal, or start/end dates. Only the supplied fields are changed. Does not change sprint status (use start_sprint / complete_sprint / cancel_sprint for that).",
+    "source": "bam",
+    "parameters": [
+      {
+        "name": "sprint_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "The sprint UUID"
+      },
+      {
+        "name": "name",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "New sprint name"
+      },
+      {
+        "name": "goal",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "New sprint goal"
+      },
+      {
+        "name": "start_date",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "New start date (ISO 8601)"
+      },
+      {
+        "name": "end_date",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "New end date (ISO 8601)"
+      }
+    ]
+  },
+  {
     "mcp_tool": "update_task",
-    "description": "Update an existing task",
+    "description": "Update an existing task. Accepts natural identifiers for task, assignee, state, and sprint in addition to UUIDs.",
     "source": "bam",
     "parameters": [
       {
         "name": "task_id",
         "type": "string",
-        "format": "uuid",
         "required": true,
         "nullable": false,
-        "description": "The task ID"
+        "description": ""
       },
       {
         "name": "title",
@@ -1347,10 +3588,9 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
       {
         "name": "assignee_id",
         "type": "string",
-        "format": "uuid",
         "required": false,
         "nullable": true,
-        "description": "New assignee"
+        "description": "New assignee — UUID, email, or display name"
       },
       {
         "name": "priority",
@@ -1377,18 +3617,24 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
       {
         "name": "sprint_id",
         "type": "string",
-        "format": "uuid",
         "required": false,
         "nullable": true,
-        "description": "New sprint"
+        "description": "New sprint — name or UUID"
       },
       {
         "name": "state_id",
         "type": "string",
-        "format": "uuid",
         "required": false,
         "nullable": false,
-        "description": "New state"
+        "description": ""
+      },
+      {
+        "name": "epic_id",
+        "type": "string",
+        "format": "uuid",
+        "required": false,
+        "nullable": true,
+        "description": "Epic to link/unlink (UUID or null)"
       },
       {
         "name": "start_date",
@@ -1407,24 +3653,133 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
     ]
   },
   {
+    "mcp_tool": "update_view",
+    "description": "Update one of your OWN saved views. Only the supplied fields change. The API rejects editing another user's view with 403.",
+    "source": "bam",
+    "parameters": [
+      {
+        "name": "view_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "The saved-view UUID"
+      },
+      {
+        "name": "name",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "New name"
+      },
+      {
+        "name": "filters",
+        "type": "object",
+        "required": false,
+        "nullable": false,
+        "description": "New filter configuration"
+      },
+      {
+        "name": "sort",
+        "type": "string",
+        "required": false,
+        "nullable": true,
+        "description": "New sort spec (null clears it)"
+      },
+      {
+        "name": "swimlane",
+        "type": "string",
+        "required": false,
+        "nullable": true,
+        "description": "New swimlane (null clears it)"
+      },
+      {
+        "name": "is_shared",
+        "type": "boolean",
+        "required": false,
+        "nullable": false,
+        "description": "New shared flag"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bam_list_epics",
+    "description": "List all epics for a project, with task counts and status.",
+    "source": "bam-resolver",
+    "parameters": [
+      {
+        "name": "project_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "The project ID"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bam_list_labels",
+    "description": "List labels. If project_id is given, lists labels for that project; otherwise lists labels for every project the caller can see in their org.",
+    "source": "bam-resolver",
+    "parameters": [
+      {
+        "name": "project_id",
+        "type": "string",
+        "format": "uuid",
+        "required": false,
+        "nullable": false,
+        "description": "Optional project ID to scope results"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bam_list_phases",
+    "description": "List all phases (board columns) for a project, ordered by position",
+    "source": "bam-resolver",
+    "parameters": [
+      {
+        "name": "project_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "The project ID"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bam_list_states",
+    "description": "List all task states for a project, ordered by position. Each state has a category in { todo, active, blocked, review, done, cancelled }.",
+    "source": "bam-resolver",
+    "parameters": [
+      {
+        "name": "project_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "The project ID"
+      }
+    ]
+  },
+  {
     "mcp_tool": "banter_add_channel_members",
-    "description": "Add one or more members to a Banter channel",
+    "description": "Add one or more members to a Banter channel. Accepts a channel UUID, name, or #name, and each user may be a UUID, email, or @handle — mixed lists are supported.",
     "source": "banter",
     "parameters": [
       {
         "name": "channel_id",
         "type": "string",
-        "format": "uuid",
         "required": true,
         "nullable": false,
-        "description": "The channel ID"
+        "description": "Channel UUID, name, or #name"
       },
       {
         "name": "user_ids",
         "type": "array",
         "required": true,
         "nullable": false,
-        "description": "Array of user IDs to add"
+        "description": "Users to add. Each element may be a UUID, email address, or @handle."
       }
     ]
   },
@@ -1452,16 +3807,15 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
   },
   {
     "mcp_tool": "banter_archive_channel",
-    "description": "Archive a Banter channel (reversible)",
+    "description": "Archive a Banter channel (reversible). Accepts a channel UUID, a bare channel name, or #name — no need to resolve the id first.",
     "source": "banter",
     "parameters": [
       {
         "name": "channel_id",
         "type": "string",
-        "format": "uuid",
         "required": true,
         "nullable": false,
-        "description": "The channel ID to archive"
+        "description": "Channel UUID, name, or #name to archive"
       }
     ]
   },
@@ -1491,6 +3845,43 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
         "required": false,
         "nullable": false,
         "description": "Number of results"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "banter_cancel_scheduled_message",
+    "description": "Cancel a pending scheduled Banter post. Only the original author or an org owner/admin may cancel, and only while the post is still pending (fails 409 otherwise).",
+    "source": "banter",
+    "parameters": [
+      {
+        "name": "scheduled_message_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "The scheduled message ID to cancel"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "banter_create_bookmark",
+    "description": "Bookmark a Banter message for the calling user, with an optional note. Idempotent — bookmarking an already-bookmarked message is a no-op.",
+    "source": "banter",
+    "parameters": [
+      {
+        "name": "message_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "The message ID to bookmark"
+      },
+      {
+        "name": "note",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Optional note to attach to the bookmark"
       }
     ]
   },
@@ -1573,6 +3964,29 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
     ]
   },
   {
+    "mcp_tool": "banter_delete_bookmark",
+    "description": "Remove a Banter bookmark for the calling user. Pass either the bookmark id (bookmark_id) or the bookmarked message id (message_id) — exactly one is required.",
+    "source": "banter",
+    "parameters": [
+      {
+        "name": "bookmark_id",
+        "type": "string",
+        "format": "uuid",
+        "required": false,
+        "nullable": false,
+        "description": "The bookmark ID to remove"
+      },
+      {
+        "name": "message_id",
+        "type": "string",
+        "format": "uuid",
+        "required": false,
+        "nullable": false,
+        "description": "Remove the caller's bookmark for this message ID"
+      }
+    ]
+  },
+  {
     "mcp_tool": "banter_delete_channel",
     "description": "Delete a Banter channel (destructive - requires confirmation)",
     "source": "banter",
@@ -1606,6 +4020,27 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
         "required": true,
         "nullable": false,
         "description": "The message ID to delete"
+      },
+      {
+        "name": "confirm",
+        "type": "boolean",
+        "required": true,
+        "nullable": false,
+        "description": "Must be true to confirm deletion"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "banter_delete_user_group",
+    "description": "Delete a Banter user group (destructive - requires confirmation). Accepts a group UUID or @handle. Requires org owner/admin privileges.",
+    "source": "banter",
+    "parameters": [
+      {
+        "name": "group_id",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "User group UUID or @handle to delete"
       },
       {
         "name": "confirm",
@@ -1661,6 +4096,217 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
     ]
   },
   {
+    "mcp_tool": "banter_feed_dismiss",
+    "description": "Dismiss a single feed entry — it is excluded from future reads entirely.",
+    "source": "banter",
+    "parameters": [
+      {
+        "name": "entry_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "The feed entry id to dismiss"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "banter_feed_explain",
+    "description": "Return the full score breakdown for one feed entry (recency, weight, affinity, interaction, engagement, multipliers). For tuning and debugging.",
+    "source": "banter",
+    "parameters": [
+      {
+        "name": "entry_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "The feed entry id"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "banter_feed_mark_seen",
+    "description": "Mark feed entries as seen (they sink in the ranking but do not vanish). Provide either entry_ids or a before_seq watermark.",
+    "source": "banter",
+    "parameters": [
+      {
+        "name": "entry_ids",
+        "type": "array",
+        "required": false,
+        "nullable": false,
+        "description": "Entry ids to mark seen"
+      },
+      {
+        "name": "before_seq",
+        "type": "number",
+        "format": "integer",
+        "required": false,
+        "nullable": false,
+        "description": "Mark everything at or below this seq seen"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "banter_feed_query",
+    "description": "The caller's ranked Banter Feed: posts in followed channels, replies on threads they are in, and cross-app activity that concerns them, most-relevant first. Filter by category/source; set explain=true for score breakdowns.",
+    "source": "banter",
+    "parameters": [
+      {
+        "name": "cursor",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Pagination cursor (offset)"
+      },
+      {
+        "name": "limit",
+        "type": "number",
+        "format": "integer",
+        "required": false,
+        "nullable": false,
+        "description": "Page size (default 30)"
+      },
+      {
+        "name": "category",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "source",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "unseen",
+        "type": "boolean",
+        "required": false,
+        "nullable": false,
+        "description": "Only entries not yet seen"
+      },
+      {
+        "name": "explain",
+        "type": "boolean",
+        "required": false,
+        "nullable": false,
+        "description": "Include the per-entry score breakdown"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "banter_feed_subscription_list",
+    "description": "List the caller's explicit feed subscription rows (the deviations from the default-on state).",
+    "source": "banter",
+    "parameters": [
+      {
+        "name": "source",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Filter to one source app"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "banter_feed_subscription_set",
+    "description": "Follow / unfollow / mute a scope in the caller's feed. scope_type is item|channel|project|source; scope_source is the app (banter, bam, brief, ...). state is following|unfollowed|muted. unfollowed is a soft opt-out (keeps direct items); muted is a hard opt-out.",
+    "source": "banter",
+    "parameters": [
+      {
+        "name": "scope_type",
+        "type": "enum",
+        "enum": [
+          "item",
+          "channel",
+          "project",
+          "source"
+        ],
+        "required": true,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "scope_source",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "scope_id",
+        "type": "string",
+        "format": "uuid",
+        "required": false,
+        "nullable": false,
+        "description": "Entity/channel/project id; omit for a source-level scope"
+      },
+      {
+        "name": "state",
+        "type": "enum",
+        "enum": [
+          "following",
+          "unfollowed",
+          "muted"
+        ],
+        "required": true,
+        "nullable": false,
+        "description": ""
+      }
+    ]
+  },
+  {
+    "mcp_tool": "banter_feed_weights_get",
+    "description": "Effective feed ranking weights for the caller's org (merged platform defaults + org overrides), plus the raw overrides at each level.",
+    "source": "banter",
+    "parameters": []
+  },
+  {
+    "mcp_tool": "banter_feed_weights_set_org",
+    "description": "Set this org's feed ranking weight overrides (org admin/owner). Send only the knobs to override (categories map, gravity, recency_offset, engagement_weight, interaction_boost, affinity_boost, seen_multiplier, candidate_window_days, must_see_floor); the rest inherit. Bumps the version so the change is live on the next read. Platform-level defaults are not agent-editable.",
+    "source": "banter",
+    "parameters": [
+      {
+        "name": "weights",
+        "type": "object",
+        "required": true,
+        "nullable": false,
+        "description": "Partial weight-override object"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "banter_find_user_by_email",
+    "description": "Find a Banter user by email (case-insensitive exact match). Returns {id, email, name, display_name, avatar_url} or null if no match.",
+    "source": "banter",
+    "parameters": [
+      {
+        "name": "email",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "The email address to look up."
+      }
+    ]
+  },
+  {
+    "mcp_tool": "banter_find_user_by_handle",
+    "description": "Find a Banter user by handle (accepts \"@alice\" or \"alice\"). Banter users do not have a dedicated handle column — matching falls back to a slugified form of display_name (lower-cased, whitespace collapsed to hyphens). Returns the user or null.",
+    "source": "banter",
+    "parameters": [
+      {
+        "name": "handle",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": ""
+      }
+    ]
+  },
+  {
     "mcp_tool": "banter_get_active_huddle",
     "description": "Check if a channel has an active huddle and get its details",
     "source": "banter",
@@ -1706,6 +4352,20 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
     ]
   },
   {
+    "mcp_tool": "banter_get_channel_by_name",
+    "description": "Resolve a Banter channel by name or handle. Accepts \"general\", \"#general\", or a slug. Returns the channel {id, name, handle, type, description} or null if not found.",
+    "source": "banter",
+    "parameters": [
+      {
+        "name": "name_or_handle",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": ""
+      }
+    ]
+  },
+  {
     "mcp_tool": "banter_get_message",
     "description": "Get a specific Banter message by ID",
     "source": "banter",
@@ -1723,6 +4383,12 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
   {
     "mcp_tool": "banter_get_preferences",
     "description": "Get the authenticated user's Banter notification and theme preferences.",
+    "source": "banter",
+    "parameters": []
+  },
+  {
+    "mcp_tool": "banter_get_presence",
+    "description": "Get the authenticated caller's current Banter presence row (status, custom status text/emoji, in-call channel).",
     "source": "banter",
     "parameters": []
   },
@@ -1746,6 +4412,20 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
     "description": "Get the current user's unread message summary across all Banter channels",
     "source": "banter",
     "parameters": []
+  },
+  {
+    "mcp_tool": "banter_get_user_group_by_handle",
+    "description": "Resolve a Banter user group by handle (accepts \"@engineering\" or \"engineering\"). Returns {id, name, handle, description, member_count} or null if no match.",
+    "source": "banter",
+    "parameters": [
+      {
+        "name": "handle",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": ""
+      }
+    ]
   },
   {
     "mcp_tool": "banter_invite_agent_to_call",
@@ -1787,16 +4467,15 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
   },
   {
     "mcp_tool": "banter_join_channel",
-    "description": "Join a Banter channel",
+    "description": "Join a Banter channel. Accepts a channel UUID, a bare channel name, or #name.",
     "source": "banter",
     "parameters": [
       {
         "name": "channel_id",
         "type": "string",
-        "format": "uuid",
         "required": true,
         "nullable": false,
-        "description": "The channel ID to join"
+        "description": "Channel UUID, name, or #name to join"
       }
     ]
   },
@@ -1827,6 +4506,27 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
         "required": true,
         "nullable": false,
         "description": "The channel ID to leave"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "banter_list_bookmarks",
+    "description": "List the authenticated caller's Banter message bookmarks, newest first, with channel and message preview context.",
+    "source": "banter",
+    "parameters": []
+  },
+  {
+    "mcp_tool": "banter_list_call_participants",
+    "description": "List the participants of a Banter call (historical roster with join/leave times, duration, media flags, and bot/participation-mode metadata).",
+    "source": "banter",
+    "parameters": [
+      {
+        "name": "call_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "The call ID"
       }
     ]
   },
@@ -1873,6 +4573,34 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
     ]
   },
   {
+    "mcp_tool": "banter_list_channel_members",
+    "description": "List the members of a Banter channel (with display name, email, role, and mute state). Accepts a channel UUID, a bare channel name, or #name.",
+    "source": "banter",
+    "parameters": [
+      {
+        "name": "channel_id",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Channel UUID, name, or #name"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "banter_list_channel_presence",
+    "description": "List the non-offline (online/idle/in-call/dnd) members of a Banter channel. Accepts a channel UUID, name, or #name. Presence is ephemeral (Redis-backed) so treat the result as a point-in-time snapshot.",
+    "source": "banter",
+    "parameters": [
+      {
+        "name": "channel_id",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Channel UUID, name, or #name"
+      }
+    ]
+  },
+  {
     "mcp_tool": "banter_list_channels",
     "description": "List all Banter channels the current user has access to",
     "source": "banter",
@@ -1891,6 +4619,26 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
         "required": false,
         "nullable": false,
         "description": "Number of results"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "banter_list_dms",
+    "description": "List the authenticated caller's direct-message and group-DM channels, ordered by most recent activity.",
+    "source": "banter",
+    "parameters": []
+  },
+  {
+    "mcp_tool": "banter_list_group_members",
+    "description": "List the members of a Banter user group. Accepts a group UUID or a group @handle (e.g. \"@engineering\").",
+    "source": "banter",
+    "parameters": [
+      {
+        "name": "group_id",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "User group UUID or @handle"
       }
     ]
   },
@@ -1932,6 +4680,70 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
         "required": false,
         "nullable": false,
         "description": "Pagination direction relative to cursor"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "banter_list_pins",
+    "description": "List the pinned messages in a Banter channel (with the pinned message and its author). Accepts a channel UUID, name, or #name.",
+    "source": "banter",
+    "parameters": [
+      {
+        "name": "channel_id",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Channel UUID, name, or #name"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "banter_list_reactions",
+    "description": "List the emoji reactions on a Banter message, grouped by emoji with the reacting users.",
+    "source": "banter",
+    "parameters": [
+      {
+        "name": "message_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "The message ID"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "banter_list_scheduled_messages",
+    "description": "List scheduled (or delivered/cancelled/failed) posts queued for a Banter channel. Accepts a channel UUID, name, or #name. Defaults to status=\"pending\".",
+    "source": "banter",
+    "parameters": [
+      {
+        "name": "channel_id",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Channel UUID, name, or #name"
+      },
+      {
+        "name": "status",
+        "type": "enum",
+        "enum": [
+          "pending",
+          "delivered",
+          "cancelled",
+          "failed"
+        ],
+        "required": false,
+        "nullable": false,
+        "description": "Filter by status (default pending)"
+      },
+      {
+        "name": "limit",
+        "type": "number",
+        "format": "integer",
+        "required": false,
+        "nullable": false,
+        "description": "Max results (default 50)"
       }
     ]
   },
@@ -1988,17 +4800,52 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
     ]
   },
   {
-    "mcp_tool": "banter_pin_message",
-    "description": "Pin a message in a Banter channel",
+    "mcp_tool": "banter_list_users",
+    "description": "Fuzzy search Banter users by name, display name, or email. Returns up to 20 users in the active org ordered by relevance. If no query is supplied, returns the 20 most recently created users.",
+    "source": "banter",
+    "parameters": [
+      {
+        "name": "query",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Optional fuzzy search term matched against display_name and email."
+      }
+    ]
+  },
+  {
+    "mcp_tool": "banter_mark_read",
+    "description": "Mark a Banter channel read up to a given message — advances the caller's last-read cursor and clears any unified notifications for that channel. Accepts a channel UUID, name, or #name.",
     "source": "banter",
     "parameters": [
       {
         "name": "channel_id",
         "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Channel UUID, name, or #name"
+      },
+      {
+        "name": "message_id",
+        "type": "string",
         "format": "uuid",
         "required": true,
         "nullable": false,
-        "description": "The channel ID"
+        "description": "The most recent message ID the caller has read"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "banter_pin_message",
+    "description": "Pin a message in a Banter channel. Accepts a channel UUID, name, or #name.",
+    "source": "banter",
+    "parameters": [
+      {
+        "name": "channel_id",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Channel UUID, name, or #name"
       },
       {
         "name": "message_id",
@@ -2042,16 +4889,15 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
   },
   {
     "mcp_tool": "banter_post_message",
-    "description": "Post a new message to a Banter channel",
+    "description": "Post a new message to a Banter channel. Accepts a channel UUID, a bare channel name, or #name. §13 Wave 4: optionally accepts scheduled_at (ISO-8601, max 30 days out), defer_if_quiet (convert to scheduled if channel is in quiet hours), and urgency_override (bypass quiet hours when both caller and channel policy consent). When a post is scheduled or deferred, the tool returns a scheduled envelope ({ scheduled: true, scheduled_message_id, scheduled_at, defer_reason }) instead of an immediate message.",
     "source": "banter",
     "parameters": [
       {
         "name": "channel_id",
         "type": "string",
-        "format": "uuid",
         "required": true,
         "nullable": false,
-        "description": "The channel ID"
+        "description": "Channel UUID, name, or #name to post in"
       },
       {
         "name": "content",
@@ -2066,6 +4912,27 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
         "required": false,
         "nullable": false,
         "description": "File attachment IDs"
+      },
+      {
+        "name": "scheduled_at",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Optional ISO-8601 future timestamp. Max 30 days out. If set, the post is scheduled (202) instead of posted immediately."
+      },
+      {
+        "name": "defer_if_quiet",
+        "type": "boolean",
+        "required": false,
+        "nullable": false,
+        "description": "If true and the channel is currently in a quiet-hours window, convert this immediate post into a scheduled post at the next-allowed time instead of rejecting with 409."
+      },
+      {
+        "name": "urgency_override",
+        "type": "boolean",
+        "required": false,
+        "nullable": false,
+        "description": "If true AND the channel policy.urgency_override flag is true, bypass the quiet-hours check. The caller cannot override unless the policy explicitly allows it."
       }
     ]
   },
@@ -2167,6 +5034,78 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
     ]
   },
   {
+    "mcp_tool": "banter_schedule_post",
+    "description": "Schedule a Banter post for future delivery. Thin wrapper over banter_post_message with scheduled_at REQUIRED. Returns the scheduled envelope { scheduled: true, scheduled_message_id, scheduled_at, defer_reason }. If respect_quiet_hours is true (default) the scheduled_at is honored as-is; if the channel is in quiet hours at fire time, the worker still delivers because scheduled posts are explicit. Use defer_if_quiet on banter_post_message to instead reschedule around a quiet-hours window at request time.",
+    "source": "banter",
+    "parameters": [
+      {
+        "name": "channel_id",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Channel UUID, name, or #name to post in"
+      },
+      {
+        "name": "content",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Message content (markdown supported)"
+      },
+      {
+        "name": "scheduled_at",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "ISO-8601 future timestamp (max 30 days out)."
+      },
+      {
+        "name": "attachment_ids",
+        "type": "array",
+        "required": false,
+        "nullable": false,
+        "description": "File attachment IDs"
+      },
+      {
+        "name": "respect_quiet_hours",
+        "type": "boolean",
+        "required": false,
+        "nullable": false,
+        "description": "Reserved for future use. Currently scheduled posts are delivered at scheduled_at regardless; use defer_if_quiet on banter_post_message for quiet-hours-aware immediate posts."
+      }
+    ]
+  },
+  {
+    "mcp_tool": "banter_search_channels",
+    "description": "Full-text search Banter channels by name, display name, topic, or description in the caller's org. Returns visible (public or member) channels only.",
+    "source": "banter",
+    "parameters": [
+      {
+        "name": "q",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Search query string"
+      },
+      {
+        "name": "limit",
+        "type": "number",
+        "format": "integer",
+        "required": false,
+        "nullable": false,
+        "description": "Number of results (default 20)"
+      },
+      {
+        "name": "offset",
+        "type": "number",
+        "format": "integer",
+        "required": false,
+        "nullable": false,
+        "description": "Result offset for pagination"
+      }
+    ]
+  },
+  {
     "mcp_tool": "banter_search_messages",
     "description": "Search messages across Banter channels",
     "source": "banter",
@@ -2264,16 +5203,15 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
   },
   {
     "mcp_tool": "banter_send_dm",
-    "description": "Send a direct message to another user (creates or reuses existing DM channel)",
+    "description": "Send a direct message to another user (creates or reuses existing DM channel). Accepts a user UUID, email address, or @handle.",
     "source": "banter",
     "parameters": [
       {
-        "name": "user_id",
+        "name": "to_user_id",
         "type": "string",
-        "format": "uuid",
         "required": true,
         "nullable": false,
-        "description": "The recipient user ID"
+        "description": "Recipient as UUID, email address, or @handle"
       },
       {
         "name": "content",
@@ -2286,7 +5224,7 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
   },
   {
     "mcp_tool": "banter_send_group_dm",
-    "description": "Send a group direct message (creates or reuses existing group DM)",
+    "description": "Send a group direct message (creates or reuses existing group DM). Each recipient may be a UUID, email, or @handle — mixed lists are supported.",
     "source": "banter",
     "parameters": [
       {
@@ -2294,7 +5232,7 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
         "type": "array",
         "required": true,
         "nullable": false,
-        "description": "Recipient user IDs (2-7 users)"
+        "description": "Recipients (2-7). Each element may be a UUID, email address, or @handle."
       },
       {
         "name": "content",
@@ -2341,16 +5279,15 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
   },
   {
     "mcp_tool": "banter_share_sprint",
-    "description": "Share a BigBlueBam sprint summary as a rich embed in a Banter channel",
+    "description": "Share a BigBlueBam sprint summary as a rich embed in a Banter channel. Accepts a channel UUID, name, or #name.",
     "source": "banter",
     "parameters": [
       {
         "name": "channel_id",
         "type": "string",
-        "format": "uuid",
         "required": true,
         "nullable": false,
-        "description": "The channel ID to post in"
+        "description": "Channel UUID, name, or #name to post in"
       },
       {
         "name": "sprint_id",
@@ -2371,16 +5308,15 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
   },
   {
     "mcp_tool": "banter_share_task",
-    "description": "Share a BigBlueBam task as a rich embed in a Banter channel",
+    "description": "Share a BigBlueBam task as a rich embed in a Banter channel. Accepts a channel UUID, name, or #name.",
     "source": "banter",
     "parameters": [
       {
         "name": "channel_id",
         "type": "string",
-        "format": "uuid",
         "required": true,
         "nullable": false,
-        "description": "The channel ID to post in"
+        "description": "Channel UUID, name, or #name to post in"
       },
       {
         "name": "task_id",
@@ -2401,16 +5337,15 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
   },
   {
     "mcp_tool": "banter_share_ticket",
-    "description": "Share a Helpdesk ticket as a rich embed in a Banter channel",
+    "description": "Share a Helpdesk ticket as a rich embed in a Banter channel. Accepts a channel UUID, name, or #name.",
     "source": "banter",
     "parameters": [
       {
         "name": "channel_id",
         "type": "string",
-        "format": "uuid",
         "required": true,
         "nullable": false,
-        "description": "The channel ID to post in"
+        "description": "Channel UUID, name, or #name to post in"
       },
       {
         "name": "ticket_id",
@@ -2431,16 +5366,15 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
   },
   {
     "mcp_tool": "banter_start_call",
-    "description": "Start a new voice/video call in a Banter channel",
+    "description": "Start a new voice/video call in a Banter channel. Accepts a channel UUID, name, or #name.",
     "source": "banter",
     "parameters": [
       {
         "name": "channel_id",
         "type": "string",
-        "format": "uuid",
         "required": true,
         "nullable": false,
-        "description": "The channel ID"
+        "description": "Channel UUID, name, or #name"
       },
       {
         "name": "type",
@@ -2458,16 +5392,15 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
   },
   {
     "mcp_tool": "banter_unpin_message",
-    "description": "Unpin a message from a Banter channel",
+    "description": "Unpin a message from a Banter channel. Accepts a channel UUID, name, or #name.",
     "source": "banter",
     "parameters": [
       {
         "name": "channel_id",
         "type": "string",
-        "format": "uuid",
         "required": true,
         "nullable": false,
-        "description": "The channel ID"
+        "description": "Channel UUID, name, or #name"
       },
       {
         "name": "message_id",
@@ -2566,9 +5499,70 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
     ]
   },
   {
-    "mcp_tool": "beacon_challenge",
-    "description": "Flag a Beacon for review (challenge its accuracy or relevance).",
-    "source": "beacon",
+    "mcp_tool": "banter_list_subscriptions",
+    "description": "List the caller's active pattern subscriptions. Pass channel_id to restrict to a single channel. Returns up to 200 rows ordered by created_at desc.",
+    "source": "banter-subscription",
+    "parameters": [
+      {
+        "name": "channel_id",
+        "type": "string",
+        "format": "uuid",
+        "required": false,
+        "nullable": false,
+        "description": "Restrict the list to a single channel."
+      }
+    ]
+  },
+  {
+    "mcp_tool": "banter_subscribe_pattern",
+    "description": "Create a passive pattern subscription on a Banter channel. Fires banter.message.matched Bolt events whenever an incoming message matches the supplied pattern_spec. Pattern kinds: 'interrogative' (any question-shaped message), 'keyword' (term list with any/all mode), 'regex' (ADMIN-ONLY to mitigate ReDoS), 'mention' (matches @display_name substrings). Subscriber defaults to the caller, who must be users.kind IN ('agent','service'). Returns subscription_id plus effective=false with a reason string when the channel policy or §15 agent_policies blocks routing - the row is still stored so operators can see the intent.",
+    "source": "banter-subscription",
+    "parameters": [
+      {
+        "name": "channel_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Target channel UUID"
+      },
+      {
+        "name": "subscriber_user_id",
+        "type": "string",
+        "format": "uuid",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "rate_limit_per_hour",
+        "type": "number",
+        "format": "integer",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      }
+    ]
+  },
+  {
+    "mcp_tool": "banter_unsubscribe_pattern",
+    "description": "Disable an existing pattern subscription. Idempotent: re-calling on an already-disabled row returns the original disabled_at. Only the subscriber (or a SuperUser) can disable via this path; channel admins wanting to force-unsubscribe an agent should use the channel admin surface.",
+    "source": "banter-subscription",
+    "parameters": [
+      {
+        "name": "subscription_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": ""
+      }
+    ]
+  },
+  {
+    "mcp_tool": "basis_add_metric_version",
+    "description": "Add a new immutable definition version to a metric. Versioning a certified metric changes the org-wide source of truth, so this is a two-step confirm: call with confirm_action omitted/false to preview the current metric, then again with confirm_action:true to proceed.",
+    "source": "basis",
     "parameters": [
       {
         "name": "id",
@@ -2576,7 +5570,816 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
         "format": "uuid",
         "required": true,
         "nullable": false,
-        "description": "Beacon ID"
+        "description": ""
+      },
+      {
+        "name": "change_note",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "confirm_action",
+        "type": "boolean",
+        "required": false,
+        "nullable": false,
+        "description": "Set true to actually add the version"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "basis_certify_metric",
+    "description": "Certify a metric so it becomes the org-wide source of truth (truth-flip). Two-step confirm: call with confirm_action omitted/false to preview, then again with confirm_action:true to proceed.",
+    "source": "basis",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "confirm_action",
+        "type": "boolean",
+        "required": false,
+        "nullable": false,
+        "description": "Set true to actually certify"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "basis_decertify_metric",
+    "description": "Return a certified metric to draft (truth-flip). Two-step confirm: call with confirm_action omitted/false to preview, then again with confirm_action:true to proceed.",
+    "source": "basis",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "confirm_action",
+        "type": "boolean",
+        "required": false,
+        "nullable": false,
+        "description": "Set true to actually decertify"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "basis_define_metric",
+    "description": "Define a NEW draft Basis metric (draft only; certification is a separate HITL-gated step).",
+    "source": "basis",
+    "parameters": [
+      {
+        "name": "slug",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "name",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "unit",
+        "type": "enum",
+        "enum": [
+          "currency",
+          "count",
+          "percent",
+          "ratio",
+          "duration_ms"
+        ],
+        "required": true,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "favorable_direction",
+        "type": "enum",
+        "enum": [
+          "up",
+          "down",
+          "neutral"
+        ],
+        "required": false,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "description",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      }
+    ]
+  },
+  {
+    "mcp_tool": "basis_deprecate_metric",
+    "description": "Deprecate (soft-retire) a metric (destructive). Two-step confirm: call with confirm_action omitted/false to preview, then again with confirm_action:true to proceed.",
+    "source": "basis",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "confirm_action",
+        "type": "boolean",
+        "required": false,
+        "nullable": false,
+        "description": "Set true to actually deprecate"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "basis_explain_change",
+    "description": "Explain why a metric changed between two periods: a deterministic dimensional decomposition plus a per-viewer, access-scoped \"possibly related activity\" aid. REQUIRES asker_user_id; when omitted, Class-B (entity) breakdowns collapse to a single hidden aggregate (fail-closed).",
+    "source": "basis",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "dimension",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "asker_user_id",
+        "type": "string",
+        "format": "uuid",
+        "required": false,
+        "nullable": false,
+        "description": "The human on whose behalf the agent is asking; gates per-entity visibility"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "basis_get_metric",
+    "description": "Get a Basis metric with its current version definition.",
+    "source": "basis",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": ""
+      }
+    ]
+  },
+  {
+    "mcp_tool": "basis_get_settings",
+    "description": "Get this org's Basis settings: default decomposition dimension, explanation cache TTL, and snapshot retention window.",
+    "source": "basis",
+    "parameters": []
+  },
+  {
+    "mcp_tool": "basis_list_metrics",
+    "description": "List governed Basis metrics for the current organization, optionally filtered by certification state.",
+    "source": "basis",
+    "parameters": [
+      {
+        "name": "certification",
+        "type": "enum",
+        "enum": [
+          "draft",
+          "certified",
+          "deprecated"
+        ],
+        "required": false,
+        "nullable": false,
+        "description": ""
+      }
+    ]
+  },
+  {
+    "mcp_tool": "basis_list_versions",
+    "description": "List a metric's immutable definition version history (newest first), as shown on the metric detail page.",
+    "source": "basis",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": ""
+      }
+    ]
+  },
+  {
+    "mcp_tool": "basis_metric_lineage",
+    "description": "Get a metric binding contract: its query definition and certified presentation envelope (unit, direction, target).",
+    "source": "basis",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": ""
+      }
+    ]
+  },
+  {
+    "mcp_tool": "basis_metric_value",
+    "description": "Get a certified metric value over a period. Returns UPSTREAM_UNAVAILABLE if the Bench query service is down.",
+    "source": "basis",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "from",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "to",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": ""
+      }
+    ]
+  },
+  {
+    "mcp_tool": "basis_rank_drivers",
+    "description": "Rank the deterministic drivers of a metric delta (dimension-value contributions). Same fail-closed asker rule as basis_explain_change.",
+    "source": "basis",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "dimension",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "asker_user_id",
+        "type": "string",
+        "format": "uuid",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      }
+    ]
+  },
+  {
+    "mcp_tool": "basis_search_metrics",
+    "description": "Search Basis metrics by name/slug substring (case-insensitive) within the org.",
+    "source": "basis",
+    "parameters": [
+      {
+        "name": "query",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Substring to match against metric name or slug"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "basis_update_metric",
+    "description": "Update a metric's metadata (name, description, favorable_direction, owner, related_apps, target). Does NOT change the definition - use basis_add_metric_version for that.",
+    "source": "basis",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "name",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "description",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "favorable_direction",
+        "type": "enum",
+        "enum": [
+          "up",
+          "down",
+          "neutral"
+        ],
+        "required": false,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "owner_id",
+        "type": "string",
+        "format": "uuid",
+        "required": false,
+        "nullable": true,
+        "description": ""
+      },
+      {
+        "name": "related_apps",
+        "type": "array",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      }
+    ]
+  },
+  {
+    "mcp_tool": "basis_update_settings",
+    "description": "Update this org's Basis settings (default dimension, explanation cache TTL seconds, snapshot retention days; null retention = unbounded).",
+    "source": "basis",
+    "parameters": [
+      {
+        "name": "snapshot_max_age_days",
+        "type": "number",
+        "format": "integer",
+        "required": false,
+        "nullable": true,
+        "description": ""
+      },
+      {
+        "name": "explanation_cache_ttl_seconds",
+        "type": "number",
+        "format": "integer",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "default_dimension",
+        "type": "string",
+        "required": false,
+        "nullable": true,
+        "description": ""
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bay_annotation_create",
+    "description": "Post a coordinate-anchored annotation on a Bay version. The anchor is structured + queryable: video → {type:\"frame\",frame} or {type:\"timerange\",start,end}; image → {type:\"region\",x,y,w,h}; 3D → {type:\"viewpoint\",camera}. This is how an agent posts automated-QC findings next to human notes.",
+    "source": "bay",
+    "parameters": [
+      {
+        "name": "version_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "anchor",
+        "type": "object",
+        "required": true,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "body",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "thread_parent_id",
+        "type": "string",
+        "format": "uuid",
+        "required": false,
+        "nullable": true,
+        "description": ""
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bay_annotation_list",
+    "description": "List annotations on a Bay version (optionally include resolved).",
+    "source": "bay",
+    "parameters": [
+      {
+        "name": "version_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "include_resolved",
+        "type": "boolean",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bay_annotation_resolve",
+    "description": "Mark a Bay annotation resolved (or reopen with resolved:false).",
+    "source": "bay",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "resolved",
+        "type": "boolean",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bay_asset_archive",
+    "description": "Archive (soft-delete) a Bay asset. Review history is preserved.",
+    "source": "bay",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": ""
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bay_asset_create",
+    "description": "Create a Bay review asset. media_kind is one of image/video/audio/model. The canonical bytes live in Bin; attach them via bay_version_create with bin_asset_id.",
+    "source": "bay",
+    "parameters": [
+      {
+        "name": "name",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "media_kind",
+        "type": "enum",
+        "enum": [
+          "image",
+          "video",
+          "audio",
+          "model"
+        ],
+        "required": true,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "project_id",
+        "type": "string",
+        "format": "uuid",
+        "required": false,
+        "nullable": true,
+        "description": ""
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bay_asset_get",
+    "description": "Get a Bay asset's metadata (media_kind, current version, project).",
+    "source": "bay",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": ""
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bay_asset_list",
+    "description": "List Bay review assets (the durable things under review: a shot, cut, track, or model), optionally filtered by project or including archived. Returns metadata; use bay_version_list for the version stack.",
+    "source": "bay",
+    "parameters": [
+      {
+        "name": "project_id",
+        "type": "string",
+        "format": "uuid",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "include_archived",
+        "type": "boolean",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bay_decision_list",
+    "description": "List the per-reviewer decisions on a Bay version (the approval rollup input).",
+    "source": "bay",
+    "parameters": [
+      {
+        "name": "version_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": ""
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bay_decision_set",
+    "description": "Set (upsert) the caller's review decision on a Bay version — one decision per reviewer per version. decision is approved/rejected/changes_requested/pending. An agent setting a decision is a first-class reviewer; an agent-proposed FINAL approval that a different human must ratify should instead route through proposal_create.",
+    "source": "bay",
+    "parameters": [
+      {
+        "name": "version_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "decision",
+        "type": "enum",
+        "enum": [
+          "approved",
+          "rejected",
+          "changes_requested",
+          "pending"
+        ],
+        "required": true,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "comment",
+        "type": "string",
+        "required": false,
+        "nullable": true,
+        "description": ""
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bay_review_link_create",
+    "description": "Mint a public, token-gated share link for a Bay review so an unauthenticated guest can view the media + annotations + decisions (and optionally comment) at /bay/r/:token. Optionally set an expiry (days) and whether guest comments are allowed. Returns the link including its shareable url.",
+    "source": "bay",
+    "parameters": [
+      {
+        "name": "asset_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "The Bay review asset to share"
+      },
+      {
+        "name": "expires_in_days",
+        "type": "number",
+        "format": "integer",
+        "required": false,
+        "nullable": true,
+        "description": ""
+      },
+      {
+        "name": "allow_comments",
+        "type": "boolean",
+        "required": false,
+        "nullable": false,
+        "description": "Allow guests to comment (default true)"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bay_review_resolve",
+    "description": "Open (find-or-create) the Bay review for a Bin media asset. Given the Bin asset id (and optionally its content_type/name/current bin_version_id), returns the Bay review asset — creating it + an initial version on first call, idempotent thereafter. This is how a media file in Bin is opened for review in Bay.",
+    "source": "bay",
+    "parameters": [
+      {
+        "name": "bin_asset_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "The Bin asset holding the media bytes"
+      },
+      {
+        "name": "bin_version_id",
+        "type": "string",
+        "format": "uuid",
+        "required": false,
+        "nullable": true,
+        "description": ""
+      },
+      {
+        "name": "name",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "media_kind",
+        "type": "enum",
+        "enum": [
+          "image",
+          "video",
+          "audio",
+          "model"
+        ],
+        "required": false,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "content_type",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Used to infer media_kind when not given"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bay_version_create",
+    "description": "Add a new immutable version to a Bay asset. Reference the canonical bytes already stored in Bin via bin_asset_id / bin_version_id, and pass media_meta (duration_sec, width, height, codec, …).",
+    "source": "bay",
+    "parameters": [
+      {
+        "name": "asset_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "bin_asset_id",
+        "type": "string",
+        "format": "uuid",
+        "required": false,
+        "nullable": true,
+        "description": ""
+      },
+      {
+        "name": "bin_version_id",
+        "type": "string",
+        "format": "uuid",
+        "required": false,
+        "nullable": true,
+        "description": ""
+      },
+      {
+        "name": "media_meta",
+        "type": "object",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bay_version_get",
+    "description": "Get a single Bay version (media metadata + Bin byte references).",
+    "source": "bay",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": ""
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bay_version_list",
+    "description": "List the immutable version stack of a Bay asset, newest first.",
+    "source": "bay",
+    "parameters": [
+      {
+        "name": "asset_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": ""
+      }
+    ]
+  },
+  {
+    "mcp_tool": "beacon_attachment_delete",
+    "description": "Delete an attachment from a Beacon. `id` accepts a UUID, slug, or title.",
+    "source": "beacon",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Beacon UUID, slug, or title"
+      },
+      {
+        "name": "attachment_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Attachment ID to delete"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "beacon_attachments_list",
+    "description": "List a Beacon's attachments. `id` accepts a UUID, slug, or title.",
+    "source": "beacon",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Beacon UUID, slug, or title"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "beacon_challenge",
+    "description": "Flag a Beacon for review (challenge its accuracy or relevance).",
+    "source": "beacon",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Beacon ID (UUID), slug, or title"
       },
       {
         "name": "reason",
@@ -2584,6 +6387,100 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
         "required": false,
         "nullable": false,
         "description": "Reason for the challenge"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "beacon_comment_add",
+    "description": "Add a comment to a Beacon, optionally as a reply to another comment. `id` accepts a UUID, slug, or title.",
+    "source": "beacon",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Beacon UUID, slug, or title"
+      },
+      {
+        "name": "body_markdown",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Comment body (Markdown)"
+      },
+      {
+        "name": "parent_id",
+        "type": "string",
+        "format": "uuid",
+        "required": false,
+        "nullable": false,
+        "description": "Parent comment ID to reply to"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "beacon_comment_delete",
+    "description": "Delete a comment from a Beacon (author or admin). `id` accepts a UUID, slug, or title.",
+    "source": "beacon",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Beacon UUID, slug, or title"
+      },
+      {
+        "name": "comment_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Comment ID to delete"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "beacon_comment_edit",
+    "description": "Edit a comment's body (author only). `id` accepts a UUID, slug, or title.",
+    "source": "beacon",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Beacon UUID, slug, or title"
+      },
+      {
+        "name": "comment_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Comment ID to edit"
+      },
+      {
+        "name": "body_markdown",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "New comment body (Markdown)"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "beacon_comments_list",
+    "description": "List all comments on a Beacon (threaded). `id` accepts a UUID, slug, or title.",
+    "source": "beacon",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Beacon UUID, slug, or title"
       }
     ]
   },
@@ -2629,10 +6526,9 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
       {
         "name": "project_id",
         "type": "string",
-        "format": "uuid",
         "required": false,
         "nullable": false,
-        "description": "Project scope (if project-level)"
+        "description": "Project scope (if project-level) — accepts a UUID or project name"
       }
     ]
   },
@@ -2692,10 +6588,9 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
       {
         "name": "beacon_id",
         "type": "string",
-        "format": "uuid",
         "required": true,
         "nullable": false,
-        "description": "Focal Beacon ID"
+        "description": "Focal Beacon ID (UUID), slug, or title"
       },
       {
         "name": "hops",
@@ -2771,18 +6666,16 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
       {
         "name": "id",
         "type": "string",
-        "format": "uuid",
         "required": true,
         "nullable": false,
-        "description": "Source Beacon ID"
+        "description": "Source Beacon ID (UUID), slug, or title"
       },
       {
         "name": "target_id",
         "type": "string",
-        "format": "uuid",
         "required": true,
         "nullable": false,
-        "description": "Target Beacon ID"
+        "description": "Target Beacon ID (UUID), slug, or title"
       },
       {
         "name": "link_type",
@@ -2808,10 +6701,9 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
       {
         "name": "id",
         "type": "string",
-        "format": "uuid",
         "required": true,
         "nullable": false,
-        "description": "Source Beacon ID"
+        "description": "Source Beacon ID (UUID), slug, or title"
       },
       {
         "name": "link_id",
@@ -2820,6 +6712,20 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
         "required": true,
         "nullable": false,
         "description": "Link ID to remove"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "beacon_links_list",
+    "description": "List a Beacon's typed links (related/depends-on/etc.). `id` accepts a UUID, slug, or title.",
+    "source": "beacon",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Beacon UUID, slug, or title"
       }
     ]
   },
@@ -2965,10 +6871,9 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
       {
         "name": "id",
         "type": "string",
-        "format": "uuid",
         "required": true,
         "nullable": false,
-        "description": "Beacon ID"
+        "description": "Beacon ID (UUID), slug, or title"
       }
     ]
   },
@@ -3085,10 +6990,9 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
       {
         "name": "id",
         "type": "string",
-        "format": "uuid",
         "required": true,
         "nullable": false,
-        "description": "Beacon ID"
+        "description": "Beacon ID (UUID), slug, or title"
       }
     ]
   },
@@ -3100,10 +7004,9 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
       {
         "name": "id",
         "type": "string",
-        "format": "uuid",
         "required": true,
         "nullable": false,
-        "description": "Beacon ID"
+        "description": "Beacon ID (UUID), slug, or title"
       }
     ]
   },
@@ -3180,6 +7083,21 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
     ]
   },
   {
+    "mcp_tool": "beacon_stats",
+    "description": "Org-wide Beacon statistics (counts by status, staleness, verification) for the active scope.",
+    "source": "beacon",
+    "parameters": [
+      {
+        "name": "project_id",
+        "type": "string",
+        "format": "uuid",
+        "required": false,
+        "nullable": false,
+        "description": "Optional project scope filter"
+      }
+    ]
+  },
+  {
     "mcp_tool": "beacon_suggest",
     "description": "Typeahead suggestions from the Beacon title/tag index.",
     "source": "beacon",
@@ -3209,10 +7127,9 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
       {
         "name": "id",
         "type": "string",
-        "format": "uuid",
         "required": true,
         "nullable": false,
-        "description": "Beacon ID"
+        "description": "Beacon ID (UUID), slug, or title"
       },
       {
         "name": "tags",
@@ -3231,10 +7148,9 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
       {
         "name": "id",
         "type": "string",
-        "format": "uuid",
         "required": true,
         "nullable": false,
-        "description": "Beacon ID"
+        "description": "Beacon ID (UUID), slug, or title"
       },
       {
         "name": "tag",
@@ -3283,10 +7199,9 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
       {
         "name": "id",
         "type": "string",
-        "format": "uuid",
         "required": true,
         "nullable": false,
-        "description": "Beacon ID"
+        "description": "Beacon ID (UUID), slug, or title"
       },
       {
         "name": "title",
@@ -3332,6 +7247,83 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
     ]
   },
   {
+    "mcp_tool": "beacon_upsert_by_slug",
+    "description": "Idempotent create-or-update of a Beacon entry by slug. Natural key is the globally-unique slug. On update, bumps version and writes a beacon_versions snapshot. Returns { data, created, idempotency_key } — `created` is true on insert, false on update.",
+    "source": "beacon",
+    "parameters": [
+      {
+        "name": "slug",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Slug — idempotency key (must be a URL-safe string)"
+      },
+      {
+        "name": "title",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Entry title"
+      },
+      {
+        "name": "summary",
+        "type": "string",
+        "required": false,
+        "nullable": true,
+        "description": "Short summary (plain text)"
+      },
+      {
+        "name": "body_markdown",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Entry body (Markdown)"
+      },
+      {
+        "name": "body_html",
+        "type": "string",
+        "required": false,
+        "nullable": true,
+        "description": "Optional pre-rendered HTML (sanitized server-side)"
+      },
+      {
+        "name": "visibility",
+        "type": "enum",
+        "enum": [
+          "Public",
+          "Organization",
+          "Project",
+          "Private"
+        ],
+        "required": false,
+        "nullable": false,
+        "description": "Visibility level"
+      },
+      {
+        "name": "project_id",
+        "type": "string",
+        "format": "uuid",
+        "required": false,
+        "nullable": true,
+        "description": "Project scope (UUID)"
+      },
+      {
+        "name": "metadata",
+        "type": "object",
+        "required": false,
+        "nullable": false,
+        "description": "Arbitrary metadata JSON"
+      },
+      {
+        "name": "change_note",
+        "type": "string",
+        "required": false,
+        "nullable": true,
+        "description": "Note attached to the new version row on update"
+      }
+    ]
+  },
+  {
     "mcp_tool": "beacon_verify",
     "description": "Record a verification event on a Beacon (confirms content is still accurate).",
     "source": "beacon",
@@ -3339,10 +7331,9 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
       {
         "name": "id",
         "type": "string",
-        "format": "uuid",
         "required": true,
         "nullable": false,
-        "description": "Beacon ID"
+        "description": "Beacon ID (UUID), slug, or title"
       },
       {
         "name": "verification_type",
@@ -3394,10 +7385,9 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
       {
         "name": "id",
         "type": "string",
-        "format": "uuid",
         "required": true,
         "nullable": false,
-        "description": "Beacon ID"
+        "description": "Beacon ID (UUID), slug, or title"
       },
       {
         "name": "version",
@@ -3417,10 +7407,9 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
       {
         "name": "id",
         "type": "string",
-        "format": "uuid",
         "required": true,
         "nullable": false,
-        "description": "Beacon ID"
+        "description": "Beacon ID (UUID), slug, or title"
       }
     ]
   },
@@ -3432,16 +7421,15 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
   },
   {
     "mcp_tool": "bearing_goal_create",
-    "description": "Create a new OKR goal within a period.",
+    "description": "Create a new OKR goal within a period. `period_id` accepts either a UUID or the period label (e.g. \"Q2 2026\"). `owner_id` accepts a UUID or the owner's email address.",
     "source": "bearing",
     "parameters": [
       {
         "name": "period_id",
         "type": "string",
-        "format": "uuid",
         "required": true,
         "nullable": false,
-        "description": "Period to attach the goal to"
+        "description": ""
       },
       {
         "name": "title",
@@ -3502,10 +7490,23 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
       {
         "name": "owner_id",
         "type": "string",
-        "format": "uuid",
         "required": true,
         "nullable": false,
-        "description": "User ID of the goal owner"
+        "description": "Goal owner: user UUID or email address"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bearing_goal_delete",
+    "description": "Delete a goal and its key results. `id` accepts either a UUID or the goal title.",
+    "source": "bearing",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Goal UUID or goal title"
       }
     ]
   },
@@ -3525,17 +7526,80 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
     ]
   },
   {
-    "mcp_tool": "bearing_goal_update",
-    "description": "Update an existing goal. Provide only the fields to change.",
+    "mcp_tool": "bearing_goal_history",
+    "description": "Get the progress history (point-in-time snapshots) for a goal. `id` accepts a UUID or the goal title.",
     "source": "bearing",
     "parameters": [
       {
         "name": "id",
         "type": "string",
-        "format": "uuid",
         "required": true,
         "nullable": false,
-        "description": "Goal ID"
+        "description": "Goal UUID or goal title"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bearing_goal_status_override",
+    "description": "Manually override a goal's status (e.g. force \"at_risk\" or \"achieved\"), bypassing automatic progress-derived status. `id` accepts a UUID or the goal title.",
+    "source": "bearing",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Goal UUID or goal title"
+      },
+      {
+        "name": "status",
+        "type": "enum",
+        "enum": [
+          "draft",
+          "on_track",
+          "at_risk",
+          "behind",
+          "achieved",
+          "missed"
+        ],
+        "required": true,
+        "nullable": false,
+        "description": "New status to set"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bearing_goal_unwatch",
+    "description": "Remove a watcher from a goal. `id` accepts a UUID or goal title; `user_id` accepts a UUID or email address. You may remove yourself, or — if you are the goal owner or an org admin/owner — remove another user.",
+    "source": "bearing",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Goal UUID or goal title"
+      },
+      {
+        "name": "user_id",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Watcher to remove: user UUID or email address"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bearing_goal_update",
+    "description": "Update an existing goal. Provide only the fields to change. `id` accepts either a UUID or the goal title. `owner_id` accepts a UUID or email address.",
+    "source": "bearing",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Goal UUID or goal title"
       },
       {
         "name": "title",
@@ -3567,10 +7631,9 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
       {
         "name": "owner_id",
         "type": "string",
-        "format": "uuid",
         "required": false,
         "nullable": false,
-        "description": "Updated owner"
+        "description": "Updated owner: user UUID or email address"
       },
       {
         "name": "icon",
@@ -3585,6 +7648,48 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
         "required": false,
         "nullable": false,
         "description": "Updated color"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bearing_goal_updates",
+    "description": "List the status updates posted on a goal. `id` accepts a UUID or the goal title.",
+    "source": "bearing",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Goal UUID or goal title"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bearing_goal_watch",
+    "description": "Add the calling user as a watcher on a goal (subscribe to its updates). `id` accepts a UUID or the goal title. The watcher is always the authenticated caller; there is no target-user parameter.",
+    "source": "bearing",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Goal UUID or goal title"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bearing_goal_watchers",
+    "description": "List the users watching a goal. `id` accepts a UUID or the goal title.",
+    "source": "bearing",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Goal UUID or goal title"
       }
     ]
   },
@@ -3649,16 +7754,15 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
   },
   {
     "mcp_tool": "bearing_kr_create",
-    "description": "Create a key result under a goal.",
+    "description": "Create a key result under a goal. `goal_id` accepts a UUID or the goal title. `owner_id` accepts a UUID or email address.",
     "source": "bearing",
     "parameters": [
       {
         "name": "goal_id",
         "type": "string",
-        "format": "uuid",
         "required": true,
         "nullable": false,
-        "description": "Parent goal ID"
+        "description": "Parent goal UUID or goal title"
       },
       {
         "name": "title",
@@ -3733,25 +7837,65 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
       {
         "name": "owner_id",
         "type": "string",
-        "format": "uuid",
         "required": false,
         "nullable": false,
-        "description": "Key result owner (defaults to goal owner)"
+        "description": "Key result owner: user UUID or email (defaults to goal owner)"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bearing_kr_delete",
+    "description": "Delete a key result. `id` accepts a UUID or the KR title — if the title is shared across multiple goals the tool fails and asks for disambiguation.",
+    "source": "bearing",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Key result UUID or KR title"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bearing_kr_get",
+    "description": "Get a single key result. `id` accepts a UUID or the KR title — if the title is shared across multiple goals the tool fails and asks for disambiguation.",
+    "source": "bearing",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Key result UUID or KR title"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bearing_kr_history",
+    "description": "Get the value/progress snapshot history for a key result. `id` accepts a UUID or the KR title.",
+    "source": "bearing",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Key result UUID or KR title"
       }
     ]
   },
   {
     "mcp_tool": "bearing_kr_link",
-    "description": "Link a key result to a Bam entity (epic, project, or task query) for automatic progress tracking.",
+    "description": "Link a key result to a Bam entity (epic, project, or task query) for automatic progress tracking. `key_result_id` accepts a UUID or the KR title.",
     "source": "bearing",
     "parameters": [
       {
         "name": "key_result_id",
         "type": "string",
-        "format": "uuid",
         "required": true,
         "nullable": false,
-        "description": "Key result ID"
+        "description": "Key result UUID or KR title"
       },
       {
         "name": "link_type",
@@ -3799,17 +7943,66 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
     ]
   },
   {
+    "mcp_tool": "bearing_kr_links",
+    "description": "List the Bam-entity links attached to a key result. `key_result_id` accepts a UUID or the KR title.",
+    "source": "bearing",
+    "parameters": [
+      {
+        "name": "key_result_id",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Key result UUID or KR title"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bearing_kr_list",
+    "description": "List the key results for a goal. `goal_id` accepts a UUID or the goal title.",
+    "source": "bearing",
+    "parameters": [
+      {
+        "name": "goal_id",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Goal UUID or goal title"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bearing_kr_unlink",
+    "description": "Remove a link from a key result. `key_result_id` accepts a UUID or the KR title; `link_id` is the link UUID (get it from bearing_kr_links).",
+    "source": "bearing",
+    "parameters": [
+      {
+        "name": "key_result_id",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Key result UUID or KR title"
+      },
+      {
+        "name": "link_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Link UUID to remove"
+      }
+    ]
+  },
+  {
     "mcp_tool": "bearing_kr_update",
-    "description": "Update a key result value or metadata. When current_value is provided, also records a value check-in.",
+    "description": "Update a key result value or metadata. When current_value is provided, also records a value check-in. `id` accepts either a UUID or the KR title — if multiple KRs share the title the tool fails and asks for disambiguation.",
     "source": "bearing",
     "parameters": [
       {
         "name": "id",
         "type": "string",
-        "format": "uuid",
         "required": true,
         "nullable": false,
-        "description": "Key result ID"
+        "description": "Key result UUID or KR title"
       },
       {
         "name": "current_value",
@@ -3835,6 +8028,103 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
     ]
   },
   {
+    "mcp_tool": "bearing_period_activate",
+    "description": "Activate an OKR period (mark it the current/live planning window). `id` accepts a UUID or the period label.",
+    "source": "bearing",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Period UUID or period label"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bearing_period_complete",
+    "description": "Complete an OKR period (close it out at end of cadence). `id` accepts a UUID or the period label.",
+    "source": "bearing",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Period UUID or period label"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bearing_period_create",
+    "description": "Create a new OKR period (planning window such as a quarter). Dates are YYYY-MM-DD.",
+    "source": "bearing",
+    "parameters": [
+      {
+        "name": "name",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "period_type",
+        "type": "enum",
+        "enum": [
+          "quarter",
+          "half",
+          "year",
+          "month",
+          "custom"
+        ],
+        "required": true,
+        "nullable": false,
+        "description": "Period cadence"
+      },
+      {
+        "name": "starts_at",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Start date (YYYY-MM-DD)"
+      },
+      {
+        "name": "ends_at",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "End date (YYYY-MM-DD)"
+      },
+      {
+        "name": "status",
+        "type": "enum",
+        "enum": [
+          "planning",
+          "active",
+          "completed",
+          "archived"
+        ],
+        "required": false,
+        "nullable": false,
+        "description": "Initial status (default planning)"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bearing_period_delete",
+    "description": "Delete an OKR period. `id` accepts a UUID or the period label (e.g. \"Q2 2026\").",
+    "source": "bearing",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Period UUID or period label"
+      }
+    ]
+  },
+  {
     "mcp_tool": "bearing_period_get",
     "description": "Get a single OKR period with aggregated stats.",
     "source": "bearing",
@@ -3846,6 +8136,68 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
         "required": true,
         "nullable": false,
         "description": "Period ID"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bearing_period_update",
+    "description": "Update an OKR period. `id` accepts a UUID or the period label (e.g. \"Q2 2026\"). Provide only the fields to change. Setting status to \"archived\" archives the period.",
+    "source": "bearing",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Period UUID or period label"
+      },
+      {
+        "name": "name",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Updated label"
+      },
+      {
+        "name": "period_type",
+        "type": "enum",
+        "enum": [
+          "quarter",
+          "half",
+          "year",
+          "month",
+          "custom"
+        ],
+        "required": false,
+        "nullable": false,
+        "description": "Updated cadence"
+      },
+      {
+        "name": "starts_at",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Updated start date (YYYY-MM-DD)"
+      },
+      {
+        "name": "ends_at",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Updated end date (YYYY-MM-DD)"
+      },
+      {
+        "name": "status",
+        "type": "enum",
+        "enum": [
+          "planning",
+          "active",
+          "completed",
+          "archived"
+        ],
+        "required": false,
+        "nullable": false,
+        "description": "Updated status"
       }
     ]
   },
@@ -3924,16 +8276,15 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
   },
   {
     "mcp_tool": "bearing_update_post",
-    "description": "Post a status update on a goal.",
+    "description": "Post a status update on a goal. `goal_id` accepts a UUID or the goal title.",
     "source": "bearing",
     "parameters": [
       {
         "name": "goal_id",
         "type": "string",
-        "format": "uuid",
         "required": true,
         "nullable": false,
-        "description": "Goal ID"
+        "description": "Goal UUID or goal title"
       },
       {
         "name": "status",
@@ -3956,6 +8307,64 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
         "required": false,
         "nullable": false,
         "description": "Update body text (max 5000 chars)"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bench_add_widget",
+    "description": "Add a widget to a dashboard. The widget binds a data source + entity to a query config and a visualization type. Use bench_list_data_sources to discover valid data_source/entity and field names.",
+    "source": "bench",
+    "parameters": [
+      {
+        "name": "dashboard_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Dashboard ID to add the widget to"
+      },
+      {
+        "name": "name",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Widget name"
+      },
+      {
+        "name": "data_source",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "entity",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "viz_config",
+        "type": "object",
+        "required": false,
+        "nullable": false,
+        "description": "Visualization options"
+      },
+      {
+        "name": "kpi_config",
+        "type": "object",
+        "required": false,
+        "nullable": false,
+        "description": "KPI-card options"
+      },
+      {
+        "name": "cache_ttl_seconds",
+        "type": "number",
+        "format": "integer",
+        "required": false,
+        "nullable": false,
+        "description": "Result cache TTL in seconds"
       }
     ]
   },
@@ -4028,6 +8437,245 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
     ]
   },
   {
+    "mcp_tool": "bench_create_dashboard",
+    "description": "Create a new analytics dashboard. Widgets are added separately via bench_add_widget.",
+    "source": "bench",
+    "parameters": [
+      {
+        "name": "name",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Dashboard name"
+      },
+      {
+        "name": "description",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Dashboard description"
+      },
+      {
+        "name": "project_id",
+        "type": "string",
+        "format": "uuid",
+        "required": false,
+        "nullable": false,
+        "description": "Project to scope the dashboard to"
+      },
+      {
+        "name": "visibility",
+        "type": "enum",
+        "enum": [
+          "private",
+          "project",
+          "organization"
+        ],
+        "required": false,
+        "nullable": false,
+        "description": "Who can see the dashboard (default private)"
+      },
+      {
+        "name": "is_default",
+        "type": "boolean",
+        "required": false,
+        "nullable": false,
+        "description": "Mark as the default dashboard"
+      },
+      {
+        "name": "auto_refresh_seconds",
+        "type": "number",
+        "format": "integer",
+        "required": false,
+        "nullable": false,
+        "description": "Auto-refresh interval in seconds"
+      },
+      {
+        "name": "layout",
+        "type": "array",
+        "required": false,
+        "nullable": false,
+        "description": "Grid layout descriptors"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bench_create_saved_query",
+    "description": "Save a reusable ad-hoc query. The query_config follows the same shape as bench_query_ad_hoc (measures, dimensions, filters).",
+    "source": "bench",
+    "parameters": [
+      {
+        "name": "name",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Saved query name"
+      },
+      {
+        "name": "description",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Description"
+      },
+      {
+        "name": "data_source",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "entity",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "query_config",
+        "type": "object",
+        "required": true,
+        "nullable": false,
+        "description": "Query config (measures/dimensions/filters)"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bench_create_scheduled_report",
+    "description": "Create a scheduled report that periodically renders a dashboard and delivers it. delivery_target is an email address, Banter channel ID, or Brief document target depending on delivery_method.",
+    "source": "bench",
+    "parameters": [
+      {
+        "name": "dashboard_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Dashboard to render and deliver"
+      },
+      {
+        "name": "name",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Report name"
+      },
+      {
+        "name": "cron_expression",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Cron schedule expression"
+      },
+      {
+        "name": "cron_timezone",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "IANA timezone for the cron schedule"
+      },
+      {
+        "name": "delivery_method",
+        "type": "enum",
+        "enum": [
+          "email",
+          "banter_channel",
+          "brief_document"
+        ],
+        "required": true,
+        "nullable": false,
+        "description": "How to deliver the rendered report"
+      },
+      {
+        "name": "delivery_target",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Email address, Banter channel, or Brief document target"
+      },
+      {
+        "name": "export_format",
+        "type": "enum",
+        "enum": [
+          "pdf",
+          "png",
+          "csv"
+        ],
+        "required": false,
+        "nullable": false,
+        "description": "Rendered artifact format"
+      },
+      {
+        "name": "enabled",
+        "type": "boolean",
+        "required": false,
+        "nullable": false,
+        "description": "Whether the schedule is active"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bench_delete_dashboard",
+    "description": "Delete a dashboard and its widgets. This is permanent.",
+    "source": "bench",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Dashboard ID to delete"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bench_delete_saved_query",
+    "description": "Delete a saved query. This is permanent.",
+    "source": "bench",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Saved query ID to delete"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bench_delete_scheduled_report",
+    "description": "Delete a scheduled report. This stops future deliveries and is permanent.",
+    "source": "bench",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Scheduled report ID to delete"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bench_delete_widget",
+    "description": "Delete a widget from its dashboard. This is permanent.",
+    "source": "bench",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Widget ID to delete"
+      }
+    ]
+  },
+  {
     "mcp_tool": "bench_detect_anomalies",
     "description": "Scan recent metrics for anomalies. Queries the specified data source and compares the most recent period against the previous period to detect significant deviations.",
     "source": "bench",
@@ -4076,6 +8724,36 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
     ]
   },
   {
+    "mcp_tool": "bench_duplicate_dashboard",
+    "description": "Clone a dashboard, including its widgets, into a new copy owned by the caller.",
+    "source": "bench",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Dashboard ID to clone"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bench_export_dashboard",
+    "description": "Queue a dashboard export render (PDF). Returns the queued job descriptor; the rendered artifact is delivered out of band.",
+    "source": "bench",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Dashboard ID to export"
+      }
+    ]
+  },
+  {
     "mcp_tool": "bench_generate_report",
     "description": "Trigger immediate generation and delivery of a scheduled report.",
     "source": "bench",
@@ -4102,6 +8780,57 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
         "required": true,
         "nullable": false,
         "description": "Dashboard ID"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bench_get_data_source",
+    "description": "Get the detailed schema for one data source entity — its available measures, dimensions, and filterable fields. Use this after bench_list_data_sources to learn valid field names for a query.",
+    "source": "bench",
+    "parameters": [
+      {
+        "name": "product",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "entity",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": ""
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bench_get_saved_query",
+    "description": "Get a single saved query by ID, including its full query config.",
+    "source": "bench",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Saved query ID"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bench_get_widget",
+    "description": "Get a single widget configuration by ID (data source, entity, query config, visualization).",
+    "source": "bench",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Widget ID"
       }
     ]
   },
@@ -4137,6 +8866,47 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
     "description": "List all available data sources and their schemas (measures, dimensions, filters). Use this to discover what data can be queried through Bench.",
     "source": "bench",
     "parameters": []
+  },
+  {
+    "mcp_tool": "bench_list_materialized_views",
+    "description": "List the Bench materialized views and their refresh state (last refreshed, row count, schedule).",
+    "source": "bench",
+    "parameters": []
+  },
+  {
+    "mcp_tool": "bench_list_saved_queries",
+    "description": "List saved ad-hoc queries for the organization. Saved queries pair a data source + entity with a reusable query config.",
+    "source": "bench",
+    "parameters": []
+  },
+  {
+    "mcp_tool": "bench_list_scheduled_reports",
+    "description": "List scheduled reports for the organization, with optional fuzzy search on name. Returns id, name, dashboard_id, dashboard_name, schedule (cron expression + timezone + enabled), recipients (delivery method/target/format), last_run_at, and next_run_at.",
+    "source": "bench",
+    "parameters": [
+      {
+        "name": "search",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Optional fuzzy search on report name"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bench_list_widgets",
+    "description": "List widgets across the organization, optionally scoped to a single dashboard. Widgets are normally only reachable by nesting inside bench_get_dashboard; this gives them direct addressability for resolver flows. Returns id, name, type, dashboard_id, dashboard_name, position, and query.",
+    "source": "bench",
+    "parameters": [
+      {
+        "name": "dashboard_id",
+        "type": "string",
+        "format": "uuid",
+        "required": false,
+        "nullable": false,
+        "description": "Optional dashboard ID to scope results to"
+      }
+    ]
   },
   {
     "mcp_tool": "bench_query_ad_hoc",
@@ -4204,6 +8974,35 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
     ]
   },
   {
+    "mcp_tool": "bench_refresh_materialized_view",
+    "description": "Manually trigger a REFRESH of a Bench materialized view. This can be expensive; use bench_list_materialized_views to find valid view names.",
+    "source": "bench",
+    "parameters": [
+      {
+        "name": "view_name",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Materialized view name to refresh"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bench_refresh_widget",
+    "description": "Force cache invalidation and re-execute a widget query, bypassing any cached result. Use bench_query_widget for a normal (cacheable) read.",
+    "source": "bench",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Widget ID to refresh"
+      }
+    ]
+  },
+  {
     "mcp_tool": "bench_summarize_dashboard",
     "description": "Get all widget data from a dashboard for AI summarization. Returns the dashboard metadata and query results for each widget.",
     "source": "bench",
@@ -4215,6 +9014,259 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
         "required": true,
         "nullable": false,
         "description": "Dashboard ID to summarize"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bench_update_dashboard",
+    "description": "Update dashboard metadata (name, description, visibility, layout). Provide only the fields to change.",
+    "source": "bench",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Dashboard ID"
+      },
+      {
+        "name": "name",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Updated name"
+      },
+      {
+        "name": "description",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Updated description"
+      },
+      {
+        "name": "project_id",
+        "type": "string",
+        "format": "uuid",
+        "required": false,
+        "nullable": true,
+        "description": "Updated project scope (null to clear)"
+      },
+      {
+        "name": "visibility",
+        "type": "enum",
+        "enum": [
+          "private",
+          "project",
+          "organization"
+        ],
+        "required": false,
+        "nullable": false,
+        "description": "Updated visibility"
+      },
+      {
+        "name": "is_default",
+        "type": "boolean",
+        "required": false,
+        "nullable": false,
+        "description": "Updated default flag"
+      },
+      {
+        "name": "auto_refresh_seconds",
+        "type": "number",
+        "format": "integer",
+        "required": false,
+        "nullable": true,
+        "description": "Updated auto-refresh interval (null to clear)"
+      },
+      {
+        "name": "layout",
+        "type": "array",
+        "required": false,
+        "nullable": false,
+        "description": "Updated grid layout"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bench_update_saved_query",
+    "description": "Update a saved query. Provide only the fields to change; query_config replaces the existing config wholesale.",
+    "source": "bench",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Saved query ID"
+      },
+      {
+        "name": "name",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Updated name"
+      },
+      {
+        "name": "description",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Updated description"
+      },
+      {
+        "name": "data_source",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Updated data source"
+      },
+      {
+        "name": "entity",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Updated entity"
+      },
+      {
+        "name": "query_config",
+        "type": "object",
+        "required": false,
+        "nullable": false,
+        "description": "Replacement query config"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bench_update_scheduled_report",
+    "description": "Update a scheduled report (schedule, delivery, or enabled state). Provide only the fields to change.",
+    "source": "bench",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Scheduled report ID"
+      },
+      {
+        "name": "name",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Updated name"
+      },
+      {
+        "name": "cron_expression",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Updated cron schedule"
+      },
+      {
+        "name": "cron_timezone",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Updated timezone"
+      },
+      {
+        "name": "delivery_method",
+        "type": "enum",
+        "enum": [
+          "email",
+          "banter_channel",
+          "brief_document"
+        ],
+        "required": false,
+        "nullable": false,
+        "description": "Updated delivery method"
+      },
+      {
+        "name": "delivery_target",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Updated delivery target"
+      },
+      {
+        "name": "export_format",
+        "type": "enum",
+        "enum": [
+          "pdf",
+          "png",
+          "csv"
+        ],
+        "required": false,
+        "nullable": false,
+        "description": "Updated artifact format"
+      },
+      {
+        "name": "enabled",
+        "type": "boolean",
+        "required": false,
+        "nullable": false,
+        "description": "Enable or disable the schedule"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bench_update_widget",
+    "description": "Update a widget configuration. Provide only the fields to change. Changing query_config replaces it wholesale.",
+    "source": "bench",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Widget ID"
+      },
+      {
+        "name": "name",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Updated name"
+      },
+      {
+        "name": "data_source",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Updated data source"
+      },
+      {
+        "name": "entity",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Updated entity"
+      },
+      {
+        "name": "viz_config",
+        "type": "object",
+        "required": false,
+        "nullable": false,
+        "description": "Updated visualization options"
+      },
+      {
+        "name": "kpi_config",
+        "type": "object",
+        "required": false,
+        "nullable": false,
+        "description": "Updated KPI-card options"
+      },
+      {
+        "name": "cache_ttl_seconds",
+        "type": "number",
+        "format": "integer",
+        "required": false,
+        "nullable": false,
+        "description": "Updated cache TTL"
       }
     ]
   },
@@ -4259,6 +9311,144 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
         "required": false,
         "nullable": false,
         "description": "Unit type: hours, days, units, fixed"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bill_approve_expense",
+    "description": "Approve a pending expense.",
+    "source": "bill",
+    "parameters": [
+      {
+        "name": "expense_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Expense UUID"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bill_cancel_recurring_invoice",
+    "description": "Cancel a recurring schedule permanently. Already-generated invoices are unaffected.",
+    "source": "bill",
+    "parameters": [
+      {
+        "name": "recurring_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Recurring schedule UUID"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bill_create_client",
+    "description": "Create a new billing client for the organization.",
+    "source": "bill",
+    "parameters": [
+      {
+        "name": "name",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Client name"
+      },
+      {
+        "name": "email",
+        "type": "string",
+        "format": "email",
+        "required": false,
+        "nullable": false,
+        "description": "Billing email"
+      },
+      {
+        "name": "phone",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Phone number"
+      },
+      {
+        "name": "address_line1",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Address line 1"
+      },
+      {
+        "name": "address_line2",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Address line 2"
+      },
+      {
+        "name": "city",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "City"
+      },
+      {
+        "name": "state_region",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "State or region"
+      },
+      {
+        "name": "postal_code",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Postal/ZIP code"
+      },
+      {
+        "name": "country",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "ISO 3166-1 alpha-2 country code"
+      },
+      {
+        "name": "tax_id",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Tax identification number"
+      },
+      {
+        "name": "bond_company_id",
+        "type": "string",
+        "format": "uuid",
+        "required": false,
+        "nullable": false,
+        "description": "Linked Bond CRM company UUID"
+      },
+      {
+        "name": "default_payment_terms_days",
+        "type": "number",
+        "format": "integer",
+        "required": false,
+        "nullable": false,
+        "description": "Default payment terms in days"
+      },
+      {
+        "name": "default_payment_instructions",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Default payment instructions"
+      },
+      {
+        "name": "notes",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Internal notes"
       }
     ]
   },
@@ -4321,18 +9511,16 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
       {
         "name": "client_id",
         "type": "string",
-        "format": "uuid",
         "required": true,
         "nullable": false,
-        "description": "Billing client UUID"
+        "description": ""
       },
       {
         "name": "project_id",
         "type": "string",
-        "format": "uuid",
         "required": false,
         "nullable": false,
-        "description": "Link to a Bam project"
+        "description": "Link to a Bam project — UUID or exact project name"
       },
       {
         "name": "tax_rate",
@@ -4352,7 +9540,7 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
   },
   {
     "mcp_tool": "bill_create_invoice_from_deal",
-    "description": "Generate a draft invoice from a Bond CRM deal, pulling deal value and contact info.",
+    "description": "Generate a draft invoice from a Bond CRM deal, pulling deal value and contact info. NOTE: deal_id must be a UUID — Bond deal title search is not reachable from this tool. In a Bolt rule, pass `{{ event.deal.id }}` from the triggering deal.* event.",
     "source": "bill",
     "parameters": [
       {
@@ -4361,38 +9549,35 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
         "format": "uuid",
         "required": true,
         "nullable": false,
-        "description": "Bond deal UUID"
+        "description": ""
       },
       {
         "name": "client_id",
         "type": "string",
-        "format": "uuid",
         "required": true,
         "nullable": false,
-        "description": "Billing client UUID"
+        "description": "Billing client — UUID, exact client name, or client email"
       }
     ]
   },
   {
     "mcp_tool": "bill_create_invoice_from_time",
-    "description": "Generate an invoice from Bam time entries for a project and date range.",
+    "description": "Generate a draft invoice from Bam time entries for a project over a date range. The Bill API resolves every time entry on the project between date_from and date_to (inclusive), groups them by user + task, prices each group via the resolved billing rate, and writes one line item per group. Requires a billing rate configured for each contributing user on the project.",
     "source": "bill",
     "parameters": [
       {
         "name": "project_id",
         "type": "string",
-        "format": "uuid",
         "required": true,
         "nullable": false,
-        "description": "Bam project UUID"
+        "description": "Bam project — UUID or exact project name"
       },
       {
         "name": "client_id",
         "type": "string",
-        "format": "uuid",
         "required": true,
         "nullable": false,
-        "description": "Billing client UUID"
+        "description": "Billing client — UUID, exact client name, or client email"
       },
       {
         "name": "date_from",
@@ -4407,6 +9592,289 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
         "required": true,
         "nullable": false,
         "description": "End date (YYYY-MM-DD)"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bill_create_rate",
+    "description": "Create a billing rate, optionally scoped to a project and/or user with an effective date range.",
+    "source": "bill",
+    "parameters": [
+      {
+        "name": "project_id",
+        "type": "string",
+        "format": "uuid",
+        "required": false,
+        "nullable": false,
+        "description": "Scope to a project UUID (omit for org-wide)"
+      },
+      {
+        "name": "user_id",
+        "type": "string",
+        "format": "uuid",
+        "required": false,
+        "nullable": false,
+        "description": "Scope to a user UUID (omit for all users)"
+      },
+      {
+        "name": "rate_amount",
+        "type": "number",
+        "format": "integer",
+        "required": true,
+        "nullable": false,
+        "description": "Rate amount in cents"
+      },
+      {
+        "name": "rate_type",
+        "type": "enum",
+        "enum": [
+          "hourly",
+          "daily",
+          "fixed"
+        ],
+        "required": false,
+        "nullable": false,
+        "description": "Rate type (default hourly)"
+      },
+      {
+        "name": "currency",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "ISO 4217 currency code"
+      },
+      {
+        "name": "effective_from",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Effective from date (YYYY-MM-DD)"
+      },
+      {
+        "name": "effective_to",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Effective to date (YYYY-MM-DD)"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bill_create_recurring_invoice",
+    "description": "Create a recurring/subscription invoice schedule. The daily worker generates an invoice from the line-item template each cadence period and advances next_run_at. Set auto_finalize to issue real numbered invoices instead of drafts.",
+    "source": "bill",
+    "parameters": [
+      {
+        "name": "client_id",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Billing client — UUID, exact client name, or client email"
+      },
+      {
+        "name": "name",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "cadence",
+        "type": "enum",
+        "enum": [
+          "weekly",
+          "monthly",
+          "quarterly",
+          "annually"
+        ],
+        "required": true,
+        "nullable": false,
+        "description": "How often to generate an invoice"
+      },
+      {
+        "name": "project_id",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Link to a Bam project — UUID or exact project name"
+      },
+      {
+        "name": "auto_finalize",
+        "type": "boolean",
+        "required": false,
+        "nullable": false,
+        "description": "When true, generated invoices are finalized (numbered + sent); otherwise left as drafts (default false)"
+      },
+      {
+        "name": "currency",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "ISO 4217 currency code (defaults to org setting)"
+      },
+      {
+        "name": "tax_rate",
+        "type": "number",
+        "required": false,
+        "nullable": false,
+        "description": "Tax rate percentage"
+      },
+      {
+        "name": "discount_amount",
+        "type": "number",
+        "format": "integer",
+        "required": false,
+        "nullable": false,
+        "description": "Discount amount in cents"
+      },
+      {
+        "name": "payment_terms_days",
+        "type": "number",
+        "format": "integer",
+        "required": false,
+        "nullable": false,
+        "description": "Net payment terms in days"
+      },
+      {
+        "name": "start_date",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "First eligible run date (YYYY-MM-DD, default today)"
+      },
+      {
+        "name": "end_date",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Optional last date the series may run (YYYY-MM-DD)"
+      },
+      {
+        "name": "notes",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Internal notes copied onto each generated invoice"
+      },
+      {
+        "name": "line_items",
+        "type": "array",
+        "required": false,
+        "nullable": false,
+        "description": "Line-item template copied onto each generated invoice"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bill_delete_client",
+    "description": "Delete a billing client by UUID.",
+    "source": "bill",
+    "parameters": [
+      {
+        "name": "client_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Client UUID"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bill_delete_expense",
+    "description": "Delete an expense by UUID.",
+    "source": "bill",
+    "parameters": [
+      {
+        "name": "expense_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Expense UUID"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bill_delete_invoice",
+    "description": "Delete an invoice by UUID (draft invoices only).",
+    "source": "bill",
+    "parameters": [
+      {
+        "name": "invoice_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Invoice UUID"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bill_delete_line_item",
+    "description": "Delete a line item from a draft invoice.",
+    "source": "bill",
+    "parameters": [
+      {
+        "name": "invoice_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Invoice UUID"
+      },
+      {
+        "name": "item_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Line item UUID"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bill_delete_payment",
+    "description": "Delete a recorded payment by UUID, reverting the invoice balance.",
+    "source": "bill",
+    "parameters": [
+      {
+        "name": "payment_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Payment UUID"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bill_delete_rate",
+    "description": "Delete a billing rate by UUID.",
+    "source": "bill",
+    "parameters": [
+      {
+        "name": "rate_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Rate UUID"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bill_duplicate_invoice",
+    "description": "Duplicate an existing invoice into a new draft, copying line items.",
+    "source": "bill",
+    "parameters": [
+      {
+        "name": "invoice_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Source invoice UUID"
       }
     ]
   },
@@ -4426,6 +9894,36 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
     ]
   },
   {
+    "mcp_tool": "bill_generate_recurring_invoice_now",
+    "description": "Generate an invoice from a recurring schedule immediately, without waiting for the next scheduled run. Advances next_run_at by one cadence step. Returns the new invoice id, number, and status.",
+    "source": "bill",
+    "parameters": [
+      {
+        "name": "recurring_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Recurring schedule UUID"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bill_get_client",
+    "description": "Get a single billing client by UUID, including address and billing defaults.",
+    "source": "bill",
+    "parameters": [
+      {
+        "name": "client_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Client UUID"
+      }
+    ]
+  },
+  {
     "mcp_tool": "bill_get_invoice",
     "description": "Get full invoice detail including line items and payments.",
     "source": "bill",
@@ -4441,6 +9939,27 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
     ]
   },
   {
+    "mcp_tool": "bill_get_invoice_jobs",
+    "description": "Get the latest async PDF-generation and email-send job state for an invoice.",
+    "source": "bill",
+    "parameters": [
+      {
+        "name": "invoice_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Invoice UUID"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bill_get_outstanding",
+    "description": "Outstanding-balance report: invoices with an unpaid balance and the amount still owed.",
+    "source": "bill",
+    "parameters": []
+  },
+  {
     "mcp_tool": "bill_get_overdue",
     "description": "List all overdue invoices with days overdue and amount due.",
     "source": "bill",
@@ -4451,6 +9970,21 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
     "description": "Get project profitability: invoiced revenue vs. logged expenses per project.",
     "source": "bill",
     "parameters": []
+  },
+  {
+    "mcp_tool": "bill_get_recurring_invoice",
+    "description": "Get a recurring invoice schedule with its line-item template.",
+    "source": "bill",
+    "parameters": [
+      {
+        "name": "recurring_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Recurring schedule UUID"
+      }
+    ]
   },
   {
     "mcp_tool": "bill_get_revenue_summary",
@@ -4470,6 +10004,26 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
         "required": false,
         "nullable": false,
         "description": "End date (YYYY-MM-DD)"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bill_get_settings",
+    "description": "Get the organization billing settings (company info, default currency, tax rate, payment terms, invoice prefix).",
+    "source": "bill",
+    "parameters": []
+  },
+  {
+    "mcp_tool": "bill_list_clients",
+    "description": "List billing clients for the organization, with optional fuzzy search across name, email, and linked Bond company name. Returns id, name, email, company_id, company_name, currency (org default), and default_payment_terms_days — the resolver surface every \"bill client X\" rule needs.",
+    "source": "bill",
+    "parameters": [
+      {
+        "name": "search",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Optional fuzzy search across client name, email, and Bond company name"
       }
     ]
   },
@@ -4547,6 +10101,63 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
     ]
   },
   {
+    "mcp_tool": "bill_list_rates",
+    "description": "List billing rates, optionally filtered by project or user.",
+    "source": "bill",
+    "parameters": [
+      {
+        "name": "project_id",
+        "type": "string",
+        "format": "uuid",
+        "required": false,
+        "nullable": false,
+        "description": "Filter by project UUID"
+      },
+      {
+        "name": "user_id",
+        "type": "string",
+        "format": "uuid",
+        "required": false,
+        "nullable": false,
+        "description": "Filter by user UUID"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bill_list_recurring_invoices",
+    "description": "List recurring/subscription invoice schedules for the org, optionally filtered by status (active, paused, cancelled).",
+    "source": "bill",
+    "parameters": [
+      {
+        "name": "status",
+        "type": "enum",
+        "enum": [
+          "active",
+          "paused",
+          "cancelled"
+        ],
+        "required": false,
+        "nullable": false,
+        "description": "Filter by lifecycle status"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bill_pause_recurring_invoice",
+    "description": "Pause a recurring schedule — stops invoice generation until resumed.",
+    "source": "bill",
+    "parameters": [
+      {
+        "name": "recurring_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Recurring schedule UUID"
+      }
+    ]
+  },
+  {
     "mcp_tool": "bill_record_payment",
     "description": "Record a payment against an invoice.",
     "source": "bill",
@@ -4593,6 +10204,21 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
     ]
   },
   {
+    "mcp_tool": "bill_reject_expense",
+    "description": "Reject a pending expense.",
+    "source": "bill",
+    "parameters": [
+      {
+        "name": "expense_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Expense UUID"
+      }
+    ]
+  },
+  {
     "mcp_tool": "bill_resolve_rate",
     "description": "Resolve the effective billing rate for a given project + user + date.",
     "source": "bill",
@@ -4623,6 +10249,21 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
     ]
   },
   {
+    "mcp_tool": "bill_resume_recurring_invoice",
+    "description": "Resume a paused recurring schedule — generation continues at next_run_at.",
+    "source": "bill",
+    "parameters": [
+      {
+        "name": "recurring_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Recurring schedule UUID"
+      }
+    ]
+  },
+  {
     "mcp_tool": "bill_send_invoice",
     "description": "Mark invoice as sent (triggers email delivery if configured).",
     "source": "bill",
@@ -4634,6 +10275,1357 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
         "required": true,
         "nullable": false,
         "description": "Invoice UUID"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bill_update_client",
+    "description": "Update a billing client. Provide only the fields to change.",
+    "source": "bill",
+    "parameters": [
+      {
+        "name": "client_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Client UUID"
+      },
+      {
+        "name": "name",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Client name"
+      },
+      {
+        "name": "email",
+        "type": "string",
+        "format": "email",
+        "required": false,
+        "nullable": false,
+        "description": "Billing email"
+      },
+      {
+        "name": "phone",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Phone number"
+      },
+      {
+        "name": "address_line1",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Address line 1"
+      },
+      {
+        "name": "address_line2",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Address line 2"
+      },
+      {
+        "name": "city",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "City"
+      },
+      {
+        "name": "state_region",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "State or region"
+      },
+      {
+        "name": "postal_code",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Postal/ZIP code"
+      },
+      {
+        "name": "country",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "ISO 3166-1 alpha-2 country code"
+      },
+      {
+        "name": "tax_id",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Tax identification number"
+      },
+      {
+        "name": "bond_company_id",
+        "type": "string",
+        "format": "uuid",
+        "required": false,
+        "nullable": false,
+        "description": "Linked Bond CRM company UUID"
+      },
+      {
+        "name": "default_payment_terms_days",
+        "type": "number",
+        "format": "integer",
+        "required": false,
+        "nullable": false,
+        "description": "Default payment terms in days"
+      },
+      {
+        "name": "default_payment_instructions",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Default payment instructions"
+      },
+      {
+        "name": "notes",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Internal notes"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bill_update_expense",
+    "description": "Update an expense. Provide only the fields to change.",
+    "source": "bill",
+    "parameters": [
+      {
+        "name": "expense_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Expense UUID"
+      },
+      {
+        "name": "project_id",
+        "type": "string",
+        "format": "uuid",
+        "required": false,
+        "nullable": false,
+        "description": "Linked Bam project UUID"
+      },
+      {
+        "name": "description",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Expense description"
+      },
+      {
+        "name": "amount",
+        "type": "number",
+        "format": "integer",
+        "required": false,
+        "nullable": false,
+        "description": "Amount in cents"
+      },
+      {
+        "name": "currency",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "ISO 4217 currency code"
+      },
+      {
+        "name": "category",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Category"
+      },
+      {
+        "name": "vendor",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Vendor name"
+      },
+      {
+        "name": "expense_date",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Expense date (YYYY-MM-DD)"
+      },
+      {
+        "name": "billable",
+        "type": "boolean",
+        "required": false,
+        "nullable": false,
+        "description": "Whether this can be invoiced to a client"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bill_update_invoice",
+    "description": "Update a draft invoice. Provide only the fields to change.",
+    "source": "bill",
+    "parameters": [
+      {
+        "name": "invoice_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Invoice UUID"
+      },
+      {
+        "name": "client_id",
+        "type": "string",
+        "format": "uuid",
+        "required": false,
+        "nullable": false,
+        "description": "Billing client UUID"
+      },
+      {
+        "name": "project_id",
+        "type": "string",
+        "format": "uuid",
+        "required": false,
+        "nullable": false,
+        "description": "Linked Bam project UUID"
+      },
+      {
+        "name": "invoice_date",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Invoice date (YYYY-MM-DD)"
+      },
+      {
+        "name": "due_date",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Due date (YYYY-MM-DD)"
+      },
+      {
+        "name": "tax_rate",
+        "type": "number",
+        "required": false,
+        "nullable": false,
+        "description": "Tax rate percentage"
+      },
+      {
+        "name": "discount_amount",
+        "type": "number",
+        "format": "integer",
+        "required": false,
+        "nullable": false,
+        "description": "Discount amount in cents"
+      },
+      {
+        "name": "payment_terms_days",
+        "type": "number",
+        "format": "integer",
+        "required": false,
+        "nullable": false,
+        "description": "Payment terms in days"
+      },
+      {
+        "name": "payment_instructions",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Payment instructions"
+      },
+      {
+        "name": "notes",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Internal notes"
+      },
+      {
+        "name": "footer_text",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Invoice footer text"
+      },
+      {
+        "name": "terms_text",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Invoice terms text"
+      },
+      {
+        "name": "bond_deal_id",
+        "type": "string",
+        "format": "uuid",
+        "required": false,
+        "nullable": false,
+        "description": "Linked Bond CRM deal UUID"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bill_update_line_item",
+    "description": "Update a line item on a draft invoice. Provide only the fields to change.",
+    "source": "bill",
+    "parameters": [
+      {
+        "name": "invoice_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Invoice UUID"
+      },
+      {
+        "name": "item_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Line item UUID"
+      },
+      {
+        "name": "description",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Line item description"
+      },
+      {
+        "name": "quantity",
+        "type": "number",
+        "required": false,
+        "nullable": false,
+        "description": "Quantity"
+      },
+      {
+        "name": "unit",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Unit type: hours, days, units, fixed"
+      },
+      {
+        "name": "unit_price",
+        "type": "number",
+        "format": "integer",
+        "required": false,
+        "nullable": false,
+        "description": "Unit price in cents"
+      },
+      {
+        "name": "sort_order",
+        "type": "number",
+        "format": "integer",
+        "required": false,
+        "nullable": false,
+        "description": "Display sort order"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bill_update_rate",
+    "description": "Update a billing rate. Provide only the fields to change.",
+    "source": "bill",
+    "parameters": [
+      {
+        "name": "rate_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Rate UUID"
+      },
+      {
+        "name": "rate_amount",
+        "type": "number",
+        "format": "integer",
+        "required": false,
+        "nullable": false,
+        "description": "Rate amount in cents"
+      },
+      {
+        "name": "rate_type",
+        "type": "enum",
+        "enum": [
+          "hourly",
+          "daily",
+          "fixed"
+        ],
+        "required": false,
+        "nullable": false,
+        "description": "Rate type"
+      },
+      {
+        "name": "effective_from",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Effective from date (YYYY-MM-DD)"
+      },
+      {
+        "name": "effective_to",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Effective to date (YYYY-MM-DD)"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bill_update_recurring_invoice",
+    "description": "Update a recurring invoice schedule. Provide only the fields to change. Passing line_items replaces the whole template.",
+    "source": "bill",
+    "parameters": [
+      {
+        "name": "recurring_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Recurring schedule UUID"
+      },
+      {
+        "name": "name",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Schedule name"
+      },
+      {
+        "name": "cadence",
+        "type": "enum",
+        "enum": [
+          "weekly",
+          "monthly",
+          "quarterly",
+          "annually"
+        ],
+        "required": false,
+        "nullable": false,
+        "description": "Generation cadence"
+      },
+      {
+        "name": "auto_finalize",
+        "type": "boolean",
+        "required": false,
+        "nullable": false,
+        "description": "Auto-finalize generated invoices"
+      },
+      {
+        "name": "currency",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "ISO 4217 currency code"
+      },
+      {
+        "name": "tax_rate",
+        "type": "number",
+        "required": false,
+        "nullable": false,
+        "description": "Tax rate percentage"
+      },
+      {
+        "name": "discount_amount",
+        "type": "number",
+        "format": "integer",
+        "required": false,
+        "nullable": false,
+        "description": "Discount amount in cents"
+      },
+      {
+        "name": "payment_terms_days",
+        "type": "number",
+        "format": "integer",
+        "required": false,
+        "nullable": false,
+        "description": "Net payment terms in days"
+      },
+      {
+        "name": "start_date",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "First eligible run date"
+      },
+      {
+        "name": "end_date",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Optional last run date"
+      },
+      {
+        "name": "next_run_at",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Override the next scheduled generation time (ISO datetime)"
+      },
+      {
+        "name": "notes",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Internal notes"
+      },
+      {
+        "name": "line_items",
+        "type": "array",
+        "required": false,
+        "nullable": false,
+        "description": "Replacement line-item template"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bill_update_settings",
+    "description": "Update the organization billing settings. Provide only the fields to change.",
+    "source": "bill",
+    "parameters": [
+      {
+        "name": "company_name",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Company name on invoices"
+      },
+      {
+        "name": "company_email",
+        "type": "string",
+        "format": "email",
+        "required": false,
+        "nullable": false,
+        "description": "Company billing email"
+      },
+      {
+        "name": "company_phone",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Company phone"
+      },
+      {
+        "name": "company_address",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Company address"
+      },
+      {
+        "name": "company_logo_url",
+        "type": "string",
+        "format": "url",
+        "required": false,
+        "nullable": false,
+        "description": "Company logo URL"
+      },
+      {
+        "name": "company_tax_id",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Company tax ID"
+      },
+      {
+        "name": "default_currency",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Default ISO 4217 currency code"
+      },
+      {
+        "name": "default_tax_rate",
+        "type": "number",
+        "required": false,
+        "nullable": false,
+        "description": "Default tax rate percentage"
+      },
+      {
+        "name": "default_payment_terms_days",
+        "type": "number",
+        "format": "integer",
+        "required": false,
+        "nullable": false,
+        "description": "Default payment terms in days"
+      },
+      {
+        "name": "default_payment_instructions",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Default payment instructions"
+      },
+      {
+        "name": "default_footer_text",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Default invoice footer text"
+      },
+      {
+        "name": "default_terms_text",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Default invoice terms text"
+      },
+      {
+        "name": "invoice_prefix",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Invoice number prefix"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bill_void_invoice",
+    "description": "Void a finalized invoice — marks it void without deleting the record.",
+    "source": "bill",
+    "parameters": [
+      {
+        "name": "invoice_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Invoice UUID"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bin_asset_archive",
+    "description": "Archive (soft-delete) a Bin asset. Two-step confirm: call with confirm_action omitted/false to preview, then again with confirm_action:true to proceed. The asset is hidden from default listings but versions are retained.",
+    "source": "bin",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Asset ID"
+      },
+      {
+        "name": "confirm_action",
+        "type": "boolean",
+        "required": false,
+        "nullable": false,
+        "description": "Set true to actually archive"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bin_asset_create",
+    "description": "Create a Bin asset (metadata only; the first version bytes are uploaded separately via the REST upload route). Use this to register a new file before uploading content, or to create a placeholder an agent will fill via bin_data_append_rows on a structured asset.",
+    "source": "bin",
+    "parameters": [
+      {
+        "name": "name",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Asset / file name (extension informs the structured-data format)"
+      },
+      {
+        "name": "content_type",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "MIME type, e.g. text/csv, application/json"
+      },
+      {
+        "name": "folder_id",
+        "type": "string",
+        "format": "uuid",
+        "required": false,
+        "nullable": true,
+        "description": "Containing folder"
+      },
+      {
+        "name": "project_id",
+        "type": "string",
+        "format": "uuid",
+        "required": false,
+        "nullable": true,
+        "description": "Owning project"
+      },
+      {
+        "name": "visibility",
+        "type": "enum",
+        "enum": [
+          "organization",
+          "project",
+          "private"
+        ],
+        "required": false,
+        "nullable": false,
+        "description": ""
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bin_asset_delete",
+    "description": "Hard-delete a Bin asset: removes the catalog entry AND its stored bytes (all versions + derived proxy/poster). Irreversible — unlike bin_asset_archive, nothing is retained. Missing bytes are not an error (the row is deleted regardless). Two-step confirm: call with confirm_action omitted/false to preview, then again with confirm_action:true to proceed.",
+    "source": "bin",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Asset ID"
+      },
+      {
+        "name": "confirm_action",
+        "type": "boolean",
+        "required": false,
+        "nullable": false,
+        "description": "Set true to actually delete"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bin_asset_get",
+    "description": "Get a Bin asset's metadata: name, content type, current version, size, scan status (serving is gated until clean/skipped), visibility, and folder/project placement.",
+    "source": "bin",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Asset ID"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bin_asset_list",
+    "description": "List Bin assets (the DAM library) visible to the caller, optionally scoped to a folder (pass folder_id=\"root\" for unfiled) or project, and optionally including archived. Returns metadata only; use bin_data_read for structured-data contents.",
+    "source": "bin",
+    "parameters": [
+      {
+        "name": "folder_id",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "project_id",
+        "type": "string",
+        "format": "uuid",
+        "required": false,
+        "nullable": false,
+        "description": "Filter by project"
+      },
+      {
+        "name": "include_archived",
+        "type": "boolean",
+        "required": false,
+        "nullable": false,
+        "description": "Include archived assets (default false)"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bin_asset_update",
+    "description": "Update a Bin asset's mutable metadata: rename, move to a folder (folder_id, or null for root), and/or set its arbitrary tags (replaces the tag list). Used to organize the file hierarchy and make assets searchable.",
+    "source": "bin",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Asset ID"
+      },
+      {
+        "name": "name",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "folder_id",
+        "type": "string",
+        "format": "uuid",
+        "required": false,
+        "nullable": true,
+        "description": "Containing folder, or null for root"
+      },
+      {
+        "name": "tags",
+        "type": "array",
+        "required": false,
+        "nullable": false,
+        "description": "Replaces the asset’s tags"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bin_data_append_rows",
+    "description": "Append rows to a record-shaped structured-data asset. Commits a new immutable version (the original dialect is preserved). Each row is an object keyed by column name.",
+    "source": "bin",
+    "parameters": [
+      {
+        "name": "asset_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Asset ID"
+      },
+      {
+        "name": "rows",
+        "type": "array",
+        "required": true,
+        "nullable": false,
+        "description": ""
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bin_data_array_op",
+    "description": "Add or delete a row in any structured-data grid. path=[] targets a record asset's top-level rows; a path like [\"passengers\"] targets a tree embedded grid (array-of-dicts). op is \"append\" (add a row at the end; value optional), \"insert\" (at index), or \"delete\" (remove index). Commits a new immutable version.",
+    "source": "bin",
+    "parameters": [
+      {
+        "name": "asset_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Asset ID"
+      },
+      {
+        "name": "op",
+        "type": "enum",
+        "enum": [
+          "append",
+          "insert",
+          "delete"
+        ],
+        "required": true,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "path",
+        "type": "array",
+        "required": false,
+        "nullable": false,
+        "description": "Array path; omit/[] for a record asset"
+      },
+      {
+        "name": "value",
+        "type": "object",
+        "required": false,
+        "nullable": false,
+        "description": "Row object for append/insert"
+      },
+      {
+        "name": "index",
+        "type": "number",
+        "format": "integer",
+        "required": false,
+        "nullable": false,
+        "description": "Target index for insert/delete"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bin_data_comment_create",
+    "description": "Add a review comment anchored to a cell/path of a structured-data asset. Record anchor: { rid, colId? }; tree anchor: { pointer }. Comments are authored by humans or agents identically.",
+    "source": "bin",
+    "parameters": [
+      {
+        "name": "asset_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Asset ID"
+      },
+      {
+        "name": "shape",
+        "type": "enum",
+        "enum": [
+          "record",
+          "tree"
+        ],
+        "required": true,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "anchor",
+        "type": "object",
+        "required": true,
+        "nullable": false,
+        "description": "record: { rid, colId? } ; tree: { pointer }"
+      },
+      {
+        "name": "body",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Markdown comment body"
+      },
+      {
+        "name": "thread_parent_id",
+        "type": "string",
+        "format": "uuid",
+        "required": false,
+        "nullable": true,
+        "description": "Reply target"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bin_data_comment_list",
+    "description": "List review comments on a structured-data asset (open by default; pass include_resolved).",
+    "source": "bin",
+    "parameters": [
+      {
+        "name": "asset_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Asset ID"
+      },
+      {
+        "name": "include_resolved",
+        "type": "boolean",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bin_data_comment_resolve",
+    "description": "Mark a structured-data review comment resolved (or reopen it with resolved:false).",
+    "source": "bin",
+    "parameters": [
+      {
+        "name": "asset_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Asset ID"
+      },
+      {
+        "name": "comment_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Comment ID"
+      },
+      {
+        "name": "resolved",
+        "type": "boolean",
+        "required": false,
+        "nullable": false,
+        "description": "Default true"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bin_data_open_session",
+    "description": "Open or resume the editing session for a structured-data asset. Returns the detected shape, the schema (pinned or inferred), the dialect, the base version, and the /bin/ws collaboration room. Use before a series of edits; the live human editor shares the same session.",
+    "source": "bin",
+    "parameters": [
+      {
+        "name": "asset_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Asset ID"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bin_data_patch",
+    "description": "Apply cell patches to a record-shaped structured-data asset by 0-based row index. Commits a new immutable version. Each patch is { index, set: { column: newValue } }.",
+    "source": "bin",
+    "parameters": [
+      {
+        "name": "asset_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Asset ID"
+      },
+      {
+        "name": "patches",
+        "type": "array",
+        "required": true,
+        "nullable": false,
+        "description": ""
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bin_data_patch_tree",
+    "description": "Edit a tree-shaped structured-data asset (JSON/YAML) by setting values at paths. Each patch is { path, value } where path is an array like [\"passengers\", 2, \"vip\"] or [\"charter\", \"operator\"]. Strings are coerced to the existing leaf's type (number/boolean). Commits a new immutable version.",
+    "source": "bin",
+    "parameters": [
+      {
+        "name": "asset_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Asset ID"
+      },
+      {
+        "name": "patches",
+        "type": "array",
+        "required": true,
+        "nullable": false,
+        "description": ""
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bin_data_read",
+    "description": "Read a structured-data asset (CSV/TSV/JSON/JSONL/YAML) as records or a tree. Record-shaped assets return columns + rows with optional equality filtering (filter map), column projection, and offset/limit paging, plus an inferred field schema. Tree-shaped assets return the reconstructed value. Gated on scan status (clean/skipped only).",
+    "source": "bin",
+    "parameters": [
+      {
+        "name": "asset_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Asset ID"
+      },
+      {
+        "name": "filter",
+        "type": "object",
+        "required": false,
+        "nullable": false,
+        "description": "Equality filter: { column: value } (record shape)"
+      },
+      {
+        "name": "columns",
+        "type": "array",
+        "required": false,
+        "nullable": false,
+        "description": "Project to these columns (record shape)"
+      },
+      {
+        "name": "limit",
+        "type": "number",
+        "format": "integer",
+        "required": false,
+        "nullable": false,
+        "description": "Max rows (default 1000)"
+      },
+      {
+        "name": "offset",
+        "type": "number",
+        "format": "integer",
+        "required": false,
+        "nullable": false,
+        "description": "Row offset for paging"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bin_folder_create",
+    "description": "Create a Bin folder, optionally nested under a parent and/or scoped to a project.",
+    "source": "bin",
+    "parameters": [
+      {
+        "name": "name",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "parent_id",
+        "type": "string",
+        "format": "uuid",
+        "required": false,
+        "nullable": true,
+        "description": ""
+      },
+      {
+        "name": "project_id",
+        "type": "string",
+        "format": "uuid",
+        "required": false,
+        "nullable": true,
+        "description": ""
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bin_folder_list",
+    "description": "List Bin folders for the caller’s org, optionally scoped to a project.",
+    "source": "bin",
+    "parameters": [
+      {
+        "name": "project_id",
+        "type": "string",
+        "format": "uuid",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bin_tag_list",
+    "description": "List the distinct tags used across the org’s Bin assets (for tag pickers/filters).",
+    "source": "bin",
+    "parameters": []
+  },
+  {
+    "mcp_tool": "bin_version_list",
+    "description": "List the immutable versions of a Bin asset, newest first. Each upload or structured-editor commit mints a monotonic version_number; bytes are never edited in place.",
+    "source": "bin",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Asset ID"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "blank_add_field",
+    "description": "Add a single field to an existing form. `field_key` must be a safe identifier (letters, digits, underscores; starting with a letter or underscore).",
+    "source": "blank",
+    "parameters": [
+      {
+        "name": "form_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Form ID to add the field to"
+      },
+      {
+        "name": "field_key",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "label",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Human-readable field label"
+      },
+      {
+        "name": "field_type",
+        "type": "enum",
+        "enum": [
+          "short_text",
+          "long_text",
+          "email",
+          "phone",
+          "url",
+          "number",
+          "single_select",
+          "multi_select",
+          "dropdown",
+          "date",
+          "time",
+          "datetime",
+          "file_upload",
+          "image_upload",
+          "rating",
+          "scale",
+          "nps",
+          "checkbox",
+          "toggle",
+          "section_header",
+          "paragraph",
+          "hidden"
+        ],
+        "required": true,
+        "nullable": false,
+        "description": "Field input type"
+      },
+      {
+        "name": "description",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Help text shown under the field"
+      },
+      {
+        "name": "placeholder",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Placeholder text for the input"
+      },
+      {
+        "name": "required",
+        "type": "boolean",
+        "required": false,
+        "nullable": false,
+        "description": "Whether a response is required"
+      },
+      {
+        "name": "min_length",
+        "type": "number",
+        "format": "integer",
+        "required": false,
+        "nullable": false,
+        "description": "Minimum text length"
+      },
+      {
+        "name": "max_length",
+        "type": "number",
+        "format": "integer",
+        "required": false,
+        "nullable": false,
+        "description": "Maximum text length"
+      },
+      {
+        "name": "options",
+        "type": "any",
+        "required": false,
+        "nullable": false,
+        "description": "Choice options for select/dropdown fields (array of {value,label})"
+      },
+      {
+        "name": "scale_min",
+        "type": "number",
+        "format": "integer",
+        "required": false,
+        "nullable": false,
+        "description": "Minimum value for scale/rating/nps fields"
+      },
+      {
+        "name": "scale_max",
+        "type": "number",
+        "format": "integer",
+        "required": false,
+        "nullable": false,
+        "description": "Maximum value for scale/rating/nps fields"
+      },
+      {
+        "name": "scale_min_label",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Label for the low end of a scale"
+      },
+      {
+        "name": "scale_max_label",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Label for the high end of a scale"
+      },
+      {
+        "name": "conditional_on_field_id",
+        "type": "string",
+        "format": "uuid",
+        "required": false,
+        "nullable": false,
+        "description": "Show this field only when another field meets a condition"
+      },
+      {
+        "name": "conditional_operator",
+        "type": "enum",
+        "enum": [
+          "equals",
+          "not_equals",
+          "contains",
+          "gt",
+          "lt",
+          "is_set",
+          "is_not_set"
+        ],
+        "required": false,
+        "nullable": false,
+        "description": "Comparison operator for conditional visibility"
+      },
+      {
+        "name": "conditional_value",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Value compared against for conditional visibility"
+      },
+      {
+        "name": "sort_order",
+        "type": "number",
+        "format": "integer",
+        "required": false,
+        "nullable": false,
+        "description": "Position of the field among siblings"
+      },
+      {
+        "name": "page_number",
+        "type": "number",
+        "format": "integer",
+        "required": false,
+        "nullable": false,
+        "description": "Page (for multi-page forms)"
+      },
+      {
+        "name": "column_span",
+        "type": "number",
+        "format": "integer",
+        "required": false,
+        "nullable": false,
+        "description": "Layout column span (1 or 2)"
+      },
+      {
+        "name": "default_value",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Pre-filled default value"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "blank_close_form",
+    "description": "Close a published form to new submissions. Existing submissions are retained; the form stops accepting responses.",
+    "source": "blank",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Form ID to close"
       }
     ]
   },
@@ -4685,6 +11677,66 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
     ]
   },
   {
+    "mcp_tool": "blank_delete_field",
+    "description": "Delete a single field from a form. This is destructive and removes the field definition.",
+    "source": "blank",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Field ID to delete"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "blank_delete_form",
+    "description": "Delete a form and all of its fields and submissions. This is destructive and cannot be undone.",
+    "source": "blank",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Form ID to delete"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "blank_delete_submission",
+    "description": "Delete a single form submission. This is destructive and cannot be undone.",
+    "source": "blank",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Submission ID to delete"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "blank_duplicate_form",
+    "description": "Clone an existing form (including its fields) into a new draft form owned by the current user.",
+    "source": "blank",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Form ID to duplicate"
+      }
+    ]
+  },
+  {
     "mcp_tool": "blank_export_submissions",
     "description": "Export all submissions for a form as CSV data.",
     "source": "blank",
@@ -4710,6 +11762,21 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
         "required": true,
         "nullable": false,
         "description": ""
+      }
+    ]
+  },
+  {
+    "mcp_tool": "blank_get_embed_code",
+    "description": "Get the HTML embed snippet (and public URL) for a published form, suitable for pasting into an external page.",
+    "source": "blank",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Form ID"
       }
     ]
   },
@@ -4832,6 +11899,28 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
     ]
   },
   {
+    "mcp_tool": "blank_reorder_fields",
+    "description": "Bulk reorder the fields of a form by assigning each field a new sort_order.",
+    "source": "blank",
+    "parameters": [
+      {
+        "name": "form_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Form ID whose fields to reorder"
+      },
+      {
+        "name": "fields",
+        "type": "array",
+        "required": true,
+        "nullable": false,
+        "description": "Field ID"
+      }
+    ]
+  },
+  {
     "mcp_tool": "blank_summarize_responses",
     "description": "Get analytics data for a form including response counts, field breakdowns, and trends. Useful for AI summarization of form results.",
     "source": "blank",
@@ -4843,6 +11932,171 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
         "required": true,
         "nullable": false,
         "description": "Form ID to analyze"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "blank_update_field",
+    "description": "Update a single form field. Provide only the fields you want to change.",
+    "source": "blank",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Field ID to update"
+      },
+      {
+        "name": "field_key",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Updated stable identifier (letters/digits/underscores, must start with a letter or underscore)"
+      },
+      {
+        "name": "label",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Updated label"
+      },
+      {
+        "name": "field_type",
+        "type": "enum",
+        "enum": [
+          "short_text",
+          "long_text",
+          "email",
+          "phone",
+          "url",
+          "number",
+          "single_select",
+          "multi_select",
+          "dropdown",
+          "date",
+          "time",
+          "datetime",
+          "file_upload",
+          "image_upload",
+          "rating",
+          "scale",
+          "nps",
+          "checkbox",
+          "toggle",
+          "section_header",
+          "paragraph",
+          "hidden"
+        ],
+        "required": false,
+        "nullable": false,
+        "description": "Updated field type"
+      },
+      {
+        "name": "description",
+        "type": "string",
+        "required": false,
+        "nullable": true,
+        "description": "Updated help text (null to clear)"
+      },
+      {
+        "name": "placeholder",
+        "type": "string",
+        "required": false,
+        "nullable": true,
+        "description": "Updated placeholder (null to clear)"
+      },
+      {
+        "name": "required",
+        "type": "boolean",
+        "required": false,
+        "nullable": false,
+        "description": "Whether a response is required"
+      },
+      {
+        "name": "min_length",
+        "type": "number",
+        "format": "integer",
+        "required": false,
+        "nullable": true,
+        "description": "Minimum text length (null to clear)"
+      },
+      {
+        "name": "max_length",
+        "type": "number",
+        "format": "integer",
+        "required": false,
+        "nullable": true,
+        "description": "Maximum text length (null to clear)"
+      },
+      {
+        "name": "options",
+        "type": "any",
+        "required": false,
+        "nullable": false,
+        "description": "Updated choice options for select/dropdown fields"
+      },
+      {
+        "name": "scale_min",
+        "type": "number",
+        "format": "integer",
+        "required": false,
+        "nullable": false,
+        "description": "Updated scale minimum"
+      },
+      {
+        "name": "scale_max",
+        "type": "number",
+        "format": "integer",
+        "required": false,
+        "nullable": false,
+        "description": "Updated scale maximum"
+      },
+      {
+        "name": "scale_min_label",
+        "type": "string",
+        "required": false,
+        "nullable": true,
+        "description": "Updated low-end scale label (null to clear)"
+      },
+      {
+        "name": "scale_max_label",
+        "type": "string",
+        "required": false,
+        "nullable": true,
+        "description": "Updated high-end scale label (null to clear)"
+      },
+      {
+        "name": "sort_order",
+        "type": "number",
+        "format": "integer",
+        "required": false,
+        "nullable": false,
+        "description": "Updated position among siblings"
+      },
+      {
+        "name": "page_number",
+        "type": "number",
+        "format": "integer",
+        "required": false,
+        "nullable": false,
+        "description": "Updated page number"
+      },
+      {
+        "name": "column_span",
+        "type": "number",
+        "format": "integer",
+        "required": false,
+        "nullable": false,
+        "description": "Updated layout column span (1 or 2)"
+      },
+      {
+        "name": "default_value",
+        "type": "string",
+        "required": false,
+        "nullable": true,
+        "description": "Updated default value (null to clear)"
       }
     ]
   },
@@ -4898,6 +12152,20 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
         "required": false,
         "nullable": false,
         "description": ""
+      }
+    ]
+  },
+  {
+    "mcp_tool": "blast_cancel_campaign",
+    "description": "Cancel a scheduled or in-progress campaign so it will not (continue to) send. `id` accepts either a UUID or the campaign name.",
+    "source": "blast",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Campaign UUID or campaign name"
       }
     ]
   },
@@ -4994,7 +12262,7 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
   },
   {
     "mcp_tool": "blast_draft_campaign",
-    "description": "Create a campaign in draft status with template, segment, and schedule.",
+    "description": "Create a campaign in draft status with template, segment, and schedule. `template_id` and `segment_id` accept either a UUID or the entity name — exact match preferred, single fuzzy match acceptable.",
     "source": "blast",
     "parameters": [
       {
@@ -5021,18 +12289,16 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
       {
         "name": "template_id",
         "type": "string",
-        "format": "uuid",
         "required": false,
         "nullable": false,
-        "description": "Template ID to use"
+        "description": "Template UUID or template name (exact match preferred)"
       },
       {
         "name": "segment_id",
         "type": "string",
-        "format": "uuid",
         "required": false,
         "nullable": false,
-        "description": "Recipient segment ID"
+        "description": "Recipient segment UUID or segment name (exact match preferred)"
       },
       {
         "name": "from_name",
@@ -5087,32 +12353,72 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
     ]
   },
   {
-    "mcp_tool": "blast_get_campaign",
-    "description": "Get campaign detail and delivery stats.",
+    "mcp_tool": "blast_duplicate_template",
+    "description": "Duplicate an email template into a new copy. `id` accepts either a UUID or the template name (exact match preferred, single fuzzy match acceptable).",
     "source": "blast",
     "parameters": [
       {
         "name": "id",
         "type": "string",
-        "format": "uuid",
         "required": true,
         "nullable": false,
-        "description": "Campaign ID"
+        "description": "Template UUID or template name to duplicate"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "blast_evaluate_segment",
+    "description": "Run the full recipient evaluation for a segment (the resolved send list a campaign would target). Read-only — does not send anything. `id` accepts either a UUID or the segment name.",
+    "source": "blast",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Segment UUID or segment name"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "blast_get_campaign",
+    "description": "Get campaign detail and delivery stats. `id` accepts either a UUID or the campaign name (exact match preferred, single fuzzy match acceptable).",
+    "source": "blast",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Campaign UUID or campaign name"
       }
     ]
   },
   {
     "mcp_tool": "blast_get_campaign_analytics",
-    "description": "Get engagement metrics for a sent campaign: open rate, click rate, click map, delivery breakdown.",
+    "description": "Get engagement metrics for a sent campaign: open rate, click rate, click map, delivery breakdown. `id` accepts either a UUID or the campaign name.",
     "source": "blast",
     "parameters": [
       {
         "name": "id",
         "type": "string",
-        "format": "uuid",
         "required": true,
         "nullable": false,
-        "description": "Campaign ID"
+        "description": "Campaign UUID or campaign name"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "blast_get_campaign_device_analytics",
+    "description": "Get the device/client breakdown of opens and clicks for a campaign. `id` accepts either a UUID or the campaign name.",
+    "source": "blast",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Campaign UUID or campaign name"
       }
     ]
   },
@@ -5121,6 +12427,39 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
     "description": "Get org-level engagement trends: total sent, avg open rate, avg click rate, unsubscribe rate.",
     "source": "blast",
     "parameters": []
+  },
+  {
+    "mcp_tool": "blast_get_engagement_trend",
+    "description": "Get org-level engagement metrics over time, bucketed daily, weekly, or monthly.",
+    "source": "blast",
+    "parameters": [
+      {
+        "name": "period",
+        "type": "enum",
+        "enum": [
+          "daily",
+          "weekly",
+          "monthly"
+        ],
+        "required": false,
+        "nullable": false,
+        "description": "Bucketing period (default service-defined)"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "blast_get_segment",
+    "description": "Get a single segment with its filter criteria and cached recipient count. `id` accepts either a UUID or the segment name.",
+    "source": "blast",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Segment UUID or segment name"
+      }
+    ]
   },
   {
     "mcp_tool": "blast_get_template",
@@ -5134,6 +12473,66 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
         "required": true,
         "nullable": false,
         "description": "Template ID"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "blast_list_campaign_recipients",
+    "description": "List the recipients of a campaign with per-recipient delivery status. `id` accepts either a UUID or the campaign name.",
+    "source": "blast",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Campaign UUID or campaign name"
+      },
+      {
+        "name": "limit",
+        "type": "number",
+        "format": "integer",
+        "required": false,
+        "nullable": false,
+        "description": "Page size (default service-defined)"
+      },
+      {
+        "name": "offset",
+        "type": "number",
+        "format": "integer",
+        "required": false,
+        "nullable": false,
+        "description": "Pagination offset"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "blast_list_campaigns",
+    "description": "List email campaigns with optional status filter and pagination.",
+    "source": "blast",
+    "parameters": [
+      {
+        "name": "status",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Filter by campaign status (e.g. draft, scheduled, sending, sent)"
+      },
+      {
+        "name": "limit",
+        "type": "number",
+        "format": "integer",
+        "required": false,
+        "nullable": false,
+        "description": "Page size (1-100)"
+      },
+      {
+        "name": "offset",
+        "type": "number",
+        "format": "integer",
+        "required": false,
+        "nullable": false,
+        "description": "Offset for pagination"
       }
     ]
   },
@@ -5195,6 +12594,20 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
     ]
   },
   {
+    "mcp_tool": "blast_pause_campaign",
+    "description": "Pause an in-progress campaign send. `id` accepts either a UUID or the campaign name.",
+    "source": "blast",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Campaign UUID or campaign name"
+      }
+    ]
+  },
+  {
     "mcp_tool": "blast_preview_segment",
     "description": "Preview the first 50 matching contacts for a segment.",
     "source": "blast",
@@ -5210,17 +12623,51 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
     ]
   },
   {
-    "mcp_tool": "blast_send_campaign",
-    "description": "Send a campaign immediately. Requires human approval by default.",
+    "mcp_tool": "blast_preview_template",
+    "description": "Render a template with sample merge data to preview the resulting subject and HTML. Read-only — does not send anything. `id` accepts either a UUID or the template name.",
     "source": "blast",
     "parameters": [
       {
         "name": "id",
         "type": "string",
-        "format": "uuid",
         "required": true,
         "nullable": false,
-        "description": "Campaign ID"
+        "description": "Template UUID or template name"
+      },
+      {
+        "name": "merge_data",
+        "type": "object",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      }
+    ]
+  },
+  {
+    "mcp_tool": "blast_recalculate_segment_count",
+    "description": "Recalculate and cache the recipient count for a segment by re-running its filter against current Bond contacts. `id` accepts either a UUID or the segment name.",
+    "source": "blast",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Segment UUID or segment name"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "blast_send_campaign",
+    "description": "Send a campaign immediately. Requires human approval by default. `id` accepts either a UUID or the campaign name (exact match preferred, single fuzzy match acceptable).",
+    "source": "blast",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Campaign UUID or campaign name"
       },
       {
         "name": "require_human_approval",
@@ -5260,17 +12707,2864 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
     ]
   },
   {
-    "mcp_tool": "board_add_sticky",
-    "description": "Add a sticky note to a board.",
+    "mcp_tool": "blast_update_campaign",
+    "description": "Update a draft campaign. Provide only the fields to change. `id` accepts either a UUID or the campaign name. `template_id` and `segment_id` accept a UUID or the entity name.",
+    "source": "blast",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Campaign UUID or campaign name"
+      },
+      {
+        "name": "name",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Updated campaign name"
+      },
+      {
+        "name": "subject",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Updated email subject line"
+      },
+      {
+        "name": "html_body",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Updated HTML email body"
+      },
+      {
+        "name": "plain_text_body",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Updated plain-text body"
+      },
+      {
+        "name": "template_id",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Template UUID or template name"
+      },
+      {
+        "name": "segment_id",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Recipient segment UUID or segment name"
+      },
+      {
+        "name": "from_name",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "From name"
+      },
+      {
+        "name": "from_email",
+        "type": "string",
+        "format": "email",
+        "required": false,
+        "nullable": false,
+        "description": "From email address"
+      },
+      {
+        "name": "reply_to_email",
+        "type": "string",
+        "format": "email",
+        "required": false,
+        "nullable": false,
+        "description": "Reply-to email address"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "blast_update_segment",
+    "description": "Update a segment's name, description, or filter criteria. Provide only the fields to change. `id` accepts either a UUID or the segment name.",
+    "source": "blast",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Segment UUID or segment name"
+      },
+      {
+        "name": "name",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Updated segment name"
+      },
+      {
+        "name": "description",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Updated segment description"
+      },
+      {
+        "name": "filter_criteria",
+        "type": "object",
+        "required": false,
+        "nullable": false,
+        "description": "Contact field to filter on"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "blast_update_template",
+    "description": "Update an email template. Provide only the fields to change. `id` accepts either a UUID or the template name (exact match preferred, single fuzzy match acceptable).",
+    "source": "blast",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Template UUID or template name"
+      },
+      {
+        "name": "name",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Updated template name"
+      },
+      {
+        "name": "subject_template",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Updated subject line with merge fields"
+      },
+      {
+        "name": "html_body",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Updated HTML email body"
+      },
+      {
+        "name": "plain_text_body",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Updated plain-text body"
+      },
+      {
+        "name": "description",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Updated template description"
+      },
+      {
+        "name": "template_type",
+        "type": "enum",
+        "enum": [
+          "campaign",
+          "drip_step",
+          "transactional",
+          "system"
+        ],
+        "required": false,
+        "nullable": false,
+        "description": "Updated template type"
+      },
+      {
+        "name": "thumbnail_url",
+        "type": "string",
+        "format": "url",
+        "required": false,
+        "nullable": false,
+        "description": "Updated thumbnail URL"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "blip_app_create",
+    "description": "Declare a Blip tracked app: the unit of control that owns collection on/off, the default rate limit, the default 14-day retention, PII transform rules, and the report types observed under it. Org-scoped.",
+    "source": "blip",
+    "parameters": [
+      {
+        "name": "name",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "slug",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Stable slug (defaults from name)"
+      },
+      {
+        "name": "description",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "platform",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Optional platform hint, e.g. ios, android, web"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "blip_app_delete",
+    "description": "Delete a Blip tracked app and ALL of its data (keys, entries, watches, views, captures). Terminal and owner-gated. Two-step confirm: call with confirm_action omitted/false to preview, then again with confirm_action:true to proceed.",
+    "source": "blip",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Tracked app ID"
+      },
+      {
+        "name": "confirm_action",
+        "type": "boolean",
+        "required": false,
+        "nullable": false,
+        "description": "Set true to actually delete"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "blip_app_get",
+    "description": "Get a Blip tracked app’s detail: config (rate limit, retention default, transform), collection state, and health (recent ingest/error/dead-letter counts).",
+    "source": "blip",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Tracked app ID"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "blip_app_list",
+    "description": "List Blip tracked apps for the caller’s org, with per-app health/collection state.",
+    "source": "blip",
+    "parameters": [
+      {
+        "name": "include_archived",
+        "type": "boolean",
+        "required": false,
+        "nullable": false,
+        "description": "Include archived/deleted apps (default false)"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "blip_app_update",
+    "description": "Edit a Blip tracked app’s mutable config: rename, description, platform hint.",
+    "source": "blip",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Tracked app ID"
+      },
+      {
+        "name": "name",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "description",
+        "type": "string",
+        "required": false,
+        "nullable": true,
+        "description": ""
+      },
+      {
+        "name": "platform",
+        "type": "string",
+        "required": false,
+        "nullable": true,
+        "description": ""
+      }
+    ]
+  },
+  {
+    "mcp_tool": "blip_capture_url",
+    "description": "Get a short-TTL presigned GET URL for a stored screen capture (or its thumbnail). Agents and the viewer never receive base64; they resolve capture refs to URLs through this tool. Pass thumb:true for the thumbnail key.",
+    "source": "blip",
+    "parameters": [
+      {
+        "name": "ref",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Capture ref / object key from an entry’s screen_captures[]"
+      },
+      {
+        "name": "thumb",
+        "type": "boolean",
+        "required": false,
+        "nullable": false,
+        "description": "true = presign the thumbnail instead of the full image"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "blip_collection_set",
+    "description": "Start or stop collection for a Blip tracked app. When disabled, the edge rejects ingest with 409 within the key-cache TTL (~1s). Does not delete existing data.",
+    "source": "blip",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Tracked app ID"
+      },
+      {
+        "name": "enabled",
+        "type": "boolean",
+        "required": true,
+        "nullable": false,
+        "description": "true = collecting, false = paused"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "blip_entry_export",
+    "description": "Freeze a (tracked_app, report_type) collection (optionally filtered) into an immutable JSONL asset in Bin, returning the Bin asset ref. Use for archival, sharing, or feeding the frozen log into the Bin structured-data viewer.",
+    "source": "blip",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Tracked app ID"
+      },
+      {
+        "name": "report_type",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Report type"
+      },
+      {
+        "name": "columns",
+        "type": "array",
+        "required": false,
+        "nullable": false,
+        "description": "Project the exported rows to these fields"
+      },
+      {
+        "name": "name",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Name for the resulting Bin asset"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "blip_entry_purge",
+    "description": "Purge entries for a (tracked_app, report_type), optionally narrowed by a §7.1 filter. Deletes durable rows and reclaims their stored captures; compiled timelapse videos are independent Bin assets and are not affected. Two-step confirm: call with confirm_action omitted/false to preview, then again with confirm_action:true.",
+    "source": "blip",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Tracked app ID"
+      },
+      {
+        "name": "report_type",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Report type"
+      },
+      {
+        "name": "confirm_action",
+        "type": "boolean",
+        "required": false,
+        "nullable": false,
+        "description": "Set true to actually purge"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "blip_entry_query",
+    "description": "Query entries for a (tracked_app, report_type): a §7.1 filter predicate, column projection, sort, and a page (limit/offset). Pass format:\"jsonl\" for newline-delimited output. The durable store is authoritative; this is not the live tail.",
+    "source": "blip",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Tracked app ID"
+      },
+      {
+        "name": "report_type",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Report type"
+      },
+      {
+        "name": "columns",
+        "type": "array",
+        "required": false,
+        "nullable": false,
+        "description": "Project to these fields"
+      },
+      {
+        "name": "limit",
+        "type": "number",
+        "format": "integer",
+        "required": false,
+        "nullable": false,
+        "description": "Page size (default 100, max 1000)"
+      },
+      {
+        "name": "offset",
+        "type": "number",
+        "format": "integer",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "format",
+        "type": "enum",
+        "enum": [
+          "json",
+          "jsonl"
+        ],
+        "required": false,
+        "nullable": false,
+        "description": "Default json"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "blip_entry_tail",
+    "description": "Incremental pull of entries for a (tracked_app, report_type) with seq > cursor, plus the new max seq for the next call. The polling complement to the realtime WebSocket tail; ideal for agents draining new telemetry on an interval. Omit cursor for the first call.",
+    "source": "blip",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Tracked app ID"
+      },
+      {
+        "name": "report_type",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Report type"
+      },
+      {
+        "name": "cursor",
+        "type": "union",
+        "required": false,
+        "nullable": false,
+        "description": "Highest seq already seen (omit for first pull)"
+      },
+      {
+        "name": "columns",
+        "type": "array",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "limit",
+        "type": "number",
+        "format": "integer",
+        "required": false,
+        "nullable": false,
+        "description": "Max entries this pull (default 100)"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "blip_field_catalog_list",
+    "description": "List the observed-field catalog for a (tracked_app, report_type): each field path with inferred type, first/last seen, observation count, and is_metric / is_indexed flags. Powers column pickers and sort options.",
+    "source": "blip",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Tracked app ID"
+      },
+      {
+        "name": "report_type",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Report type"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "blip_field_index",
+    "description": "Promote a JSONB field to an indexed field for a (tracked_app, report_type). Enqueues a worker job that builds CREATE INDEX CONCURRENTLY on ((payload->>field)) and flips is_indexed. Heavy and explicit; reserved columns are always indexed.",
+    "source": "blip",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Tracked app ID"
+      },
+      {
+        "name": "report_type",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Report type"
+      },
+      {
+        "name": "field_path",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": ""
+      }
+    ]
+  },
+  {
+    "mcp_tool": "blip_field_set_metric",
+    "description": "Mark or unmark a numeric field as a Bench metric for a (tracked_app, report_type). Metric fields are included in the numeric Bench rollup. Pass is_metric:false to unmark.",
+    "source": "blip",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Tracked app ID"
+      },
+      {
+        "name": "report_type",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Report type"
+      },
+      {
+        "name": "field_path",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Field path"
+      },
+      {
+        "name": "is_metric",
+        "type": "boolean",
+        "required": false,
+        "nullable": false,
+        "description": "Default true; pass false to unmark"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "blip_key_create",
+    "description": "Mint a write-only ingest key for a tracked app. The full token (blip_<key_id>_<secret>) is returned EXACTLY ONCE in this response and never again; only an HMAC is stored. Optionally label it and set a per-key rate-limit override.",
+    "source": "blip",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Tracked app ID"
+      },
+      {
+        "name": "label",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "rate_limit_override",
+        "type": "object",
+        "required": false,
+        "nullable": true,
+        "description": "Per-key token-bucket override; null/omit to inherit the app default"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "blip_key_list",
+    "description": "List a tracked app’s ingest keys (status, label, last4, fingerprint, last-used, rate-limit override). The secret is never returned.",
+    "source": "blip",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Tracked app ID"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "blip_key_revoke",
+    "description": "Revoke an ingest key. TERMINAL: the token never works again (suspend is the reversible option). The row is retained so historical entries keep their attribution. Two-step confirm: call with confirm_action omitted/false to preview, then again with confirm_action:true.",
+    "source": "blip",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Ingest key ID"
+      },
+      {
+        "name": "confirm_action",
+        "type": "boolean",
+        "required": false,
+        "nullable": false,
+        "description": "Set true to actually revoke"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "blip_key_suspend",
+    "description": "Suspend (or resume) an ingest key. Reversible: pass resume:true to flip a suspended key back to active. A suspended key’s token is rejected at the edge within the key-cache TTL (~1s).",
+    "source": "blip",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Ingest key ID"
+      },
+      {
+        "name": "resume",
+        "type": "boolean",
+        "required": false,
+        "nullable": false,
+        "description": "true to resume (re-activate) instead of suspend"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "blip_key_update",
+    "description": "Edit an ingest key’s label and/or per-key rate-limit override.",
+    "source": "blip",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Ingest key ID"
+      },
+      {
+        "name": "label",
+        "type": "string",
+        "required": false,
+        "nullable": true,
+        "description": ""
+      },
+      {
+        "name": "rate_limit_override",
+        "type": "object",
+        "required": false,
+        "nullable": true,
+        "description": "null clears the override (inherit app default)"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "blip_ratelimit_set",
+    "description": "Set the tracked app’s DEFAULT rate limit (the per-key bucket used when a key has no override, and the per-app aggregate ceiling) plus body/batch/capture caps.",
+    "source": "blip",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Tracked app ID"
+      },
+      {
+        "name": "refill_per_sec",
+        "type": "number",
+        "required": true,
+        "nullable": false,
+        "description": "Token-bucket refill rate"
+      },
+      {
+        "name": "burst",
+        "type": "number",
+        "format": "integer",
+        "required": true,
+        "nullable": false,
+        "description": "Token-bucket burst capacity"
+      },
+      {
+        "name": "max_body_bytes",
+        "type": "number",
+        "format": "integer",
+        "required": false,
+        "nullable": false,
+        "description": "Default 262144 (256 KB)"
+      },
+      {
+        "name": "max_batch_count",
+        "type": "number",
+        "format": "integer",
+        "required": false,
+        "nullable": false,
+        "description": "Default 500 entries per request"
+      },
+      {
+        "name": "max_capture_body_bytes",
+        "type": "number",
+        "format": "integer",
+        "required": false,
+        "nullable": false,
+        "description": "Default 4 MB"
+      },
+      {
+        "name": "max_capture_bytes",
+        "type": "number",
+        "format": "integer",
+        "required": false,
+        "nullable": false,
+        "description": "Per-image cap, default 2 MB"
+      },
+      {
+        "name": "max_captures_per_report",
+        "type": "number",
+        "format": "integer",
+        "required": false,
+        "nullable": false,
+        "description": "Default 8"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "blip_report_types_list",
+    "description": "List the report types observed under a tracked app (discovered from incoming data, never pre-declared).",
+    "source": "blip",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Tracked app ID"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "blip_retention_set",
+    "description": "Set a retention policy for a tracked app. Omit report_type for the app-wide default; pass one to override a single (tracked_app, report_type). null on a cap removes that limit (explicit, never automatic). New apps default to max_age_days=14.",
+    "source": "blip",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Tracked app ID"
+      },
+      {
+        "name": "report_type",
+        "type": "string",
+        "required": false,
+        "nullable": true,
+        "description": "null/omit = the app-wide default policy"
+      },
+      {
+        "name": "max_age_days",
+        "type": "number",
+        "format": "integer",
+        "required": false,
+        "nullable": true,
+        "description": "null = no age limit"
+      },
+      {
+        "name": "max_rows",
+        "type": "number",
+        "format": "integer",
+        "required": false,
+        "nullable": true,
+        "description": "null = no row cap"
+      },
+      {
+        "name": "max_bytes",
+        "type": "number",
+        "format": "integer",
+        "required": false,
+        "nullable": true,
+        "description": "null = no byte cap"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "blip_timelapse_create",
+    "description": "Compile an ordered, filtered collection of capture-bearing entries into an MP4 (stored as a Bin asset). The intent case is a session timelapse: filter to one session_id with captures, order by seq, one frame per capture. Enqueues a worker job; poll blip_timelapse_get or react to the timelapse.ready event.",
+    "source": "blip",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Tracked app ID"
+      },
+      {
+        "name": "report_type",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Optional report-type scope"
+      },
+      {
+        "name": "frame_duration_sec",
+        "type": "number",
+        "required": false,
+        "nullable": false,
+        "description": "Per-frame duration, default 0.5"
+      },
+      {
+        "name": "image_selection",
+        "type": "enum",
+        "enum": [
+          "first",
+          "all"
+        ],
+        "required": false,
+        "nullable": false,
+        "description": "Which images to take per multi-image entry (default first)"
+      },
+      {
+        "name": "max_dimension",
+        "type": "number",
+        "format": "integer",
+        "required": false,
+        "nullable": false,
+        "description": "Downscale ceiling; frames padded to a common canvas"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "blip_timelapse_get",
+    "description": "Get a timelapse job’s status (queued|running|ready|failed), frame count, and the Bin video asset ref when ready.",
+    "source": "blip",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Timelapse job ID"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "blip_timelapse_list",
+    "description": "List timelapse compilation jobs for a tracked app (newest first), with status and video asset refs.",
+    "source": "blip",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Tracked app ID"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "blip_transform_set",
+    "description": "Set the ordered PII/redaction transform rules for a tracked app (optionally narrowed to one report_type). Rules run on the edge before tail/store. Each rule: { match: \"payload:user.email\" | \"glob:*token*\" | \"regex:...\", action: \"drop\"|\"mask\"|\"hash\"|\"truncate\"|\"pseudonymize\", params?: { keep_last?, max_len?, period?, unless? } }. params.unless { field: \"metadata.privacy_version\", at_least: 2 } skips the rule for payloads whose numeric field is at least that value (missing field: the rule applies). Use \"pseudonymize\" (params.period \"day\"|\"week\"|\"month\", default month) for user/install ids: stable within the UTC period, unlinkable once it ends. \"hash\" is stable forever and re-linkable by anyone holding the raw value.",
+    "source": "blip",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Tracked app ID"
+      },
+      {
+        "name": "report_type",
+        "type": "string",
+        "required": false,
+        "nullable": true,
+        "description": "null/omit = applies to all report types"
+      },
+      {
+        "name": "enabled",
+        "type": "boolean",
+        "required": false,
+        "nullable": false,
+        "description": "Default true"
+      },
+      {
+        "name": "rules",
+        "type": "array",
+        "required": false,
+        "nullable": false,
+        "description": "field path, glob:..., or regex:..."
+      }
+    ]
+  },
+  {
+    "mcp_tool": "blip_view_create",
+    "description": "Create a saved view over a (tracked_app, report_type): filter + columns + sort + live-tail + page size. scope \"private\" is visible only to the owner; \"org\" to anyone who can_access the tracked app. Report types are fully usable with zero views (a default view is auto-provided).",
+    "source": "blip",
+    "parameters": [
+      {
+        "name": "tracked_app_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Tracked app ID"
+      },
+      {
+        "name": "report_type",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Report type"
+      },
+      {
+        "name": "name",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "scope",
+        "type": "enum",
+        "enum": [
+          "private",
+          "org"
+        ],
+        "required": false,
+        "nullable": false,
+        "description": "Default private"
+      },
+      {
+        "name": "spec",
+        "type": "object",
+        "required": true,
+        "nullable": false,
+        "description": "{ filter, columns:[{field,label?,width?}], sort:[{field,dir}], liveTail:boolean, pageSize:number }"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "blip_view_delete",
+    "description": "Delete a saved view (owner or admin). Views are personal/operational config, not telemetry data; no entry data is affected.",
+    "source": "blip",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "View ID"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "blip_view_list",
+    "description": "List saved views for a (tracked_app, report_type) visible to the caller (own private views plus org-shared views).",
+    "source": "blip",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Tracked app ID"
+      },
+      {
+        "name": "report_type",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Report type"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "blip_view_update",
+    "description": "Edit a saved view’s name, scope, or spec. Editing an org-shared view requires being its owner or an admin.",
+    "source": "blip",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "View ID"
+      },
+      {
+        "name": "name",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "scope",
+        "type": "enum",
+        "enum": [
+          "private",
+          "org"
+        ],
+        "required": false,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "spec",
+        "type": "object",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      }
+    ]
+  },
+  {
+    "mcp_tool": "blip_watch_create",
+    "description": "Create a watch on a (tracked_app, report_type) that emits a Bolt event when satisfied. kind \"match\" fires per-entry on a §7.1 predicate (event entry.matched); kind \"window\" evaluates an aggregate over a trailing window and emits window.breached / window.recovered. A per-watch cooldown caps fire frequency.",
+    "source": "blip",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Tracked app ID"
+      },
+      {
+        "name": "name",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Stable handle Bolt rules filter on"
+      },
+      {
+        "name": "kind",
+        "type": "enum",
+        "enum": [
+          "match",
+          "window"
+        ],
+        "required": true,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "report_type",
+        "type": "string",
+        "required": false,
+        "nullable": true,
+        "description": "null/omit = all report types for the app"
+      },
+      {
+        "name": "description",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "predicate",
+        "type": "object",
+        "required": true,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "cooldown_sec",
+        "type": "number",
+        "format": "integer",
+        "required": false,
+        "nullable": false,
+        "description": "Min seconds between fires (default 60; 0 = every match)"
+      },
+      {
+        "name": "enabled",
+        "type": "boolean",
+        "required": false,
+        "nullable": false,
+        "description": "Default true"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "blip_watch_delete",
+    "description": "Delete a watch. Two-step confirm: call with confirm_action omitted/false to preview, then again with confirm_action:true to proceed. (Use blip_watch_set_enabled to pause without deleting.)",
+    "source": "blip",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Watch ID"
+      },
+      {
+        "name": "confirm_action",
+        "type": "boolean",
+        "required": false,
+        "nullable": false,
+        "description": "Set true to actually delete"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "blip_watch_get",
+    "description": "Get a watch’s detail: kind, predicate, cooldown, enabled state, and last-fired time.",
+    "source": "blip",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Watch ID"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "blip_watch_history",
+    "description": "List recent firings of a watch (entry.matched / window.breached / window.recovered) with their context, newest first.",
+    "source": "blip",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Watch ID"
+      },
+      {
+        "name": "limit",
+        "type": "number",
+        "format": "integer",
+        "required": false,
+        "nullable": false,
+        "description": "Max firings to return"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "blip_watch_list",
+    "description": "List watches configured for a tracked app (match and window), with enabled state and last-fired time.",
+    "source": "blip",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Tracked app ID"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "blip_watch_set_enabled",
+    "description": "Enable or disable a watch without deleting it.",
+    "source": "blip",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Watch ID"
+      },
+      {
+        "name": "enabled",
+        "type": "boolean",
+        "required": true,
+        "nullable": false,
+        "description": "true = enabled, false = disabled"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "blip_watch_test",
+    "description": "Dry-run a watch predicate against recent entries for a (tracked_app, report_type) and return what would have matched (or the aggregate value vs threshold), so a watch can be validated before it is enabled. Does not create a watch or emit events.",
+    "source": "blip",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Tracked app ID"
+      },
+      {
+        "name": "kind",
+        "type": "enum",
+        "enum": [
+          "match",
+          "window"
+        ],
+        "required": false,
+        "nullable": false,
+        "description": "Default match"
+      },
+      {
+        "name": "report_type",
+        "type": "string",
+        "required": false,
+        "nullable": true,
+        "description": ""
+      },
+      {
+        "name": "predicate",
+        "type": "object",
+        "required": true,
+        "nullable": false,
+        "description": "Same shape as blip_watch_create.predicate"
+      },
+      {
+        "name": "limit",
+        "type": "number",
+        "format": "integer",
+        "required": false,
+        "nullable": false,
+        "description": "Max sample entries to evaluate"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "blip_watch_update",
+    "description": "Edit a watch: name, description, predicate, cooldown, and/or report-type scope.",
+    "source": "blip",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Watch ID"
+      },
+      {
+        "name": "name",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "description",
+        "type": "string",
+        "required": false,
+        "nullable": true,
+        "description": ""
+      },
+      {
+        "name": "report_type",
+        "type": "string",
+        "required": false,
+        "nullable": true,
+        "description": ""
+      },
+      {
+        "name": "predicate",
+        "type": "object",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "cooldown_sec",
+        "type": "number",
+        "format": "integer",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      }
+    ]
+  },
+  {
+    "mcp_tool": "blueprint_add_collaborator",
+    "description": "Grant a user explicit access to a Blueprint diagram at a given role. `role` is one of owner / editor / commenter / viewer (defaults to editor). Idempotent: re-adding an existing collaborator updates their role rather than erroring. `user_id` must be a Bam user UUID — resolve emails/names first via find_user_by_email / find_user_by_name.",
+    "source": "blueprint",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Diagram ID"
+      },
+      {
+        "name": "user_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Bam user UUID to grant access to"
+      },
+      {
+        "name": "role",
+        "type": "enum",
+        "enum": [
+          "owner",
+          "editor",
+          "commenter",
+          "viewer"
+        ],
+        "required": false,
+        "nullable": false,
+        "description": "Collaboration role (default editor)"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "blueprint_add_comment",
+    "description": "Add a comment to a Blueprint diagram. Anchor it to a specific node by passing `node_id` (e.g. to flag an issue with a particular step), or omit node_id to attach it to the diagram as a whole. `body` is the rich-text/markdown source; `body_plain` is an optional plain-text rendering used for search and notifications. Broadcasts a blueprint.comment.created event so collaborators see it live.",
+    "source": "blueprint",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Diagram ID"
+      },
+      {
+        "name": "body",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Comment body (rich-text/markdown source, max 10000 chars)"
+      },
+      {
+        "name": "body_plain",
+        "type": "string",
+        "required": false,
+        "nullable": true,
+        "description": "Optional plain-text rendering of the comment (for search/notifications)"
+      },
+      {
+        "name": "node_id",
+        "type": "string",
+        "format": "uuid",
+        "required": false,
+        "nullable": true,
+        "description": "Node to anchor the comment to (null/omit for a diagram-level comment)"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "blueprint_add_edge",
+    "description": "Connect two Blueprint nodes with an edge. `kind` is a free-form tag the renderer uses to pick line style (e.g. 'sequence', 'reports_to', 'depends_on', 'data_flow'). source_handle / target_handle attach to specific connection points on the nodes (port ids); omit for default center-to-center connections. `marker_start` / `marker_end` control arrowheads ('arrow', 'circle', 'diamond', 'none'). Optional waypoints route the edge through specific (x, y) coordinates.",
+    "source": "blueprint",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Diagram ID"
+      },
+      {
+        "name": "source_node_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Source node UUID"
+      },
+      {
+        "name": "target_node_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Target node UUID"
+      },
+      {
+        "name": "source_handle",
+        "type": "string",
+        "required": false,
+        "nullable": true,
+        "description": "Source port/handle id"
+      },
+      {
+        "name": "target_handle",
+        "type": "string",
+        "required": false,
+        "nullable": true,
+        "description": "Target port/handle id"
+      },
+      {
+        "name": "kind",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "label",
+        "type": "string",
+        "required": false,
+        "nullable": true,
+        "description": "Visible edge label"
+      },
+      {
+        "name": "marker_start",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "marker_end",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "style",
+        "type": "object",
+        "required": false,
+        "nullable": false,
+        "description": "Style overrides JSON (stroke, dashed, etc.)"
+      },
+      {
+        "name": "waypoints",
+        "type": "array",
+        "required": false,
+        "nullable": false,
+        "description": "Optional routed waypoints"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "blueprint_add_node",
+    "description": "Add a node to a Blueprint diagram. `shape` is a free-form tag the renderer maps to a visual (e.g. 'rounded', 'rectangle', 'diamond', 'circle', 'cylinder', 'subroutine', 'actor'). Set `parent_node_id` to nest the node inside a container/swimlane. Set `ref_entity_type` + `ref_entity_id` to back-link the node to a cross-product entity (e.g. ref_entity_type='bam.task', ref_entity_id=<task uuid>). Positions are optional — if omitted, blueprint_apply_layout will place the node.",
+    "source": "blueprint",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Diagram ID"
+      },
+      {
+        "name": "shape",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "label",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Visible label text"
+      },
+      {
+        "name": "description",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Long-form description shown in the node detail pane"
+      },
+      {
+        "name": "parent_node_id",
+        "type": "string",
+        "format": "uuid",
+        "required": false,
+        "nullable": true,
+        "description": "Parent container node for nesting (null for top-level)"
+      },
+      {
+        "name": "position_x",
+        "type": "number",
+        "required": false,
+        "nullable": false,
+        "description": "X position (px) — optional; auto-layout will place if omitted"
+      },
+      {
+        "name": "position_y",
+        "type": "number",
+        "required": false,
+        "nullable": false,
+        "description": "Y position (px) — optional; auto-layout will place if omitted"
+      },
+      {
+        "name": "width",
+        "type": "number",
+        "required": false,
+        "nullable": false,
+        "description": "Node width (px)"
+      },
+      {
+        "name": "height",
+        "type": "number",
+        "required": false,
+        "nullable": false,
+        "description": "Node height (px)"
+      },
+      {
+        "name": "z_index",
+        "type": "number",
+        "format": "integer",
+        "required": false,
+        "nullable": false,
+        "description": "Stacking order (higher = on top)"
+      },
+      {
+        "name": "pinned",
+        "type": "boolean",
+        "required": false,
+        "nullable": false,
+        "description": "If true, the node is pinned against auto-layout reshuffles"
+      },
+      {
+        "name": "style",
+        "type": "object",
+        "required": false,
+        "nullable": false,
+        "description": "Style overrides JSON (colors, borders, etc.)"
+      },
+      {
+        "name": "data",
+        "type": "object",
+        "required": false,
+        "nullable": false,
+        "description": "Arbitrary structured data attached to the node"
+      },
+      {
+        "name": "ref_entity_type",
+        "type": "string",
+        "required": false,
+        "nullable": true,
+        "description": ""
+      },
+      {
+        "name": "ref_entity_id",
+        "type": "string",
+        "format": "uuid",
+        "required": false,
+        "nullable": true,
+        "description": "Cross-product entity UUID matching ref_entity_type"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "blueprint_apply_layout",
+    "description": "Run ELK auto-layout on a Blueprint diagram. `algorithm` overrides the diagram's stored default ('layered', 'mrtree', 'force', 'radial', 'stress'). `direction` is honored for layered layouts. Pinned nodes stay in place. Graphs above the api's in-process node limit are queued via a BullMQ worker job and the response surfaces `{ status: 'queued' }` instead of positions.",
+    "source": "blueprint",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Diagram ID"
+      },
+      {
+        "name": "algorithm",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "direction",
+        "type": "enum",
+        "enum": [
+          "UP",
+          "DOWN",
+          "LEFT",
+          "RIGHT"
+        ],
+        "required": false,
+        "nullable": false,
+        "description": "Layout direction (layered only)"
+      },
+      {
+        "name": "spacing",
+        "type": "number",
+        "format": "integer",
+        "required": false,
+        "nullable": false,
+        "description": "General spacing (px)"
+      },
+      {
+        "name": "node_node_spacing",
+        "type": "number",
+        "format": "integer",
+        "required": false,
+        "nullable": false,
+        "description": "Node-to-node spacing (px)"
+      },
+      {
+        "name": "layer_spacing",
+        "type": "number",
+        "format": "integer",
+        "required": false,
+        "nullable": false,
+        "description": "Layer-to-layer spacing (px, layered only)"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "blueprint_archive",
+    "description": "Archive a Blueprint diagram (soft delete — sets is_archived=true on blueprint_diagrams). Destructive — requires confirm_action=true to actually proceed. Call once with confirm_action: false (or omit) to preview the action, then call again with confirm_action: true to commit. Requires the caller's API key scope to include `admin`.",
+    "source": "blueprint",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Diagram ID to archive"
+      },
+      {
+        "name": "confirm_action",
+        "type": "boolean",
+        "required": true,
+        "nullable": false,
+        "description": "Must be true to actually archive. Call once with false (or omit) to preview the action, then call again with true."
+      }
+    ]
+  },
+  {
+    "mcp_tool": "blueprint_create",
+    "description": "Create a new Blueprint diagram. `diagram_type` is a free-form tag (e.g. \"flowchart\", \"orgchart\", \"swimlane\", \"architecture\") that the UI uses to pick the default shape palette and layout. `layout_algorithm` defaults to ELK `layered`; other values include `mrtree` (org charts), `force`, and `radial`. `template_id` initializes the diagram from an existing template.",
+    "source": "blueprint",
+    "parameters": [
+      {
+        "name": "name",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Diagram name (max 200 chars)"
+      },
+      {
+        "name": "description",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Optional description (max 5000 chars)"
+      },
+      {
+        "name": "project_id",
+        "type": "string",
+        "format": "uuid",
+        "required": false,
+        "nullable": true,
+        "description": "Project to associate the diagram with (null for org-wide)"
+      },
+      {
+        "name": "diagram_type",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "layout_algorithm",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "visibility",
+        "type": "enum",
+        "enum": [
+          "organization",
+          "project",
+          "private"
+        ],
+        "required": false,
+        "nullable": false,
+        "description": "Visibility level (default private)"
+      },
+      {
+        "name": "layout_options",
+        "type": "object",
+        "required": false,
+        "nullable": false,
+        "description": "Layout-specific options passed to ELK (e.g., direction, spacing)"
+      },
+      {
+        "name": "canvas_settings",
+        "type": "object",
+        "required": false,
+        "nullable": false,
+        "description": "Canvas appearance settings (background, grid, etc.)"
+      },
+      {
+        "name": "template_id",
+        "type": "string",
+        "format": "uuid",
+        "required": false,
+        "nullable": false,
+        "description": "Template UUID to seed the new diagram from"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "blueprint_delete_edge",
+    "description": "Delete an edge from a Blueprint diagram. Destructive — requires confirm_action=true to actually proceed. Call once with confirm_action: false (or omit) to preview, then call again with true to commit.",
+    "source": "blueprint",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Diagram ID"
+      },
+      {
+        "name": "edge_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Edge ID to delete"
+      },
+      {
+        "name": "confirm_action",
+        "type": "boolean",
+        "required": true,
+        "nullable": false,
+        "description": "Must be true to actually delete. Call once with false (or omit) to preview the action, then call again with true."
+      }
+    ]
+  },
+  {
+    "mcp_tool": "blueprint_delete_node",
+    "description": "Delete a node from a Blueprint diagram. CASCADE-deletes every edge that references the node as source or target. Destructive — requires confirm_action=true to actually proceed. Call once with confirm_action: false (or omit) to preview, then call again with true to commit.",
+    "source": "blueprint",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Diagram ID"
+      },
+      {
+        "name": "node_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Node ID to delete"
+      },
+      {
+        "name": "confirm_action",
+        "type": "boolean",
+        "required": true,
+        "nullable": false,
+        "description": "Must be true to actually delete. Call once with false (or omit) to preview the action, then call again with true."
+      }
+    ]
+  },
+  {
+    "mcp_tool": "blueprint_duplicate_node",
+    "description": "Duplicate a Blueprint node in the same diagram. The clone copies every visual attribute (label, shape, dimensions, style, data, cross-product entity ref) and is offset from the original so it doesn't sit on top of it — defaults to +32px down-right. Containment (parent_node_id), pinned state, and z-index are preserved. Edges to/from the source are NOT duplicated; connect the clone yourself if you need it wired in. Broadcasts a blueprint.node.created event.",
+    "source": "blueprint",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Diagram ID"
+      },
+      {
+        "name": "node_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Node to duplicate"
+      },
+      {
+        "name": "offset_x",
+        "type": "number",
+        "required": false,
+        "nullable": false,
+        "description": "Horizontal offset for the clone (default 32px)"
+      },
+      {
+        "name": "offset_y",
+        "type": "number",
+        "required": false,
+        "nullable": false,
+        "description": "Vertical offset for the clone (default 32px)"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "blueprint_export",
+    "description": "Export a Blueprint diagram in the requested format. `json` is the canonical structured payload; `mermaid` produces a Mermaid source string useful for re-embedding in Briefs or LLM context; `svg` and `png` produce rendered artifacts (large graphs may be queued via a worker job — the response surfaces whatever the api returns).",
+    "source": "blueprint",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Diagram ID"
+      },
+      {
+        "name": "format",
+        "type": "enum",
+        "enum": [
+          "json",
+          "mermaid",
+          "svg",
+          "png"
+        ],
+        "required": true,
+        "nullable": false,
+        "description": "Export format"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "blueprint_generate",
+    "description": "Build or extend an entire Blueprint diagram from a structured node/edge spec in ONE call. This is the headline agent surface: read a process doc or roster, emit a list of {ref, label, shape, parent_ref, ref_entity_type, ref_entity_id} node specs plus {source_ref, target_ref, label, kind} edge specs, and the server materializes uuids, wires up parent containers, then auto-layouts. `ref` is the agent-supplied local handle used to wire edges to nodes within this call; it is NOT persisted. Set `replace: true` to wipe the existing graph first (otherwise nodes/edges are appended). Set `auto_layout: false` to skip the post-generate ELK pass (defaults to true). Returns the final graph + layout result.",
+    "source": "blueprint",
+    "parameters": [
+      {
+        "name": "diagram_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Diagram ID to populate or extend"
+      },
+      {
+        "name": "nodes",
+        "type": "array",
+        "required": false,
+        "nullable": true,
+        "description": "Local handle for cross-referencing in the edges array (not persisted)"
+      },
+      {
+        "name": "edges",
+        "type": "array",
+        "required": false,
+        "nullable": false,
+        "description": "Local handle of the source node"
+      },
+      {
+        "name": "auto_layout",
+        "type": "boolean",
+        "required": false,
+        "nullable": false,
+        "description": "Run ELK auto-layout after materializing nodes/edges (default true)"
+      },
+      {
+        "name": "replace",
+        "type": "boolean",
+        "required": false,
+        "nullable": false,
+        "description": "Wipe the existing graph first (default false — appends)"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "blueprint_generate_from_bam",
+    "description": "Materialize a brand-new Blueprint diagram from a Bam project's tasks. Creates one node per task (with ref_entity_type='bam.task' + ref_entity_id back-link) and one edge per task parent link (using both the legacy tasks.parent_task_id self-FK and the task_parent_links many-to-many join table from B3 Frndo Launch). Auto-runs layered ELK so the diagram opens already laid out. Skips completed tasks unless include_completed=true. Reverse direction of blueprint_promote_graph_to_tasks; the two together give a round-trip Blueprint↔Bam workflow. After creation, any Bam task title/description change propagates into every linked node (and vice-versa) via the two-way sync hook.",
+    "source": "blueprint",
+    "parameters": [
+      {
+        "name": "project_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Bam project whose tasks become the graph"
+      },
+      {
+        "name": "name",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "description",
+        "type": "string",
+        "required": false,
+        "nullable": true,
+        "description": "Diagram description"
+      },
+      {
+        "name": "include_completed",
+        "type": "boolean",
+        "required": false,
+        "nullable": false,
+        "description": "Pull tasks whose phase is terminal too. Default false."
+      },
+      {
+        "name": "sprint_id",
+        "type": "string",
+        "format": "uuid",
+        "required": false,
+        "nullable": true,
+        "description": "When set, only tasks in this sprint are pulled."
+      },
+      {
+        "name": "visibility",
+        "type": "enum",
+        "enum": [
+          "organization",
+          "project",
+          "private"
+        ],
+        "required": false,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "auto_layout",
+        "type": "boolean",
+        "required": false,
+        "nullable": false,
+        "description": "Run layered ELK after materialization (default true)."
+      }
+    ]
+  },
+  {
+    "mcp_tool": "blueprint_get",
+    "description": "Get a Blueprint diagram's metadata, type, layout algorithm, visibility, and timestamps. Returns the diagram envelope only; use blueprint_read_nodes / blueprint_read_edges for the graph payload.",
+    "source": "blueprint",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Diagram ID"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "blueprint_import_mermaid",
+    "description": "Import a Mermaid source string into a Blueprint diagram, materializing its nodes and edges into the typed graph. Set `replace: true` to wipe the existing graph first (otherwise the parsed nodes/edges are appended). This is the agent path for turning a Mermaid block (e.g. from a Brief, a Beacon entry, or an LLM draft) into an editable, queryable Blueprint graph. After import, call blueprint_apply_layout if you want ELK to position the new nodes. Returns import counts.",
+    "source": "blueprint",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Diagram ID to import into"
+      },
+      {
+        "name": "source",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Mermaid source string (max 200000 chars)"
+      },
+      {
+        "name": "replace",
+        "type": "boolean",
+        "required": false,
+        "nullable": false,
+        "description": "Wipe the existing graph before importing (default false — appends)"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "blueprint_link_entity",
+    "description": "Attach a cross-product reference to a Blueprint node so the renderer can show live status from the linked entity (e.g. a task's phase, a deal's stage, a beacon's verify state). `ref_entity_type` is one of the canonical platform link types (e.g. 'bam.task', 'beacon.entry', 'bearing.goal', 'bond.deal', 'bond.contact', 'helpdesk.ticket'). Pass a different (type, id) pair to retarget; use blueprint_update_node with null fields to clear.",
+    "source": "blueprint",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Diagram ID"
+      },
+      {
+        "name": "node_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Node ID to link"
+      },
+      {
+        "name": "ref_entity_type",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "ref_entity_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Target entity UUID"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "blueprint_list",
+    "description": "List Blueprint diagrams visible to the caller, optionally filtered by project, diagram type, starred-by-me, or include-archived. Blueprint diagrams are typed graphs (nodes, edges, ports) backed by relational tables — distinct from Board (freeform whiteboard). Returns metadata only; use blueprint_get / blueprint_read_nodes / blueprint_read_edges for the graph payload.",
+    "source": "blueprint",
+    "parameters": [
+      {
+        "name": "project_id",
+        "type": "string",
+        "format": "uuid",
+        "required": false,
+        "nullable": false,
+        "description": "Filter by project"
+      },
+      {
+        "name": "diagram_type",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "starred",
+        "type": "boolean",
+        "required": false,
+        "nullable": false,
+        "description": "If true, only diagrams the caller has starred"
+      },
+      {
+        "name": "include_archived",
+        "type": "boolean",
+        "required": false,
+        "nullable": false,
+        "description": "Include archived diagrams (default false)"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "blueprint_list_collaborators",
+    "description": "List the explicit collaborators on a Blueprint diagram and their per-diagram roles (owner / editor / commenter / viewer). These are direct share grants on top of any project- or org-level visibility. Use this to see who has been granted access before adding or removing a collaborator.",
+    "source": "blueprint",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Diagram ID"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "blueprint_list_comments",
+    "description": "List the comments on a Blueprint diagram in chronological order. Comments may be anchored to a specific node (node_id set) or attached to the diagram as a whole (node_id null), and carry a resolved flag. Use this to read review feedback before acting on it, or to find unresolved threads.",
+    "source": "blueprint",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Diagram ID"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "blueprint_list_templates",
+    "description": "List the Blueprint diagram templates available to the caller's org. Templates seed a new diagram via the `template_id` parameter of blueprint_create. Returns template metadata; use the returned id as template_id when creating a diagram.",
+    "source": "blueprint",
+    "parameters": []
+  },
+  {
+    "mcp_tool": "blueprint_list_versions",
+    "description": "List the saved version snapshots of a Blueprint diagram, newest first. Each version is an immutable point-in-time snapshot of the full graph (nodes + edges), captured by blueprint_snapshot_version or by the SPA. Use the version_number with blueprint_restore_version to roll the live diagram back. Returns metadata only — the snapshot payload is not inlined here.",
+    "source": "blueprint",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Diagram ID"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "blueprint_move_node",
+    "description": "Reposition a Blueprint node to a specific (position_x, position_y). Optionally pin the node against future auto-layout passes by setting pinned=true. Broadcasts a blueprint.node.moved event over WebSocket so collaborators see the move live.",
+    "source": "blueprint",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Diagram ID"
+      },
+      {
+        "name": "node_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Node ID"
+      },
+      {
+        "name": "position_x",
+        "type": "number",
+        "required": true,
+        "nullable": false,
+        "description": "New X position (px)"
+      },
+      {
+        "name": "position_y",
+        "type": "number",
+        "required": true,
+        "nullable": false,
+        "description": "New Y position (px)"
+      },
+      {
+        "name": "pinned",
+        "type": "boolean",
+        "required": false,
+        "nullable": false,
+        "description": "If true, pin the node so future auto-layout passes leave it in place"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "blueprint_promote_graph_to_tasks",
+    "description": "Compile a Blueprint diagram into a Bam-tasks-creation plan. Returns the structured list of tasks to create (one per node) plus parent/child links to set up (one per edge), under the chosen edge-direction convention. The blueprint-api deliberately does NOT create the tasks itself — the caller (SPA or agent) drives the actual `create_task` / `bam_add_task_parent` calls so attribution stays on the caller. After tasks land, the caller should also patch each blueprint_node with ref_entity_type='bam.task' + ref_entity_id=<new task id> via blueprint_link_entity so the two-way sync hook fires. Edge-direction options: 'source-parent' (A->B means A parents B, default for mindmaps/decision trees), 'target-parent' (A->B means B parents A, for dependency graphs), 'none' (skip parent links).",
+    "source": "blueprint",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Diagram ID"
+      },
+      {
+        "name": "project_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Bam project the new tasks land in"
+      },
+      {
+        "name": "phase_id",
+        "type": "string",
+        "format": "uuid",
+        "required": false,
+        "nullable": true,
+        "description": "Phase id for new tasks (defaults to project default)"
+      },
+      {
+        "name": "sprint_id",
+        "type": "string",
+        "format": "uuid",
+        "required": false,
+        "nullable": true,
+        "description": "Sprint id"
+      },
+      {
+        "name": "edge_direction",
+        "type": "enum",
+        "enum": [
+          "source-parent",
+          "target-parent",
+          "none"
+        ],
+        "required": false,
+        "nullable": false,
+        "description": ""
+      }
+    ]
+  },
+  {
+    "mcp_tool": "blueprint_promote_node_to_task",
+    "description": "Generate a Bam-task payload from a Blueprint node and suggest back-linking the node to the new task. Returns a structured payload the caller can POST to /b3/api/projects/:id/tasks (the second hop is not yet executed server-side — wire-up is on the Wave 5 roadmap). Use this when a node represents work to be tracked in Bam (e.g. a swimlane step or a deliverable).",
+    "source": "blueprint",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Diagram ID"
+      },
+      {
+        "name": "node_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Source node ID"
+      },
+      {
+        "name": "project_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Target Bam project UUID for the new task"
+      },
+      {
+        "name": "phase_id",
+        "type": "string",
+        "format": "uuid",
+        "required": false,
+        "nullable": false,
+        "description": "Target phase UUID (uses project default if omitted)"
+      },
+      {
+        "name": "sprint_id",
+        "type": "string",
+        "format": "uuid",
+        "required": false,
+        "nullable": true,
+        "description": "Target sprint UUID (null = backlog)"
+      },
+      {
+        "name": "title",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Override task title (defaults to node label)"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "blueprint_read_edges",
+    "description": "Read every edge in a Blueprint diagram. Edges connect nodes by uuid (source_node_id, target_node_id) and carry kind, label, markers, style, and optional waypoints for routed paths. Pair with blueprint_read_nodes to materialize the graph.",
+    "source": "blueprint",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Diagram ID"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "blueprint_read_nodes",
+    "description": "Read every node in a Blueprint diagram. Returns full node rows with positions, sizes, parent_node_id (for container nesting), style/data JSONB, and any cross-product ref_entity_type / ref_entity_id linkage (e.g. bam.task, beacon.entry, bond.deal). Use this together with blueprint_read_edges to reconstruct the full graph payload.",
+    "source": "blueprint",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Diagram ID"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "blueprint_remove_collaborator",
+    "description": "Revoke a user's explicit collaborator grant on a Blueprint diagram. This removes only the direct share grant — the user may still see the diagram via project- or org-level visibility. Destructive — requires confirm_action=true to actually proceed. Call once with confirm_action: false (or omit) to preview, then call again with true to commit.",
+    "source": "blueprint",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Diagram ID"
+      },
+      {
+        "name": "user_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Bam user UUID whose collaborator grant to revoke"
+      },
+      {
+        "name": "confirm_action",
+        "type": "boolean",
+        "required": true,
+        "nullable": false,
+        "description": "Must be true to actually remove. Call once with false (or omit) to preview, then call again with true."
+      }
+    ]
+  },
+  {
+    "mcp_tool": "blueprint_restore_version",
+    "description": "Roll a Blueprint diagram's live graph back to a previously-snapshotted version, identified by its version_number (see blueprint_list_versions). Restoring replaces the current nodes and edges with the snapshot's contents — destructive to the current graph state. Take a fresh blueprint_snapshot_version first if you might want to undo the restore. Returns the restored graph payload.",
+    "source": "blueprint",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Diagram ID"
+      },
+      {
+        "name": "version_number",
+        "type": "number",
+        "format": "integer",
+        "required": true,
+        "nullable": false,
+        "description": "Version number to restore (from blueprint_list_versions)"
+      },
+      {
+        "name": "confirm_action",
+        "type": "boolean",
+        "required": true,
+        "nullable": false,
+        "description": "Must be true to actually restore. Call once with false (or omit) to preview, then call again with true. Restoring overwrites the current graph."
+      }
+    ]
+  },
+  {
+    "mcp_tool": "blueprint_search",
+    "description": "Search Blueprint diagrams by case-insensitive substring on name and description. NOTE (MVP limitation): the blueprint-api does not yet expose a server-side search filter, so this tool fetches the visible diagram list and filters client-side. Result counts are capped by the visible list size and node-label search is not yet supported. The Wave 5 plan upgrades this to a server-side ILIKE + node-label search; until then, prefer blueprint_list with project_id / diagram_type filters when you know them.",
+    "source": "blueprint",
+    "parameters": [
+      {
+        "name": "query",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Substring to match against name and description"
+      },
+      {
+        "name": "project_id",
+        "type": "string",
+        "format": "uuid",
+        "required": false,
+        "nullable": false,
+        "description": "Optional project scope to narrow the candidate list"
+      },
+      {
+        "name": "include_archived",
+        "type": "boolean",
+        "required": false,
+        "nullable": false,
+        "description": "Include archived diagrams in the candidate list (default false)"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "blueprint_snapshot_version",
+    "description": "Capture the current graph (nodes + edges) of a Blueprint diagram as a new immutable version snapshot, auto-numbered one higher than the latest. An optional `label` annotates the snapshot (e.g. \"before agent rewrite\", \"approved v2\"). Snapshotting does not change the live diagram — it just records a restore point. Pair with blueprint_restore_version to roll back later.",
+    "source": "blueprint",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Diagram ID to snapshot"
+      },
+      {
+        "name": "label",
+        "type": "string",
+        "required": false,
+        "nullable": true,
+        "description": "Optional human label for the snapshot (max 200 chars)"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "blueprint_star",
+    "description": "Star a Blueprint diagram for the calling user, so it surfaces in their starred list (blueprint_list with starred=true). Idempotent — starring an already-starred diagram is a no-op. Personal bookmark only; does not affect other users.",
+    "source": "blueprint",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Diagram ID to star"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "blueprint_unstar",
+    "description": "Remove the calling user's star from a Blueprint diagram. Idempotent — unstarring a diagram that was not starred is a no-op. Personal bookmark only; does not affect other users.",
+    "source": "blueprint",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Diagram ID to unstar"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "blueprint_update",
+    "description": "Update a Blueprint diagram's metadata. Provide only the fields to change. Concurrent edits use last-write-wins with an updated_at stale check at the api layer.",
+    "source": "blueprint",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Diagram ID"
+      },
+      {
+        "name": "name",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Updated name"
+      },
+      {
+        "name": "description",
+        "type": "string",
+        "required": false,
+        "nullable": true,
+        "description": "Updated description (null to clear)"
+      },
+      {
+        "name": "project_id",
+        "type": "string",
+        "format": "uuid",
+        "required": false,
+        "nullable": true,
+        "description": "Reassign to a different project (null for org-wide)"
+      },
+      {
+        "name": "diagram_type",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Updated diagram type tag"
+      },
+      {
+        "name": "layout_algorithm",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Updated ELK layout algorithm name"
+      },
+      {
+        "name": "visibility",
+        "type": "enum",
+        "enum": [
+          "organization",
+          "project",
+          "private"
+        ],
+        "required": false,
+        "nullable": false,
+        "description": "Updated visibility"
+      },
+      {
+        "name": "layout_options",
+        "type": "object",
+        "required": false,
+        "nullable": false,
+        "description": "Updated layout options"
+      },
+      {
+        "name": "canvas_settings",
+        "type": "object",
+        "required": false,
+        "nullable": false,
+        "description": "Updated canvas settings"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "blueprint_update_comment",
+    "description": "Edit a Blueprint comment's text or toggle its resolved state. Provide only the fields to change: pass `resolved: true` to resolve a review thread (or `false` to reopen it), and/or `body`/`body_plain` to edit the text. This is the resolve mechanism — there is no separate resolve endpoint.",
+    "source": "blueprint",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Diagram ID"
+      },
+      {
+        "name": "comment_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Comment ID"
+      },
+      {
+        "name": "body",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Updated comment body"
+      },
+      {
+        "name": "body_plain",
+        "type": "string",
+        "required": false,
+        "nullable": true,
+        "description": "Updated plain-text rendering (null to clear)"
+      },
+      {
+        "name": "resolved",
+        "type": "boolean",
+        "required": false,
+        "nullable": false,
+        "description": "Set true to resolve the comment thread, false to reopen it"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "blueprint_update_edge",
+    "description": "Update fields on a Blueprint edge. Provide only the fields to change. Pass `waypoints: null` to clear waypoints and let the renderer route the edge automatically.",
+    "source": "blueprint",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Diagram ID"
+      },
+      {
+        "name": "edge_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Edge ID"
+      },
+      {
+        "name": "source_handle",
+        "type": "string",
+        "required": false,
+        "nullable": true,
+        "description": "Updated source handle"
+      },
+      {
+        "name": "target_handle",
+        "type": "string",
+        "required": false,
+        "nullable": true,
+        "description": "Updated target handle"
+      },
+      {
+        "name": "kind",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Updated edge kind"
+      },
+      {
+        "name": "label",
+        "type": "string",
+        "required": false,
+        "nullable": true,
+        "description": "Updated label (null to clear)"
+      },
+      {
+        "name": "marker_start",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Updated start marker"
+      },
+      {
+        "name": "marker_end",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Updated end marker"
+      },
+      {
+        "name": "style",
+        "type": "object",
+        "required": false,
+        "nullable": false,
+        "description": "Updated style JSON"
+      },
+      {
+        "name": "waypoints",
+        "type": "array",
+        "required": false,
+        "nullable": true,
+        "description": "Updated waypoints (null to clear)"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "blueprint_update_node",
+    "description": "Update fields on a Blueprint node. Provide only the fields to change. Does NOT update position — use blueprint_move_node for that. To re-target the cross-product link, prefer blueprint_link_entity (single-purpose tool with cleaner semantics).",
+    "source": "blueprint",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Diagram ID"
+      },
+      {
+        "name": "node_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Node ID"
+      },
+      {
+        "name": "shape",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Updated shape tag"
+      },
+      {
+        "name": "label",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Updated label"
+      },
+      {
+        "name": "description",
+        "type": "string",
+        "required": false,
+        "nullable": true,
+        "description": "Updated description (null to clear)"
+      },
+      {
+        "name": "parent_node_id",
+        "type": "string",
+        "format": "uuid",
+        "required": false,
+        "nullable": true,
+        "description": "Updated parent container (null to detach)"
+      },
+      {
+        "name": "width",
+        "type": "number",
+        "required": false,
+        "nullable": false,
+        "description": "Updated width (px)"
+      },
+      {
+        "name": "height",
+        "type": "number",
+        "required": false,
+        "nullable": false,
+        "description": "Updated height (px)"
+      },
+      {
+        "name": "z_index",
+        "type": "number",
+        "format": "integer",
+        "required": false,
+        "nullable": false,
+        "description": "Updated stacking order"
+      },
+      {
+        "name": "pinned",
+        "type": "boolean",
+        "required": false,
+        "nullable": false,
+        "description": "Updated pin state"
+      },
+      {
+        "name": "style",
+        "type": "object",
+        "required": false,
+        "nullable": false,
+        "description": "Updated style JSON"
+      },
+      {
+        "name": "data",
+        "type": "object",
+        "required": false,
+        "nullable": false,
+        "description": "Updated data JSON"
+      },
+      {
+        "name": "ref_entity_type",
+        "type": "string",
+        "required": false,
+        "nullable": true,
+        "description": "Updated cross-product link type"
+      },
+      {
+        "name": "ref_entity_id",
+        "type": "string",
+        "format": "uuid",
+        "required": false,
+        "nullable": true,
+        "description": "Updated cross-product entity UUID"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "board_add_collaborator",
+    "description": "Add a collaborator to a board with a view or edit permission. `board_id` accepts a UUID or board name; `user_id` accepts a user UUID or email address.",
     "source": "board",
     "parameters": [
       {
         "name": "board_id",
         "type": "string",
-        "format": "uuid",
         "required": true,
         "nullable": false,
-        "description": "Board ID"
+        "description": "Board UUID or name"
+      },
+      {
+        "name": "user_id",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Collaborator: user UUID or email address"
+      },
+      {
+        "name": "permission",
+        "type": "enum",
+        "enum": [
+          "view",
+          "edit"
+        ],
+        "required": false,
+        "nullable": false,
+        "description": "Permission level (default edit)"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "board_add_sticky",
+    "description": "Add a sticky note to a board. `board_id` accepts either a UUID or a board name.",
+    "source": "board",
+    "parameters": [
+      {
+        "name": "board_id",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Board UUID or name"
       },
       {
         "name": "text",
@@ -5312,16 +15606,15 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
   },
   {
     "mcp_tool": "board_add_text",
-    "description": "Add a text element to a board.",
+    "description": "Add a text element to a board. `board_id` accepts either a UUID or a board name.",
     "source": "board",
     "parameters": [
       {
         "name": "board_id",
         "type": "string",
-        "format": "uuid",
         "required": true,
         "nullable": false,
-        "description": "Board ID"
+        "description": "Board UUID or name"
       },
       {
         "name": "text",
@@ -5348,22 +15641,35 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
   },
   {
     "mcp_tool": "board_archive",
-    "description": "Archive a board (soft delete).",
+    "description": "Archive a board (soft delete). `id` accepts either a UUID or a board name.",
     "source": "board",
     "parameters": [
       {
         "name": "id",
         "type": "string",
-        "format": "uuid",
         "required": true,
         "nullable": false,
-        "description": "Board ID"
+        "description": "Board UUID or name"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "board_check_integrity",
+    "description": "Run a per-board integrity check, returning the list of structural issues (e.g. a project_id referencing a project outside the org). `id` accepts either a UUID or a board name.",
+    "source": "board",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Board UUID or name"
       }
     ]
   },
   {
     "mcp_tool": "board_create",
-    "description": "Create a new visual collaboration board.",
+    "description": "Create a new visual collaboration board. `template_id` accepts either a UUID or a template name (case-insensitive).",
     "source": "board",
     "parameters": [
       {
@@ -5391,10 +15697,9 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
       {
         "name": "template_id",
         "type": "string",
-        "format": "uuid",
         "required": false,
         "nullable": false,
-        "description": "Template to initialize the board from"
+        "description": "Template UUID or name to initialize the board from"
       },
       {
         "name": "background",
@@ -5424,17 +15729,136 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
     ]
   },
   {
-    "mcp_tool": "board_export",
-    "description": "Export a board as SVG or PNG.",
+    "mcp_tool": "board_create_template",
+    "description": "Create a board template, optionally seeded from an existing board's scene. `board_id` (if provided) accepts a UUID or a board name to capture as the template.",
+    "source": "board",
+    "parameters": [
+      {
+        "name": "name",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Template name"
+      },
+      {
+        "name": "description",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Template description"
+      },
+      {
+        "name": "category",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Template category"
+      },
+      {
+        "name": "icon",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Template icon (short string / emoji)"
+      },
+      {
+        "name": "board_id",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Source board UUID or name to capture the template scene from"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "board_create_version",
+    "description": "Capture a named snapshot of a board's current scene that can later be restored. `board_id` accepts either a UUID or a board name.",
+    "source": "board",
+    "parameters": [
+      {
+        "name": "board_id",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Board UUID or name"
+      },
+      {
+        "name": "name",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Optional snapshot label"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "board_delete_link",
+    "description": "Delete a single element-to-task link by its link UUID (get it from board_list_links). This does not delete the underlying task or element, only the association.",
+    "source": "board",
+    "parameters": [
+      {
+        "name": "link_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Link row UUID (from board_list_links)"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "board_delete_permanent",
+    "description": "Permanently hard-delete a board and ALL of its elements, collaborators, stars, and versions (cascade). This is irreversible — distinct from board_archive which only soft-deletes. `id` accepts either a UUID or a board name.",
     "source": "board",
     "parameters": [
       {
         "name": "id",
         "type": "string",
-        "format": "uuid",
         "required": true,
         "nullable": false,
-        "description": "Board ID"
+        "description": "Board UUID or name to permanently delete"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "board_delete_template",
+    "description": "Delete a board template. `id` accepts either a UUID or a template name.",
+    "source": "board",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Template UUID or name"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "board_duplicate",
+    "description": "Duplicate a board, copying its elements into a new board. `id` accepts either a UUID or a board name.",
+    "source": "board",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Board UUID or name to duplicate"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "board_export",
+    "description": "Export a board as SVG or PNG. `id` accepts either a UUID or a board name.",
+    "source": "board",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Board UUID or name"
       },
       {
         "name": "format",
@@ -5461,6 +15885,34 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
         "required": true,
         "nullable": false,
         "description": "Board ID"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "board_instantiate_template",
+    "description": "Create a new board from a template. `id` accepts a template UUID or name; `project_id` (if provided) accepts a project UUID or name to associate the new board with.",
+    "source": "board",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Template UUID or name"
+      },
+      {
+        "name": "name",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Name for the new board (defaults to the template name)"
+      },
+      {
+        "name": "project_id",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Project UUID or name to associate the new board with"
       }
     ]
   },
@@ -5507,17 +15959,111 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
     ]
   },
   {
-    "mcp_tool": "board_promote_to_tasks",
-    "description": "Promote sticky notes to Bam tasks in a project.",
+    "mcp_tool": "board_list_collaborators",
+    "description": "List the collaborators (and their view/edit permission) on a board. `id` accepts either a UUID or a board name.",
+    "source": "board",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Board UUID or name"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "board_list_links",
+    "description": "List the element-to-Bam-task links on a board (created when stickies are promoted to tasks). `id` accepts either a UUID or a board name.",
+    "source": "board",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Board UUID or name"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "board_list_recent",
+    "description": "List the boards most recently updated by or visible to the caller.",
+    "source": "board",
+    "parameters": []
+  },
+  {
+    "mcp_tool": "board_list_starred",
+    "description": "List the boards the calling user has starred.",
+    "source": "board",
+    "parameters": []
+  },
+  {
+    "mcp_tool": "board_list_templates",
+    "description": "List the board templates available to the org (system + org-defined), optionally filtered by category.",
+    "source": "board",
+    "parameters": [
+      {
+        "name": "category",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Filter by template category"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "board_list_versions",
+    "description": "List the saved version snapshots of a board. `id` accepts either a UUID or a board name.",
+    "source": "board",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Board UUID or name"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "board_org_stats",
+    "description": "Get org-level board statistics (counts, activity rollups across all boards in the organization).",
+    "source": "board",
+    "parameters": []
+  },
+  {
+    "mcp_tool": "board_post_chat",
+    "description": "Post a chat message into a board's side-channel chat. `board_id` accepts either a UUID or a board name.",
     "source": "board",
     "parameters": [
       {
         "name": "board_id",
         "type": "string",
-        "format": "uuid",
         "required": true,
         "nullable": false,
-        "description": "Board ID"
+        "description": "Board UUID or name"
+      },
+      {
+        "name": "body",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Message text (max 5000 chars)"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "board_promote_to_tasks",
+    "description": "Promote sticky notes to Bam tasks in a project. `board_id` accepts either a UUID or a board name. `project_id` accepts either a UUID or a project name. `phase_id` accepts either a UUID or a phase name (scoped to the resolved project).",
+    "source": "board",
+    "parameters": [
+      {
+        "name": "board_id",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Board UUID or name"
       },
       {
         "name": "element_ids",
@@ -5529,33 +16075,44 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
       {
         "name": "project_id",
         "type": "string",
-        "format": "uuid",
         "required": true,
         "nullable": false,
-        "description": "Target project ID for the new tasks"
+        "description": "Target project UUID or name"
       },
       {
         "name": "phase_id",
         "type": "string",
-        "format": "uuid",
         "required": false,
         "nullable": false,
-        "description": "Target phase ID (uses default if omitted)"
+        "description": "Target phase UUID or name (uses default if omitted)"
       }
     ]
   },
   {
-    "mcp_tool": "board_read_elements",
-    "description": "Read all elements on a board. Returns structured data with positions, text, and types.",
+    "mcp_tool": "board_read_chat",
+    "description": "Read the recent chat messages on a board (most recent first, capped server-side). `id` accepts either a UUID or a board name.",
     "source": "board",
     "parameters": [
       {
         "name": "id",
         "type": "string",
-        "format": "uuid",
         "required": true,
         "nullable": false,
-        "description": "Board ID"
+        "description": "Board UUID or name"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "board_read_elements",
+    "description": "Read all elements on a board. Returns structured data with positions, text, and types. `id` accepts either a UUID or a board name.",
+    "source": "board",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Board UUID or name"
       }
     ]
   },
@@ -5590,6 +16147,89 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
     ]
   },
   {
+    "mcp_tool": "board_remediate_integrity",
+    "description": "Apply a fix for a board integrity issue: \"detach\" clears the board's project association, \"reassign\" moves it to a different project (which must belong to the caller's org). `id` accepts a board UUID or name; for \"reassign\", `project_id` accepts a project UUID or project name.",
+    "source": "board",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Board UUID or name"
+      },
+      {
+        "name": "action",
+        "type": "enum",
+        "enum": [
+          "detach",
+          "reassign"
+        ],
+        "required": true,
+        "nullable": false,
+        "description": "Remediation action to apply"
+      },
+      {
+        "name": "project_id",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      }
+    ]
+  },
+  {
+    "mcp_tool": "board_remove_collaborator",
+    "description": "Remove a collaborator from a board. `collaborator_id` is the collaborator-row UUID (get it from board_list_collaborators).",
+    "source": "board",
+    "parameters": [
+      {
+        "name": "collaborator_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Collaborator row UUID (from board_list_collaborators)"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "board_restore",
+    "description": "Restore a previously archived board. `id` accepts either a UUID or a board name.",
+    "source": "board",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Board UUID or name"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "board_restore_version",
+    "description": "Restore a board to a previously captured version snapshot, replacing its current scene. `board_id` accepts a UUID or board name; `version_id` is the version UUID (get it from board_list_versions).",
+    "source": "board",
+    "parameters": [
+      {
+        "name": "board_id",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Board UUID or name"
+      },
+      {
+        "name": "version_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Version snapshot UUID (from board_list_versions)"
+      }
+    ]
+  },
+  {
     "mcp_tool": "board_search",
     "description": "Search across board element text content.",
     "source": "board",
@@ -5612,32 +16252,58 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
     ]
   },
   {
-    "mcp_tool": "board_summarize",
-    "description": "Get a board summary grouped by frames, including element counts and text content.",
+    "mcp_tool": "board_star_toggle",
+    "description": "Toggle the calling user's star on a board (favorite / unfavorite). `id` accepts either a UUID or a board name.",
     "source": "board",
     "parameters": [
       {
         "name": "id",
         "type": "string",
-        "format": "uuid",
         "required": true,
         "nullable": false,
-        "description": "Board ID"
+        "description": "Board UUID or name"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "board_stats",
+    "description": "Get statistics for a single board (element counts, collaborator counts, last activity). `id` accepts either a UUID or a board name.",
+    "source": "board",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Board UUID or name"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "board_summarize",
+    "description": "Get a board summary grouped by frames, including element counts and text content. `id` accepts either a UUID or a board name.",
+    "source": "board",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Board UUID or name"
       }
     ]
   },
   {
     "mcp_tool": "board_update",
-    "description": "Update board metadata. Provide only the fields to change.",
+    "description": "Update board metadata. Provide only the fields to change. `id` accepts either a UUID or a board name.",
     "source": "board",
     "parameters": [
       {
         "name": "id",
         "type": "string",
-        "format": "uuid",
         "required": true,
         "nullable": false,
-        "description": "Board ID"
+        "description": "Board UUID or name"
       },
       {
         "name": "name",
@@ -5695,6 +16361,82 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
     ]
   },
   {
+    "mcp_tool": "board_update_collaborator",
+    "description": "Change a collaborator's permission (view or edit) on a board. `collaborator_id` is the collaborator-row UUID (get it from board_list_collaborators).",
+    "source": "board",
+    "parameters": [
+      {
+        "name": "collaborator_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Collaborator row UUID (from board_list_collaborators)"
+      },
+      {
+        "name": "permission",
+        "type": "enum",
+        "enum": [
+          "view",
+          "edit"
+        ],
+        "required": true,
+        "nullable": false,
+        "description": "New permission level"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "board_update_template",
+    "description": "Update a board template's metadata. `id` accepts either a UUID or a template name. Provide only the fields to change.",
+    "source": "board",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Template UUID or name"
+      },
+      {
+        "name": "name",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Updated name"
+      },
+      {
+        "name": "description",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Updated description"
+      },
+      {
+        "name": "category",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Updated category"
+      },
+      {
+        "name": "icon",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Updated icon"
+      },
+      {
+        "name": "sort_order",
+        "type": "number",
+        "format": "integer",
+        "required": false,
+        "nullable": false,
+        "description": "Updated sort order"
+      }
+    ]
+  },
+  {
     "mcp_tool": "bolt_actions",
     "description": "List available MCP tools that can be used as automation actions.",
     "source": "bolt",
@@ -5744,7 +16486,19 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
           "bearing",
           "bill",
           "book",
-          "blank"
+          "blank",
+          "platform",
+          "burn",
+          "bulwark",
+          "braid",
+          "basis",
+          "blip",
+          "blueprint",
+          "bureau",
+          "bin",
+          "bay",
+          "bursar",
+          "bastion"
         ],
         "required": true,
         "nullable": false,
@@ -5811,10 +16565,9 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
       {
         "name": "id",
         "type": "string",
-        "format": "uuid",
         "required": true,
         "nullable": false,
-        "description": "Automation ID"
+        "description": "Automation UUID or exact automation name"
       }
     ]
   },
@@ -5826,10 +16579,23 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
       {
         "name": "id",
         "type": "string",
-        "format": "uuid",
         "required": true,
         "nullable": false,
-        "description": "Automation ID"
+        "description": ""
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bolt_duplicate",
+    "description": "Duplicate an automation. Creates a disabled copy (with its conditions and actions) under a new name so you can safely modify it before enabling.",
+    "source": "bolt",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Automation UUID or exact automation name to duplicate"
       }
     ]
   },
@@ -5841,10 +16607,9 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
       {
         "name": "id",
         "type": "string",
-        "format": "uuid",
         "required": true,
         "nullable": false,
-        "description": "Automation ID"
+        "description": ""
       }
     ]
   },
@@ -5870,7 +16635,19 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
           "bearing",
           "bill",
           "book",
-          "blank"
+          "blank",
+          "platform",
+          "burn",
+          "bulwark",
+          "braid",
+          "basis",
+          "blip",
+          "blueprint",
+          "bureau",
+          "bin",
+          "bay",
+          "bursar",
+          "bastion"
         ],
         "required": false,
         "nullable": false,
@@ -5901,10 +16678,9 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
       {
         "name": "automation_id",
         "type": "string",
-        "format": "uuid",
         "required": true,
         "nullable": false,
-        "description": "Automation ID"
+        "description": "Automation UUID or exact automation name"
       },
       {
         "name": "status",
@@ -5931,6 +16707,57 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
     ]
   },
   {
+    "mcp_tool": "bolt_explain",
+    "description": "Explain an automation definition in plain English using the org's configured LLM provider. Pass the automation shape (name, trigger_source, trigger_event, conditions, actions) — for an existing automation, fetch it with bolt_get first. Returns a natural-language explanation. Requires an LLM provider to be configured (returns AI_NOT_CONFIGURED otherwise).",
+    "source": "bolt",
+    "parameters": [
+      {
+        "name": "automation",
+        "type": "object",
+        "required": false,
+        "nullable": false,
+        "description": "Automation name"
+      },
+      {
+        "name": "project_id",
+        "type": "string",
+        "format": "uuid",
+        "required": false,
+        "nullable": false,
+        "description": "Project to resolve the LLM provider against"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bolt_generate",
+    "description": "Generate a draft automation definition from a natural-language prompt using the org's configured LLM provider. Returns a proposed automation object (name, trigger, conditions, actions) plus a confidence score; it does NOT persist anything — pass the result to bolt_create to save it. Requires an LLM provider to be configured (returns AI_NOT_CONFIGURED otherwise).",
+    "source": "bolt",
+    "parameters": [
+      {
+        "name": "prompt",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Natural-language description of the desired automation"
+      },
+      {
+        "name": "context",
+        "type": "object",
+        "required": false,
+        "nullable": false,
+        "description": "Optional context object to ground the generation"
+      },
+      {
+        "name": "project_id",
+        "type": "string",
+        "format": "uuid",
+        "required": false,
+        "nullable": false,
+        "description": "Project to resolve the LLM provider against and scope the draft"
+      }
+    ]
+  },
+  {
     "mcp_tool": "bolt_get",
     "description": "Get a single automation with its conditions and actions.",
     "source": "bolt",
@@ -5938,10 +16765,73 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
       {
         "name": "id",
         "type": "string",
-        "format": "uuid",
         "required": true,
         "nullable": false,
-        "description": "Automation ID"
+        "description": "Automation UUID or exact automation name"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bolt_get_automation_by_name",
+    "description": "Resolve an automation by its name within the caller's org. Case-insensitive exact match is preferred; falls back to a single-hit fuzzy ILIKE \"%name%\" match. Returns a compact projection ({ id, name, description, trigger_source, trigger_event, enabled, action_count, last_execution_at }) or null if no unique match is found. Useful for meta-automations that need to reference other automations by name (e.g. disable the \"Nightly Deploys\" automation when an incident is declared).",
+    "source": "bolt",
+    "parameters": [
+      {
+        "name": "name",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Automation name to resolve (case-insensitive)"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bolt_instantiate_template",
+    "description": "Create a new automation from a built-in template (see bolt_list_templates for ids). Optional overrides let you set the name, description, project, and cron schedule on the new automation.",
+    "source": "bolt",
+    "parameters": [
+      {
+        "name": "template_id",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Template id from bolt_list_templates"
+      },
+      {
+        "name": "name",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Override the automation name"
+      },
+      {
+        "name": "description",
+        "type": "string",
+        "required": false,
+        "nullable": true,
+        "description": "Override the description"
+      },
+      {
+        "name": "project_id",
+        "type": "string",
+        "format": "uuid",
+        "required": false,
+        "nullable": true,
+        "description": "Scope the new automation to a project"
+      },
+      {
+        "name": "cron_expression",
+        "type": "string",
+        "required": false,
+        "nullable": true,
+        "description": "Cron expression (for schedule-triggered templates)"
+      },
+      {
+        "name": "cron_timezone",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": ""
       }
     ]
   },
@@ -5975,7 +16865,19 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
           "bearing",
           "bill",
           "book",
-          "blank"
+          "blank",
+          "platform",
+          "burn",
+          "bulwark",
+          "braid",
+          "basis",
+          "blip",
+          "blueprint",
+          "bureau",
+          "bin",
+          "bay",
+          "bursar",
+          "bastion"
         ],
         "required": false,
         "nullable": false,
@@ -6006,8 +16908,121 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
     ]
   },
   {
-    "mcp_tool": "bolt_test",
-    "description": "Test-fire an automation with a simulated event payload.",
+    "mcp_tool": "bolt_list_executions",
+    "description": "List execution history across all automations in the org (not scoped to a single automation — use bolt_executions for that). Org-admin scoped.",
+    "source": "bolt",
+    "parameters": [
+      {
+        "name": "status",
+        "type": "enum",
+        "enum": [
+          "running",
+          "success",
+          "partial",
+          "failed",
+          "skipped"
+        ],
+        "required": false,
+        "nullable": false,
+        "description": "Filter by execution status"
+      },
+      {
+        "name": "cursor",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Pagination cursor"
+      },
+      {
+        "name": "limit",
+        "type": "number",
+        "format": "integer",
+        "required": false,
+        "nullable": false,
+        "description": "Page size (default per server, max 100)"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bolt_list_templates",
+    "description": "List the built-in automation templates available for instantiation (pre-built trigger/condition/action blueprints).",
+    "source": "bolt",
+    "parameters": []
+  },
+  {
+    "mcp_tool": "bolt_list_versions",
+    "description": "List the saved version history for an automation. Each version is a point-in-time snapshot of the trigger, conditions, and actions captured on update/restore.",
+    "source": "bolt",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Automation UUID or exact automation name"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bolt_patch",
+    "description": "Partial metadata update of an automation. Only touches name, description, and/or enabled — does not modify the trigger, conditions, or actions (use bolt_update for those). Provide only the fields to change.",
+    "source": "bolt",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Automation UUID or exact automation name"
+      },
+      {
+        "name": "name",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Updated name"
+      },
+      {
+        "name": "description",
+        "type": "string",
+        "required": false,
+        "nullable": true,
+        "description": "Updated description (null to clear)"
+      },
+      {
+        "name": "enabled",
+        "type": "boolean",
+        "required": false,
+        "nullable": false,
+        "description": "Enable or disable"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bolt_restore_version",
+    "description": "Restore an automation to a previously saved version. The current state is snapshotted first, then the named version becomes the live definition.",
+    "source": "bolt",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Automation UUID or exact automation name"
+      },
+      {
+        "name": "version_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Version UUID to restore (from bolt_list_versions)"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bolt_retry_execution",
+    "description": "Retry a failed (or partial) execution. Re-runs the automation against the original event payload and creates a new execution row.",
     "source": "bolt",
     "parameters": [
       {
@@ -6016,7 +17031,36 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
         "format": "uuid",
         "required": true,
         "nullable": false,
-        "description": "Automation ID to test"
+        "description": "Execution UUID to retry (from bolt_executions / bolt_list_executions)"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bolt_stats",
+    "description": "Get aggregate automation statistics for the org (totals, enabled count, execution counts). Pass project_id to scope the numbers to a single project so they line up with a filtered list view.",
+    "source": "bolt",
+    "parameters": [
+      {
+        "name": "project_id",
+        "type": "string",
+        "format": "uuid",
+        "required": false,
+        "nullable": false,
+        "description": "Scope stats to a single project"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bolt_test",
+    "description": "Dry-run an automation against a simulated event payload. This evaluates ONLY the automation's conditions against the event — it does NOT execute the actions. Use it to check whether a given event would (or would not) trigger the automation. Returns `passed` (would the actions run), a per-condition `log`, and a human-readable `message`. To actually run actions, the automation must fire on a real ingested event.",
+    "source": "bolt",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Automation UUID or exact automation name to test"
       },
       {
         "name": "event",
@@ -6035,10 +17079,9 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
       {
         "name": "id",
         "type": "string",
-        "format": "uuid",
         "required": true,
         "nullable": false,
-        "description": "Automation ID"
+        "description": "Automation UUID or exact automation name"
       },
       {
         "name": "name",
@@ -6071,7 +17114,19 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
           "bearing",
           "bill",
           "book",
-          "blank"
+          "blank",
+          "platform",
+          "burn",
+          "bulwark",
+          "braid",
+          "basis",
+          "blip",
+          "blueprint",
+          "bureau",
+          "bin",
+          "bay",
+          "bursar",
+          "bastion"
         ],
         "required": false,
         "nullable": false,
@@ -6115,17 +17170,96 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
     ]
   },
   {
-    "mcp_tool": "bond_close_deal_lost",
-    "description": "Mark a deal as lost. Sets closed_at, close_reason, and optionally the competitor who won. Emits a deal.lost event for Bolt automations.",
+    "mcp_tool": "bolt_event_trace",
+    "description": "Return the full evaluation trail for a single Bolt ingest event: every automation that evaluated the event, whether its conditions matched, and the outcome of each action step. Values in actual/expected are truncated to 1KB per field. Empty executions[] means the event hit zero rules. Org-scoped: only executions in the caller's active org are returned.",
+    "source": "bolt-observability",
+    "parameters": [
+      {
+        "name": "event_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": ""
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bolt_recent_events",
+    "description": "List recent Bolt ingest events in the caller's org that matched at least one automation. Each row is aggregated by event_id with the count of matched automations and the earliest started_at. Filters are optional; limit is capped server-side at 500 (default 50). Useful for a live-ish ops view of what is firing.",
+    "source": "bolt-observability",
+    "parameters": [
+      {
+        "name": "source",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Filter by event source (e.g. bond, bam, banter)"
+      },
+      {
+        "name": "event",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Filter by bare event name (e.g. deal.rotting)"
+      },
+      {
+        "name": "since",
+        "type": "string",
+        "format": "datetime",
+        "required": false,
+        "nullable": false,
+        "description": "Only events started_at >= this ISO 8601 timestamp"
+      },
+      {
+        "name": "limit",
+        "type": "number",
+        "format": "integer",
+        "required": false,
+        "nullable": false,
+        "description": "Max rows to return (default 50, hard cap 500)"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bond_add_deal_contact",
+    "description": "Associate a contact with a deal, optionally tagging the contact's role (e.g. \"decision_maker\", \"champion\"). `id` accepts a deal UUID or title fragment; `contact_id` accepts a contact UUID, email, or unique name fragment.",
     "source": "bond",
     "parameters": [
       {
         "name": "id",
         "type": "string",
-        "format": "uuid",
         "required": true,
         "nullable": false,
-        "description": "Deal ID"
+        "description": "Deal — accepts a UUID or a unique deal title fragment"
+      },
+      {
+        "name": "contact_id",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Contact — accepts a UUID, email, or unique name fragment"
+      },
+      {
+        "name": "role",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Role of the contact on this deal"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bond_close_deal_lost",
+    "description": "Mark a deal as lost. Sets closed_at, close_reason, and optionally the competitor who won. Emits a deal.lost event for Bolt automations. `id` accepts a deal UUID or a unique title fragment.",
+    "source": "bond",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Deal — accepts a UUID or unique deal title fragment"
       },
       {
         "name": "close_reason",
@@ -6145,16 +17279,15 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
   },
   {
     "mcp_tool": "bond_close_deal_won",
-    "description": "Mark a deal as won. Sets closed_at, moves to the won stage, and emits a deal.won event for Bolt automations.",
+    "description": "Mark a deal as won. Sets closed_at, moves to the won stage, and emits a deal.won event for Bolt automations. `id` accepts a deal UUID or a unique title fragment.",
     "source": "bond",
     "parameters": [
       {
         "name": "id",
         "type": "string",
-        "format": "uuid",
         "required": true,
         "nullable": false,
-        "description": "Deal ID"
+        "description": "Deal — accepts a UUID or unique deal title fragment"
       },
       {
         "name": "close_reason",
@@ -6290,7 +17423,7 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
   },
   {
     "mcp_tool": "bond_create_contact",
-    "description": "Create a new CRM contact with identity, classification, and optional company association.",
+    "description": "Create a new CRM contact with identity, classification, and optional company association. `owner_id` accepts a user UUID or email; `company_id` accepts a company UUID or name.",
     "source": "bond",
     "parameters": [
       {
@@ -6356,18 +17489,16 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
       {
         "name": "owner_id",
         "type": "string",
-        "format": "uuid",
         "required": false,
         "nullable": false,
-        "description": "Owner user ID"
+        "description": "Owner — accepts a user UUID or email address"
       },
       {
         "name": "company_id",
         "type": "string",
-        "format": "uuid",
         "required": false,
         "nullable": false,
-        "description": "Primary company ID to associate"
+        "description": "Primary company to associate — accepts a company UUID or name"
       },
       {
         "name": "address_line1",
@@ -6421,8 +17552,81 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
     ]
   },
   {
+    "mcp_tool": "bond_create_custom_field",
+    "description": "Create a custom field definition for contacts, companies, or deals. Requires admin scope. `field_key` must be lowercase snake_case starting with a letter. select/multi_select types take an `options` list.",
+    "source": "bond",
+    "parameters": [
+      {
+        "name": "entity_type",
+        "type": "enum",
+        "enum": [
+          "contact",
+          "company",
+          "deal"
+        ],
+        "required": true,
+        "nullable": false,
+        "description": "Which entity the field applies to"
+      },
+      {
+        "name": "field_key",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Stable key (lowercase snake_case, starts with a letter)"
+      },
+      {
+        "name": "label",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Human-readable label"
+      },
+      {
+        "name": "field_type",
+        "type": "enum",
+        "enum": [
+          "text",
+          "number",
+          "date",
+          "select",
+          "multi_select",
+          "url",
+          "email",
+          "phone",
+          "boolean"
+        ],
+        "required": true,
+        "nullable": false,
+        "description": "Field data type"
+      },
+      {
+        "name": "options",
+        "type": "array",
+        "required": false,
+        "nullable": false,
+        "description": "Options for select / multi_select"
+      },
+      {
+        "name": "required",
+        "type": "boolean",
+        "required": false,
+        "nullable": false,
+        "description": "Whether the field is required"
+      },
+      {
+        "name": "sort_order",
+        "type": "number",
+        "format": "integer",
+        "required": false,
+        "nullable": false,
+        "description": "Display order"
+      }
+    ]
+  },
+  {
     "mcp_tool": "bond_create_deal",
-    "description": "Create a new deal in a pipeline.",
+    "description": "Create a new deal in a pipeline. `pipeline_id` accepts a pipeline UUID or exact name; `stage_id` accepts a stage UUID or exact name (within the resolved pipeline); `owner_id` accepts a user UUID or email; `company_id` accepts a company UUID or name; `contact_ids` entries each accept a contact UUID or email.",
     "source": "bond",
     "parameters": [
       {
@@ -6435,18 +17639,16 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
       {
         "name": "pipeline_id",
         "type": "string",
-        "format": "uuid",
         "required": true,
         "nullable": false,
-        "description": "Pipeline ID"
+        "description": "Pipeline — accepts a UUID or exact pipeline name"
       },
       {
         "name": "stage_id",
         "type": "string",
-        "format": "uuid",
         "required": false,
         "nullable": false,
-        "description": "Initial stage ID (defaults to first stage in pipeline)"
+        "description": "Initial stage — accepts a UUID or exact stage name (scoped to the resolved pipeline). Defaults to the first stage in the pipeline."
       },
       {
         "name": "value",
@@ -6488,25 +17690,23 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
       {
         "name": "owner_id",
         "type": "string",
-        "format": "uuid",
         "required": false,
         "nullable": false,
-        "description": "Deal owner user ID"
+        "description": "Deal owner — accepts a user UUID or email"
       },
       {
         "name": "company_id",
         "type": "string",
-        "format": "uuid",
         "required": false,
         "nullable": false,
-        "description": "Primary company ID"
+        "description": "Primary company — accepts a company UUID or name"
       },
       {
         "name": "contact_ids",
         "type": "array",
         "required": false,
         "nullable": false,
-        "description": "Contact IDs to associate with the deal"
+        "description": "Contacts to associate — each entry accepts a UUID or email"
       },
       {
         "name": "custom_fields",
@@ -6514,6 +17714,372 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
         "required": false,
         "nullable": false,
         "description": "Custom field values"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bond_create_import_mapping",
+    "description": "Record (upsert) a single external-system → Bond-entity import mapping for dedup/lookup. Requires admin scope. This is the JSON mapping primitive, not a CSV/file upload.",
+    "source": "bond",
+    "parameters": [
+      {
+        "name": "source_system",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "source_id",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Record ID in the external system"
+      },
+      {
+        "name": "bond_entity_type",
+        "type": "enum",
+        "enum": [
+          "contact",
+          "company",
+          "deal"
+        ],
+        "required": true,
+        "nullable": false,
+        "description": "Bond entity type this maps to"
+      },
+      {
+        "name": "bond_entity_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Bond entity UUID this maps to"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bond_create_pipeline",
+    "description": "Create a new pipeline, optionally seeding it with stages. Requires admin scope. Each stage may set stage_type (\"active\"/\"won\"/\"lost\"), probability, and rotting threshold.",
+    "source": "bond",
+    "parameters": [
+      {
+        "name": "name",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Pipeline name"
+      },
+      {
+        "name": "description",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Pipeline description"
+      },
+      {
+        "name": "is_default",
+        "type": "boolean",
+        "required": false,
+        "nullable": false,
+        "description": "Mark this pipeline the org default"
+      },
+      {
+        "name": "currency",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "stages",
+        "type": "array",
+        "required": false,
+        "nullable": false,
+        "description": "Stage name"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bond_create_scoring_rule",
+    "description": "Create a lead-scoring rule. Requires admin scope. When a contact matches the condition, score_delta (-100..100) is applied to its lead score.",
+    "source": "bond",
+    "parameters": [
+      {
+        "name": "name",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Rule name"
+      },
+      {
+        "name": "description",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Rule description"
+      },
+      {
+        "name": "condition_field",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "condition_operator",
+        "type": "enum",
+        "enum": [
+          "equals",
+          "not_equals",
+          "contains",
+          "gt",
+          "lt",
+          "gte",
+          "lte",
+          "exists",
+          "not_exists"
+        ],
+        "required": true,
+        "nullable": false,
+        "description": "Comparison operator"
+      },
+      {
+        "name": "condition_value",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Value to compare against"
+      },
+      {
+        "name": "score_delta",
+        "type": "number",
+        "format": "integer",
+        "required": true,
+        "nullable": false,
+        "description": "Points to add (or subtract) when the condition matches"
+      },
+      {
+        "name": "enabled",
+        "type": "boolean",
+        "required": false,
+        "nullable": false,
+        "description": "Whether the rule is active (default true)"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bond_create_stage",
+    "description": "Add a stage to a pipeline. Requires admin scope. `pipeline_id` accepts a pipeline UUID or an exact name.",
+    "source": "bond",
+    "parameters": [
+      {
+        "name": "pipeline_id",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Pipeline — accepts a UUID or exact pipeline name"
+      },
+      {
+        "name": "name",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Stage name"
+      },
+      {
+        "name": "sort_order",
+        "type": "number",
+        "format": "integer",
+        "required": false,
+        "nullable": false,
+        "description": "Display order"
+      },
+      {
+        "name": "stage_type",
+        "type": "enum",
+        "enum": [
+          "active",
+          "won",
+          "lost"
+        ],
+        "required": false,
+        "nullable": false,
+        "description": "Stage semantics"
+      },
+      {
+        "name": "probability_pct",
+        "type": "number",
+        "format": "integer",
+        "required": false,
+        "nullable": false,
+        "description": "Default win probability for deals in this stage"
+      },
+      {
+        "name": "rotting_days",
+        "type": "number",
+        "format": "integer",
+        "required": false,
+        "nullable": false,
+        "description": "Days before a deal in this stage is flagged stale"
+      },
+      {
+        "name": "color",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bond_delete_activity",
+    "description": "Delete an activity by ID.",
+    "source": "bond",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Activity ID"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bond_delete_company",
+    "description": "Soft-delete a company. `id` accepts a company UUID or an exact/unique company name. Use bond_restore_company to undo.",
+    "source": "bond",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Company — accepts a UUID or a unique company name"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bond_delete_contact",
+    "description": "Soft-delete a contact. `id` accepts a contact UUID, an email, or a unique name fragment (single-match only). Use bond_restore_contact to undo.",
+    "source": "bond",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Contact — accepts a UUID, email address, or unique name fragment"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bond_delete_custom_field",
+    "description": "Delete a custom field definition. Requires admin scope.",
+    "source": "bond",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Custom field definition ID"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bond_delete_deal",
+    "description": "Soft-delete a deal. `id` accepts a deal UUID or a unique title fragment (single-match only). Use bond_restore_deal to undo.",
+    "source": "bond",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Deal — accepts a UUID or a unique deal title fragment"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bond_delete_pipeline",
+    "description": "Delete a pipeline. Requires admin scope. `id` accepts a pipeline UUID or an exact name.",
+    "source": "bond",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Pipeline — accepts a UUID or exact pipeline name"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bond_delete_scoring_rule",
+    "description": "Delete a lead-scoring rule. Requires admin scope.",
+    "source": "bond",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Scoring rule ID"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bond_delete_stage",
+    "description": "Delete a stage from a pipeline. Requires admin scope. `pipeline_id` accepts a pipeline UUID or exact name; `stage_id` accepts a stage UUID or exact stage name within the pipeline.",
+    "source": "bond",
+    "parameters": [
+      {
+        "name": "pipeline_id",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Pipeline — accepts a UUID or exact pipeline name"
+      },
+      {
+        "name": "stage_id",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Stage — accepts a UUID or an exact stage name within the pipeline"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bond_duplicate_deal",
+    "description": "Duplicate a deal (creates a copy in the same pipeline/stage). `id` accepts a deal UUID or a unique title fragment.",
+    "source": "bond",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Deal — accepts a UUID or a unique deal title fragment"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bond_get_activity",
+    "description": "Get a single activity by ID.",
+    "source": "bond",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Activity ID"
       }
     ]
   },
@@ -6548,6 +18114,50 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
     ]
   },
   {
+    "mcp_tool": "bond_get_conversion_rates",
+    "description": "Get stage-to-stage conversion rates for a pipeline over an optional date window.",
+    "source": "bond",
+    "parameters": [
+      {
+        "name": "pipeline_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Pipeline ID"
+      },
+      {
+        "name": "start_date",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Window start (ISO date)"
+      },
+      {
+        "name": "end_date",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Window end (ISO date)"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bond_get_custom_field",
+    "description": "Get a single custom field definition by ID.",
+    "source": "bond",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Custom field definition ID"
+      }
+    ]
+  },
+  {
     "mcp_tool": "bond_get_deal",
     "description": "Get full deal detail including associated contacts, activities, and stage change history.",
     "source": "bond",
@@ -6563,6 +18173,49 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
     ]
   },
   {
+    "mcp_tool": "bond_get_deal_related",
+    "description": "Get cross-product records linked to a deal: invoices (Bill), events (Book), and tasks (Bam). Each section is best-effort and returns an empty array if its source is unavailable. `id` accepts a deal UUID or a unique title fragment.",
+    "source": "bond",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Deal — accepts a UUID or a unique deal title fragment"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bond_get_deal_stage_history",
+    "description": "Get the stage transition history for a deal (each move with timestamp and actor). `id` accepts a deal UUID or a unique title fragment.",
+    "source": "bond",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Deal — accepts a UUID or a unique deal title fragment"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bond_get_deal_velocity",
+    "description": "Get the average time deals spend in each stage of a pipeline.",
+    "source": "bond",
+    "parameters": [
+      {
+        "name": "pipeline_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Pipeline ID"
+      }
+    ]
+  },
+  {
     "mcp_tool": "bond_get_forecast",
     "description": "Get revenue forecast from weighted pipeline value, broken into 30/60/90 day buckets based on expected close dates.",
     "source": "bond",
@@ -6574,6 +18227,20 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
         "required": false,
         "nullable": false,
         "description": "Pipeline ID (defaults to the org default pipeline)"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bond_get_pipeline",
+    "description": "Get a single pipeline with its stages. `id` accepts a pipeline UUID or an exact pipeline name.",
+    "source": "bond",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Pipeline — accepts a UUID or exact pipeline name"
       }
     ]
   },
@@ -6620,6 +18287,95 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
         "required": false,
         "nullable": false,
         "description": "Max results (default 50, max 100)"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bond_get_user_settings",
+    "description": "Get the calling user's own Bond settings (e.g. reply-to email).",
+    "source": "bond",
+    "parameters": []
+  },
+  {
+    "mcp_tool": "bond_get_win_loss",
+    "description": "Get win/loss ratio and analysis, optionally scoped to a pipeline and date window.",
+    "source": "bond",
+    "parameters": [
+      {
+        "name": "pipeline_id",
+        "type": "string",
+        "format": "uuid",
+        "required": false,
+        "nullable": false,
+        "description": "Pipeline ID (defaults to all pipelines)"
+      },
+      {
+        "name": "start_date",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Window start (ISO date)"
+      },
+      {
+        "name": "end_date",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Window end (ISO date)"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bond_list_activities",
+    "description": "List CRM activities, optionally filtered by contact, deal, company, or activity type. `contact_id`/`deal_id`/`company_id` must be UUIDs.",
+    "source": "bond",
+    "parameters": [
+      {
+        "name": "contact_id",
+        "type": "string",
+        "format": "uuid",
+        "required": false,
+        "nullable": false,
+        "description": "Filter by contact"
+      },
+      {
+        "name": "deal_id",
+        "type": "string",
+        "format": "uuid",
+        "required": false,
+        "nullable": false,
+        "description": "Filter by deal"
+      },
+      {
+        "name": "company_id",
+        "type": "string",
+        "format": "uuid",
+        "required": false,
+        "nullable": false,
+        "description": "Filter by company"
+      },
+      {
+        "name": "activity_type",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "limit",
+        "type": "number",
+        "format": "integer",
+        "required": false,
+        "nullable": false,
+        "description": "Page size (default unspecified, max 100)"
+      },
+      {
+        "name": "offset",
+        "type": "number",
+        "format": "integer",
+        "required": false,
+        "nullable": false,
+        "description": "Pagination offset"
       }
     ]
   },
@@ -6686,6 +18442,57 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
         "required": false,
         "nullable": false,
         "description": "Page size (default 50, max 100)"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bond_list_company_contacts",
+    "description": "List the contacts associated with a company. `id` accepts a company UUID or a unique company name.",
+    "source": "bond",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Company — accepts a UUID or a unique company name"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bond_list_company_deals",
+    "description": "List the deals attached to a company (paginated). `id` accepts a company UUID or a unique company name.",
+    "source": "bond",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Company — accepts a UUID or a unique company name"
+      },
+      {
+        "name": "limit",
+        "type": "number",
+        "format": "integer",
+        "required": false,
+        "nullable": false,
+        "description": "Page size (default unspecified, max 100)"
+      },
+      {
+        "name": "offset",
+        "type": "number",
+        "format": "integer",
+        "required": false,
+        "nullable": false,
+        "description": "Pagination offset"
+      },
+      {
+        "name": "sort",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": ""
       }
     ]
   },
@@ -6778,6 +18585,53 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
         "required": false,
         "nullable": false,
         "description": "Page size (default 50, max 100)"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bond_list_custom_fields",
+    "description": "List custom field definitions, optionally filtered to one entity type (contact, company, or deal).",
+    "source": "bond",
+    "parameters": [
+      {
+        "name": "entity_type",
+        "type": "enum",
+        "enum": [
+          "contact",
+          "company",
+          "deal"
+        ],
+        "required": false,
+        "nullable": false,
+        "description": "Filter to one entity type"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bond_list_deal_activities",
+    "description": "List the activity timeline for a deal (notes, calls, emails, meetings, stage changes). `id` accepts a deal UUID or a unique title fragment.",
+    "source": "bond",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Deal — accepts a UUID or a unique deal title fragment"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bond_list_deal_contacts",
+    "description": "List the contacts associated with a deal (with their per-deal role). `id` accepts a deal UUID or a unique title fragment.",
+    "source": "bond",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Deal — accepts a UUID or a unique deal title fragment"
       }
     ]
   },
@@ -6888,8 +18742,64 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
     ]
   },
   {
+    "mcp_tool": "bond_list_import_mappings",
+    "description": "List external-system → Bond-entity import mappings for the org, optionally filtered by source system.",
+    "source": "bond",
+    "parameters": [
+      {
+        "name": "source_system",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Filter by external system name"
+      },
+      {
+        "name": "limit",
+        "type": "number",
+        "format": "integer",
+        "required": false,
+        "nullable": false,
+        "description": "Page size (max 500)"
+      },
+      {
+        "name": "offset",
+        "type": "number",
+        "format": "integer",
+        "required": false,
+        "nullable": false,
+        "description": "Pagination offset"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bond_list_pipelines",
+    "description": "List all CRM pipelines for the org, each with its ordered stages.",
+    "source": "bond",
+    "parameters": []
+  },
+  {
+    "mcp_tool": "bond_list_scoring_rules",
+    "description": "List the lead-scoring rules configured for the org.",
+    "source": "bond",
+    "parameters": []
+  },
+  {
+    "mcp_tool": "bond_list_stages",
+    "description": "List the ordered stages of a pipeline. `pipeline_id` accepts a pipeline UUID or an exact name.",
+    "source": "bond",
+    "parameters": [
+      {
+        "name": "pipeline_id",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Pipeline — accepts a UUID or exact pipeline name"
+      }
+    ]
+  },
+  {
     "mcp_tool": "bond_log_activity",
-    "description": "Log an activity (note, call, email, meeting, task, etc.) against a contact, deal, or both.",
+    "description": "Log an activity (note, call, email, meeting, task, etc.) against a contact, deal, or both. `contact_id` accepts a UUID or email; `deal_id` accepts a UUID or unique deal title fragment; `company_id` accepts a UUID or company name.",
     "source": "bond",
     "parameters": [
       {
@@ -6912,26 +18822,23 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
       {
         "name": "contact_id",
         "type": "string",
-        "format": "uuid",
         "required": false,
         "nullable": false,
-        "description": "Contact ID to associate with"
+        "description": "Contact — accepts a UUID, email, or unique name fragment"
       },
       {
         "name": "deal_id",
         "type": "string",
-        "format": "uuid",
         "required": false,
         "nullable": false,
-        "description": "Deal ID to associate with"
+        "description": "Deal — accepts a UUID or unique deal title fragment"
       },
       {
         "name": "company_id",
         "type": "string",
-        "format": "uuid",
         "required": false,
         "nullable": false,
-        "description": "Company ID to associate with"
+        "description": "Company — accepts a UUID or unique company name"
       },
       {
         "name": "subject",
@@ -6988,7 +18895,70 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
   },
   {
     "mcp_tool": "bond_move_deal_stage",
-    "description": "Move a deal to a new pipeline stage. Records stage history and emits a deal.stage_changed event for Bolt automations.",
+    "description": "Move a deal to a new pipeline stage. Records stage history and emits a deal.stage_changed event for Bolt automations. `id` accepts a deal UUID or a unique title fragment; `stage_id` accepts a stage UUID or exact stage name (stage name is resolved within the deal's pipeline).",
+    "source": "bond",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Deal — accepts a UUID or unique deal title fragment"
+      },
+      {
+        "name": "stage_id",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Target stage — accepts a UUID or exact stage name (resolved within the deal's pipeline)"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bond_remove_deal_contact",
+    "description": "Remove a contact association from a deal. `id` accepts a deal UUID or title fragment; `contact_id` accepts a contact UUID, email, or unique name fragment.",
+    "source": "bond",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Deal — accepts a UUID or a unique deal title fragment"
+      },
+      {
+        "name": "contact_id",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Contact — accepts a UUID, email, or unique name fragment"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bond_reorder_stages",
+    "description": "Reorder a pipeline's stages. Requires admin scope. `pipeline_id` accepts a pipeline UUID or an exact name; `stage_ids` is the full ordered list of stage UUIDs.",
+    "source": "bond",
+    "parameters": [
+      {
+        "name": "pipeline_id",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Pipeline — accepts a UUID or exact pipeline name"
+      },
+      {
+        "name": "stage_ids",
+        "type": "array",
+        "required": true,
+        "nullable": false,
+        "description": "Stage UUIDs in the desired order"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bond_restore_company",
+    "description": "Undelete a previously soft-deleted company. `id` must be the company UUID (a deleted company will not surface in name search).",
     "source": "bond",
     "parameters": [
       {
@@ -6997,15 +18967,37 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
         "format": "uuid",
         "required": true,
         "nullable": false,
-        "description": "Deal ID"
-      },
+        "description": "Company UUID to restore"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bond_restore_contact",
+    "description": "Undelete a previously soft-deleted contact. `id` must be the contact UUID (a deleted contact will not surface in name/email search).",
+    "source": "bond",
+    "parameters": [
       {
-        "name": "stage_id",
+        "name": "id",
         "type": "string",
         "format": "uuid",
         "required": true,
         "nullable": false,
-        "description": "Target stage ID"
+        "description": "Contact UUID to restore"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bond_restore_deal",
+    "description": "Undelete a previously soft-deleted deal. `id` must be the deal UUID (a deleted deal will not surface in title search).",
+    "source": "bond",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Deal UUID to restore"
       }
     ]
   },
@@ -7021,6 +19013,28 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
         "required": true,
         "nullable": false,
         "description": "Contact ID to score"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bond_search_companies",
+    "description": "Full-text search across company name and domain. Lightweight typeahead-style lookup; for filtered/paginated browsing use bond_list_companies.",
+    "source": "bond",
+    "parameters": [
+      {
+        "name": "query",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Search query string (name or domain)"
+      },
+      {
+        "name": "limit",
+        "type": "number",
+        "format": "integer",
+        "required": false,
+        "nullable": false,
+        "description": "Max results (default unspecified, max 100)"
       }
     ]
   },
@@ -7043,6 +19057,42 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
         "required": false,
         "nullable": false,
         "description": "Max results (default 20, max 100)"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bond_update_activity",
+    "description": "Update an activity's subject, body, or metadata. Provide only the fields to change.",
+    "source": "bond",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Activity ID"
+      },
+      {
+        "name": "subject",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Updated subject/title"
+      },
+      {
+        "name": "body",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Updated body/notes"
+      },
+      {
+        "name": "metadata",
+        "type": "object",
+        "required": false,
+        "nullable": false,
+        "description": "Updated activity-type-specific data"
       }
     ]
   },
@@ -7179,16 +19229,15 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
   },
   {
     "mcp_tool": "bond_update_contact",
-    "description": "Update an existing contact. Provide only the fields to change.",
+    "description": "Update an existing contact. Provide only the fields to change. `id` accepts a contact UUID, an email, or a name fragment (single-match only). `owner_id` accepts a user UUID or email.",
     "source": "bond",
     "parameters": [
       {
         "name": "id",
         "type": "string",
-        "format": "uuid",
         "required": true,
         "nullable": false,
-        "description": "Contact ID"
+        "description": "Contact — accepts a UUID, email address, or unique name fragment"
       },
       {
         "name": "first_name",
@@ -7253,10 +19302,9 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
       {
         "name": "owner_id",
         "type": "string",
-        "format": "uuid",
         "required": false,
         "nullable": false,
-        "description": "Updated owner user ID"
+        "description": "Updated owner — accepts a user UUID or email address"
       },
       {
         "name": "address_line1",
@@ -7310,8 +19358,8 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
     ]
   },
   {
-    "mcp_tool": "bond_update_deal",
-    "description": "Update an existing deal. Provide only the fields to change.",
+    "mcp_tool": "bond_update_custom_field",
+    "description": "Update a custom field definition. Requires admin scope. Provide only the fields to change (the entity_type and field_key are immutable).",
     "source": "bond",
     "parameters": [
       {
@@ -7320,7 +19368,68 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
         "format": "uuid",
         "required": true,
         "nullable": false,
-        "description": "Deal ID"
+        "description": "Custom field definition ID"
+      },
+      {
+        "name": "label",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Updated label"
+      },
+      {
+        "name": "field_type",
+        "type": "enum",
+        "enum": [
+          "text",
+          "number",
+          "date",
+          "select",
+          "multi_select",
+          "url",
+          "email",
+          "phone",
+          "boolean"
+        ],
+        "required": false,
+        "nullable": false,
+        "description": "Updated field type"
+      },
+      {
+        "name": "options",
+        "type": "array",
+        "required": false,
+        "nullable": false,
+        "description": "Updated options for select / multi_select"
+      },
+      {
+        "name": "required",
+        "type": "boolean",
+        "required": false,
+        "nullable": false,
+        "description": "Updated required flag"
+      },
+      {
+        "name": "sort_order",
+        "type": "number",
+        "format": "integer",
+        "required": false,
+        "nullable": false,
+        "description": "Updated display order"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bond_update_deal",
+    "description": "Update an existing deal. Provide only the fields to change. `id` accepts a deal UUID or a unique title fragment (single-match only). `owner_id` accepts a user UUID or email; `company_id` accepts a company UUID or name.",
+    "source": "bond",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Deal — accepts a UUID or unique deal title fragment"
       },
       {
         "name": "name",
@@ -7369,18 +19478,16 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
       {
         "name": "owner_id",
         "type": "string",
-        "format": "uuid",
         "required": false,
         "nullable": false,
-        "description": "Updated owner"
+        "description": "Updated owner — accepts a user UUID or email"
       },
       {
         "name": "company_id",
         "type": "string",
-        "format": "uuid",
         "required": false,
         "nullable": false,
-        "description": "Updated primary company"
+        "description": "Updated primary company — accepts a company UUID or name"
       },
       {
         "name": "custom_fields",
@@ -7392,9 +19499,51 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
     ]
   },
   {
-    "mcp_tool": "book_cancel_event",
-    "description": "Cancel a calendar event (sets status to cancelled).",
-    "source": "book",
+    "mcp_tool": "bond_update_pipeline",
+    "description": "Update a pipeline's metadata. Requires admin scope. Provide only the fields to change. `id` accepts a pipeline UUID or an exact name.",
+    "source": "bond",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Pipeline — accepts a UUID or exact pipeline name"
+      },
+      {
+        "name": "name",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Updated name"
+      },
+      {
+        "name": "description",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Updated description"
+      },
+      {
+        "name": "is_default",
+        "type": "boolean",
+        "required": false,
+        "nullable": false,
+        "description": "Set as org default"
+      },
+      {
+        "name": "currency",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Updated default currency"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bond_update_scoring_rule",
+    "description": "Update a lead-scoring rule. Requires admin scope. Provide only the fields to change.",
+    "source": "bond",
     "parameters": [
       {
         "name": "id",
@@ -7402,7 +19551,299 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
         "format": "uuid",
         "required": true,
         "nullable": false,
-        "description": "Event ID to cancel"
+        "description": "Scoring rule ID"
+      },
+      {
+        "name": "name",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Updated name"
+      },
+      {
+        "name": "description",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Updated description"
+      },
+      {
+        "name": "condition_field",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Updated condition field"
+      },
+      {
+        "name": "condition_operator",
+        "type": "enum",
+        "enum": [
+          "equals",
+          "not_equals",
+          "contains",
+          "gt",
+          "lt",
+          "gte",
+          "lte",
+          "exists",
+          "not_exists"
+        ],
+        "required": false,
+        "nullable": false,
+        "description": "Updated operator"
+      },
+      {
+        "name": "condition_value",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Updated comparison value"
+      },
+      {
+        "name": "score_delta",
+        "type": "number",
+        "format": "integer",
+        "required": false,
+        "nullable": false,
+        "description": "Updated point delta"
+      },
+      {
+        "name": "enabled",
+        "type": "boolean",
+        "required": false,
+        "nullable": false,
+        "description": "Enable/disable the rule"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bond_update_stage",
+    "description": "Update a pipeline stage. Requires admin scope. `pipeline_id` accepts a pipeline UUID or an exact name; `stage_id` accepts a stage UUID or an exact stage name within that pipeline. Provide only the fields to change.",
+    "source": "bond",
+    "parameters": [
+      {
+        "name": "pipeline_id",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Pipeline — accepts a UUID or exact pipeline name"
+      },
+      {
+        "name": "stage_id",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Stage — accepts a UUID or an exact stage name within the pipeline"
+      },
+      {
+        "name": "name",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Updated stage name"
+      },
+      {
+        "name": "sort_order",
+        "type": "number",
+        "format": "integer",
+        "required": false,
+        "nullable": false,
+        "description": "Updated display order"
+      },
+      {
+        "name": "stage_type",
+        "type": "enum",
+        "enum": [
+          "active",
+          "won",
+          "lost"
+        ],
+        "required": false,
+        "nullable": false,
+        "description": "Updated stage semantics"
+      },
+      {
+        "name": "probability_pct",
+        "type": "number",
+        "format": "integer",
+        "required": false,
+        "nullable": false,
+        "description": "Updated default win probability"
+      },
+      {
+        "name": "rotting_days",
+        "type": "number",
+        "format": "integer",
+        "required": false,
+        "nullable": false,
+        "description": "Updated stale threshold in days"
+      },
+      {
+        "name": "color",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Updated hex color"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bond_update_user_settings",
+    "description": "Set or clear the calling user's Bond reply-to email address. Pass an empty string or null to clear it.",
+    "source": "bond",
+    "parameters": [
+      {
+        "name": "reply_to_email",
+        "type": "union",
+        "required": false,
+        "nullable": false,
+        "description": "Reply-to email; empty string or null clears it"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bond_upsert_contact",
+    "description": "Idempotent create-or-update of a CRM contact by email. Natural key is (organization_id, lower(email)). Soft-deleted matches are resurrected. Returns { data, created, idempotency_key } — `created` is true on insert, false on update.",
+    "source": "bond",
+    "parameters": [
+      {
+        "name": "email",
+        "type": "string",
+        "format": "email",
+        "required": true,
+        "nullable": false,
+        "description": "Email address — idempotency key (case-insensitive)"
+      },
+      {
+        "name": "first_name",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "First name"
+      },
+      {
+        "name": "last_name",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Last name"
+      },
+      {
+        "name": "phone",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Phone number"
+      },
+      {
+        "name": "title",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Job title"
+      },
+      {
+        "name": "avatar_url",
+        "type": "string",
+        "format": "url",
+        "required": false,
+        "nullable": false,
+        "description": "Avatar URL"
+      },
+      {
+        "name": "lifecycle_stage",
+        "type": "enum",
+        "enum": [
+          "subscriber",
+          "lead",
+          "marketing_qualified",
+          "sales_qualified",
+          "opportunity",
+          "customer",
+          "evangelist",
+          "other"
+        ],
+        "required": false,
+        "nullable": false,
+        "description": "Lifecycle stage"
+      },
+      {
+        "name": "lead_source",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Lead source"
+      },
+      {
+        "name": "address_line1",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "address_line2",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "city",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "state_region",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "postal_code",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "country",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "ISO 3166-1 alpha-2 country code"
+      },
+      {
+        "name": "custom_fields",
+        "type": "object",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "owner_id",
+        "type": "string",
+        "format": "uuid",
+        "required": false,
+        "nullable": false,
+        "description": "Owner user UUID (defaults to acting user on insert; unchanged on update)"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "book_cancel_event",
+    "description": "Cancel a calendar event (sets status to cancelled). `id` accepts either a UUID or an event title.",
+    "source": "book",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Event UUID or title to cancel"
       }
     ]
   },
@@ -7443,17 +19884,101 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
     ]
   },
   {
+    "mcp_tool": "book_create_calendar",
+    "description": "Create a calendar in the caller's organization.",
+    "source": "book",
+    "parameters": [
+      {
+        "name": "name",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Calendar name"
+      },
+      {
+        "name": "description",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Calendar description"
+      },
+      {
+        "name": "color",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "calendar_type",
+        "type": "enum",
+        "enum": [
+          "personal",
+          "team",
+          "project",
+          "booking"
+        ],
+        "required": false,
+        "nullable": false,
+        "description": "Calendar type (default personal)"
+      },
+      {
+        "name": "timezone",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "IANA timezone"
+      },
+      {
+        "name": "project_id",
+        "type": "string",
+        "format": "uuid",
+        "required": false,
+        "nullable": false,
+        "description": "Project to scope the calendar to (when type is project)"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "book_create_connection",
+    "description": "Subscribe to an external calendar feed by .ics URL (the no-OAuth provider path). The feed is pulled into a Book calendar on creation-time sync and on the worker schedule. Google/Microsoft connections require operator OAuth credentials and are not created here.",
+    "source": "book",
+    "parameters": [
+      {
+        "name": "feed_url",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Public iCalendar (.ics) URL, including webcal:// links"
+      },
+      {
+        "name": "name",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Human-friendly label for the connection"
+      },
+      {
+        "name": "calendar_id",
+        "type": "string",
+        "format": "uuid",
+        "required": false,
+        "nullable": false,
+        "description": "Target Book calendar to mirror events into (auto-selected if omitted)"
+      }
+    ]
+  },
+  {
     "mcp_tool": "book_create_event",
-    "description": "Create a calendar event with optional attendees.",
+    "description": "Create a calendar event with optional attendees. `calendar_id` accepts either a UUID or a calendar name (case-insensitive). Each attendee `user_id` accepts either a UUID or an email address.",
     "source": "book",
     "parameters": [
       {
         "name": "calendar_id",
         "type": "string",
-        "format": "uuid",
         "required": true,
         "nullable": false,
-        "description": "Calendar to create the event in"
+        "description": "Calendar UUID or name to create the event in"
       },
       {
         "name": "title",
@@ -7509,13 +20034,57 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
         "type": "array",
         "required": false,
         "nullable": false,
-        "description": "List of attendees"
+        "description": "User UUID or email (falls back to the attendee email)"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "book_delete_booking_page",
+    "description": "Delete a public booking page (scheduling link).",
+    "source": "book",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Booking page UUID"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "book_delete_calendar",
+    "description": "Delete a calendar. `id` accepts either a UUID or a calendar name (case-insensitive exact match).",
+    "source": "book",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Calendar UUID or name"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "book_delete_connection",
+    "description": "Remove an external calendar connection (Google/Microsoft).",
+    "source": "book",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Connection UUID"
       }
     ]
   },
   {
     "mcp_tool": "book_find_meeting_time",
-    "description": "AI-assisted: find optimal meeting times for a set of attendees. Returns up to 3 suggested slots.",
+    "description": "AI-assisted: find optimal meeting times for a set of attendees. Returns up to 3 suggested slots. Each entry in `user_ids` accepts either a UUID or an email address.",
     "source": "book",
     "parameters": [
       {
@@ -7523,7 +20092,7 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
         "type": "array",
         "required": true,
         "nullable": false,
-        "description": "Attendee user IDs"
+        "description": "Attendee user UUIDs or emails"
       },
       {
         "name": "duration_minutes",
@@ -7550,17 +20119,59 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
     ]
   },
   {
+    "mcp_tool": "book_find_meeting_time_for_users",
+    "description": "Find meeting-time slots across a mixed roster of humans and agents/service accounts. Agents/service accounts have no calendars; when respect_working_hours_for_humans_only is true (default) they are treated as unconditionally available and skipped from conflict detection. Each entry in user_ids accepts a UUID or an email address. Returns slots with per-attendee availability annotations so the caller can render \"agent: always available\" alongside the human conflict picture.",
+    "source": "book",
+    "parameters": [
+      {
+        "name": "user_ids",
+        "type": "array",
+        "required": true,
+        "nullable": false,
+        "description": "Attendee user UUIDs or emails"
+      },
+      {
+        "name": "duration_minutes",
+        "type": "number",
+        "format": "integer",
+        "required": true,
+        "nullable": false,
+        "description": "Meeting duration in minutes"
+      },
+      {
+        "name": "window",
+        "type": "object",
+        "required": true,
+        "nullable": false,
+        "description": "ISO 8601 window start"
+      },
+      {
+        "name": "respect_working_hours_for_humans_only",
+        "type": "boolean",
+        "required": false,
+        "nullable": false,
+        "description": "Default true. When true, agents/service accounts are unconditionally available; when false, every user is treated as a human for scheduling purposes."
+      },
+      {
+        "name": "timezone",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "IANA timezone for the caller, used only for rendering hints downstream."
+      }
+    ]
+  },
+  {
     "mcp_tool": "book_get_availability",
-    "description": "Get available time slots for a user in a date range.",
+    "description": "Get available time slots for a user in a date range. `user_id` accepts either a UUID or an email address.",
     "source": "book",
     "parameters": [
       {
         "name": "user_id",
         "type": "string",
-        "format": "uuid",
         "required": true,
         "nullable": false,
-        "description": "User ID to check availability for"
+        "description": "User UUID or email to check availability for"
       },
       {
         "name": "start_date",
@@ -7579,8 +20190,23 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
     ]
   },
   {
+    "mcp_tool": "book_get_event",
+    "description": "Get a single calendar event by ID, including attendees and linked-entity context.",
+    "source": "book",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Event UUID"
+      }
+    ]
+  },
+  {
     "mcp_tool": "book_get_team_availability",
-    "description": "Get available time slots for multiple users to find common free times.",
+    "description": "Get available time slots for multiple users to find common free times. Each entry in `user_ids` accepts either a UUID or an email address. Fails cleanly if any input cannot be resolved.",
     "source": "book",
     "parameters": [
       {
@@ -7588,7 +20214,7 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
         "type": "array",
         "required": true,
         "nullable": false,
-        "description": "Array of user IDs"
+        "description": "Array of user UUIDs or emails"
       },
       {
         "name": "start_date",
@@ -7628,6 +20254,44 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
     ]
   },
   {
+    "mcp_tool": "book_get_working_hours",
+    "description": "Get the caller's weekly working-hours schedule (per day-of-week availability windows).",
+    "source": "book",
+    "parameters": []
+  },
+  {
+    "mcp_tool": "book_list_booking_pages",
+    "description": "List the caller's public booking pages (scheduling links).",
+    "source": "book",
+    "parameters": []
+  },
+  {
+    "mcp_tool": "book_list_calendars",
+    "description": "List the caller's calendars, optionally filtered by calendar type (personal, team, project, booking).",
+    "source": "book",
+    "parameters": [
+      {
+        "name": "calendar_type",
+        "type": "enum",
+        "enum": [
+          "personal",
+          "team",
+          "project",
+          "booking"
+        ],
+        "required": false,
+        "nullable": false,
+        "description": "Filter by calendar type"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "book_list_connections",
+    "description": "List the caller's external calendar connections (ICS feeds / Google / Microsoft) and their sync status. Tokens and feed URLs are never exposed.",
+    "source": "book",
+    "parameters": []
+  },
+  {
     "mcp_tool": "book_list_events",
     "description": "List calendar events in a date range, optionally filtered by calendar IDs.",
     "source": "book",
@@ -7665,16 +20329,15 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
   },
   {
     "mcp_tool": "book_rsvp_event",
-    "description": "Accept, decline, or mark tentative for a calendar event on behalf of the current user.",
+    "description": "Accept, decline, or mark tentative for a calendar event on behalf of the current user. `event_id` accepts either a UUID or an event title.",
     "source": "book",
     "parameters": [
       {
         "name": "event_id",
         "type": "string",
-        "format": "uuid",
         "required": true,
         "nullable": false,
-        "description": "Event ID"
+        "description": "Event UUID or title"
       },
       {
         "name": "response_status",
@@ -7691,8 +20354,22 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
     ]
   },
   {
-    "mcp_tool": "book_update_event",
-    "description": "Update an existing calendar event.",
+    "mcp_tool": "book_set_working_hours",
+    "description": "Replace the caller's weekly working-hours schedule. `day_of_week` is 0 (Sunday) through 6 (Saturday); times are HH:MM or HH:MM:SS. This is a full replace — include every day you want available.",
+    "source": "book",
+    "parameters": [
+      {
+        "name": "hours",
+        "type": "array",
+        "required": false,
+        "nullable": false,
+        "description": "0 = Sunday … 6 = Saturday"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "book_sync_connection",
+    "description": "Force an immediate sync of an existing external calendar connection. Returns the import result counts (imported/created/updated/removed).",
     "source": "book",
     "parameters": [
       {
@@ -7701,7 +20378,198 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
         "format": "uuid",
         "required": true,
         "nullable": false,
-        "description": "Event ID"
+        "description": "Connection UUID"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "book_update_booking_page",
+    "description": "Update a public booking page. Provide only the fields to change. Set `enabled: false` to take a page offline without deleting it.",
+    "source": "book",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Booking page UUID"
+      },
+      {
+        "name": "slug",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "URL slug for /meet/:slug"
+      },
+      {
+        "name": "title",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Page title"
+      },
+      {
+        "name": "description",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Page description"
+      },
+      {
+        "name": "duration_minutes",
+        "type": "number",
+        "format": "integer",
+        "required": false,
+        "nullable": false,
+        "description": "Meeting duration"
+      },
+      {
+        "name": "buffer_before_min",
+        "type": "number",
+        "format": "integer",
+        "required": false,
+        "nullable": false,
+        "description": "Buffer before each booking (minutes)"
+      },
+      {
+        "name": "buffer_after_min",
+        "type": "number",
+        "format": "integer",
+        "required": false,
+        "nullable": false,
+        "description": "Buffer after each booking (minutes)"
+      },
+      {
+        "name": "max_advance_days",
+        "type": "number",
+        "format": "integer",
+        "required": false,
+        "nullable": false,
+        "description": "How far ahead visitors may book (days)"
+      },
+      {
+        "name": "min_notice_hours",
+        "type": "number",
+        "format": "integer",
+        "required": false,
+        "nullable": false,
+        "description": "Minimum notice before a booking (hours)"
+      },
+      {
+        "name": "color",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Hex accent color"
+      },
+      {
+        "name": "logo_url",
+        "type": "string",
+        "format": "url",
+        "required": false,
+        "nullable": false,
+        "description": "Logo URL"
+      },
+      {
+        "name": "confirmation_message",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Confirmation message shown after booking"
+      },
+      {
+        "name": "redirect_url",
+        "type": "string",
+        "format": "url",
+        "required": false,
+        "nullable": false,
+        "description": "Redirect URL after booking"
+      },
+      {
+        "name": "auto_create_bond_contact",
+        "type": "boolean",
+        "required": false,
+        "nullable": false,
+        "description": "Auto-create a Bond contact on booking"
+      },
+      {
+        "name": "auto_create_bam_task",
+        "type": "boolean",
+        "required": false,
+        "nullable": false,
+        "description": "Auto-create a Bam task on booking"
+      },
+      {
+        "name": "bam_project_id",
+        "type": "string",
+        "format": "uuid",
+        "required": false,
+        "nullable": false,
+        "description": "Bam project for auto-created tasks"
+      },
+      {
+        "name": "enabled",
+        "type": "boolean",
+        "required": false,
+        "nullable": false,
+        "description": "Whether the page accepts bookings"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "book_update_calendar",
+    "description": "Update a calendar's metadata. `id` accepts either a UUID or a calendar name (case-insensitive exact match). Provide only the fields to change.",
+    "source": "book",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Calendar UUID or name"
+      },
+      {
+        "name": "name",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Updated name"
+      },
+      {
+        "name": "description",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Updated description"
+      },
+      {
+        "name": "color",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Updated hex color"
+      },
+      {
+        "name": "timezone",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Updated IANA timezone"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "book_update_event",
+    "description": "Update an existing calendar event. `id` accepts either a UUID or an event title (case-insensitive exact or single fuzzy match within +/- 1 year of now).",
+    "source": "book",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Event UUID or title"
       },
       {
         "name": "title",
@@ -7753,9 +20621,9 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
     ]
   },
   {
-    "mcp_tool": "brief_append_content",
-    "description": "Append Markdown content to the end of a Brief document.",
-    "source": "brief",
+    "mcp_tool": "braid_get_profile",
+    "description": "Get a golden profile with its member source identities and recent merge/split decisions embedded, so /profiles/:id/identities and /profiles/:id/decisions need no separate tool. All scalars and attributes are re-assembled per viewer: denied member identities are dropped and identity_count/confidence recomputed over only visible members. Pass asker_user_id to gate per-viewer visibility fail-closed.",
+    "source": "braid",
     "parameters": [
       {
         "name": "id",
@@ -7763,7 +20631,346 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
         "format": "uuid",
         "required": true,
         "nullable": false,
-        "description": "Document ID"
+        "description": ""
+      },
+      {
+        "name": "asker_user_id",
+        "type": "string",
+        "format": "uuid",
+        "required": false,
+        "nullable": false,
+        "description": "The human on whose behalf the agent is asking; gates per-viewer visibility"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "braid_get_settings",
+    "description": "Get this org's Braid settings: auto-merge / review thresholds, the strong-signal requirement, enabled source types, and the rescan window.",
+    "source": "braid",
+    "parameters": []
+  },
+  {
+    "mcp_tool": "braid_list_candidates",
+    "description": "List review-queue match candidates (profile pairs pending human merge review), sorted by -score. Filter by status (pending|merged|rejected|superseded); cursor-paginated. Evidence value-refs are re-hydrated per caller.",
+    "source": "braid",
+    "parameters": [
+      {
+        "name": "cursor",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "limit",
+        "type": "number",
+        "format": "integer",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      }
+    ]
+  },
+  {
+    "mcp_tool": "braid_list_profiles",
+    "description": "List golden profiles for the org (admin-tier read; per-viewer assembly for granted non-admins). Filter by kind (person|company) and status; cursor-paginated.",
+    "source": "braid",
+    "parameters": [
+      {
+        "name": "cursor",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "limit",
+        "type": "number",
+        "format": "integer",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "asker_user_id",
+        "type": "string",
+        "format": "uuid",
+        "required": false,
+        "nullable": false,
+        "description": "The human on whose behalf the agent is asking; gates per-viewer assembly"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "braid_list_survivorship_rules",
+    "description": "List this org's survivorship rules (per kind, per field winner-selection strategies).",
+    "source": "braid",
+    "parameters": []
+  },
+  {
+    "mcp_tool": "braid_merge_profiles",
+    "description": "Merge two golden profiles into one (truth-flip; auditable and reversible via braid_split_profile). Provide EITHER candidate_id (confirm a queued candidate via /candidates/:id/merge) OR profile_a_id + profile_b_id (direct merge via /profiles/merge). Two-step confirm: call once WITHOUT confirm_token to stage a Redis-backed token, then call again WITH the returned confirm_token to execute.",
+    "source": "braid",
+    "parameters": [
+      {
+        "name": "candidate_id",
+        "type": "string",
+        "format": "uuid",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "profile_a_id",
+        "type": "string",
+        "format": "uuid",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "profile_b_id",
+        "type": "string",
+        "format": "uuid",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "reason",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "confirm_token",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Confirmation token from a prior staging call. Required to execute the merge."
+      }
+    ]
+  },
+  {
+    "mcp_tool": "braid_profile_timeline",
+    "description": "Get a golden profile's cross-app timeline (activity + Bolt events for its member identities). Fail-closed per viewer: a row is included only if it maps to a member identity whose source entity the asker passed can_access on. Pass asker_user_id to gate visibility.",
+    "source": "braid",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "asker_user_id",
+        "type": "string",
+        "format": "uuid",
+        "required": false,
+        "nullable": false,
+        "description": "The human on whose behalf the agent is asking; gates per-viewer visibility fail-closed"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "braid_propose_merge",
+    "description": "Propose merging two golden profiles for HUMAN review. Upserts a canonical braid_match_candidates row (computed evidence, bridge identities) and registers an agent_proposals row in the org-admin approval inbox, so approval flows through the same CAS-guarded mergeCandidate executor. The proposing asker must pass can_access on both profiles' member identities (or be admin); rate-limited. The proposal IS the human-in-the-loop, so there is no confirm_action here.",
+    "source": "braid",
+    "parameters": [
+      {
+        "name": "profile_a_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "profile_b_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "reason",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "asker_user_id",
+        "type": "string",
+        "format": "uuid",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      }
+    ]
+  },
+  {
+    "mcp_tool": "braid_reject_candidate",
+    "description": "Reject a match candidate. Writes an identity-level dedupe suppression so the bridging identity pair does not re-surface next tick. Permission-gated by braid.profile.merge (the confirm boundary is the merge, not the suppression, so no confirm_action here).",
+    "source": "braid",
+    "parameters": [
+      {
+        "name": "candidate_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "reason",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      }
+    ]
+  },
+  {
+    "mcp_tool": "braid_resolve",
+    "description": "Resolve a source-app record ({source_type, source_id}) to its stable golden profile id. The flagship Braid operation. The input record is preflighted through can_access first: a denied record returns NOT_FOUND, never a golden id. identity_count is suppressed for non-admin askers. Follows the merged_into_id chain and may lazily mint a singleton profile for a never-before-seen record.",
+    "source": "braid",
+    "parameters": [
+      {
+        "name": "source_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "asker_user_id",
+        "type": "string",
+        "format": "uuid",
+        "required": false,
+        "nullable": false,
+        "description": "The human on whose behalf the agent is asking; gates input-record preflight"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "braid_search_profiles",
+    "description": "Search golden profiles by display_name or primary_email substring (case-insensitive) within the org. Admin-asker only (the search vector is a PII oracle otherwise, spec S4); results are per-viewer assembled.",
+    "source": "braid",
+    "parameters": [
+      {
+        "name": "query",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Substring to match against display_name or primary_email"
+      },
+      {
+        "name": "limit",
+        "type": "number",
+        "format": "integer",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "asker_user_id",
+        "type": "string",
+        "format": "uuid",
+        "required": false,
+        "nullable": false,
+        "description": "The human on whose behalf the agent is asking; gates per-viewer assembly"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "braid_set_survivorship_rule",
+    "description": "Upsert the per-org survivorship rule that decides which member value wins for one (kind, field) when profiles merge. strategy is most_recent | source_priority | longest_non_null | most_frequent | manual_pin. source_priority is the ordered source_type list used by the source_priority strategy; pinned_value is used with manual_pin.",
+    "source": "braid",
+    "parameters": [
+      {
+        "name": "field",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "e.g. display_name, primary_email, primary_phone, title, company_profile_id"
+      },
+      {
+        "name": "source_priority",
+        "type": "array",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "pinned_value",
+        "type": "any",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      }
+    ]
+  },
+  {
+    "mcp_tool": "braid_split_profile",
+    "description": "Split or unmerge a golden profile (destructive truth-flip). Provide EITHER merge_decision_id (undo a specific prior merge) OR identity_ids (peel the listed member identities into a fresh profile). Two-step confirm: call once WITHOUT confirm_token to stage a Redis-backed token, then call again WITH the returned confirm_token to execute.",
+    "source": "braid",
+    "parameters": [
+      {
+        "name": "profile_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "merge_decision_id",
+        "type": "string",
+        "format": "uuid",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "identity_ids",
+        "type": "array",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "reason",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "confirm_token",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Confirmation token from a prior staging call. Required to execute the split."
+      }
+    ]
+  },
+  {
+    "mcp_tool": "brief_append_content",
+    "description": "Append Markdown content to the end of a Brief document.",
+    "source": "brief",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Document ID (UUID), slug, or title (exact case-insensitive match)"
       },
       {
         "name": "content",
@@ -7782,10 +20989,99 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
       {
         "name": "id",
         "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Document ID (UUID), slug, or title (exact case-insensitive match)"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "brief_collaborator_add",
+    "description": "Add a user as a collaborator on a Brief document with a given permission level.",
+    "source": "brief",
+    "parameters": [
+      {
+        "name": "document_id",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Document ID (UUID), slug, or title (exact case-insensitive match)"
+      },
+      {
+        "name": "user_id",
+        "type": "string",
         "format": "uuid",
         "required": true,
         "nullable": false,
-        "description": "Document ID"
+        "description": "Collaborator user UUID"
+      },
+      {
+        "name": "permission",
+        "type": "enum",
+        "enum": [
+          "view",
+          "comment",
+          "edit"
+        ],
+        "required": false,
+        "nullable": false,
+        "description": "Permission level (default view)"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "brief_collaborator_remove",
+    "description": "Remove a collaborator from a Brief document. Get the collaborator ID from brief_collaborators_list.",
+    "source": "brief",
+    "parameters": [
+      {
+        "name": "collaborator_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Collaborator record UUID"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "brief_collaborator_update",
+    "description": "Update an existing collaborator's permission level on a Brief document. Get the collaborator ID from brief_collaborators_list.",
+    "source": "brief",
+    "parameters": [
+      {
+        "name": "collaborator_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Collaborator record UUID"
+      },
+      {
+        "name": "permission",
+        "type": "enum",
+        "enum": [
+          "view",
+          "comment",
+          "edit"
+        ],
+        "required": true,
+        "nullable": false,
+        "description": "New permission level"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "brief_collaborators_list",
+    "description": "List the per-user collaborators (and their permissions) on a Brief document.",
+    "source": "brief",
+    "parameters": [
+      {
+        "name": "document_id",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Document ID (UUID), slug, or title (exact case-insensitive match)"
       }
     ]
   },
@@ -7797,10 +21093,9 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
       {
         "name": "document_id",
         "type": "string",
-        "format": "uuid",
         "required": true,
         "nullable": false,
-        "description": "Document ID"
+        "description": "Document ID (UUID), slug, or title (exact case-insensitive match)"
       },
       {
         "name": "body",
@@ -7827,6 +21122,43 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
     ]
   },
   {
+    "mcp_tool": "brief_comment_delete",
+    "description": "Delete a Brief comment. The author may delete their own comment; org admins/owners may delete any comment.",
+    "source": "brief",
+    "parameters": [
+      {
+        "name": "comment_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Comment ID"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "brief_comment_edit",
+    "description": "Edit the body of an existing Brief comment.",
+    "source": "brief",
+    "parameters": [
+      {
+        "name": "comment_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Comment ID"
+      },
+      {
+        "name": "body",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "New comment body text (1-50k chars)"
+      }
+    ]
+  },
+  {
     "mcp_tool": "brief_comment_list",
     "description": "List comments on a Brief document.",
     "source": "brief",
@@ -7834,10 +21166,31 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
       {
         "name": "document_id",
         "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Document ID (UUID), slug, or title (exact case-insensitive match)"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "brief_comment_react",
+    "description": "Add an emoji reaction to a Brief comment.",
+    "source": "brief",
+    "parameters": [
+      {
+        "name": "comment_id",
+        "type": "string",
         "format": "uuid",
         "required": true,
         "nullable": false,
-        "description": "Document ID"
+        "description": "Comment ID"
+      },
+      {
+        "name": "emoji",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Emoji (1-32 chars)"
       }
     ]
   },
@@ -7853,6 +21206,28 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
         "required": true,
         "nullable": false,
         "description": "Comment ID"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "brief_comment_unreact",
+    "description": "Remove the calling user's emoji reaction from a Brief comment.",
+    "source": "brief",
+    "parameters": [
+      {
+        "name": "comment_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Comment ID"
+      },
+      {
+        "name": "emoji",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Emoji to remove (1-32 chars)"
       }
     ]
   },
@@ -7921,10 +21296,87 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
       {
         "name": "id",
         "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Document ID (UUID), slug, or title (exact case-insensitive match)"
+      },
+      {
+        "name": "project_id",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Target project UUID or exact project name (defaults to same project)"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "brief_embed_delete",
+    "description": "Delete an embed (uploaded file/image) record from a Brief document. Get the embed ID from brief_embeds_list.",
+    "source": "brief",
+    "parameters": [
+      {
+        "name": "embed_id",
+        "type": "string",
         "format": "uuid",
         "required": true,
         "nullable": false,
-        "description": "Document ID to duplicate"
+        "description": "Embed record UUID"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "brief_embeds_list",
+    "description": "List the embedded files/images recorded on a Brief document.",
+    "source": "brief",
+    "parameters": [
+      {
+        "name": "document_id",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Document ID (UUID), slug, or title (exact case-insensitive match)"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "brief_export_html",
+    "description": "Export a Brief document as a standalone styled HTML page.",
+    "source": "brief",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Document ID (UUID), slug, or title (exact case-insensitive match)"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "brief_export_markdown",
+    "description": "Export a Brief document as Markdown text.",
+    "source": "brief",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Document ID (UUID), slug, or title (exact case-insensitive match)"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "brief_folder_create",
+    "description": "Create a Brief folder, optionally nested under a parent folder and/or scoped to a project.",
+    "source": "brief",
+    "parameters": [
+      {
+        "name": "name",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Folder name (1-255 chars)"
       },
       {
         "name": "project_id",
@@ -7932,7 +21384,91 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
         "format": "uuid",
         "required": false,
         "nullable": false,
-        "description": "Target project ID (defaults to same project)"
+        "description": "Project to scope the folder to"
+      },
+      {
+        "name": "parent_id",
+        "type": "string",
+        "format": "uuid",
+        "required": false,
+        "nullable": false,
+        "description": "Parent folder UUID (for nesting)"
+      },
+      {
+        "name": "sort_order",
+        "type": "number",
+        "format": "integer",
+        "required": false,
+        "nullable": false,
+        "description": "Sort order among siblings"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "brief_folder_delete",
+    "description": "Delete a Brief folder.",
+    "source": "brief",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Folder UUID"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "brief_folder_update",
+    "description": "Update or move a Brief folder. Provide only the fields to change.",
+    "source": "brief",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Folder UUID"
+      },
+      {
+        "name": "name",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Updated name"
+      },
+      {
+        "name": "parent_id",
+        "type": "string",
+        "format": "uuid",
+        "required": false,
+        "nullable": true,
+        "description": "Move under a different parent folder (null to move to root)"
+      },
+      {
+        "name": "sort_order",
+        "type": "number",
+        "format": "integer",
+        "required": false,
+        "nullable": false,
+        "description": "Updated sort order"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "brief_folders_list",
+    "description": "List the Brief folder tree for the org, optionally scoped to a project.",
+    "source": "brief",
+    "parameters": [
+      {
+        "name": "project_id",
+        "type": "string",
+        "format": "uuid",
+        "required": false,
+        "nullable": false,
+        "description": "Filter folders to a specific project"
       }
     ]
   },
@@ -7951,6 +21487,62 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
     ]
   },
   {
+    "mcp_tool": "brief_link_beacon",
+    "description": "Link a Brief document to a Beacon knowledge article.",
+    "source": "brief",
+    "parameters": [
+      {
+        "name": "document_id",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Document ID (UUID), slug, or title (exact case-insensitive match)"
+      },
+      {
+        "name": "beacon_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Beacon article UUID"
+      },
+      {
+        "name": "link_type",
+        "type": "enum",
+        "enum": [
+          "reference",
+          "source",
+          "related"
+        ],
+        "required": false,
+        "nullable": false,
+        "description": "Type of link (default reference)"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "brief_link_remove",
+    "description": "Remove a link (task or Beacon) from a Brief document. Get the link ID from brief_links_list.",
+    "source": "brief",
+    "parameters": [
+      {
+        "name": "document_id",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Document ID (UUID), slug, or title (exact case-insensitive match)"
+      },
+      {
+        "name": "link_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Link UUID to remove"
+      }
+    ]
+  },
+  {
     "mcp_tool": "brief_link_task",
     "description": "Link a Brief document to a Bam task.",
     "source": "brief",
@@ -7958,18 +21550,16 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
       {
         "name": "document_id",
         "type": "string",
-        "format": "uuid",
         "required": true,
         "nullable": false,
-        "description": "Document ID"
+        "description": "Document ID (UUID), slug, or title (exact case-insensitive match)"
       },
       {
         "name": "task_id",
         "type": "string",
-        "format": "uuid",
         "required": true,
         "nullable": false,
-        "description": "Bam task ID to link"
+        "description": "Bam task UUID or human ref (e.g. FRND-42)"
       },
       {
         "name": "link_type",
@@ -7983,6 +21573,20 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
         "required": false,
         "nullable": false,
         "description": "Type of link (default reference)"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "brief_links_list",
+    "description": "List all task and Beacon links attached to a Brief document.",
+    "source": "brief",
+    "parameters": [
+      {
+        "name": "document_id",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Document ID (UUID), slug, or title (exact case-insensitive match)"
       }
     ]
   },
@@ -8053,10 +21657,24 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
       {
         "name": "id",
         "type": "string",
-        "format": "uuid",
         "required": true,
         "nullable": false,
-        "description": "Document ID to promote"
+        "description": "Document ID (UUID), slug, or title (exact case-insensitive match) to promote"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "brief_recent",
+    "description": "List recently updated Brief documents the caller can see.",
+    "source": "brief",
+    "parameters": [
+      {
+        "name": "limit",
+        "type": "number",
+        "format": "integer",
+        "required": false,
+        "nullable": false,
+        "description": "Max results (default 20, max 50)"
       }
     ]
   },
@@ -8068,10 +21686,9 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
       {
         "name": "id",
         "type": "string",
-        "format": "uuid",
         "required": true,
         "nullable": false,
-        "description": "Document ID"
+        "description": "Document ID (UUID), slug, or title (exact case-insensitive match)"
       }
     ]
   },
@@ -8126,8 +21743,106 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
     ]
   },
   {
-    "mcp_tool": "brief_update",
-    "description": "Update Brief document metadata. Provide only the fields to change.",
+    "mcp_tool": "brief_semantic_search",
+    "description": "Semantic (vector) search over Brief documents. Falls back to full-text search when the vector index is unavailable.",
+    "source": "brief",
+    "parameters": [
+      {
+        "name": "q",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Search query text (max 500 chars)"
+      },
+      {
+        "name": "limit",
+        "type": "number",
+        "format": "integer",
+        "required": false,
+        "nullable": false,
+        "description": "Max results (default 20, max 50)"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "brief_star",
+    "description": "Toggle the calling user's star on a Brief document.",
+    "source": "brief",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Document ID (UUID), slug, or title (exact case-insensitive match)"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "brief_starred",
+    "description": "List the calling user's starred Brief documents.",
+    "source": "brief",
+    "parameters": []
+  },
+  {
+    "mcp_tool": "brief_stats",
+    "description": "Get org-wide Brief document statistics (counts by status, totals, etc.).",
+    "source": "brief",
+    "parameters": []
+  },
+  {
+    "mcp_tool": "brief_template_create",
+    "description": "Create an organization-level Brief document template.",
+    "source": "brief",
+    "parameters": [
+      {
+        "name": "name",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Template name (1-255 chars)"
+      },
+      {
+        "name": "description",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Template description (max 2000 chars)"
+      },
+      {
+        "name": "icon",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Template icon (emoji or icon name)"
+      },
+      {
+        "name": "category",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Template category"
+      },
+      {
+        "name": "html_preview",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Template body / preview HTML"
+      },
+      {
+        "name": "sort_order",
+        "type": "number",
+        "format": "integer",
+        "required": false,
+        "nullable": false,
+        "description": "Sort order within the template list"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "brief_template_delete",
+    "description": "Delete an organization Brief document template.",
     "source": "brief",
     "parameters": [
       {
@@ -8136,7 +21851,85 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
         "format": "uuid",
         "required": true,
         "nullable": false,
-        "description": "Document ID"
+        "description": "Template UUID"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "brief_template_update",
+    "description": "Update an organization Brief document template. Provide only the fields to change.",
+    "source": "brief",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Template UUID"
+      },
+      {
+        "name": "name",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Updated name"
+      },
+      {
+        "name": "description",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Updated description"
+      },
+      {
+        "name": "icon",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Updated icon"
+      },
+      {
+        "name": "category",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Updated category"
+      },
+      {
+        "name": "html_preview",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Updated body / preview HTML"
+      },
+      {
+        "name": "sort_order",
+        "type": "number",
+        "format": "integer",
+        "required": false,
+        "nullable": false,
+        "description": "Updated sort order"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "brief_templates_list",
+    "description": "List the available Brief document templates (system + org).",
+    "source": "brief",
+    "parameters": []
+  },
+  {
+    "mcp_tool": "brief_update",
+    "description": "Update Brief document metadata. Provide only the fields to change.",
+    "source": "brief",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Document ID (UUID), slug, or title (exact case-insensitive match)"
       },
       {
         "name": "title",
@@ -8202,10 +21995,9 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
       {
         "name": "id",
         "type": "string",
-        "format": "uuid",
         "required": true,
         "nullable": false,
-        "description": "Document ID"
+        "description": "Document ID (UUID), slug, or title (exact case-insensitive match)"
       },
       {
         "name": "content",
@@ -8217,6 +22009,64 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
     ]
   },
   {
+    "mcp_tool": "brief_version_create",
+    "description": "Create a named version snapshot of a Brief document at its current state.",
+    "source": "brief",
+    "parameters": [
+      {
+        "name": "document_id",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Document ID (UUID), slug, or title (exact case-insensitive match)"
+      },
+      {
+        "name": "title",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Snapshot label (max 512 chars)"
+      },
+      {
+        "name": "change_summary",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "What changed since the last version (max 1000 chars)"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "brief_version_diff",
+    "description": "Compute a line-by-line diff between two versions of a Brief document.",
+    "source": "brief",
+    "parameters": [
+      {
+        "name": "document_id",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Document ID (UUID), slug, or title (exact case-insensitive match)"
+      },
+      {
+        "name": "version_id_1",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "First (older) version ID"
+      },
+      {
+        "name": "version_id_2",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Second (newer) version ID"
+      }
+    ]
+  },
+  {
     "mcp_tool": "brief_version_get",
     "description": "Get a specific version of a Brief document.",
     "source": "brief",
@@ -8224,10 +22074,9 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
       {
         "name": "document_id",
         "type": "string",
-        "format": "uuid",
         "required": true,
         "nullable": false,
-        "description": "Document ID"
+        "description": "Document ID (UUID), slug, or title (exact case-insensitive match)"
       },
       {
         "name": "version_id",
@@ -8247,10 +22096,9 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
       {
         "name": "document_id",
         "type": "string",
-        "format": "uuid",
         "required": true,
         "nullable": false,
-        "description": "Document ID"
+        "description": "Document ID (UUID), slug, or title (exact case-insensitive match)"
       },
       {
         "name": "version_id",
@@ -8270,10 +22118,3256 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
       {
         "name": "document_id",
         "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Document ID (UUID), slug, or title (exact case-insensitive match)"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bulwark_chase_compliance",
+    "description": "Draft a chase for a missing or expiring compliance document (POST /compliance-docs/:id/chase). The resulting agent_proposals row IS the human-in-the-loop (an operator approves-and-sends), so there is no confirm_action here.",
+    "source": "bulwark",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
         "format": "uuid",
         "required": true,
         "nullable": false,
-        "description": "Document ID"
+        "description": ""
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bulwark_check_notice_risk",
+    "description": "Assess notice / waiver-risk exposure for a job (project) or contract: fans out to GET /deadlines and GET /waiver-risks, returning open deadlines with due dates plus detected waiver risks (clock_running_out, overdue, unbound_obligation, missing_compliance_doc). Pass asker_user_id so bulwark-api narrows both lists to what that human may see (fail-closed). The notice_draft body is only present for bulwark.notice.draft holders.",
+    "source": "bulwark",
+    "parameters": [
+      {
+        "name": "project_id",
+        "type": "string",
+        "format": "uuid",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "contract_id",
+        "type": "string",
+        "format": "uuid",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "due_before",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "ISO timestamp; only deadlines due before this."
+      },
+      {
+        "name": "limit",
+        "type": "number",
+        "format": "integer",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bulwark_confirm_obligation",
+    "description": "Confirm, edit, or bind an obligation (PATCH /obligations/:id). Set review_status='confirmed' to accept it (which arms it once its binding is complete), and/or edit its type, title, event_binding, deadline_rule, or mandated_doc_types, and/or bind an amendment obligation to the base it supersedes. To REJECT an obligation use bulwark_reject_obligation instead (that path is confirm-gated). Pass asker_user_id to forward the acting human for the source-scoped preflight.",
+    "source": "bulwark",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "review_status",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "title",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "mandated_doc_types",
+        "type": "array",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "supersedes_obligation_id",
+        "type": "string",
+        "format": "uuid",
+        "required": false,
+        "nullable": true,
+        "description": ""
+      },
+      {
+        "name": "supersession_outcome",
+        "type": "enum",
+        "enum": [
+          "restate",
+          "terminate"
+        ],
+        "required": false,
+        "nullable": false,
+        "description": ""
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bulwark_delete_contract",
+    "description": "Delete a contract and its obligation ledger (destructive). Two-step confirm: call once WITHOUT confirm_token to stage a Redis-backed token, then call again WITH the returned confirm_token to execute the delete.",
+    "source": "bulwark",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "confirm_token",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Confirmation token from a prior staging call. Required to execute the delete."
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bulwark_discard_notice",
+    "description": "Discard a bad notice DRAFT (POST /deadlines/:id/discard-notice); sets notice_status=discarded WITHOUT waiving or discharging the obligation clock - the deadline stays open and can be re-drafted. This is the clean \"reject draft\" action; it is NOT bulwark_waive_deadline, which forgoes the obligation entirely. Two-step confirm: call once WITHOUT confirm_token to stage a Redis-backed token, then call again WITH the returned confirm_token to execute.",
+    "source": "bulwark",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "confirm_token",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Confirmation token from a prior staging call. Required to execute the discard."
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bulwark_draft_notice",
+    "description": "Draft a notice for a deadline (POST /deadlines/:id/draft-notice). The LLM produces only subject + body_markdown; the recipient and attachments are deterministic and stamped at send. The resulting agent_proposals row IS the human-in-the-loop (an operator approves-and-sends), so there is no confirm_action here.",
+    "source": "bulwark",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": ""
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bulwark_extract_obligations",
+    "description": "Register a contract document and extract its clause-cited obligation ledger, or re-run extraction on an existing contract. Provide EITHER contract_id (re-extract an existing contract via POST /contracts/:id/extract) OR the new-contract fields including bin_asset_id + title (create via POST /contracts, which can_access-preflights the Bin asset and auto-enqueues extraction). Extraction is async; poll bulwark_get_contract for extraction_status and the obligations rollup. The flagship Bulwark operation.",
+    "source": "bulwark",
+    "parameters": [
+      {
+        "name": "contract_id",
+        "type": "string",
+        "format": "uuid",
+        "required": false,
+        "nullable": false,
+        "description": "Existing contract to re-extract. Mutually exclusive with the create fields."
+      },
+      {
+        "name": "bin_asset_id",
+        "type": "string",
+        "format": "uuid",
+        "required": false,
+        "nullable": false,
+        "description": "The executed document in Bin. Required (with title) when creating a new contract."
+      },
+      {
+        "name": "title",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "project_id",
+        "type": "string",
+        "format": "uuid",
+        "required": false,
+        "nullable": true,
+        "description": ""
+      },
+      {
+        "name": "supersedes_contract_id",
+        "type": "string",
+        "format": "uuid",
+        "required": false,
+        "nullable": true,
+        "description": ""
+      },
+      {
+        "name": "timezone",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "jurisdiction",
+        "type": "string",
+        "required": false,
+        "nullable": true,
+        "description": ""
+      },
+      {
+        "name": "counterparty_type",
+        "type": "string",
+        "required": false,
+        "nullable": true,
+        "description": ""
+      },
+      {
+        "name": "counterparty_id",
+        "type": "string",
+        "format": "uuid",
+        "required": false,
+        "nullable": true,
+        "description": ""
+      },
+      {
+        "name": "effective_date",
+        "type": "string",
+        "required": false,
+        "nullable": true,
+        "description": ""
+      },
+      {
+        "name": "expiry_date",
+        "type": "string",
+        "required": false,
+        "nullable": true,
+        "description": ""
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bulwark_get_contract",
+    "description": "Get one contract with its embedded obligation ledger and a rollup (obligation counts by review state, open/missed deadline counts), so /contracts/:id/obligations needs no separate tool. Pass asker_user_id to narrow to what that human may see (fail-closed).",
+    "source": "bulwark",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": ""
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bulwark_get_obligation",
+    "description": "Get one obligation with its cited clause span, event binding, deadline rule, and review state. Pass asker_user_id to narrow to what that human may see (fail-closed).",
+    "source": "bulwark",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": ""
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bulwark_list_compliance",
+    "description": "List compliance documents (COI, W-9, lien waiver, certified payroll, ...) with their collection, validity, and chase state. Filter by vendor_tier_id, validity_status, and doc_type.",
+    "source": "bulwark",
+    "parameters": [
+      {
+        "name": "vendor_tier_id",
+        "type": "string",
+        "format": "uuid",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bulwark_list_contracts",
+    "description": "List contracts for the org (project-scoped to what the caller may act on). Filter by status and project_id; cursor-paginated.",
+    "source": "bulwark",
+    "parameters": [
+      {
+        "name": "project_id",
+        "type": "string",
+        "format": "uuid",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "cursor",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "limit",
+        "type": "number",
+        "format": "integer",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bulwark_list_deadlines",
+    "description": "List event-bound deadlines (project-scoped). Filter by status, contract_id, project_id, and due_before; cursor-paginated. The notice_draft body is only present for bulwark.notice.draft holders.",
+    "source": "bulwark",
+    "parameters": [
+      {
+        "name": "contract_id",
+        "type": "string",
+        "format": "uuid",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "project_id",
+        "type": "string",
+        "format": "uuid",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "due_before",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "ISO timestamp; only deadlines due before this."
+      },
+      {
+        "name": "cursor",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "limit",
+        "type": "number",
+        "format": "integer",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bulwark_list_obligations",
+    "description": "List obligations across the org (project-scoped). Filter by review_status, obligation_type, and contract_id; sort=-confidence to surface the least-certain extractions first; cursor-paginated.",
+    "source": "bulwark",
+    "parameters": [
+      {
+        "name": "contract_id",
+        "type": "string",
+        "format": "uuid",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "sort",
+        "type": "enum",
+        "enum": [
+          "-confidence"
+        ],
+        "required": false,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "cursor",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "limit",
+        "type": "number",
+        "format": "integer",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bulwark_reject_obligation",
+    "description": "Reject an obligation (PATCH /obligations/:id with review_status=rejected; destructive - disarms it). Two-step confirm: call once WITHOUT confirm_token to stage a Redis-backed token, then call again WITH the returned confirm_token to execute. Pass asker_user_id to forward the acting human for the source-scoped preflight.",
+    "source": "bulwark",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "confirm_token",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Confirmation token from a prior staging call. Required to execute the reject."
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bulwark_trigger_obligation",
+    "description": "Manually trigger a confirmed obligation (POST /obligations/:id/trigger), materializing a deadline anchored at occurred_at. For unbound / no-project obligations that no event bus will fire (DI7). Pass asker_user_id to forward the acting human for the source-scoped preflight.",
+    "source": "bulwark",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "occurred_at",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "ISO timestamp the triggering event is deemed to have occurred at."
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bulwark_waive_deadline",
+    "description": "Waive an open deadline (POST /deadlines/:id/discharge with outcome=waived; destructive - forgoes the obligation and may waive a claim). Two-step confirm: call once WITHOUT confirm_token to stage a Redis-backed token, then call again WITH the returned confirm_token to execute. Pass asker_user_id to forward the acting human for the source-scoped preflight.",
+    "source": "bulwark",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "reason",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "confirm_token",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Confirmation token from a prior staging call. Required to execute the waive."
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bureau_assign_office",
+    "description": "Assign a Bureau room (office) to a user as its owner — the user becomes the room's occupant and knock target. Org admins/owners only (gated server-side; non-admins get 403). The target user must be an active member of the org. Assignment is org-scoped; any non-archived room can be assigned (the floor designer may repurpose a huddle as an office), though the admin offices view only surfaces type='office' rooms.",
+    "source": "bureau",
+    "parameters": [
+      {
+        "name": "room_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Room id to assign"
+      },
+      {
+        "name": "user_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "User id to make the owner/occupant"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bureau_book_room",
+    "description": "Reserve a Bureau room for a time window. The booking writes a bureau_bookings row, anchors it to a Book event (best-effort — falls back to a self-minted uuid if book-api is down), and schedules two BullMQ jobs: one at starts_at that flips the room privacy override to 'private' and emits room.booked, one at ends_at that clears the override. `access: 'locked'` keeps the room private for the booking; `access: 'open'` lets anyone wander in. HIGH-IMPACT — requires confirm_action=true to actually proceed. Call once with confirm_action: false (or omit) to preview the booking, then call again with true to commit.",
+    "source": "bureau",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Room id to book"
+      },
+      {
+        "name": "title",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Booking title shown in calendars"
+      },
+      {
+        "name": "starts_at",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Start time (ISO-8601 with offset)"
+      },
+      {
+        "name": "ends_at",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "End time (ISO-8601 with offset)"
+      },
+      {
+        "name": "access",
+        "type": "enum",
+        "enum": [
+          "open",
+          "locked"
+        ],
+        "required": false,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "book_event_id",
+        "type": "string",
+        "format": "uuid",
+        "required": false,
+        "nullable": false,
+        "description": "Optional Book event id to anchor against (skips the internal book-api call)"
+      },
+      {
+        "name": "confirm_action",
+        "type": "boolean",
+        "required": true,
+        "nullable": false,
+        "description": "Must be true to actually book. Call once with false (or omit) to preview, then call again with true."
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bureau_cancel_booking",
+    "description": "Cancel a Bureau booking (sets cancelled_at, removes the lifecycle jobs, best-effort cancels the linked Book event). Cancellation is a soft delete — the row stays for auditability. Requires confirm_action=true to actually cancel. Call once with confirm_action: false (or omit) to preview, then call again with true. This affects calendar invites and may notify attendees via Book.",
+    "source": "bureau",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Booking id to cancel"
+      },
+      {
+        "name": "confirm_action",
+        "type": "boolean",
+        "required": true,
+        "nullable": false,
+        "description": "Must be true to actually cancel. Call once with false (or omit) to preview."
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bureau_create_floor",
+    "description": "Create a new Bureau floor. Org admins/owners only (gated server-side; non-admins receive 403). `slug` is the URL-safe identifier — lowercase alphanumeric with dashes, 1-140 chars. `is_default: true` marks the floor as the org's landing floor (only one can be default at a time). `layout` is a free-form JSON describing the floor's wallpaper/rooms-arrangement for the Canvas2D floor view; pass {} for an empty layout that admins fill in via the UI.",
+    "source": "bureau",
+    "parameters": [
+      {
+        "name": "name",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Display name"
+      },
+      {
+        "name": "slug",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "URL slug — lowercase alphanumeric with dashes"
+      },
+      {
+        "name": "layout",
+        "type": "object",
+        "required": false,
+        "nullable": false,
+        "description": "Free-form Canvas2D layout payload (rooms-arrangement, wallpaper, etc.)"
+      },
+      {
+        "name": "background_url",
+        "type": "string",
+        "required": false,
+        "nullable": true,
+        "description": "Optional floor background image URL"
+      },
+      {
+        "name": "building_id",
+        "type": "string",
+        "format": "uuid",
+        "required": false,
+        "nullable": true,
+        "description": "Optional building this floor belongs to (for multi-building orgs)"
+      },
+      {
+        "name": "position",
+        "type": "number",
+        "format": "integer",
+        "required": false,
+        "nullable": false,
+        "description": "Sort order in the floor list (lower = earlier)"
+      },
+      {
+        "name": "is_default",
+        "type": "boolean",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bureau_create_room",
+    "description": "Create a new Bureau room on an existing floor. `type` is the room kind: 'office' (single-occupant, can be knocked on), 'huddle' / 'conference' / 'meeting' / 'open' / 'lounge' / 'focus' / 'lobby'. `privacy_default` controls the door state at boot ('open' | 'knock' | 'private'). `bookable: true` makes the room appear in bureau_book_room. `owner_id` is required for type='office' so the knock system has someone to admit visitors. Server-side gate: org admins/owners can always create; non-admins only if bureau_settings.members_can_create_rooms is true.",
+    "source": "bureau",
+    "parameters": [
+      {
+        "name": "name",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Room display name"
+      },
+      {
+        "name": "type",
+        "type": "enum",
+        "enum": [
+          "office",
+          "huddle",
+          "conference",
+          "meeting",
+          "open",
+          "lounge",
+          "focus",
+          "lobby"
+        ],
+        "required": true,
+        "nullable": false,
+        "description": "Room kind"
+      },
+      {
+        "name": "floor_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Parent floor id"
+      },
+      {
+        "name": "capacity",
+        "type": "number",
+        "format": "integer",
+        "required": false,
+        "nullable": true,
+        "description": "Static capacity ceiling; live occupancy is enforced separately"
+      },
+      {
+        "name": "privacy_default",
+        "type": "enum",
+        "enum": [
+          "open",
+          "knock",
+          "private"
+        ],
+        "required": false,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "bookable",
+        "type": "boolean",
+        "required": false,
+        "nullable": false,
+        "description": "Whether the room can be reserved via bureau_book_room (default false)"
+      },
+      {
+        "name": "zone_id",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Zone identifier within the floor — groups rooms for layout / Canvas2D rendering"
+      },
+      {
+        "name": "owner_id",
+        "type": "string",
+        "format": "uuid",
+        "required": false,
+        "nullable": true,
+        "description": ""
+      },
+      {
+        "name": "metadata",
+        "type": "object",
+        "required": false,
+        "nullable": false,
+        "description": "Arbitrary structured metadata attached to the room"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bureau_delete_floor",
+    "description": "Soft-delete (archive) a Bureau floor. Org admins/owners only (gated server-side). This is a soft delete — the row stays and can be restored with bureau_update_floor (archived_at: null). Archiving a floor hides it and its rooms from the floor view. Requires confirm_action=true to actually delete. Call once with confirm_action: false (or omit) to preview, then call again with true.",
+    "source": "bureau",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Floor id to archive"
+      },
+      {
+        "name": "confirm_action",
+        "type": "boolean",
+        "required": true,
+        "nullable": false,
+        "description": "Must be true to actually archive. Call once with false (or omit) to preview."
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bureau_delete_room",
+    "description": "Soft-delete (archive) a Bureau room. Org admins/owners only (gated server-side). This is a soft delete — the row is retained for auditability but the room disappears from the floor and can no longer be entered, booked, or knocked on. Requires confirm_action=true to actually delete. Call once with confirm_action: false (or omit) to preview, then call again with true.",
+    "source": "bureau",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Room id to archive"
+      },
+      {
+        "name": "confirm_action",
+        "type": "boolean",
+        "required": true,
+        "nullable": false,
+        "description": "Must be true to actually archive. Call once with false (or omit) to preview."
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bureau_get_chat_messages",
+    "description": "Recover the transcript of a Bureau room chat by its room key. Access is gated by participation: you can re-read what you were present for; org admins/owners and SuperUsers can additionally read any thread they can name. Returns up to `limit` messages (default 100, max 200), oldest-first within the page; pass `before` (ISO-8601) to page backwards in time.",
+    "source": "bureau",
+    "parameters": [
+      {
+        "name": "room_key",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Chat room key (from bureau_list_chats)"
+      },
+      {
+        "name": "before",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Return messages created before this timestamp (ISO-8601) for pagination"
+      },
+      {
+        "name": "limit",
+        "type": "number",
+        "format": "integer",
+        "required": false,
+        "nullable": false,
+        "description": "Max messages to return (default 100, max 200)"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bureau_get_floor",
+    "description": "Fetch a single Bureau floor by id, including its rooms array (with live per-room occupancy), background image, and layout JSON. Use this to render the floor view or to enumerate rooms before bureau_who_is_in_room / bureau_move_self.",
+    "source": "bureau",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Floor id"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bureau_get_presence",
+    "description": "Snapshot the full org-wide Bureau presence map: every user with a live session in the caller's org, with their current room_id, floor_id, status (available/busy/dnd/focus/away/in_meeting), and the surface URL/app they are on. Reads the live Redis presence sessions that drive the floor view and the floating presence widget. An empty list means nobody in your org has a live Bureau session right now. Use bureau_locate_user for a single user, or bureau_who_is_in_room for one room's occupants.",
+    "source": "bureau",
+    "parameters": []
+  },
+  {
+    "mcp_tool": "bureau_get_settings",
+    "description": "Get the org-wide Bureau settings (continuous_audio, allow_auto_follow, default_office_privacy, members_can_book, members_can_create_rooms). Creates and returns a default row if none exists yet. Readable by any member; mutating requires bureau_update_settings (admin/owner).",
+    "source": "bureau",
+    "parameters": []
+  },
+  {
+    "mcp_tool": "bureau_get_summon",
+    "description": "Fetch a summon audit row by id: who summoned, from which room, the target URL/app, and the eligible/denied recipient lists. Only the original summoner (or an org admin/owner) may read it. Use this after bureau_summon to inspect who was eligible vs denied, then optionally bureau_summon_grant_access to grant the denied users and re-summon them.",
+    "source": "bureau",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Summon id"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bureau_knock",
+    "description": "Knock on an office door — creates a pending bureau_knocks row, emits a knock.requested Bolt event, and schedules a 30s timeout that flips the knock to 'timed_out' if the owner does not respond. Only callable on type='office' rooms with an owner; callers cannot knock on their own office. If the owner is currently in DND the call returns 423 Locked with a 'leave a note' follow-up endpoint pointer — agents should surface that to the caller rather than retry blindly.",
+    "source": "bureau",
+    "parameters": [
+      {
+        "name": "room_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Office room id to knock on"
+      },
+      {
+        "name": "message",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Optional visitor message shown to the office owner"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bureau_knock_inbox",
+    "description": "List the pending knocks where the caller is the office owner — i.e. visitors currently waiting at the caller's door. Newest first. Resolve each with bureau_respond_knock (admit/defer/decline). Knocks that timed out (no response within 30s) are not pending and won't appear here.",
+    "source": "bureau",
+    "parameters": []
+  },
+  {
+    "mcp_tool": "bureau_leave_note",
+    "description": "Leave a note for an office owner who is in Do Not Disturb — the DND fallback for bureau_knock (which returns 423 Locked when the owner is in DND). Delivers the message as a Banter DM to the owner, prefixed '[Bureau knock note] '. Only valid for type='office' rooms with an owner; you cannot leave a note on your own office. Returns { delivered: true } when the DM was posted, or { delivered: false } (HTTP 202) if Banter was unreachable and the note was dropped — surface that to the caller rather than assuming success.",
+    "source": "bureau",
+    "parameters": [
+      {
+        "name": "room_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Office room id whose owner should receive the note"
+      },
+      {
+        "name": "message",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "The note text to DM the owner"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bureau_list_bookings",
+    "description": "List the active (non-cancelled) bookings for a Bureau room that overlap the given window. Defaults to the next 7 days from now. Returned bookings include the book_event_id back-link so the caller can cross-reference Book calendar entries.",
+    "source": "bureau",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Room id"
+      },
+      {
+        "name": "from",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Window start (defaults to now)"
+      },
+      {
+        "name": "to",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Window end (defaults to now + 7 days)"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bureau_list_chats",
+    "description": "List the Bureau room-chat threads the caller participated in (the recovery half of room chat — the live half is WS-only). Optional `search` filters by thread. Use the returned room keys with bureau_get_chat_messages to read a transcript.",
+    "source": "bureau",
+    "parameters": [
+      {
+        "name": "search",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Optional search filter over the caller's chat threads"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bureau_list_floors",
+    "description": "List every Bureau floor in the caller's org, including live occupancy counts (from Redis) and the floor's default status. A Bureau floor is the top-level spatial container that holds rooms; orgs typically have one or two floors at first and add buildings/wings as they grow. Use bureau_get_floor for the rooms+layout payload.",
+    "source": "bureau",
+    "parameters": []
+  },
+  {
+    "mcp_tool": "bureau_list_offices",
+    "description": "List every type='office' room across the org's live floors, joined with each office's current owner (display name, email, avatar) and floor name. Org admins/owners only (gated server-side; non-admins get 403). Use this to see who has a personal office before bureau_assign_office.",
+    "source": "bureau",
+    "parameters": []
+  },
+  {
+    "mcp_tool": "bureau_list_rooms",
+    "description": "List rooms across the caller's org (live, non-archived), each joined with its floor name, type, capacity, and bookable flag. Pass bookable: true to restrict to reservable rooms (the set bureau_book_room accepts), or floor_id to scope to one floor. Use this to find a room id to book without walking every floor via bureau_get_floor.",
+    "source": "bureau",
+    "parameters": [
+      {
+        "name": "bookable",
+        "type": "boolean",
+        "required": false,
+        "nullable": false,
+        "description": "When true, return only bookable rooms"
+      },
+      {
+        "name": "floor_id",
+        "type": "string",
+        "format": "uuid",
+        "required": false,
+        "nullable": false,
+        "description": "Restrict to one floor"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bureau_locate_user",
+    "description": "Locate a user inside Bureau: returns their current room_id and floor_id (plus status and the surface URL they are on) if they have a live presence session in the caller's org, or { data: null } when they have none. Backed by the live Redis presence sessions the floor view uses. A null result means 'not currently on Bureau in your org' (offline, or active in a different org). For cross-app location by surface URL (which app/page they are on, with a destination-access preflight) prefer bureau_where_is_user; this tool answers the spatial 'which room/floor' question.",
+    "source": "bureau",
+    "parameters": [
+      {
+        "name": "user_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "User id to locate"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bureau_move_self",
+    "description": "Move the caller into a Bureau room: mints a LiveKit access token for `bureau-room-{id}` and records the session on the server. This is the canonical 'enter a room' tool — calling it is what makes the caller appear in bureau_who_is_in_room and bureau_get_presence. Returns { token, room_name, ws_url } so the client can connect to LiveKit. Token TTL is 3600s. The bureau-api gates the call by privacy (open / knock / private) and ACL; private rooms without an ACL entry return 403.",
+    "source": "bureau",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Target room id"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bureau_my_office",
+    "description": "Return the Bureau room owned by the caller (their personal office), or { data: null } if they have none. Use this to find the caller's home room before bureau_set_door_state or bureau_move_self.",
+    "source": "bureau",
+    "parameters": []
+  },
+  {
+    "mcp_tool": "bureau_respond_knock",
+    "description": "Resolve a pending knock as the office owner: 'admit' (visitor is allowed in — visitor gets a WS push with a fresh LiveKit token), 'defer' (owner is busy now, the knock is parked but visitor is told), or 'decline' (visitor sees a polite rejection). Only the owner_id on the knock row may patch it. Setting status emits knock.resolved on Bolt.",
+    "source": "bureau",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Knock id"
+      },
+      {
+        "name": "decision",
+        "type": "enum",
+        "enum": [
+          "admit",
+          "defer",
+          "decline"
+        ],
+        "required": true,
+        "nullable": false,
+        "description": "Knock resolution"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bureau_set_chat_retention",
+    "description": "Set the retention policy on a Bureau room chat. Org admins/owners and SuperUsers only (gated server-side; others get 403). Provide retention_hours (1..168, i.e. up to one week) to extend, OR retain_forever: true to keep the transcript indefinitely. At least one must be given.",
+    "source": "bureau",
+    "parameters": [
+      {
+        "name": "room_key",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Chat room key"
+      },
+      {
+        "name": "retention_hours",
+        "type": "number",
+        "format": "integer",
+        "required": false,
+        "nullable": false,
+        "description": "Hours to retain the transcript (1..168 = up to one week)"
+      },
+      {
+        "name": "retain_forever",
+        "type": "boolean",
+        "required": false,
+        "nullable": false,
+        "description": "Keep the transcript indefinitely"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bureau_set_door_state",
+    "description": "Update the durable default privacy ('door state') of a room: 'open' (anyone can enter), 'knock' (visitors must knock), or 'private' (ACL-only). Only callable by the office's owner for type='office' rooms, by a room manager for shared rooms, or by org admins/owners. Live overrides (e.g. a short DND window) live in Redis and are managed separately by the bureau-client SDK; this sets the fallback that renders when no override is active.",
+    "source": "bureau",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Room id"
+      },
+      {
+        "name": "privacy",
+        "type": "enum",
+        "enum": [
+          "open",
+          "knock",
+          "private"
+        ],
+        "required": true,
+        "nullable": false,
+        "description": "New default privacy"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bureau_set_floor_background",
+    "description": "Set a Bureau floor's background image URL. Org admins/owners only (gated server-side). This only stores the URL string on the floor row — uploading the image to object storage is a separate concern handled by the UI. Use bureau_update_floor with background_url: null to clear it.",
+    "source": "bureau",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Floor id"
+      },
+      {
+        "name": "background_url",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Background image URL to store on the floor"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bureau_set_status",
+    "description": "Set AND persist the caller's Bureau presence status: 'available', 'busy', 'away', or 'dnd' (Do Not Disturb — knocks are rejected with 423 Locked and the leave-a-note follow-up). The status is stored durably (it survives reconnects and applies even when the caller has no live web session — e.g. an agent setting its own status over MCP) and is fanned out to every live session immediately so the floor view and the floating presence widget repaint at once. Returns { status, live_sessions, persisted } where live_sessions is how many live sessions were updated (0 is normal for an agent with no open floor view; the durable status still persisted). Read it back with bureau_get_presence or bureau_locate_user.",
+    "source": "bureau",
+    "parameters": [
+      {
+        "name": "status",
+        "type": "enum",
+        "enum": [
+          "available",
+          "busy",
+          "away",
+          "dnd"
+        ],
+        "required": true,
+        "nullable": false,
+        "description": "Presence status to set"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bureau_summon",
+    "description": "Summon every eligible occupant of the caller's current Bureau room to a URL in another product (Board, Brief, Bond, etc.). The bureau-api runs cross-app access checks for each recipient against the target_url so denied users are NOT pinged with a dead-link; their ids land on the denied list so the summoner can offer §4.4 'grant access' as a follow-up via bureau_summon's denied_count. HIGH IMPACT — this DMs every eligible co-occupant in real time. Requires confirm_action=true to actually summon. Call once with confirm_action: false (or omit) to preview, then call again with true. The caller MUST be in a Bureau room or the call fails with 400.",
+    "source": "bureau",
+    "parameters": [
+      {
+        "name": "target_url",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Destination URL the summoned users will be jumped to (e.g. https://app/board/abc?lkRoom=board-room-xyz)"
+      },
+      {
+        "name": "target_app",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "target_label",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "lk_room_hint",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Optional LiveKit room hint so the recipient can join the same room without a second negotiation hop"
+      },
+      {
+        "name": "confirm_action",
+        "type": "boolean",
+        "required": true,
+        "nullable": false,
+        "description": "Must be true to actually summon. Call once with false (or omit) to preview the planned recipients, then call again with true."
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bureau_summon_grant_access",
+    "description": "§4.4 grant-and-summon follow-up: for users who were DENIED on a prior summon (because they lacked access to the target URL), grant them access AND re-summon them in one step. Only the original summoner may call this on their own summon. Get the summon id and the denied user ids from bureau_get_summon. HIGH IMPACT — this grants cross-app access to the target resource AND DMs each user a real-time summon. Requires confirm_action=true to proceed. Call once with confirm_action: false (or omit) to preview, then call again with true.",
+    "source": "bureau",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Summon id to grant access on"
+      },
+      {
+        "name": "user_ids",
+        "type": "array",
+        "required": true,
+        "nullable": false,
+        "description": "User ids (from the summon's denied list) to grant access and re-summon"
+      },
+      {
+        "name": "confirm_action",
+        "type": "boolean",
+        "required": true,
+        "nullable": false,
+        "description": "Must be true to actually grant + summon. Call once with false (or omit) to preview."
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bureau_update_booking",
+    "description": "Update a Bureau booking's title, time window, or access. Provide only the fields to change. Only the organizer or an org admin/owner may update a booking; cancelled bookings cannot be edited. Changing the window re-schedules the lifecycle jobs (privacy lock at starts_at, release at ends_at). To get a booking id, use bureau_list_bookings on the room (there is no standalone booking GET).",
+    "source": "bureau",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Booking id"
+      },
+      {
+        "name": "title",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Updated booking title"
+      },
+      {
+        "name": "starts_at",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Updated start time (ISO-8601 with offset)"
+      },
+      {
+        "name": "ends_at",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Updated end time (ISO-8601 with offset)"
+      },
+      {
+        "name": "access",
+        "type": "enum",
+        "enum": [
+          "open",
+          "locked"
+        ],
+        "required": false,
+        "nullable": false,
+        "description": ""
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bureau_update_floor",
+    "description": "Update a Bureau floor's metadata. Provide only the fields to change. Org admins/owners only (gated server-side; non-admins get 403). To UNARCHIVE a soft-deleted floor, pass archived_at: null — that is the only PATCH that can target an archived floor, and it is the symmetric undo of bureau_delete_floor. Any field-only PATCH (name/layout/etc.) requires the floor to be live. `slug` and `building_id` are immutable here (set them at create time).",
+    "source": "bureau",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Floor id"
+      },
+      {
+        "name": "name",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Updated display name"
+      },
+      {
+        "name": "layout",
+        "type": "object",
+        "required": false,
+        "nullable": false,
+        "description": "Updated free-form Canvas2D layout payload"
+      },
+      {
+        "name": "background_url",
+        "type": "string",
+        "required": false,
+        "nullable": true,
+        "description": "Updated floor background image URL (null clears it)"
+      },
+      {
+        "name": "position",
+        "type": "number",
+        "format": "integer",
+        "required": false,
+        "nullable": false,
+        "description": "Updated sort order (lower = earlier)"
+      },
+      {
+        "name": "is_default",
+        "type": "boolean",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "archived_at",
+        "type": "null",
+        "required": false,
+        "nullable": false,
+        "description": "Pass null to unarchive (restore) a soft-deleted floor. No other value is accepted."
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bureau_update_room",
+    "description": "Update fields on a Bureau room. Provide only the fields to change. Server-side gate: org admins/owners, the office's owner_id (for type='office'), or a room manager via bureau_room_acl. To change the live door state use bureau_set_door_state instead — this tool only updates the durable defaults.",
+    "source": "bureau",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Room id"
+      },
+      {
+        "name": "name",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Updated display name"
+      },
+      {
+        "name": "type",
+        "type": "enum",
+        "enum": [
+          "office",
+          "huddle",
+          "conference",
+          "meeting",
+          "open",
+          "lounge",
+          "focus",
+          "lobby"
+        ],
+        "required": false,
+        "nullable": false,
+        "description": "Updated room kind"
+      },
+      {
+        "name": "capacity",
+        "type": "number",
+        "format": "integer",
+        "required": false,
+        "nullable": true,
+        "description": "Updated capacity (null clears the cap)"
+      },
+      {
+        "name": "privacy_default",
+        "type": "enum",
+        "enum": [
+          "open",
+          "knock",
+          "private"
+        ],
+        "required": false,
+        "nullable": false,
+        "description": "Updated default door privacy"
+      },
+      {
+        "name": "bookable",
+        "type": "boolean",
+        "required": false,
+        "nullable": false,
+        "description": "Updated bookable flag"
+      },
+      {
+        "name": "zone_id",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Updated zone id"
+      },
+      {
+        "name": "owner_id",
+        "type": "string",
+        "format": "uuid",
+        "required": false,
+        "nullable": true,
+        "description": ""
+      },
+      {
+        "name": "metadata",
+        "type": "object",
+        "required": false,
+        "nullable": false,
+        "description": "Updated metadata JSON"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bureau_update_settings",
+    "description": "Update the org-wide Bureau settings. Org admins/owners only (gated server-side; non-admins get 403). Provide only the fields to change. `members_can_book` gates whether non-admins may reserve rooms; `members_can_create_rooms` gates whether non-admins may create rooms; `default_office_privacy` is the door state new offices boot with.",
+    "source": "bureau",
+    "parameters": [
+      {
+        "name": "continuous_audio",
+        "type": "boolean",
+        "required": false,
+        "nullable": false,
+        "description": "Whether always-on spatial audio is enabled for the org"
+      },
+      {
+        "name": "allow_auto_follow",
+        "type": "boolean",
+        "required": false,
+        "nullable": false,
+        "description": "Whether auto-follow (being pulled along on navigation) is permitted"
+      },
+      {
+        "name": "default_office_privacy",
+        "type": "enum",
+        "enum": [
+          "open",
+          "knock",
+          "private"
+        ],
+        "required": false,
+        "nullable": false,
+        "description": "Default door privacy new offices boot with"
+      },
+      {
+        "name": "members_can_book",
+        "type": "boolean",
+        "required": false,
+        "nullable": false,
+        "description": "Whether non-admin members may book rooms"
+      },
+      {
+        "name": "members_can_create_rooms",
+        "type": "boolean",
+        "required": false,
+        "nullable": false,
+        "description": "Whether non-admin members may create rooms"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bureau_where_is_user",
+    "description": "Locate a specific user ('Hunt'): returns the URL/app/label/status of the surface the target user is currently on, so the caller can jump to them. Returns { data: { located: true, url, app, label, status } } or { data: { located: false } } when the user is offline, in Do Not Disturb, in a different org right now, or on a surface the CALLER cannot see (denial is indistinguishable from absence). This is the real, implemented locate endpoint (unlike the bureau_locate_user stub); prefer this tool. The target must share the caller's active org.",
+    "source": "bureau",
+    "parameters": [
+      {
+        "name": "user_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "User id to locate"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bureau_who_is_here",
+    "description": "Co-presence by URL: list OTHER users currently on the same content surface (the given canonical URL) according to their live Bureau session — for the 'X others here' chip and starting a huddle. Deduped by user (multiple devices collapse to one), excludes the caller, and access-filtered: if the CALLER cannot see the destination URL the result is empty. This reads live, ephemeral presence state; an empty list means nobody else is reporting that exact URL right now.",
+    "source": "bureau",
+    "parameters": [
+      {
+        "name": "url",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Canonical surface URL to check co-presence on (must match what the SDK reports)"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bureau_who_is_in_room",
+    "description": "Get a room's detail and its current occupants (user_ids of every live Bureau session present in the room). Access-filtered: the bureau-api applies the same evaluator used for room-entry, so private rooms return 404 to callers who are not on the ACL. Use this BEFORE bureau_summon or bureau_knock so an agent can decide who would actually be summoned/disturbed.",
+    "source": "bureau",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Room id"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "burn_attribute",
+    "description": "Attribute one work item to a deliverable, or mark it unscoped / non-billable (POST /attributions). Use the single-item form rather than a bulk call so each decision is individually auditable.",
+    "source": "burn",
+    "parameters": [
+      {
+        "name": "work_item_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "deliverable_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": true,
+        "description": ""
+      },
+      {
+        "name": "rationale",
+        "type": "string",
+        "required": false,
+        "nullable": true,
+        "description": ""
+      }
+    ]
+  },
+  {
+    "mcp_tool": "burn_calibration_report",
+    "description": "Standing against all seven preconditions for promoting the gate from advisory to blocking, plus gate coverage over the trailing 7 days (GET /calibration). Each unmet precondition names its own shortfall. Advisory is a complete product: an org with no promotion path still gets the queue, the variance inbox, change-order drafts, and the financial figures.",
+    "source": "burn",
+    "parameters": []
+  },
+  {
+    "mcp_tool": "burn_confirm_deliverable",
+    "description": "Confirm or edit an extracted deliverable: title, description, kind, due date, review_status, lifecycle_status (PATCH /deliverables/:id). IT CANNOT SET THE ENVELOPE OR ACTIVATE THE DELIVERABLE. Pricing an envelope and flipping is_active are human-only and are not agent-reachable by any path; a service-account attempt on the confirm-envelope route produces an approval-queue proposal instead of a write.",
+    "source": "burn",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "title",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "description",
+        "type": "string",
+        "required": false,
+        "nullable": true,
+        "description": ""
+      },
+      {
+        "name": "due_date",
+        "type": "string",
+        "required": false,
+        "nullable": true,
+        "description": ""
+      },
+      {
+        "name": "review_status",
+        "type": "enum",
+        "enum": [
+          "pending_review",
+          "confirmed",
+          "superseded"
+        ],
+        "required": false,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "lifecycle_status",
+        "type": "enum",
+        "enum": [
+          "open",
+          "complete",
+          "closed"
+        ],
+        "required": false,
+        "nullable": false,
+        "description": ""
+      }
+    ]
+  },
+  {
+    "mcp_tool": "burn_delete_engagement",
+    "description": "Delete an engagement and its deliverables (destructive). Refused when the row is a chain root with live amendments, because deleting it would detach their consumption from every rollup. Two-step confirm: call once WITHOUT confirm_token to stage a Redis-backed token, then call again WITH the returned confirm_token to execute.",
+    "source": "burn",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "confirm_token",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Confirmation token from a prior staging call. Required to execute the delete."
+      }
+    ]
+  },
+  {
+    "mcp_tool": "burn_draft_change_order",
+    "description": "Draft a change order against an engagement, optionally resolving a variance (POST /change-orders). THE DRAFT IS NEVER SENT: it becomes a pending row in the human approval queue, and that queue IS the confirmation step, which is why this tool takes no confirm_token. On approval it creates the amendment engagement and deliverable, which raises the base deliverable effective envelope so the next precheck allows the charge that was blocked.",
+    "source": "burn",
+    "parameters": [
+      {
+        "name": "engagement_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "deliverable_id",
+        "type": "string",
+        "format": "uuid",
+        "required": false,
+        "nullable": true,
+        "description": ""
+      },
+      {
+        "name": "variance_id",
+        "type": "string",
+        "format": "uuid",
+        "required": false,
+        "nullable": true,
+        "description": ""
+      },
+      {
+        "name": "note",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      }
+    ]
+  },
+  {
+    "mcp_tool": "burn_extract_deliverables",
+    "description": "Register an engagement document and extract its deliverables, or re-run extraction on an existing chain. Provide EITHER engagement_id (re-extract via POST /engagements/:id/extract) OR the new-engagement fields including title (create via POST /engagements, which can_access-preflights the Bin asset). Extraction is async. NOTE: extracted deliverables land as pending_review with NO envelope; pricing them is a human-only step (see burn_confirm_deliverable).",
+    "source": "burn",
+    "parameters": [
+      {
+        "name": "engagement_id",
+        "type": "string",
+        "format": "uuid",
+        "required": false,
+        "nullable": false,
+        "description": "Existing chain to re-extract. Mutually exclusive with the create fields."
+      },
+      {
+        "name": "title",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "contract_value",
+        "type": "number",
+        "format": "integer",
+        "required": false,
+        "nullable": true,
+        "description": "Minor units"
+      },
+      {
+        "name": "currency",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "period_length_days",
+        "type": "number",
+        "format": "integer",
+        "required": false,
+        "nullable": true,
+        "description": ""
+      },
+      {
+        "name": "bin_asset_id",
+        "type": "string",
+        "format": "uuid",
+        "required": false,
+        "nullable": true,
+        "description": ""
+      },
+      {
+        "name": "account_type",
+        "type": "string",
+        "required": false,
+        "nullable": true,
+        "description": ""
+      },
+      {
+        "name": "account_id",
+        "type": "string",
+        "format": "uuid",
+        "required": false,
+        "nullable": true,
+        "description": ""
+      },
+      {
+        "name": "bill_client_id",
+        "type": "string",
+        "format": "uuid",
+        "required": false,
+        "nullable": true,
+        "description": ""
+      },
+      {
+        "name": "amends_engagement_id",
+        "type": "string",
+        "format": "uuid",
+        "required": false,
+        "nullable": true,
+        "description": ""
+      },
+      {
+        "name": "start_date",
+        "type": "string",
+        "required": false,
+        "nullable": true,
+        "description": ""
+      },
+      {
+        "name": "end_date",
+        "type": "string",
+        "required": false,
+        "nullable": true,
+        "description": ""
+      },
+      {
+        "name": "timezone",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "project_ids",
+        "type": "array",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      }
+    ]
+  },
+  {
+    "mcp_tool": "burn_financials",
+    "description": "Financial figures for one engagement chain, or the firm-wide account roll-up with all_accounts=true (GET /financials, /financials/accounts). THE RESPONSE IS A DISCRIMINATED UNION on metric_basis and you MUST read that discriminator before reading any number. Under `true_margin` the figures are margin. Under `contract_consumption` there is NO margin key at all -- the number is how much of the contract value has been consumed, which is a different quantity, and reporting it as margin is wrong. Under `suppressed` the caller lacks burn.financials.read_all or the chain is below the contributor floor, and only contract_consumption_pct is present.",
+    "source": "burn",
+    "parameters": [
+      {
+        "name": "engagement_id",
+        "type": "string",
+        "format": "uuid",
+        "required": false,
+        "nullable": false,
+        "description": "The chain to report on. Omit only when all_accounts is true."
+      },
+      {
+        "name": "all_accounts",
+        "type": "boolean",
+        "required": false,
+        "nullable": false,
+        "description": "Firm-wide roll-up. Requires burn.financials.read_all plus an owner/admin org role."
+      }
+    ]
+  },
+  {
+    "mcp_tool": "burn_get_engagement",
+    "description": "Fetch one engagement chain with its rollup (GET /engagements/:id). Cited source records are can_access-filtered PER READER, so a document the registrant could open is still dropped for a reader who cannot, and the response reports how many were hidden.",
+    "source": "burn",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": ""
+      }
+    ]
+  },
+  {
+    "mcp_tool": "burn_list_deliverables",
+    "description": "List deliverables / the extraction review queue (GET /deliverables). `description` and the cited clause quote are floored to burn.financials.read_all, and for a caller without it the `q` filter matches TITLE ONLY -- the full-text index covers the floored clause text, so searching it would be a way to read what the response withholds.",
+    "source": "burn",
+    "parameters": [
+      {
+        "name": "engagement_id",
+        "type": "string",
+        "format": "uuid",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "review_status",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "lifecycle_status",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "q",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Matches title only unless the caller holds burn.financials.read_all"
+      },
+      {
+        "name": "cursor",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "limit",
+        "type": "number",
+        "format": "integer",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      }
+    ]
+  },
+  {
+    "mcp_tool": "burn_list_engagements",
+    "description": "List engagement chains (GET /engagements). Project-scoped: a chain linked to no project is visible only to a burn.financials.read_all holder. Contract values are floored for anyone else.",
+    "source": "burn",
+    "parameters": [
+      {
+        "name": "status",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "account_id",
+        "type": "string",
+        "format": "uuid",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "chain_root_id",
+        "type": "string",
+        "format": "uuid",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "cursor",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "limit",
+        "type": "number",
+        "format": "integer",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      }
+    ]
+  },
+  {
+    "mcp_tool": "burn_list_unscoped",
+    "description": "The unscoped-work queue (GET /unscoped). THREE BUCKETS THAT ARE NEVER SUMMED: `sold_by_nobody` is work inside a tracked contract that no deliverable covers; `unclassified` is work the classifier could not place; `outside_contract` is work on a project with no active engagement. They are opposite problems with opposite remedies, so do not add them together or present one total. Amounts are floored without burn.financials.read_all, and cited source records are can_access-filtered per reader with a hidden count.",
+    "source": "burn",
+    "parameters": [
+      {
+        "name": "cursor",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "limit",
+        "type": "number",
+        "format": "integer",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      }
+    ]
+  },
+  {
+    "mcp_tool": "burn_list_variances",
+    "description": "The variance inbox (GET /variances): envelope overruns, unscoped work, silent deliverables, ungated charges, gate outages, and rule overreach. Amounts and every money key nested in the detail object are floored without burn.financials.read_all.",
+    "source": "burn",
+    "parameters": [
+      {
+        "name": "status",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "kind",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "engagement_id",
+        "type": "string",
+        "format": "uuid",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "cursor",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "limit",
+        "type": "number",
+        "format": "integer",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      }
+    ]
+  },
+  {
+    "mcp_tool": "burn_margin",
+    "description": "DEPRECATED alias for burn_financials; use that instead. Returns the identical discriminated response. Note that despite the name, when metric_basis is `contract_consumption` the response carries NO margin key: the figure is contract consumption, not margin.",
+    "source": "burn",
+    "parameters": [
+      {
+        "name": "engagement_id",
+        "type": "string",
+        "format": "uuid",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "all_accounts",
+        "type": "boolean",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      }
+    ]
+  },
+  {
+    "mcp_tool": "burn_override_precheck",
+    "description": "Override a precheck verdict with a typed code and a written reason (POST /prechecks/:id/override). Valid codes are absorbed_cost, mapped_manually, and change_order_pending. IT CANNOT SET gate_wrong: that label drives automatic demotion of the whole gate and is owner/admin human-only, set through a different route.",
+    "source": "burn",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "override_reason_code",
+        "type": "enum",
+        "enum": [
+          "absorbed_cost",
+          "mapped_manually",
+          "change_order_pending"
+        ],
+        "required": true,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "override_reason_text",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Free text. The org configures a minimum length; short reasons are rejected."
+      }
+    ]
+  },
+  {
+    "mcp_tool": "burn_precheck",
+    "description": "Ask whether a proposed charge is allowable against its engagement envelope BEFORE it is committed (POST /precheck). Returns a verdict (allow / allow_with_note / needs_mapping / deny), the target deliverable, a clause cite, and a QUANTIZED overage. Only `deny` blocks, and only when the org has earned blocking mode for this class; `needs_mapping` never blocks. The synchronous path is deterministic-only and issues no model calls. The overage is rounded up to the org bucket and the deny boundary itself is evaluated against a bucket-aligned figure, so repeated probing cannot recover the exact envelope. A per-user daily cap and a per-deliverable probe cap both apply.",
+    "source": "burn",
+    "parameters": [
+      {
+        "name": "work_ref_id",
+        "type": "string",
+        "format": "uuid",
+        "required": false,
+        "nullable": true,
+        "description": "The source record, when it already exists. Null on a true pre-commit check."
+      },
+      {
+        "name": "project_id",
+        "type": "string",
+        "format": "uuid",
+        "required": false,
+        "nullable": true,
+        "description": ""
+      },
+      {
+        "name": "proposed_amount",
+        "type": "number",
+        "format": "integer",
+        "required": true,
+        "nullable": false,
+        "description": "Minor units (cents)"
+      },
+      {
+        "name": "currency",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "title",
+        "type": "string",
+        "required": false,
+        "nullable": true,
+        "description": ""
+      },
+      {
+        "name": "description",
+        "type": "string",
+        "required": false,
+        "nullable": true,
+        "description": ""
+      },
+      {
+        "name": "occurred_at",
+        "type": "string",
+        "required": false,
+        "nullable": true,
+        "description": ""
+      },
+      {
+        "name": "attempt_nonce",
+        "type": "string",
+        "required": false,
+        "nullable": true,
+        "description": "Distinguishes deliberate retries. The idempotency key is server-derived; a caller-supplied key is rejected."
+      }
+    ]
+  },
+  {
+    "mcp_tool": "burn_reclassify_attribution",
+    "description": "Re-decide an existing attribution: move it to a different deliverable, unscope it, or mark it non-billable (PATCH /attributions/:id). Supersede-then-insert, so the previous decision is retained as history. Returns 409 with the current state if the row changed since you read it.",
+    "source": "burn",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "deliverable_id",
+        "type": "string",
+        "format": "uuid",
+        "required": false,
+        "nullable": true,
+        "description": ""
+      },
+      {
+        "name": "rationale",
+        "type": "string",
+        "required": false,
+        "nullable": true,
+        "description": ""
+      },
+      {
+        "name": "updated_at",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "The updated_at you last read. Supplying it turns a concurrent edit into a 409 instead of a silent overwrite."
+      }
+    ]
+  },
+  {
+    "mcp_tool": "burn_reject_deliverable",
+    "description": "Reject an extracted deliverable (PATCH /deliverables/:id with review_status=rejected; destructive - it stops being a valid attribution target and any envelope it carried stops constraining charges). Two-step confirm: call once WITHOUT confirm_token to stage a token, then again WITH it to execute.",
+    "source": "burn",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "confirm_token",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      }
+    ]
+  },
+  {
+    "mcp_tool": "burn_set_gate_mode",
+    "description": "Change the spend-gate mode or pause it (PATCH /settings). A CONFIRM TOKEN IS REQUIRED WHEN THE TARGET WEAKENS ENFORCEMENT -- setting `off`, dropping to `advisory`, or setting gate_paused_until -- because switching the control off is the consequential direction and is how a firm stops noticing it is over-delivering. Promoting to `blocking` needs no token, but it is rejected server-side unless all seven calibration preconditions hold, including an explicit acknowledgement that is deliberately not agent-suppliable.",
+    "source": "burn",
+    "parameters": [
+      {
+        "name": "gate_paused_until",
+        "type": "string",
+        "required": false,
+        "nullable": true,
+        "description": "ISO timestamp. Setting it pauses enforcement and requires a confirm token."
+      },
+      {
+        "name": "gate_enabled_refs",
+        "type": "array",
+        "required": false,
+        "nullable": false,
+        "description": "Which classes enforce. Task-phase and assignment classes are advisory forever and are rejected here."
+      },
+      {
+        "name": "confirm_token",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bursar_draft_clarification",
+    "description": "Draft a vendor clarification letter grounded in a request and (optionally) a specific offer (POST /drafts/clarification -> a confidential bursar_drafts row). THE DRAFT IS NEVER SENT: it lands in the owner-scoped HITL review queue and a human approves or rejects it (bursar.draft.approve, no tool). Grounding is derived server-side by buildDraftGrounding(offer_id, request_id) - you cannot supply arbitrary grounding text, only a request/offer to ground on and a human intent prompt. Two-step confirm because generating grounds confidential offer content: call once WITHOUT confirm_token to stage a token, then again WITH it to execute.",
+    "source": "bursar",
+    "parameters": [
+      {
+        "name": "request_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "offer_id",
+        "type": "string",
+        "format": "uuid",
+        "required": false,
+        "nullable": true,
+        "description": ""
+      },
+      {
+        "name": "vendor_id",
+        "type": "string",
+        "format": "uuid",
+        "required": false,
+        "nullable": true,
+        "description": ""
+      },
+      {
+        "name": "award_id",
+        "type": "string",
+        "format": "uuid",
+        "required": false,
+        "nullable": true,
+        "description": ""
+      },
+      {
+        "name": "mismatch_id",
+        "type": "string",
+        "format": "uuid",
+        "required": false,
+        "nullable": true,
+        "description": ""
+      },
+      {
+        "name": "title",
+        "type": "string",
+        "required": false,
+        "nullable": true,
+        "description": ""
+      },
+      {
+        "name": "prompt",
+        "type": "string",
+        "required": false,
+        "nullable": true,
+        "description": "The human intent the draft is built around; NEVER the grounding itself."
+      },
+      {
+        "name": "confirm_token",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Confirmation token from a prior staging call. Required to execute the draft."
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bursar_exclusion_diff",
+    "description": "The §4.7 exclusion diff for a request (GET /requests/:id/exclusion-diff): every mandatory scope node appears exactly once per offer, with its verdict and (for withheld rows) a withheld_reason. Blanket offers render \"this offer claims blanket coverage; here is what it does not itemize\". This is the completeness invariant - a node is never silently dropped.",
+    "source": "bursar",
+    "parameters": [
+      {
+        "name": "request_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": ""
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bursar_get_baseline",
+    "description": "The FROZEN baseline ledger for an award (GET /awards/:id/baseline): the immutable snapshot of what was included, knowingly excluded (excluded_at_award), and absent at award. This is the ground truth every post-award drift finding is measured against; it is read-only, with no write path. Money is floored, so pass asker_user_id.",
+    "source": "bursar",
+    "parameters": [
+      {
+        "name": "award_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": ""
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bursar_get_coverage",
+    "description": "One coverage row in full (GET /coverage/:id): the verdict, the cited offer span, the matched lines, and for an `absent` verdict the rejected candidates with reasons and any overlap / withheld_reason. Passes through the seal predicate; money is floored, so pass asker_user_id.",
+    "source": "bursar",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": ""
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bursar_get_matrix",
+    "description": "The leveling matrix for a request (GET /requests/:id/matrix): scope nodes as rows, offers as columns, each cell a coverage verdict (covered / partial / excluded_explicit / absent / ambiguous). Passes through the shared seal predicate - a sealed offer's figures are withheld until its seal opens. Money fields are floored; pass asker_user_id.",
+    "source": "bursar",
+    "parameters": [
+      {
+        "name": "request_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": ""
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bursar_get_request",
+    "description": "One request with its header, budget, category, and scope status (GET /requests/:id). Cited source records are can_access-filtered per reader; pass asker_user_id so the filter runs for the human you act for.",
+    "source": "bursar",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": ""
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bursar_get_scope_tree",
+    "description": "The scope tree for a request (GET /requests/:id/scope): every node with its normative_strength (mandatory / should_have / nice_to_have / informational), derived_from (request / library / rival_offer / human), review_status, and citations. Rival-derived proposals are marked and are NOT counted until a human promotes them.",
+    "source": "bursar",
+    "parameters": [
+      {
+        "name": "request_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": ""
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bursar_get_totals",
+    "description": "Comparable totals for a request's offers (GET /requests/:id/totals): stated total, gap_adjusted total (stated plus the valued cost of every absence), and the count of unvalued gaps. REFUSES to render a gap_adjusted number when it cannot value a gap - it reports the unpriced-gap count instead of inventing a figure. Passes through the seal predicate; money is floored, so pass asker_user_id.",
+    "source": "bursar",
+    "parameters": [
+      {
+        "name": "request_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": ""
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bursar_level_quotes",
+    "description": "Run the absence engine over a request's offers: score every scope node against every offer, compute gap-adjusted comparable totals, and detect exclusions (POST /requests/:id/level). ASYNC-START: returns a run_id (202); poll bursar_list_leveling_runs for progress. Pass dry_run=true to get only the cost preflight (estimated LLM calls/tokens/wall-clock + would_exceed) without starting a run. Pass an existing run_id to continue a partial run rather than minting a new one. Not confirm-gated: leveling is a re-runnable compute trigger, not an irreversible write.",
+    "source": "bursar",
+    "parameters": [
+      {
+        "name": "request_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "run_id",
+        "type": "string",
+        "format": "uuid",
+        "required": false,
+        "nullable": true,
+        "description": "Continue this partial run instead of starting a new one."
+      },
+      {
+        "name": "dry_run",
+        "type": "boolean",
+        "required": false,
+        "nullable": false,
+        "description": "Return only the cost preflight; start no run."
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bursar_list_awards",
+    "description": "List awards (GET /awards): active, superseded, and terminated award headers with their vendor, request, term dates, and renewal settings. Filter by status, request_id, or vendor_id. Contract money is floored, so pass asker_user_id.",
+    "source": "bursar",
+    "parameters": [
+      {
+        "name": "status",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "request_id",
+        "type": "string",
+        "format": "uuid",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "vendor_id",
+        "type": "string",
+        "format": "uuid",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "cursor",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "limit",
+        "type": "number",
+        "format": "integer",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bursar_list_leveling_runs",
+    "description": "Authoritative progress for a request's leveling runs (GET /requests/:id/leveling-runs): status (pending / running / partial / done / failed), how many nodes/offers were scored, and the resume cursor. Poll this after bursar_level_quotes returns a run_id.",
+    "source": "bursar",
+    "parameters": [
+      {
+        "name": "request_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": ""
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bursar_list_offers",
+    "description": "List the offers under a request (GET /requests/:id/offers) with their vendor, source format, normalization status, and seal state. Passes through the shared seal predicate; sealed offers withhold their figures. Money is floored, so pass asker_user_id.",
+    "source": "bursar",
+    "parameters": [
+      {
+        "name": "request_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "cursor",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "limit",
+        "type": "number",
+        "format": "integer",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bursar_list_requests",
+    "description": "List procurement requests (GET /requests). Filter by status.",
+    "source": "bursar",
+    "parameters": [
+      {
+        "name": "status",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "cursor",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "limit",
+        "type": "number",
+        "format": "integer",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bursar_mismatches",
+    "description": "The post-award mismatch inbox: price_drift, scope_divergence, unbaselined_vendor, renewal_cliff, and manipulation findings (GET /mismatches). A finding's dollars_at_stake is a money field and is floored without bursar.spend.read_all. \"Not quantified\" NEVER becomes a number.",
+    "source": "bursar",
+    "parameters": [
+      {
+        "name": "status",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "detector",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "vendor_id",
+        "type": "string",
+        "format": "uuid",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "cursor",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "limit",
+        "type": "number",
+        "format": "integer",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bursar_renewals_due",
+    "description": "The renewal radar: awards approaching their notice deadline, banded t_minus_90/60/30/7 with an auto-renew-unreviewed severity bump (GET /renewals). Filter by status.",
+    "source": "bursar",
+    "parameters": [
+      {
+        "name": "status",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bursar_resolve_vendor",
+    "description": "Read-only alias resolution. With vendor_id: the confirmed payee aliases that resolve to that vendor (GET /vendors/:id/aliases) - use this to see which messy card strings map to a vendor. Without vendor_id: the pending alias-review queue (GET /vendors/alias-review), the payee strings the resolver could not confidently place. This tool NEVER writes an alias; confirming or deleting one is a human bursar.vendor.write action with no tool.",
+    "source": "bursar",
+    "parameters": [
+      {
+        "name": "vendor_id",
+        "type": "string",
+        "format": "uuid",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bursar_scope_gap",
+    "description": "Advisory scope-gap check on a proposed money-out subject (POST /gate/scope-gap). ADVISORY ONLY (spec 9): returns pass|advisory plus cited reason codes and records a bursar_gate_checks row. There is NO enforcement, NO bill-api preHandler, and NO blocking verdict - it never stops a charge. Use it to surface \"this vendor has no award on file\" or \"this spend has no baseline line\" as advice.",
+    "source": "bursar",
+    "parameters": [
+      {
+        "name": "request_id",
+        "type": "string",
+        "format": "uuid",
+        "required": false,
+        "nullable": true,
+        "description": ""
+      },
+      {
+        "name": "vendor_id",
+        "type": "string",
+        "format": "uuid",
+        "required": false,
+        "nullable": true,
+        "description": ""
+      },
+      {
+        "name": "subject_ref",
+        "type": "string",
+        "required": false,
+        "nullable": true,
+        "description": "A dotted reference to the money-out subject, e.g. bill.expense:<id>."
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bursar_spend_by_vendor",
+    "description": "Per-vendor (and per-shadow-payee) spend rollup (GET /spend/by-vendor). The unmatched-payee buckets are the shadow-IT product: spend with no resolved vendor keeps vendor_id NULL and rolls up by normalized_payee. Every amount is floored without bursar.spend.read_all; pass asker_user_id so the intersection is computed for the human you act for.",
+    "source": "bursar",
+    "parameters": []
+  },
+  {
+    "mcp_tool": "bursar_upsert_scope_node",
+    "description": "Create a human scope node under a request, or edit an existing node (POST /requests/:id/scope/nodes when node_id is absent; PATCH /scope-nodes/:id when present). Editing the ruler a bid is scored against is consequential, so this is a two-step confirm: call once WITHOUT confirm_token to stage a Redis-backed token, then call again WITH the returned confirm_token to execute. This tool does NOT confirm scope or promote rival nodes - those are human-only gates with no tool.",
+    "source": "bursar",
+    "parameters": [
+      {
+        "name": "request_id",
+        "type": "string",
+        "format": "uuid",
+        "required": false,
+        "nullable": false,
+        "description": "Required when creating a node (node_id absent)."
+      },
+      {
+        "name": "node_id",
+        "type": "string",
+        "format": "uuid",
+        "required": false,
+        "nullable": false,
+        "description": "When present, PATCH this node instead of creating one."
+      },
+      {
+        "name": "title",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "description",
+        "type": "string",
+        "required": false,
+        "nullable": true,
+        "description": ""
+      },
+      {
+        "name": "node_kind",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "unit",
+        "type": "string",
+        "required": false,
+        "nullable": true,
+        "description": ""
+      },
+      {
+        "name": "quantity",
+        "type": "number",
+        "required": false,
+        "nullable": true,
+        "description": ""
+      },
+      {
+        "name": "parent_id",
+        "type": "string",
+        "format": "uuid",
+        "required": false,
+        "nullable": true,
+        "description": "Create only."
+      },
+      {
+        "name": "confirm_token",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Confirmation token from a prior staging call. Required to execute the upsert."
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bursar_vendor_view",
+    "description": "One vendor with its aliases, award chain, baseline, spend, findings, and orphaned-custody badge (GET /vendors/:id). Per-vendor spend and money fields are floored for a caller without bursar.spend.read_all; pass asker_user_id so the flooring is computed for the human you act for.",
+    "source": "bursar",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": ""
+      }
+    ]
+  },
+  {
+    "mcp_tool": "account_view",
+    "description": "Composite account-page view. Resolves one of { company_id, contact_id, domain } to a company, then fans out in parallel to bond (deals, owners), helpdesk (tickets), bill (invoices), bam (tasks), and the Bam activity log (recent_activity). Each arm has a 5s timeout; per-arm failures set the corresponding field to empty and append the arm name to `missing`. Returns only entities visible to the caller; asker-mode (as_user_id) is not supported in Wave 3. Returns 502 COMPOSITE_FAILED only if every arm fails.",
+    "source": "composite",
+    "parameters": [
+      {
+        "name": "company_id",
+        "type": "string",
+        "format": "uuid",
+        "required": false,
+        "nullable": false,
+        "description": "Bond company id to load"
+      },
+      {
+        "name": "contact_id",
+        "type": "string",
+        "format": "uuid",
+        "required": false,
+        "nullable": false,
+        "description": "Bond contact id. The primary associated company is used."
+      },
+      {
+        "name": "domain",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Company domain. Resolves to company_id via /companies?search=..."
+      }
+    ]
+  },
+  {
+    "mcp_tool": "project_view",
+    "description": "Composite project-overview view. Fans out in parallel to Bam (project, task count, active sprint, activity for top contributors), Bearing (linked goals), Brief (recent documents), and Beacon (recent entries). Each arm has a 5s timeout; per-arm failures set the corresponding field to empty/null and append the arm name to `missing`. top_contributors is a 30-day client-side GROUP BY over /projects/:id/activity today; when the §5 unified activity_query tool lands, it will be preferred automatically. Returns only entities visible to the caller; asker-mode is not supported in Wave 3. Returns 502 COMPOSITE_FAILED only if every arm fails.",
+    "source": "composite",
+    "parameters": [
+      {
+        "name": "project_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Bam project id to load"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "user_view",
+    "description": "Composite person-profile view. Fans out in parallel to Bam (user via /users/:id, recent activity stub), Bond (owned deals), Helpdesk (open tickets via /tickets/search), and Bearing (owned goals). Each arm has a 5s timeout; per-arm failures set the corresponding field to empty and append the arm name to `missing`. user.kind is the users.kind column added in Wave 1 (human/agent/service). Returns only entities visible to the caller; asker-mode is not supported in Wave 3. Returns 502 COMPOSITE_FAILED only if every arm fails.",
+    "source": "composite",
+    "parameters": [
+      {
+        "name": "user_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Bam user id to load"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bond_find_duplicates",
+    "description": "Return likely duplicate contacts for a single Bond contact ranked by confidence. Signals combine pg_trgm full-name similarity, exact case-insensitive email match, and exact normalized-phone match. Each candidate row carries the contributing signals and, when a dedupe_decisions row exists for the pair, a prior_decision block so the caller can suppress pairs a human has already resolved. Member and viewer callers only see contacts they own; admins see everything in the org.",
+    "source": "dedupe",
+    "parameters": [
+      {
+        "name": "contact_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Source contact id."
+      },
+      {
+        "name": "limit",
+        "type": "number",
+        "format": "integer",
+        "required": false,
+        "nullable": false,
+        "description": "Max candidates to return (default 10, max 50)."
+      },
+      {
+        "name": "min_confidence",
+        "type": "number",
+        "required": false,
+        "nullable": false,
+        "description": "Minimum confidence threshold in [0, 1] (default 0.3)."
+      }
+    ]
+  },
+  {
+    "mcp_tool": "dedupe_list_pending",
+    "description": "List dedupe-decision pairs that still need human attention. A row is considered pending if its decision is 'needs_review' OR if a resurface_after timestamp was set and has now elapsed. Filter by entity_type to focus on one app's pairs; filter by since to restrict to rows decided after an ISO-8601 timestamp. Rows are returned ordered by decided_at DESC.",
+    "source": "dedupe",
+    "parameters": [
+      {
+        "name": "entity_type",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "since",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Optional ISO-8601 timestamp; restrict to rows decided after this time."
+      },
+      {
+        "name": "limit",
+        "type": "number",
+        "format": "integer",
+        "required": false,
+        "nullable": false,
+        "description": "Max rows (default 50, max 200)."
+      }
+    ]
+  },
+  {
+    "mcp_tool": "dedupe_record_decision",
+    "description": "Record a dedupe decision for an entity pair. The tool canonicalizes the pair order before writing, so passing (A, B) and (B, A) collide on the same row. decision is one of 'duplicate' | 'not_duplicate' | 'needs_review'. When an agent tries to overwrite a decision that a human previously recorded, the tool returns isError with code HUMAN_DECISION_EXISTS and includes the prior_decision so the caller can surface the human verdict. Humans and service accounts may always write. resurface_after is optional; when set, dedupe_list_pending will resurface the pair once the timestamp has passed.",
+    "source": "dedupe",
+    "parameters": [
+      {
+        "name": "entity_type",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "id_a",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "One side of the pair. Order does not matter; the tool canonicalizes."
+      },
+      {
+        "name": "id_b",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "The other side of the pair. Must differ from id_a."
+      },
+      {
+        "name": "decision",
+        "type": "enum",
+        "enum": [
+          "duplicate",
+          "not_duplicate",
+          "needs_review"
+        ],
+        "required": true,
+        "nullable": false,
+        "description": "Decision to record."
+      },
+      {
+        "name": "reason",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Optional free-text justification."
+      },
+      {
+        "name": "confidence",
+        "type": "number",
+        "required": false,
+        "nullable": false,
+        "description": "Confidence that drove this decision, in [0, 1]."
+      },
+      {
+        "name": "resurface_after",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Optional ISO-8601 timestamp. When set, dedupe_list_pending resurfaces the pair after this time."
+      }
+    ]
+  },
+  {
+    "mcp_tool": "helpdesk_find_similar_tickets",
+    "description": "Return similar helpdesk tickets for a single ticket ranked by confidence. Signals combine pg_trgm subject similarity, same-requester boost, same-category boost, and an existing tickets.duplicate_of link. Status filter defaults to 'not_closed' (open + in_progress + waiting + resolved). Pass 'open' for open-only or 'any' to include closed tickets. window_days restricts candidates to tickets created within the window. Each candidate carries a prior_decision block when a dedupe_decisions row exists for the pair.",
+    "source": "dedupe",
+    "parameters": [
+      {
+        "name": "ticket_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Source ticket id."
+      },
+      {
+        "name": "status_filter",
+        "type": "enum",
+        "enum": [
+          "open",
+          "any",
+          "not_closed"
+        ],
+        "required": false,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "limit",
+        "type": "number",
+        "format": "integer",
+        "required": false,
+        "nullable": false,
+        "description": "Max candidates (default 10, max 50)."
+      },
+      {
+        "name": "window_days",
+        "type": "number",
+        "format": "integer",
+        "required": false,
+        "nullable": false,
+        "description": "Restrict candidates to tickets created within the last N days (default: no restriction)."
+      },
+      {
+        "name": "min_confidence",
+        "type": "number",
+        "required": false,
+        "nullable": false,
+        "description": "Minimum confidence threshold in [0, 1] (default 0.25)."
+      }
+    ]
+  },
+  {
+    "mcp_tool": "entity_link_create",
+    "description": "Create a directional cross-app link. Both endpoints are preflighted via can_access and writes are rejected with 403 if either side is not accessible. Only the Wave 2 supported entity types are writable (bam.task/project/sprint, helpdesk.ticket, bond.deal/contact/company, brief.document, beacon.entry); any other type returns 400 UNSUPPORTED_ENTITY_TYPE. link_kind is one of related_to, duplicates, blocks, references, parent_of, derived_from. parent_of and derived_from reject writes that would close a cycle with 400 CYCLE_DETECTED. Re-creating an identical link returns the existing row with created: false (idempotent). There is NO blocked_by; use blocks and query by direction='dst'.",
+    "source": "entity-links",
+    "parameters": [
+      {
+        "name": "src_type",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Source entity type."
+      },
+      {
+        "name": "src_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Source entity UUID."
+      },
+      {
+        "name": "dst_type",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Destination entity type."
+      },
+      {
+        "name": "dst_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Destination entity UUID."
+      },
+      {
+        "name": "link_kind",
+        "type": "enum",
+        "enum": [
+          "related_to",
+          "duplicates",
+          "blocks",
+          "references",
+          "parent_of",
+          "derived_from"
+        ],
+        "required": true,
+        "nullable": false,
+        "description": "Link kind."
+      }
+    ]
+  },
+  {
+    "mcp_tool": "entity_link_remove",
+    "description": "Remove an entity link by id. Returns { ok: true } on success. Caller must have can_access on at least one side of the link (403 otherwise). Returns 404 if the link is not in the caller's org.",
+    "source": "entity-links",
+    "parameters": [
+      {
+        "name": "id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Link id to remove."
+      }
+    ]
+  },
+  {
+    "mcp_tool": "entity_links_list",
+    "description": "List cross-app entity links touching (type, id). Default direction 'both' returns both outbound and inbound rows; each row carries a 'direction' of 'outbound' or 'inbound' relative to the query. Rows whose far side is not accessible to the caller are silently filtered out and counted in filtered_count. Optional kind narrows to a single link_kind: related_to | duplicates | blocks | references | parent_of | derived_from. Reverse directions (e.g. blocked_by) are implicit via direction='dst'.",
+    "source": "entity-links",
+    "parameters": [
+      {
+        "name": "type",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Entity UUID."
+      },
+      {
+        "name": "direction",
+        "type": "enum",
+        "enum": [
+          "src",
+          "dst",
+          "both"
+        ],
+        "required": false,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "kind",
+        "type": "enum",
+        "enum": [
+          "related_to",
+          "duplicates",
+          "blocks",
+          "references",
+          "parent_of",
+          "derived_from"
+        ],
+        "required": false,
+        "nullable": false,
+        "description": "Optional link_kind filter."
+      },
+      {
+        "name": "limit",
+        "type": "number",
+        "format": "integer",
+        "required": false,
+        "nullable": false,
+        "description": "Max rows to return (default 100, max 500)."
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bam_create_epic",
+    "description": "Create a new epic in a project. Idempotency pair with bam_list_epics: list the project's epics first, match by name, and only call this when no existing epic matches (list, then create if absent).",
+    "source": "epic",
+    "parameters": [
+      {
+        "name": "project_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "The project UUID"
+      },
+      {
+        "name": "name",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Epic name"
+      },
+      {
+        "name": "description",
+        "type": "string",
+        "required": false,
+        "nullable": true,
+        "description": "Epic description (markdown)"
+      },
+      {
+        "name": "color",
+        "type": "string",
+        "required": false,
+        "nullable": true,
+        "description": "Hex color for the epic chip (e.g. #4F46E5)"
+      },
+      {
+        "name": "start_date",
+        "type": "string",
+        "required": false,
+        "nullable": true,
+        "description": "Start date (ISO 8601 / YYYY-MM-DD)"
+      },
+      {
+        "name": "target_date",
+        "type": "string",
+        "required": false,
+        "nullable": true,
+        "description": "Target date (ISO 8601 / YYYY-MM-DD)"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bam_delete_epic",
+    "description": "Delete an epic (destructive). Tasks previously linked to the epic are not deleted; their epic_id is cleared by the FK. Requires confirm:true to proceed — the first call without it returns a confirmation prompt and changes nothing.",
+    "source": "epic",
+    "parameters": [
+      {
+        "name": "epic_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "The epic UUID to delete"
+      },
+      {
+        "name": "confirm",
+        "type": "boolean",
+        "required": true,
+        "nullable": false,
+        "description": "Must be true to confirm deletion"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bam_get_epic",
+    "description": "Get a single epic by UUID, including its rollup (task_count, done_count, total_story_points, done_story_points over all tasks linked to the epic).",
+    "source": "epic",
+    "parameters": [
+      {
+        "name": "epic_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "The epic UUID"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bam_list_epic_tasks",
+    "description": "List every task linked to an epic (both parents and subtasks), ordered by sprint then board position with backlog tasks last. Each row carries human_id, title, sprint/phase names, state_category, completion, and story_points — enough to render the epic detail list or compute a burnup.",
+    "source": "epic",
+    "parameters": [
+      {
+        "name": "epic_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "The epic UUID"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bam_update_epic",
+    "description": "Update an existing epic. Only the supplied fields are changed. Use this to rename, recolor, reschedule, or change the status of an epic (set status to \"closed\" to close it).",
+    "source": "epic",
+    "parameters": [
+      {
+        "name": "epic_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "The epic UUID"
+      },
+      {
+        "name": "name",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "New epic name"
+      },
+      {
+        "name": "description",
+        "type": "string",
+        "required": false,
+        "nullable": true,
+        "description": "New description (markdown)"
+      },
+      {
+        "name": "color",
+        "type": "string",
+        "required": false,
+        "nullable": true,
+        "description": "New hex color (e.g. #4F46E5)"
+      },
+      {
+        "name": "start_date",
+        "type": "string",
+        "required": false,
+        "nullable": true,
+        "description": "New start date (ISO 8601 / YYYY-MM-DD)"
+      },
+      {
+        "name": "target_date",
+        "type": "string",
+        "required": false,
+        "nullable": true,
+        "description": "New target date (ISO 8601 / YYYY-MM-DD)"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "expertise_for_topic",
+    "description": "Rank the top subject-matter experts for a natural-language topic. Aggregates signals across Beacon ownership (default weight 3.0), Brief authorship (2.0), Bond coverage on deals and contacts (2.0), and Bam task activity (1.0). Each evidence event is dampened by an exponential time decay with a configurable half-life (default 90 days) so recent work dominates. Evidence is preflighted through can_access for the supplied asker_user_id and stripped when the asker cannot see it; scores are preserved. Returns { topic, experts: [{ user_id, name, email, score, signals: [{ source, weight, evidence[] }] }] }.",
+    "source": "expertise",
+    "parameters": [
+      {
+        "name": "topic_query",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Topic phrase"
+      },
+      {
+        "name": "asker_user_id",
+        "type": "string",
+        "format": "uuid",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "signal_weights",
+        "type": "object",
+        "required": false,
+        "nullable": false,
+        "description": "Per-source weight overrides; omitted keys fall back to the service defaults."
+      },
+      {
+        "name": "limit",
+        "type": "number",
+        "format": "integer",
+        "required": false,
+        "nullable": false,
+        "description": "Cap on experts returned (default 10)."
+      },
+      {
+        "name": "time_decay_half_life_days",
+        "type": "number",
+        "required": false,
+        "nullable": false,
+        "description": "Exponential decay half-life in days (default 90)."
       }
     ]
   },
@@ -8303,6 +25397,77 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
     "description": "Get full helpdesk configuration. Requires admin authentication — the caller's API key must belong to an org admin or owner.",
     "source": "helpdesk",
     "parameters": []
+  },
+  {
+    "mcp_tool": "helpdesk_get_ticket_by_number",
+    "description": "Resolve a helpdesk ticket by its human-readable ticket number (e.g. 1234 or #1234). Leading \"#\" is stripped. Returns the full ticket record enriched with requester and task-derived assignee info, or null if not found. Use this when you only have the ticket number (as typically shown to customers or agents) and need to resolve it to the underlying UUID / full record before calling other helpdesk tools.",
+    "source": "helpdesk",
+    "parameters": [
+      {
+        "name": "number",
+        "type": "union",
+        "required": true,
+        "nullable": false,
+        "description": ""
+      }
+    ]
+  },
+  {
+    "mcp_tool": "helpdesk_search_tickets",
+    "description": "Fuzzy search helpdesk tickets by subject and body within the caller's org. Returns up to 20 matches as a compact projection ({ id, number, subject, status, priority, requester_email, requester_name, assignee_id, assignee_name }), ordered by most recently updated. Optional filters narrow by status and by the linked task's assignee_id. Intended as a resolver for natural-language ticket lookups where only a fragment of the subject/body is known.",
+    "source": "helpdesk",
+    "parameters": [
+      {
+        "name": "query",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Search text — matched case-insensitively against ticket subject and body"
+      },
+      {
+        "name": "status",
+        "type": "enum",
+        "enum": [
+          "open",
+          "in_progress",
+          "waiting_on_customer",
+          "resolved",
+          "closed"
+        ],
+        "required": false,
+        "nullable": false,
+        "description": "Optional status filter"
+      },
+      {
+        "name": "assignee_id",
+        "type": "string",
+        "format": "uuid",
+        "required": false,
+        "nullable": false,
+        "description": "Optional assignee filter (matches the linked task's assignee)"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "helpdesk_set_default_project",
+    "description": "Set the default project for incoming helpdesk tickets for a specific organization. Identifies the org by slug (e.g. \"mage-inc\") and the project by slug (e.g. \"support-backlog\"). Future tickets submitted at /helpdesk/<org-slug>/ (no project segment) will land in this project. Per-project portal URLs (/helpdesk/<org-slug>/<project-slug>/) override this default. Requires admin authentication.",
+    "source": "helpdesk",
+    "parameters": [
+      {
+        "name": "org_slug",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Organization slug (from organizations.slug)."
+      },
+      {
+        "name": "project_slug",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Project slug (from projects.slug). Must belong to the named org."
+      }
+    ]
   },
   {
     "mcp_tool": "helpdesk_update_settings",
@@ -8336,6 +25501,56 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
         "required": false,
         "nullable": false,
         "description": "If set, only these email domains can register."
+      }
+    ]
+  },
+  {
+    "mcp_tool": "helpdesk_upsert_user",
+    "description": "Idempotent create-or-update of a helpdesk end-user by email. Natural key is (org_id, email); the tool resolves the org via the provided org_slug. Returns { data, created, idempotency_key }. SECURITY: the update path ignores the password field, so calling this tool on an existing email cannot change that user's credentials.",
+    "source": "helpdesk",
+    "parameters": [
+      {
+        "name": "org_slug",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Organization slug (sent as X-Org-Slug header)"
+      },
+      {
+        "name": "email",
+        "type": "string",
+        "format": "email",
+        "required": true,
+        "nullable": false,
+        "description": "Email address — idempotency key (lowercased server-side)"
+      },
+      {
+        "name": "display_name",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Display name"
+      },
+      {
+        "name": "password",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Password — honored ONLY on the insert path. On update this field is silently ignored."
+      },
+      {
+        "name": "email_verified",
+        "type": "boolean",
+        "required": false,
+        "nullable": false,
+        "description": "Whether the email address has been verified"
+      },
+      {
+        "name": "is_active",
+        "type": "boolean",
+        "required": false,
+        "nullable": false,
+        "description": "Whether the account is active"
       }
     ]
   },
@@ -8399,10 +25614,9 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
       {
         "name": "ticket_id",
         "type": "string",
-        "format": "uuid",
         "required": true,
         "nullable": false,
-        "description": "The ticket ID"
+        "description": ""
       },
       {
         "name": "body",
@@ -8428,10 +25642,9 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
       {
         "name": "ticket_id",
         "type": "string",
-        "format": "uuid",
         "required": true,
         "nullable": false,
-        "description": "The ticket ID"
+        "description": ""
       },
       {
         "name": "status",
@@ -8446,6 +25659,390 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
         "required": true,
         "nullable": false,
         "description": "The new status"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "ingest_fingerprint_check",
+    "description": "Atomic dedup check for intake flows (forms, tickets, leads). Hashes the incoming payload into a fingerprint; the tool records it under (org_id, source, fingerprint) with the given TTL and reports whether this is the first sighting. Backed by Redis SET NX EX, one round-trip. Use before creating downstream entities to avoid duplicate ticket / lead / agent responses when a sender retries. window_seconds is capped at 3600 (1 hour). Callers should canonicalize the payload (lowercase, collapse whitespace, strip quoted reply text) before hashing.",
+    "source": "ingest-fingerprint",
+    "parameters": [
+      {
+        "name": "source",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "fingerprint",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "window_seconds",
+        "type": "number",
+        "format": "integer",
+        "required": true,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "context",
+        "type": "object",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bam_task_count_by_phrase",
+    "description": "Count Bam tasks whose (title, description_plain) matches a phrase, bucketed by hour/day/week over a rolling window. Live tsvector query scoped to the caller's active org; optional label_filter and project_filter narrow further. window.since is REQUIRED; window.until defaults to now(). 5s server-side statement_timeout. Results are exact, not approximate.",
+    "source": "phrase-count",
+    "parameters": [
+      {
+        "name": "phrase",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "label_filter",
+        "type": "array",
+        "required": false,
+        "nullable": false,
+        "description": "Optional list of label UUIDs; matches ANY"
+      },
+      {
+        "name": "project_filter",
+        "type": "array",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      }
+    ]
+  },
+  {
+    "mcp_tool": "helpdesk_ticket_count_by_phrase",
+    "description": "Count helpdesk tickets whose (subject, description) matches a phrase, bucketed by hour/day/week over a rolling window. Live tsvector query over tickets.search_vector with a 5s server-side statement_timeout. window.since is REQUIRED; window.until defaults to now(). Optional status_filter narrows to a single ticket status. Results are exact, not approximate.",
+    "source": "phrase-count",
+    "parameters": [
+      {
+        "name": "phrase",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Phrase to match. Passed through plainto_tsquery; tsquery operators are neutralized."
+      },
+      {
+        "name": "status_filter",
+        "type": "enum",
+        "enum": [
+          "open",
+          "in_progress",
+          "waiting_on_customer",
+          "resolved",
+          "closed"
+        ],
+        "required": false,
+        "nullable": false,
+        "description": "Optional ticket status filter"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "proposal_create",
+    "description": "Create a durable proposal in the agent_proposals queue. The proposal shows up in the approver's inbox and remains actionable until decided or expired. Use this for destructive or human-gated actions where you need an explicit approval on record (not just a DM notification).",
+    "source": "proposal",
+    "parameters": [
+      {
+        "name": "proposed_action",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "proposed_payload",
+        "type": "object",
+        "required": false,
+        "nullable": false,
+        "description": "Optional structured payload describing the action (used by downstream automation on approval)."
+      },
+      {
+        "name": "approver_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "User id of the approver."
+      },
+      {
+        "name": "subject_type",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "subject_id",
+        "type": "string",
+        "format": "uuid",
+        "required": false,
+        "nullable": false,
+        "description": "Optional subject entity UUID."
+      },
+      {
+        "name": "ttl_seconds",
+        "type": "number",
+        "format": "integer",
+        "required": false,
+        "nullable": false,
+        "description": "Expiry window in seconds (default 604800=7d, max 2592000=30d)."
+      },
+      {
+        "name": "decision_reason",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Optional initial context for the approver."
+      },
+      {
+        "name": "require_human_decider",
+        "type": "boolean",
+        "required": false,
+        "nullable": false,
+        "description": "When true, only a human signed in as themselves (not an agent, service account, or impersonated session) can decide."
+      }
+    ]
+  },
+  {
+    "mcp_tool": "proposal_decide",
+    "description": "Decide a pending or revising proposal. Only the designated approver (or an org admin) may decide. The decider, their kind (human/agent/service) and any impersonating SuperUser are recorded. Returns 409 PROPOSAL_ALREADY_DECIDED if it was already decided, 409 DECIDE_IN_APP if the proposal belongs to an app (owning_app) and must be decided there, 410 if it expired, 403 if the caller is not authorized, and 403 HUMAN_DECIDER_REQUIRED when the proposal requires a human decider and the caller is an agent, a service account, or an impersonated session.",
+    "source": "proposal",
+    "parameters": [
+      {
+        "name": "proposal_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": "Proposal id to decide."
+      },
+      {
+        "name": "decision",
+        "type": "enum",
+        "enum": [
+          "approve",
+          "reject",
+          "request_revision"
+        ],
+        "required": true,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "reason",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Optional justification for the decision."
+      }
+    ]
+  },
+  {
+    "mcp_tool": "proposal_list",
+    "description": "List proposals visible to the caller. By default returns pending proposals where the caller is either the approver or the actor; org admins see the whole org queue. Pass filter[status]=all to see decided rows too.",
+    "source": "proposal",
+    "parameters": [
+      {
+        "name": "approver_id",
+        "type": "string",
+        "format": "uuid",
+        "required": false,
+        "nullable": false,
+        "description": "Filter to proposals assigned to this approver."
+      },
+      {
+        "name": "actor_id",
+        "type": "string",
+        "format": "uuid",
+        "required": false,
+        "nullable": false,
+        "description": "Filter to proposals authored by this actor."
+      },
+      {
+        "name": "status",
+        "type": "enum",
+        "enum": [
+          "pending",
+          "approved",
+          "rejected",
+          "expired",
+          "revoked",
+          "revising",
+          "all"
+        ],
+        "required": false,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "limit",
+        "type": "number",
+        "format": "integer",
+        "required": false,
+        "nullable": false,
+        "description": "Page size (default 50, max 200)."
+      },
+      {
+        "name": "cursor",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Pagination cursor (ISO-8601 created_at of the last row on the prior page)."
+      }
+    ]
+  },
+  {
+    "mcp_tool": "resolve_references",
+    "description": "Resolve free text (natural language with optional pinned mention syntax like [[ABC-42]], [[deal:Acme]], @jane, #project) into a ranked list of candidate entities. No LLM. Phase 1 deterministically resolves pinned mentions via lookup endpoints; Phase 2 extracts 2-6 word n-grams (cap 5 phrases) and fans out to every app search endpoint in parallel. Returns ranked candidates with confidence, an optional disambiguation hint when siblings are close, and any fragments that did not resolve.",
+    "source": "resolve",
+    "parameters": [
+      {
+        "name": "text",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Free text to extract and resolve entity references from."
+      },
+      {
+        "name": "hints",
+        "type": "array",
+        "required": false,
+        "nullable": false,
+        "description": "Optional list of entity_type values to prefer. Currently informational; Wave 3 fans out to every type regardless."
+      }
+    ]
+  },
+  {
+    "mcp_tool": "search_everything",
+    "description": "Cross-app unified search. Fans out in parallel to per-app search endpoints (Bam tasks, Helpdesk tickets, Bond contacts/companies, Brief documents, Beacon entries, Banter messages, Board elements), normalizes each app's native relevance score, applies a per-app weight, and returns a ranked unified hit list. Use `types` to prune fan-out to a subset of entity kinds. Pass `as_user_id` to run a visibility preflight (can_access) on every supported hit and drop anything the asker cannot see; the count of dropped hits is reported as `filtered_count`. Note: Banter messages, Board elements, and Basis metrics are NOT in the Wave 2 can_access allowlist, so those hits are always included based on the source app's own RLS (banter channel membership, board visibility, and org-scoped metric catalog respectively). Each arm has a 3s timeout; arm-level failures are reported in `errors[]` without failing the whole call.",
+    "source": "search",
+    "parameters": [
+      {
+        "name": "query",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Search phrase (2..500 chars)"
+      },
+      {
+        "name": "types",
+        "type": "array",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "limit",
+        "type": "number",
+        "format": "integer",
+        "required": false,
+        "nullable": false,
+        "description": "Maximum number of unified results (default 50, max 200)"
+      },
+      {
+        "name": "as_user_id",
+        "type": "string",
+        "format": "uuid",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      }
+    ]
+  },
+  {
+    "mcp_tool": "find_user_by_email",
+    "description": "Find a user by exact email address (case-insensitive) within the caller's active organization. Returns the user object `{ id, email, name, display_name, avatar_url, role }` or `null` if no match. Use this whenever a rule, workflow, or prompt mentions a user by email and you need their user_id to pass to another tool. Works identically for any app (Bam, Banter, Bolt, Bond, etc.) — the underlying users table is shared.",
+    "source": "user-resolver",
+    "parameters": [
+      {
+        "name": "email",
+        "type": "string",
+        "format": "email",
+        "required": true,
+        "nullable": false,
+        "description": "Exact email address to look up (case-insensitive)"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "find_user_by_name",
+    "description": "Fuzzy-search active users by name or email within the caller's active organization. Matches against display_name and email, ordered by relevance (exact email match first, then prefix matches, then contains). Returns up to 20 users as `[{ id, email, name, display_name, avatar_url, role }]`. Use this when a rule mentions \"assign to Jane\" or \"notify Bob\" and you need to disambiguate the user.",
+    "source": "user-resolver",
+    "parameters": [
+      {
+        "name": "query",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Name or email fragment to search for (case-insensitive, substring match on display_name and email)"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "list_users",
+    "description": "List users in the caller's active organization, sorted by display name. Returns `[{ id, email, name, display_name, avatar_url, role, is_active }]`. Defaults to active users only (max 200 per call). Use this to enumerate users when building UIs, workflow targets, or when you need an overview of the org roster. For project-scoped member lists, use `list_members` instead.",
+    "source": "user-resolver",
+    "parameters": [
+      {
+        "name": "active_only",
+        "type": "boolean",
+        "required": false,
+        "nullable": false,
+        "description": "If true (default), exclude disabled users"
+      },
+      {
+        "name": "limit",
+        "type": "number",
+        "format": "integer",
+        "required": false,
+        "nullable": false,
+        "description": "Maximum number of users to return (default 50, max 200)"
+      }
+    ]
+  },
+  {
+    "mcp_tool": "can_access",
+    "description": "Preflight a visibility check. Returns { allowed, reason } for whether asker_user_id can see (entity_type, entity_id). Agents that surface cross-app results into shared channels MUST call this for every cited entity and filter out anything that is not allowed. Supported entity_type values: bam.task, bam.project, bam.sprint, helpdesk.ticket, bond.deal, bond.contact, bond.company, brief.document, beacon.entry, blueprint.diagram, blueprint.node, banter.message, banter.channel, bearing.goal, bearing.kr, board.board, book.event, bill.invoice, blank.form, bolt.rule, blip.tracked_app, blip.saved_view. Unsupported types return reason='unsupported_entity_type' (with a supported_entity_types hint) and MUST NOT be surfaced.",
+    "source": "visibility",
+    "parameters": [
+      {
+        "name": "asker_user_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "entity_type",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "entity_id",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": "Entity id (UUID for every type in the current allowlist)."
       }
     ]
   }

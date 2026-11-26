@@ -1,5 +1,6 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
+import { BOLT_SOURCES } from '@bigbluebam/shared';
 import { requireAuth } from '../plugins/auth.js';
 import { shadowOnly } from '../middleware/dual-read.js';
 import { env } from '../env.js';
@@ -147,7 +148,7 @@ export default async function aiAssistRoutes(fastify: FastifyInstance) {
         '  name (string), description (string), trigger_source (string),',
         '  trigger_event (string), conditions (array of {sort_order, field, operator, value, logic_group}),',
         '  actions (array of {sort_order, mcp_tool, parameters, on_error}).',
-        'Valid trigger sources: bam, banter, beacon, brief, helpdesk, schedule, bond, blast, board, bench, bearing, bill, book, blank.',
+        `Valid trigger sources: ${BOLT_SOURCES.join(', ')}.`,
         'Respond ONLY with JSON, no markdown fencing.',
       ].join(' ');
 
