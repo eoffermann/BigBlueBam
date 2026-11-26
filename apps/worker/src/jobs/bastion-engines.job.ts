@@ -33,7 +33,10 @@ export interface EngineJobDeps {
 const MAX_RESUME_ROUNDS = 30;
 
 /** A scheduled job that calls one engine and logs its summary. */
-export function makeBastionEngineJob(engine: Exclude<BastionEngineName, 'evaluate-run' | 'evaluate-tick' | 'compile' | 'questionnaire-autofill'>, deps: EngineJobDeps) {
+export function makeBastionEngineJob(
+  engine: Exclude<BastionEngineName, 'evaluate-run' | 'evaluate-tick' | 'compile' | 'questionnaire-autofill' | 'mirror-objects' | 'verify-commitments' | 'export-packet'>,
+  deps: EngineJobDeps,
+) {
   return async function processBastionEngineJob(job: Job<BastionSweepJobData>, logger: Logger): Promise<unknown> {
     const started = Date.now();
     logger.info({ jobId: job.id, engine }, `bastion-${engine}: starting`);

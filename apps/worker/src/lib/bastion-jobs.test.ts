@@ -56,9 +56,19 @@ describe('Bastion job registration rules (spec 7)', () => {
     }
   });
 
-  it('registers one scheduled job per scheduled engine (every engine except the event-driven evaluate-run, compile and questionnaire-autofill)', () => {
+  it('registers one scheduled job per scheduled engine (every engine except the event-driven and on-demand ones)', () => {
+    // Event-driven: evaluate-run, compile, questionnaire-autofill, mirror-objects (after each
+    // backup) and export-packet; on demand: verify-commitments (the packet job calls it).
+    const notScheduled = ['evaluate-run', 'compile', 'questionnaire-autofill', 'mirror-objects', 'export-packet', 'verify-commitments'];
     const registered = [...bastionBlock.matchAll(/registerBastionSweep\(\s*BASTION_[A-Z_]+_QUEUE/g)].length;
-    expect(registered).toBe(BASTION_ENGINE_NAMES.length - 3);
+    expect(notScheduled.every((n) => (BASTION_ENGINE_NAMES as readonly string[]).includes(n))).toBe(true);
+    expect(registered).toBe(BASTION_ENGINE_NAMES.length - notScheduled.length);
+    expect(bastionBlock).toContain("makeBastionEngineJob('object-sweep'");
+    expect(bastionBlock).toMatch(/new Worker<BastionObjectBackupJobData>\(\s*BASTION_OBJECT_BACKUP_QUEUE/);
+    expect(bastionBlock).toMatch(/new Worker<BastionExportPacketJobData>\(\s*BASTION_EXPORT_PACKET_QUEUE/);
+    // The mirror is enqueued with jobId = backup id (spec 9.7).
+    expect(bastionBlock).toMatch(/\.add\('mirror', \{ backup_id: backupId \}, \{ jobId: backupId, \.\.\.SCHEDULED_JOB_RETENTION \}\)/);
+    expect(WORKER).toContain('processBackupJob(job, logger, env, { enqueueBastionMirror })');
     expect(bastionBlock).toContain("makeBastionEngineJob('attestation-nudge'");
     expect(bastionBlock).toMatch(/new Worker<BastionCompileJobData>\(\s*BASTION_COMPILE_QUEUE/);
     expect(bastionBlock).toMatch(/new Worker<BastionQuestionnaireJobData>\(\s*BASTION_QUESTIONNAIRE_AUTOFILL_QUEUE/);

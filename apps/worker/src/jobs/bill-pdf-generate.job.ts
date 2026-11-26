@@ -120,7 +120,7 @@ function formatDate(value: Date | string | null | undefined): string {
  * long dashes, typographic quotes, and non-latin glyphs never cause
  * WinAnsiEncoding mapping failures mid-render.
  */
-function sanitizeForWinAnsi(text: string | null | undefined): string {
+export function sanitizeForWinAnsi(text: string | null | undefined): string {
   if (!text) return '';
   return text
     .replace(/[\u2013\u2014\u2212]/g, '-')

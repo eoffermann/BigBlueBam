@@ -88,10 +88,20 @@ async function pruneOldBackups(env: Env, logger: Logger): Promise<void> {
   logger.info({ pruned: stale.length, keep: env.BACKUP_RETENTION_COUNT }, 'backup retention: pruned old scheduled backups');
 }
 
+export interface BackupJobHooks {
+  /**
+   * Bastion spec 9.7: after the backup has recorded `completed`, enqueue the off-site evidence
+   * copy (bastion-object-backup, jobId = backup id). Absent when Bastion is not deployed. Its
+   * failure is logged and never changes the backup's own status.
+   */
+  enqueueBastionMirror?: (backupId: string) => Promise<void>;
+}
+
 export async function processBackupJob(
   job: Job<BackupJobData>,
   logger: Logger,
   env: Env,
+  hooks: BackupJobHooks = {},
 ): Promise<void> {
   const db = getDb();
   const start = Date.now();
@@ -138,6 +148,20 @@ export async function processBackupJob(
       WHERE id = ${backupId}
     `);
     logger.info({ backupId, storageKey, ms: Date.now() - start }, 'backup: completed');
+
+    // The backup's own status is recorded above and never touched again: a failing enqueue (or
+    // a failing mirror later) leaves it `completed` (Bastion spec 9.7).
+    if (hooks.enqueueBastionMirror) {
+      try {
+        await hooks.enqueueBastionMirror(backupId);
+        logger.info({ backupId }, 'backup: queued the Bastion off-site evidence copy');
+      } catch (err) {
+        logger.warn(
+          { backupId, err: err instanceof Error ? err.message : String(err) },
+          'backup: could not queue the Bastion off-site evidence copy; the backup itself is complete',
+        );
+      }
+    }
 
     if (job.data.kind === 'scheduled' && env.BACKUP_RETENTION_COUNT > 0) {
       await pruneOldBackups(env, logger);
