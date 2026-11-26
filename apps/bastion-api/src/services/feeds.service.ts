@@ -389,23 +389,53 @@ export async function ingestFeedBatch(
 
 // ── Bolt-event feeds (the evidence-ingest engine) ─────────────────────────────────────────
 
+/** The most inbox events one Bolt-event feed turns into records per engine call. */
+export const BOLT_FEED_BATCH = 200;
+
 /**
  * Turn pending inbox events that match an active Bolt-event feed into feed records. Events that
  * match no feed are left for the consumers that own them (M6 proposal reconcile). Per org, one
  * transaction per batch of up to 200 events.
+ *
+ * The engine is its own pusher, so it never sends a batch larger than the feed's remaining daily
+ * quota (#218): it takes at most `remaining` events (the oldest first) and leaves the rest for
+ * the next UTC day, instead of retrying one all-or-nothing batch that can never fit until the
+ * events are pruned unrecorded. A feed with no quota left is skipped with a warning.
  */
 export async function ingestBoltEventFeeds(engine: EngineDeps, orgId: string): Promise<{ recorded: number; duplicates: number; quota_blocked: number }> {
   const feeds = await orgTx(engine.sql, orgId, (tx) => tx`
-    SELECT id, bolt_source, bolt_event_type FROM bastion_evidence_feeds
+    SELECT id, label, bolt_source, bolt_event_type, quota_day::text AS quota_day, records_on_quota_day, daily_record_quota
+      FROM bastion_evidence_feeds
      WHERE organization_id = ${orgId} AND source_kind = 'bolt_event' AND status = 'active'`);
   let recorded = 0;
   let duplicates = 0;
   let quotaBlocked = 0;
+  const today = utcDate(engine.now());
   for (const f of feeds) {
+    const remaining = quotaAfter(
+      { quota_day: (f.quota_day as string | null) ?? null, records_on_quota_day: Number(f.records_on_quota_day), daily_record_quota: Number(f.daily_record_quota) },
+      today,
+      0,
+    ).remaining;
+    const take = Math.min(BOLT_FEED_BATCH, remaining);
+    if (take <= 0) {
+      const waiting = await orgTx(engine.sql, orgId, (tx) => tx`
+        SELECT count(*)::int AS n FROM bastion_ingest_events
+         WHERE organization_id = ${orgId} AND status = 'pending' AND source = ${f.bolt_source as string} AND event_type = ${f.bolt_event_type as string}`);
+      const n = Number(waiting[0]?.n ?? 0);
+      if (n > 0) {
+        quotaBlocked += n;
+        engine.log.warn(
+          { organization_id: orgId, feed_id: f.id, waiting: n },
+          `bastion-evidence-ingest: feed "${String(f.label)}" has used its daily limit; ${n} event(s) wait for the next UTC day`,
+        );
+      }
+      continue;
+    }
     const events = await orgTx(engine.sql, orgId, (tx) => tx`
       SELECT id, source_idempotency_key, payload, created_at FROM bastion_ingest_events
        WHERE organization_id = ${orgId} AND status = 'pending' AND source = ${f.bolt_source as string} AND event_type = ${f.bolt_event_type as string}
-       ORDER BY created_at LIMIT 200`);
+       ORDER BY created_at LIMIT ${take}`);
     if (events.length === 0) continue;
     const highest = await beginLedgerBatch(engine, orgId);
     const records: RecordIn[] = events.map((e) => {

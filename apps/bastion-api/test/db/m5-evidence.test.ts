@@ -14,6 +14,7 @@ import {
   createFeed,
   createFeedKey,
   FeedAuthError,
+  ingestBoltEventFeeds,
   ingestFeedBatch,
   listFeedRecords,
   revokeFeedKey,
@@ -598,5 +599,34 @@ describe.skipIf(!DATABASE_URL)('M5 manual evidence, personal data, feeds and the
     await revokeFeedKey(engine, admin, key.id as string);
     await expect(authenticateFeedPush(engine, 'crew-roster', `Bearer ${key.token}`, PEPPER)).rejects.toBeInstanceOf(FeedAuthError);
     await expect(authenticateFeedPush(engine, 'crew-roster', `Bearer ${key2.token}`, PEPPER)).resolves.toBeTruthy();
+  });
+
+  it('a Bolt-event feed takes only what its daily quota allows and never sticks (#218)', async () => {
+    const o = await seed(sql, 'boltquota', 1);
+    orgs.push(o.org);
+    const engine = makeDeps(sql);
+    const admin = viewer(o, o.owner, 'owner');
+    await createFeed(engine, admin, {
+      feed_key: 'deal-closed',
+      label: 'Deals closed',
+      source_kind: 'bolt_event',
+      bolt_source: 'bond',
+      bolt_event_type: 'deal.won',
+      cadence_days: 1,
+      daily_record_quota: 3,
+    } as never);
+    for (let i = 0; i < 5; i++) {
+      await sql`INSERT INTO bastion_ingest_events (organization_id, source, event_type, source_idempotency_key, payload, created_at)
+                VALUES (${o.org}, 'bond', 'deal.won', ${`bond:deal.won:${i}`}, '{}'::jsonb, now() - (${5 - i} || ' minutes')::interval)`;
+    }
+    // Quota 3 with 5 waiting: the oldest 3 are recorded at once instead of nothing, forever.
+    expect(await ingestBoltEventFeeds(engine, o.org)).toEqual({ recorded: 3, duplicates: 0, quota_blocked: 0 });
+    // The rest wait for the next UTC day; nothing is retried as an oversized batch.
+    expect(await ingestBoltEventFeeds(engine, o.org)).toEqual({ recorded: 0, duplicates: 0, quota_blocked: 2 });
+    const left = await sql`SELECT source_idempotency_key FROM bastion_ingest_events WHERE organization_id = ${o.org} AND status = 'pending' ORDER BY created_at`;
+    expect(left.map((r) => r.source_idempotency_key)).toEqual(['bond:deal.won:3', 'bond:deal.won:4']);
+    // Next UTC day: the remaining two land.
+    const tomorrow = makeDeps(sql, { clock: { offsetMs: DAY, now: () => new Date(Date.now() + DAY) } });
+    expect((await ingestBoltEventFeeds(tomorrow, o.org)).recorded).toBe(2);
   });
 });
