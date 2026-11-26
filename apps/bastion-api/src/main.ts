@@ -26,6 +26,11 @@ import rlsPlugin from './plugins/rls.js';
 import frameworkRoutes from './routes/frameworks.routes.js';
 import controlRoutes from './routes/controls.routes.js';
 import setupRoutes from './routes/setup.routes.js';
+import evidenceRoutes from './routes/evidence.routes.js';
+import internalRoutes from './routes/internal.routes.js';
+import { engineDeps } from './engine/runtime.js';
+import { checkLedgerIdentity } from './engine/restore.js';
+import { closeBastionQueues } from './lib/queue.js';
 
 const bootStarted = Date.now();
 const elapsed = () => `${((Date.now() - bootStarted) / 1000).toFixed(1)}s`;
@@ -104,11 +109,14 @@ await fastify.register(healthCheckPlugin, {
 
 // Bastion REST surface, mounted under /v1. Each milestone registers its route files here, each
 // with its own requireCan gates. M3: library, frameworks, controls, assertions, setup.
+// M4: evaluations, evidence, ledger seals and restores, and the internal engines/events routes.
 await fastify.register(
   async (v1) => {
     await v1.register(frameworkRoutes);
     await v1.register(controlRoutes);
     await v1.register(setupRoutes);
+    await v1.register(evidenceRoutes);
+    await v1.register(internalRoutes);
   },
   { prefix: '/v1' },
 );
@@ -123,7 +131,11 @@ for (const signal of signals) {
     shuttingDown = true;
     fastify.log.info(`Received ${signal}, draining and shutting down...`);
     try {
+      // fastify.close() lets in-flight requests finish: an evaluation slice is bounded at about
+      // 28 s and compose allows 75 s (stop_grace_period), so a slice is never cut mid-write; the
+      // claim stays with the worker's claimant, which re-drives the run on its next poll.
       await fastify.close();
+      await closeBastionQueues();
       await connection.end();
       if (readConnection !== connection) await readConnection.end();
     } finally {
@@ -148,3 +160,21 @@ try {
 
 // Own-bucket check AFTER listen and not awaited: it never delays health or readiness.
 void runBucketCheck(createBastionStorage(env), env.BASTION_S3_BUCKET, fastify.log);
+
+// Restore detection at boot (spec 3.4): compare every org's ledger with its highest bucket seal.
+// Not awaited; a mismatch opens a restore row and blocks appends for that org only.
+void (async () => {
+  try {
+    const deps = engineDeps(fastify.log, fastify.redis);
+    if (!deps.storage) return;
+    const orgs = await connection`SELECT DISTINCT organization_id FROM bastion_ledger_entries`;
+    fastify.log.info(`[${elapsed()}] checking ${orgs.length} evidence ledgers against their bucket seals...`);
+    for (const [i, o] of orgs.entries()) {
+      const r = await checkLedgerIdentity(deps, o.organization_id as string);
+      if (r.blockedBy) fastify.log.warn({ organization_id: o.organization_id, restore_id: r.blockedBy }, 'ledger appends are blocked by a detected restore');
+      fastify.log.info(`[${elapsed()}] ledger identity checked ${i + 1}/${orgs.length}`);
+    }
+  } catch (err) {
+    fastify.log.warn({ err: (err as Error).message }, 'boot ledger identity check did not finish; the next append batch repeats it');
+  }
+})();

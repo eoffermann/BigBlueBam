@@ -64,9 +64,9 @@ A tool/command "corresponds" to the endpoint(s) its handler calls. Sections are 
 | Bulwark | 29 | 17 | 12 | 0 |
 | Burn | 48 | 19 | 29 | 0 |
 | Bursar | 79 | 22 | 57 | 0 |
-| Bastion (tools pending registration at M11) | 26 | 22 | 4 | 2 |
+| Bastion (tools pending registration at M11) | 37 | 30 | 7 | 2 |
 | Cross-app platform | 43 | 32 | 11 | 6 |
-| **Total** | **1291** | **896** | **395** | **19** |
+| **Total** | **1302** | **904** | **398** | **19** |
 
 _Counts are summed from the per-section tables (each row's REST endpoint counted once even when several MCP tools share it). After the `feat/mcp-endpoint-parity` build the "with an MCP tool" total roughly doubled (≈334 → ≈690). Of the ~247 endpoints still tool-less, the large majority are now annotated `— _(skip: …)_` with a reason — auth/OAuth/session, public-inbound (forms/booking/portal/tracking), multipart/binary upload, binary export (PDF/SVG/CSV/.ics), raw credential/API-key admin, SuperUser/permission/account admin (Bam org/admin held to a deliberately conservative scope this pass), Yjs/scene/WebSocket realtime sync, internal/service-to-service routes, and slug/name resolvers done internally — plus the deferred Helpdesk `X-Agent-Key` agent routes. Some endpoints are shared by multiple MCP tools and many are internal / webhook / public-inbound (not user-facing), so treat the totals as close approximations of the surface size, not an exact public-API inventory. The remaining intentional gaps cluster in **Bam org/admin** (SuperUser & permissions admin, integrations, credentials — UI/CLI-only) and a few per-app binary/upload/realtime tails._
 
@@ -2229,6 +2229,17 @@ AI procurement leveling & spend-baseline monitor. 20 `bursar_*` tools (spec sect
 | `GET /v1/setup` | `bastion_get_setup_status` | Setup wizard state: frameworks, profile, Compliance project, proposed checks, ISO applicability progress | Setup wizard |
 | `PATCH /v1/setup/profile` | `bastion_save_company_profile` | Save the ten company-profile answers | Setup wizard "Save answers" |
 | `POST /v1/setup/compliance-project` | `bastion_set_compliance_project` | Record the required Compliance project (caller must be a member of it, SuperUsers excepted; the project itself is created through Bam's `create_project`) | Setup wizard "Create a Compliance project for me", "Use an existing project" |
+| `POST /v1/evaluations` | `bastion_run_evaluation` | Evaluate now (202 + queued run; full or one control); 409 `EVALUATION_RUNNING` while one of the same scope is live | — (Readiness "Check now", M5) |
+| `GET /v1/evaluations` | `bastion_list_evaluations` | Evaluation runs, newest first, with status, partial reason and counts | — (Readiness, M5) |
+| `GET /v1/evaluations/:id` | `bastion_list_evaluations` | One run's status (polled; no realtime in v1) | — (Readiness, M5) |
+| `GET /v1/controls/:id/evidence` | `bastion_evidence_for` | A control's evidence snapshots with a plain explanation; counts only unless owner, admin or control owner | — (Control detail, M6) |
+| `GET /v1/evidence/:id` | `bastion_get_evidence` | One evidence snapshot | — (Control detail, M6) |
+| `GET /v1/evidence/:id/verify` | `bastion_verify_evidence` | Re-hash entry and stored file, check the personal-data commitment, walk to the next signed seal | — (Control detail, M6) |
+| `GET /v1/ledger/seals` | `bastion_list_seals` | Signed daily seals plus every signing key (current and retired) | — (Sharing, M9) |
+| `GET /v1/ledger/restores` | `bastion_list_restores` | Lost ledger ranges from the database and from the bucket's `restores/` records | — (Settings, M9) |
+| `POST /v1/ledger/restores/:id/acknowledge` | — _(skip: auth: session required (spec 2.8, #136); a vouching act, spec 3.4; owner only, impersonation refused, confirm)_ | Acknowledge a matched restore or resume recording under an unexplained gap | — (Settings, M9) |
+| `POST /v1/internal/engines/:name` | — _(skip: internal service-to-service; the worker's thin jobs call it with the internal secret)_ | evaluate-tick, evaluate-run, outbox-drain, ledger-seal, ledger-verify, run-reaper, evaluation-missed, weekly-readiness, retention | worker |
+| `POST /v1/internal/events` | — _(skip: internal service-to-service; bolt-api's bastion dispatch hook)_ | Durable inbox for consumed events (deduplicated per org) | bolt-api |
 | `GET /health`, `GET /health/ready`, `GET /metrics` | — _(skip: probe)_ | Health / readiness (Postgres and Redis only) / metrics | — |
 
-`bastion_list_frameworks` backs four rows, `bastion_compile_framework` two, `bastion_control_status` two, `bastion_propose_assertion` two, `bastion_upsert_control` two, `bastion_decide_applicability` two. Section counts: 26 REST endpoint rows (25 bastion-api routes plus the combined health/metrics row), 22 with a pending `bastion_*` tool, 4 skip-annotated (two session-required vouching acts, the binary CSV, health); 16 pending `bastion_*` tools. Two of them are MCP-only for now: `bastion_list_auditor_rooms` (spec rows 84, 88) and `bastion_list_auditor_requests` (row 89) were built ahead of their routes per the #196 decision, and their REST rows land here when M8 ships `GET /v1/auditor-rooms`, `GET /v1/auditor-rooms/:id/access-log` and `GET /v1/auditor-requests`.
+`bastion_list_frameworks` backs four rows, `bastion_compile_framework` two, `bastion_control_status` two, `bastion_propose_assertion` two, `bastion_list_evaluations` two, `bastion_upsert_control` two, `bastion_decide_applicability` two. Section counts: 37 REST endpoint rows (36 bastion-api routes plus the combined health/metrics row), 30 with a pending `bastion_*` tool, 7 skip-annotated (three session-required vouching acts, the binary CSV, two internal routes, health); 23 pending `bastion_*` tools (14 milestone handlers through M4, 9 from the #196 parity decision). Two of them are MCP-only for now: `bastion_list_auditor_rooms` (spec rows 84, 88) and `bastion_list_auditor_requests` (row 89) were built ahead of their routes per the #196 decision, and their REST rows land here when M8 ships `GET /v1/auditor-rooms`, `GET /v1/auditor-rooms/:id/access-log` and `GET /v1/auditor-requests`.

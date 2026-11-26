@@ -1,0 +1,274 @@
+// Restore detection by identity (spec 3.4). The bucket holds signed seal objects that survive a
+// database restore. The database entry at the highest bucket-sealed (epoch, head_seq) must exist
+// and carry that seal's head_hash; anything else means history was lost.
+//
+// The highest seal is taken across ALL seal objects for the org, not the newest by date. Seal
+// identities are cached per org; the bucket is re-listed when the cache is older than a minute
+// or when max(platform_restores.completed_at) changes, so an in-place restore from the Backup
+// app (no bastion-api restart) is caught on the next append batch. The SQL identity check
+// itself runs on every batch (it is one indexed lookup).
+//
+// On a mismatch: a bastion_ledger_restores row with the lost range and a provisional epoch; the
+// range also goes to the bucket as restores/<org>/<id>.json; ledger.restore_detected is published
+// (plus evidence.integrity_failed when no completed platform restore lines up); appends for the
+// org stay blocked until an owner resolves the row.
+
+import { randomUUID } from 'node:crypto';
+import { withStorageTimeout } from '@bigbluebam/storage';
+import { compareEpochSeq } from '../lib/ledger-canonical.js';
+import { type EngineDeps, orgTx, type Tx } from './context.js';
+import { enqueueBastionEvent } from './outbox.js';
+import { lockLedger } from './ledger.js';
+
+export interface SealIdentity {
+  org: string;
+  seal_date: string;
+  epoch: number;
+  head_seq: number;
+  head_hash: string;
+  signing_key_id: string;
+  signature: string;
+  sealed_at: string | null;
+  object_key: string;
+}
+
+export interface SealCacheEntry {
+  keys: Set<string>;
+  seals: SealIdentity[];
+  refreshedAt: number;
+  restoreMarker: string | null;
+}
+
+export class StorageUnavailableError extends Error {
+  constructor(message = 'Evidence storage is not available.') {
+    super(message);
+    this.name = 'StorageUnavailableError';
+  }
+}
+
+const CACHE_TTL_MS = 60_000;
+
+export const sealObjectKey = (org: string, sealDate: string) => `seals/${org}/${sealDate}.json`;
+export const restoreObjectKey = (org: string, id: string) => `restores/${org}/${id}.json`;
+
+async function readJson(deps: EngineDeps, key: string): Promise<unknown> {
+  const storage = deps.storage;
+  if (!storage) throw new StorageUnavailableError();
+  const { stream } = await withStorageTimeout('get', storage.getStream(key), deps.putTimeoutMs);
+  const chunks: Buffer[] = [];
+  for await (const c of stream as AsyncIterable<Buffer | string>) chunks.push(typeof c === 'string' ? Buffer.from(c) : c);
+  return JSON.parse(Buffer.concat(chunks).toString('utf8'));
+}
+
+async function listAll(deps: EngineDeps, prefix: string): Promise<string[]> {
+  const storage = deps.storage;
+  if (!storage) throw new StorageUnavailableError();
+  const keys: string[] = [];
+  let cursor: string | undefined;
+  for (let page = 0; page < 1000; page++) {
+    const res = await withStorageTimeout('list', storage.list(prefix, cursor), deps.putTimeoutMs);
+    for (const o of res.objects) keys.push(o.key);
+    if (!res.cursor) break;
+    cursor = res.cursor;
+  }
+  return keys;
+}
+
+function parseSeal(raw: unknown, key: string): SealIdentity | null {
+  const o = raw as Record<string, unknown> | null;
+  if (!o || typeof o !== 'object') return null;
+  const epoch = Number(o.epoch);
+  const seq = Number(o.head_seq);
+  if (!Number.isSafeInteger(epoch) || !Number.isSafeInteger(seq) || typeof o.head_hash !== 'string') return null;
+  return {
+    org: String(o.org),
+    seal_date: String(o.seal_date),
+    epoch,
+    head_seq: seq,
+    head_hash: o.head_hash,
+    signing_key_id: String(o.signing_key_id ?? ''),
+    signature: String(o.signature ?? ''),
+    sealed_at: typeof o.sealed_at === 'string' ? o.sealed_at : null,
+    object_key: key,
+  };
+}
+
+async function restoreMarker(deps: EngineDeps): Promise<string | null> {
+  const rows = await deps.sql`SELECT max(completed_at)::text AS m FROM platform_restores WHERE status = 'completed'`;
+  return (rows[0]?.m as string | null) ?? null;
+}
+
+/** The org's bucket seal identities (cached). Throws StorageUnavailableError without a bucket. */
+export async function refreshSeals(deps: EngineDeps, orgId: string, force = false): Promise<SealCacheEntry> {
+  if (!deps.storage) throw new StorageUnavailableError();
+  const marker = await restoreMarker(deps);
+  const cached = deps.sealCache.get(orgId);
+  if (cached && !force && Date.now() - cached.refreshedAt < CACHE_TTL_MS && cached.restoreMarker === marker) {
+    return cached;
+  }
+  const entry: SealCacheEntry = cached ?? { keys: new Set(), seals: [], refreshedAt: 0, restoreMarker: null };
+  const keys = await listAll(deps, `seals/${orgId}/`);
+  for (const key of keys) {
+    if (entry.keys.has(key)) continue;
+    const seal = parseSeal(await readJson(deps, key), key);
+    entry.keys.add(key);
+    if (seal && seal.org === orgId) entry.seals.push(seal);
+  }
+  entry.refreshedAt = Date.now();
+  entry.restoreMarker = marker;
+  deps.sealCache.set(orgId, entry);
+  return entry;
+}
+
+export function highestSeal(seals: SealIdentity[]): SealIdentity | null {
+  let best: SealIdentity | null = null;
+  for (const s of seals) {
+    if (!best || compareEpochSeq({ epoch: s.epoch, seq: s.head_seq }, { epoch: best.epoch, seq: best.head_seq }) > 0) best = s;
+  }
+  return best;
+}
+
+/** True when the DB holds the sealed entry with the sealed epoch and hash. */
+export async function dbMatchesSeal(q: Tx | EngineDeps['sql'], orgId: string, seal: SealIdentity): Promise<boolean> {
+  const rows = await q`SELECT epoch, entry_hash FROM bastion_ledger_entries
+                        WHERE organization_id = ${orgId} AND seq = ${seal.head_seq}`;
+  const row = rows[0];
+  return !!row && Number(row.epoch) === seal.epoch && row.entry_hash === seal.head_hash;
+}
+
+export interface LedgerIdentityCheck {
+  highest: SealIdentity | null;
+  /** An unresolved restore row: appends are blocked until an owner resolves it. */
+  blockedBy: string | null;
+  opened: string | null;
+}
+
+/**
+ * The check that runs at boot, at the start of every append batch, and in every seal run.
+ * Never automatically benign: a mismatch always opens (or finds) a restore row.
+ */
+export async function checkLedgerIdentity(deps: EngineDeps, orgId: string): Promise<LedgerIdentityCheck> {
+  const entry = await refreshSeals(deps, orgId);
+  const highest = highestSeal(entry.seals);
+  let opened: string | null = null;
+  if (highest && !(await dbMatchesSeal(deps.sql, orgId, highest))) {
+    const known = await deps.sql`
+      SELECT id FROM bastion_ledger_restores
+       WHERE organization_id = ${orgId} AND bucket_epoch = ${highest.epoch}
+         AND bucket_head_seq = ${highest.head_seq} AND bucket_head_hash = ${highest.head_hash}
+       LIMIT 1`;
+    if (known.length === 0) opened = await openRestore(deps, orgId, highest, entry.seals);
+  }
+  const unresolved = await deps.sql`
+    SELECT id FROM bastion_ledger_restores
+     WHERE organization_id = ${orgId} AND resolution IS NULL
+     ORDER BY detected_at LIMIT 1`;
+  return { highest, blockedBy: (unresolved[0]?.id as string | undefined) ?? null, opened };
+}
+
+async function openRestore(deps: EngineDeps, orgId: string, highest: SealIdentity, seals: SealIdentity[]): Promise<string | null> {
+  // The lost range starts after the newest seal the database still agrees with.
+  const older = [...seals]
+    .filter((s) => compareEpochSeq({ epoch: s.epoch, seq: s.head_seq }, { epoch: highest.epoch, seq: highest.head_seq }) < 0)
+    .sort((a, b) => compareEpochSeq({ epoch: b.epoch, seq: b.head_seq }, { epoch: a.epoch, seq: a.head_seq }));
+  let lostFrom = 1;
+  for (const s of older) {
+    if (await dbMatchesSeal(deps.sql, orgId, s)) {
+      lostFrom = s.head_seq + 1;
+      break;
+    }
+  }
+  const maxEpoch = seals.reduce((m, s) => Math.max(m, s.epoch), highest.epoch);
+  const sealedAt = highest.sealed_at ?? `${highest.seal_date}T00:00:00.000Z`;
+  const id = randomUUID();
+  const created = await orgTx(deps.sql, orgId, async (tx) => {
+    await lockLedger(tx, orgId);
+    const again = await tx`
+      SELECT id FROM bastion_ledger_restores
+       WHERE organization_id = ${orgId} AND bucket_epoch = ${highest.epoch}
+         AND bucket_head_seq = ${highest.head_seq} AND bucket_head_hash = ${highest.head_hash}
+       LIMIT 1`;
+    if (again.length > 0) return null;
+    const head = await tx`SELECT max(seq) AS s FROM bastion_ledger_entries WHERE organization_id = ${orgId}`;
+    const match = await tx`
+      SELECT id FROM platform_restores
+       WHERE status = 'completed' AND completed_at >= ${sealedAt}::timestamptz
+       ORDER BY completed_at DESC LIMIT 1`;
+    const platformRestoreId = (match[0]?.id as string | undefined) ?? null;
+    const status = platformRestoreId ? 'pending_ack' : 'unmatched';
+    await tx`
+      INSERT INTO bastion_ledger_restores
+        (id, organization_id, detected_at, db_head_seq, bucket_seal_date, bucket_epoch, bucket_head_seq,
+         bucket_head_hash, lost_from_seq, lost_to_seq, provisional_epoch, platform_restore_id, status)
+      VALUES (${id}, ${orgId}, ${deps.now()}, ${head[0]?.s ?? null}, ${highest.seal_date}::date, ${highest.epoch},
+              ${highest.head_seq}, ${highest.head_hash}, ${lostFrom}, ${highest.head_seq}, ${maxEpoch + 1},
+              ${platformRestoreId}, ${status})`;
+    const refs = {
+      restore_id: id,
+      epoch: highest.epoch,
+      lost_from_seq: lostFrom,
+      lost_to_seq: highest.head_seq,
+      status,
+    };
+    await enqueueBastionEvent('ledger.restore_detected', refs, tx, {
+      orgId,
+      idempotencyKey: `ledger.restore_detected:${id}`,
+      orderingKey: `seal:${orgId}`,
+    });
+    if (!platformRestoreId) {
+      await enqueueBastionEvent('evidence.integrity_failed', { ...refs, cause: 'unexplained_gap' }, tx, {
+        orgId,
+        idempotencyKey: `evidence.integrity_failed:restore:${id}`,
+        orderingKey: `seal:${orgId}`,
+      });
+    }
+    return { status, lostFrom };
+  });
+  if (!created) return null;
+  deps.log.warn(
+    { organization_id: orgId, restore_id: id, status: created.status, lost_from_seq: created.lostFrom, lost_to_seq: highest.head_seq },
+    'bastion-ledger: the database is behind the bucket seal; appends are blocked until an owner resolves it',
+  );
+  // The lost range also lives in the bucket, so it survives a further database rewrite.
+  await writeRestoreObject(deps, orgId, id);
+  return id;
+}
+
+/** Write (or rewrite) restores/<org>/<id>.json from the row. Best effort; retried by the seal run. */
+export async function writeRestoreObject(deps: EngineDeps, orgId: string, restoreId: string): Promise<boolean> {
+  if (!deps.storage) return false;
+  const rows = await orgTx(deps.sql, orgId, (tx) => tx`
+    SELECT id, organization_id, detected_at, db_head_seq, bucket_seal_date::text AS bucket_seal_date, bucket_epoch,
+           bucket_head_seq, bucket_head_hash, lost_from_seq, lost_to_seq, provisional_epoch, platform_restore_id,
+           status, resolution, resolved_at
+      FROM bastion_ledger_restores WHERE organization_id = ${orgId} AND id = ${restoreId}`);
+  const row = rows[0];
+  if (!row) return false;
+  const key = restoreObjectKey(orgId, restoreId);
+  const body = Buffer.from(JSON.stringify(row));
+  try {
+    await withStorageTimeout('put', deps.storage.put(key, body, { contentType: 'application/json', size: body.length }), deps.putTimeoutMs);
+  } catch (err) {
+    deps.log.warn({ organization_id: orgId, restore_id: restoreId, err: (err as Error).message }, 'bastion-ledger: could not write the restore record object; will retry');
+    return false;
+  }
+  await orgTx(deps.sql, orgId, (tx) => tx`UPDATE bastion_ledger_restores SET object_key = ${key}
+                                           WHERE organization_id = ${orgId} AND id = ${restoreId}`);
+  return true;
+}
+
+/** Every lost range recorded in the bucket (survives a database rewrite). */
+export async function bucketRestoreRecords(deps: EngineDeps, orgId: string): Promise<Array<Record<string, unknown>>> {
+  if (!deps.storage) return [];
+  const keys = await listAll(deps, `restores/${orgId}/`);
+  const out: Array<Record<string, unknown>> = [];
+  for (const key of keys) {
+    try {
+      out.push(await readJson(deps, key) as Record<string, unknown>);
+    } catch {
+      // An unreadable record is reported by its key alone.
+      out.push({ object_key: key, unreadable: true });
+    }
+  }
+  return out;
+}

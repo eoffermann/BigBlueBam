@@ -5,6 +5,8 @@ import {
   BastionSetupState,
   bastionAssertionProposeSchema,
   bastionAssertionReviseSchema,
+  bastionEvaluationListQuerySchema,
+  bastionRunEvaluationSchema,
 } from '@bigbluebam/shared';
 import type { ApiClient } from '../middleware/api-client.js';
 import { registerTool } from '../lib/register-tool.js';
@@ -35,6 +37,9 @@ import {
  * handlers for the routes it ships, typed off the shared Zod in @bigbluebam/shared, with tests.
  *
  * M3 (this file's first content): frameworks, controls, assertions, probes and setup status.
+ * M4: run an evaluation, evaluation runs, evidence, verification, seals and restores. Resolving
+ * a ledger restore (POST /ledger/restores/:id/acknowledge) has no tool: it is an owner's
+ * integrity act behind a session (spec 2.8).
  *
  * Agent policy: every tool goes through registerTool, so the section 15 kill switch and the
  * `bastion.*` allowlist apply; bastion_* tools fail closed until an operator allowlists them.
@@ -70,6 +75,13 @@ export const BASTION_PENDING_TOOL_NAMES = [
   'bastion_propose_assertion',
   'bastion_list_probes',
   'bastion_get_setup_status',
+  'bastion_run_evaluation',
+  'bastion_list_evaluations',
+  'bastion_evidence_for',
+  'bastion_get_evidence',
+  'bastion_verify_evidence',
+  'bastion_list_seals',
+  'bastion_list_restores',
 ] as const;
 
 export function registerBastionTools(
@@ -219,6 +231,105 @@ export function registerBastionTools(
     handler: async () => {
       const r = await client.getSetup();
       return r.ok ? ok(r.data) : err('reading setup status', r.data);
+    },
+  });
+
+  // ── 8. bastion_run_evaluation (row 22) ─────────────────────────────────────
+  registerTool(server, {
+    name: 'bastion_run_evaluation',
+    description:
+      'Check the controls now instead of waiting for the nightly run (POST /evaluations, 202 with the queued run). Without control_id every in-scope control is checked; with control_id only that one. Runs are recorded as started by an agent when the caller is one. Poll bastion_list_evaluations with run_id for progress. If an evaluation of the same scope is already going this returns 409 EVALUATION_RUNNING; it finishes on its own. Checks only read suite data; nothing is changed.',
+    input: bastionRunEvaluationSchema.shape,
+    returns: z.record(z.unknown()),
+    handler: async (args) => {
+      const r = await client.runEvaluation(args);
+      return r.ok ? ok(r.data) : err('starting evaluation', r.data);
+    },
+  });
+
+  // ── 9. bastion_list_evaluations (rows 23, 24) ──────────────────────────────
+  registerTool(server, {
+    name: 'bastion_list_evaluations',
+    description:
+      'Evaluation runs, newest first (GET /evaluations, optional status filter and limit), or one run with run_id (GET /evaluations/:id): trigger (nightly, manual, agent), scope, status (queued, running, succeeded, partial with a reason such as restore_pending, failed), and the counts checked so far. Read-only.',
+    input: {
+      run_id: z.string().uuid().optional(),
+      status: bastionEvaluationListQuerySchema.shape.status,
+      limit: z.number().int().min(1).max(100).optional(),
+    },
+    returns: z.record(z.unknown()),
+    handler: async ({ run_id, status, limit }) => {
+      const r = run_id ? await client.getEvaluation(run_id) : await client.listEvaluations({ status, limit });
+      return r.ok ? ok(r.data) : err(run_id ? 'reading evaluation' : 'listing evaluations', r.data);
+    },
+  });
+
+  // ── 10. bastion_evidence_for (row 25) ──────────────────────────────────────
+  registerTool(server, {
+    name: 'bastion_evidence_for',
+    description:
+      'The evidence recorded for one control, newest first (GET /controls/:id/evidence): each snapshot\'s outcome (pass, fail, unprovable with a reason), the check that produced it, its window, counts, its hash and ledger position, and a plain explanation. Names and cited records are shown only to owners, admins and the control\'s owner; everyone else gets counts. Optional assertion_id narrows to one check. Read-only.',
+    input: {
+      control_id: z.string().uuid(),
+      assertion_id: z.string().uuid().optional(),
+      limit: z.number().int().min(1).max(100).optional(),
+    },
+    returns: z.record(z.unknown()),
+    handler: async ({ control_id, assertion_id, limit }) => {
+      const r = await client.listControlEvidence(control_id, { assertion_id, limit });
+      return r.ok ? ok(r.data) : err('listing evidence', r.data);
+    },
+  });
+
+  // ── 11. bastion_get_evidence (row 26) ──────────────────────────────────────
+  registerTool(server, {
+    name: 'bastion_get_evidence',
+    description:
+      'One evidence snapshot by id (GET /evidence/:id), with the same counts-only rule as bastion_evidence_for. Read-only.',
+    input: { evidence_id: z.string().uuid() },
+    returns: z.record(z.unknown()),
+    handler: async ({ evidence_id }) => {
+      const r = await client.getEvidence(evidence_id);
+      return r.ok ? ok(r.data) : err('reading evidence', r.data);
+    },
+  });
+
+  // ── 12. bastion_verify_evidence (row 27) ───────────────────────────────────
+  registerTool(server, {
+    name: 'bastion_verify_evidence',
+    description:
+      'Verify one evidence snapshot (GET /evidence/:id/verify): re-hashes its ledger entry and stored file, checks the personal-data commitment, and walks the chain to the next signed daily seal. result is intact, hash_mismatch, object_missing ("Evidence file missing"), redacted, pd_mismatch or key_changed; recent evidence reads "Not sealed yet" until the nightly seal. Read-only.',
+    input: { evidence_id: z.string().uuid() },
+    returns: z.record(z.unknown()),
+    handler: async ({ evidence_id }) => {
+      const r = await client.verifyEvidence(evidence_id);
+      return r.ok ? ok(r.data) : err('verifying evidence', r.data);
+    },
+  });
+
+  // ── 13. bastion_list_seals (row 29; M3 parity reconciliation) ──────────────
+  registerTool(server, {
+    name: 'bastion_list_seals',
+    description:
+      'The signed daily seals of the evidence ledger (GET /ledger/seals): seal date, epoch, head position and hash, Ed25519 signature, signing key id, and when the seal object reached storage and was published; plus every signing key (current and retired) with its public key so anyone can check old seals. Read-only.',
+    input: { limit: z.number().int().min(1).max(400).optional() },
+    returns: z.record(z.unknown()),
+    handler: async ({ limit }) => {
+      const r = await client.listSeals(limit);
+      return r.ok ? ok(r.data) : err('listing seals', r.data);
+    },
+  });
+
+  // ── 14. bastion_list_restores (row 30; M3 parity reconciliation) ───────────
+  registerTool(server, {
+    name: 'bastion_list_restores',
+    description:
+      'Gaps in the evidence ledger found after a database restore (GET /ledger/restores): each lost range as "History lost by restore, epoch E seq X-Y" or "Unexplained gap, epoch E seq X-Y", whether recording is paused until an owner resolves it, and the ranges recorded in storage that the database no longer holds. Read-only; resolving a gap is a signed-in owner\'s act in Bastion and has no tool.',
+    input: {},
+    returns: z.record(z.unknown()),
+    handler: async () => {
+      const r = await client.listRestores();
+      return r.ok ? ok(r.data) : err('listing restores', r.data);
     },
   });
 }

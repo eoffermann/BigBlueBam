@@ -10,6 +10,8 @@
  *      call, extracts the first two string-literal arguments (event name,
  *      source), and verifies the pair is in the catalog AND that the event
  *      name is bare (no dotted source prefix).
+ *   3. Treats every `enqueueBastionEvent('<event>', ...)` call as a `bastion`
+ *      publisher (Bastion spec 8.1; scripts/lib/bolt-bastion-enqueues.mjs).
  *
  * Exits 1 on drift, 0 on clean. Intentionally minimal: this runs on every PR
  * and should never require a rebuild or a running database. All parsing is
@@ -24,6 +26,7 @@
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
 import { BOLT_SOURCES_FILE, loadBoltSources } from './lib/bolt-sources.mjs';
+import { checkBastionEnqueues } from './lib/bolt-bastion-enqueues.mjs';
 
 const ROOT = resolve(new URL('..', import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, '$1'));
 const CATALOG_FILE = join(ROOT, 'apps', 'bolt-api', 'src', 'services', 'event-catalog.ts');
@@ -203,6 +206,10 @@ function checkCalls(catalog) {
     } catch {
       continue;
     }
+    // Bastion (spec 8.1) enqueues its events through an outbox; the drainer's own
+    // publishBoltEvent call is dynamic, so the literal lives at the enqueue site.
+    if (text.includes('enqueueBastionEvent')) violations.push(...checkBastionEnqueues(file, text, catalog));
+
     // Fast reject before the slower walker.
     if (!text.includes('publishBoltEvent')) continue;
 

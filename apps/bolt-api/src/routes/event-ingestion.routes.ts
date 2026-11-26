@@ -24,6 +24,8 @@ import { dispatchToBulwark } from '../services/bulwark-dispatch-hook.js';
 import { dispatchToBurn } from '../services/burn-dispatch-hook.js';
 // Bursar live-ingest transport (Bursar design spec 16.2)
 import { dispatchToBursar } from '../services/bursar-dispatch-hook.js';
+// Bastion live-ingest transport (Bastion design spec 8.2)
+import { dispatchToBastion } from '../services/bastion-dispatch-hook.js';
 import { Queue } from 'bullmq';
 import type Redis from 'ioredis';
 
@@ -206,6 +208,22 @@ export default async function eventIngestionRoutes(fastify: FastifyInstance) {
       // bursar-api's durable inbox at /v1/internal/events, gate-checked per org. Fire-and-forget;
       // a dropped dispatch is recovered by Bursar's reconcile passes.
       void dispatchToBursar(
+        fastify.redis,
+        {
+          orgId: event.org_id,
+          eventId,
+          source: event.source,
+          eventType: event.event_type,
+          payload: event.payload,
+        },
+        request.log,
+      ).catch(() => {
+        // swallowed: helper has its own logging
+      });
+
+      // Bastion live-ingest transport (spec 8.2): platform proposal.decided, plus any
+      // (source, event_type) an org bound to a machine feed, into bastion-api's durable inbox.
+      void dispatchToBastion(
         fastify.redis,
         {
           orgId: event.org_id,
