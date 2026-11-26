@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { llmTimeoutEnvSchema } from '@bigbluebam/shared';
 
 const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
@@ -46,7 +47,9 @@ const envSchema = z.object({
   // BURSAR_ENGINE_TIMEOUT_MS bounds only the 202-returning start leg (spec 18.6a): the
   // leveling and derivation engines proceed in bounded slices under a lease, so this is
   // never the deadline for the work itself.
-  BURSAR_LLM_TIMEOUT_MS: z.coerce.number().int().positive().default(60000),
+  // One LLM call's deadline, sent to the proxy as timeout_ms (#283); 60 s per spec 3.9 (the shared
+  // default). Refused at boot outside the proxy's 1 s..180 s bounds.
+  BURSAR_LLM_TIMEOUT_MS: llmTimeoutEnvSchema(),
   BURSAR_ENGINE_TIMEOUT_MS: z.coerce.number().int().positive().default(30000),
 
   // Deadline for the request-path internal round trips: the permission dual-read (viewer

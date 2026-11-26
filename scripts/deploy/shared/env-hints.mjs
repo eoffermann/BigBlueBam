@@ -429,6 +429,13 @@ export const ENV_HINTS = {
   PUBLIC_FORM_RATE_LIMIT: { kind: 'literal', value: '10' },
   PUBLIC_FORM_RATE_WINDOW_MS: { kind: 'literal', value: '3600000' },
   QUERY_TIMEOUT_MS: { kind: 'literal', value: '10000' },
+  // One LLM call's deadline for burn, bulwark, basis and braid (#283), sent to the api's LLM
+  // proxy as timeout_ms. 1000..180000; each service refuses to boot outside that range.
+  LLM_TIMEOUT_MS: {
+    kind: 'literal',
+    value: '60000',
+    note: 'One AI call deadline in ms, sent to the api LLM proxy. At most 180000; the service refuses to start above it.',
+  },
   CACHE_TTL_SECONDS: { kind: 'literal', value: '60' },
   // Platform-wide default, matching `${BBB_PERMISSIONS_ENFORCE:-warn}` in docker-compose.yml
   // (:125 and ~19 other sites). 'warn' records resolver divergence without blocking.

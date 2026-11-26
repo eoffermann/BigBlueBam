@@ -295,7 +295,7 @@ with **R**, optional with `o`.
 | o | `BOLT_API_INTERNAL_URL` | computed | `http://bolt-api.railway.internal:8080` |  |
 | o | `INTERNAL_SERVICE_SECRET` | secret | `<generate>` | openssl rand -hex 32 — protects internal service-to-service calls (bolt-api event ingestion, MCP /tools/call). Validated min(32); use 64 hex chars. |
 | o | `QUERY_TIMEOUT_MS` | literal | `10000` |  |
-| o | `LLM_TIMEOUT_MS` | unknown | `<see app docs>` |  |
+| o | `LLM_TIMEOUT_MS` | literal | `60000` | One AI call deadline in ms, sent to the api LLM proxy. At most 180000; the service refuses to start above it. |
 | o | `EXPLANATION_CACHE_TTL_SECONDS` | unknown | `<see app docs>` |  |
 
 ### braid-api

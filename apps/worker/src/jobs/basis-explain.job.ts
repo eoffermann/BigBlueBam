@@ -19,6 +19,7 @@ import type { Job } from 'bullmq';
 import type { Logger } from 'pino';
 import { sql } from 'drizzle-orm';
 import { publishBoltEvent } from '@bigbluebam/shared';
+import { callInternalLlm, type InternalLlmMessage } from '@bigbluebam/shared/internal-llm-client';
 import { getDb } from '../utils/db.js';
 
 export interface BasisExplainJobData {
@@ -85,7 +86,7 @@ async function generateNarrative(
     `Top contributions - ${top}.`,
   ].filter(Boolean).join(' ');
 
-  const messages = [
+  const messages: InternalLlmMessage[] = [
     {
       role: 'system',
       content:
@@ -94,16 +95,32 @@ async function generateNarrative(
     { role: 'user', content: facts },
   ];
 
-  const res = await fetch(`${apiUrl.replace(/\/+$/, '')}/internal/llm/chat`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'x-internal-secret': secret },
-    body: JSON.stringify({ provider_id: providerId, messages, max_tokens: 200, temperature: 0.2 }),
-    signal: AbortSignal.timeout(Number(process.env.LLM_TIMEOUT_MS ?? 15000) + 5000),
+  // The shared client (#283): the deadline is sent to the proxy as timeout_ms (clamped exactly as
+  // the proxy clamps it) and the client waits LLM_CLIENT_GRACE_MS past it, instead of re-deriving
+  // its own grace. A 504 is an LlmTimeoutError; the row is counted failed either way.
+  const r = await callInternalLlm({
+    apiBaseUrl: apiUrl,
+    secret,
+    service: 'basis',
+    providerId,
+    messages,
+    maxTokens: 200,
+    temperature: 0.2,
+    timeoutMs: basisLlmTimeoutMs(),
   });
-  if (!res.ok) throw new Error(`internal-llm ${res.status}`);
-  const json = (await res.json()) as { data?: { content?: string } };
-  const text = json.data?.content?.trim();
+  const text = r.content.trim();
   return text ? text : null;
+}
+
+/**
+ * The narrative call's deadline: BASIS_LLM_TIMEOUT_MS (the same variable compose hands basis-api
+ * as LLM_TIMEOUT_MS), else the worker's own LLM_TIMEOUT_MS, else the proxy's default. The shared
+ * client clamps it to the proxy's bounds.
+ */
+export function basisLlmTimeoutMs(env: NodeJS.ProcessEnv = process.env): number | null {
+  const raw = env.BASIS_LLM_TIMEOUT_MS ?? env.LLM_TIMEOUT_MS;
+  const n = raw === undefined || raw === '' ? Number.NaN : Number(raw);
+  return Number.isFinite(n) ? n : null;
 }
 
 export async function processBasisExplainJob(

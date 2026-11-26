@@ -269,6 +269,8 @@ services:
       # platform llm-provider (BBB_API_INTERNAL_URL) and recall/re-embed into
       # Qdrant. Both are degradable request-time deps (spec 9.2).
       BBB_API_INTERNAL_URL: http://api:4000
+      # The basis-explain narrative call's deadline, sent to the LLM proxy as timeout_ms (#283).
+      BASIS_LLM_TIMEOUT_MS: ${BASIS_LLM_TIMEOUT_MS:-60000}
       QDRANT_URL: ${QDRANT_URL:-http://qdrant:6333}
       # braid-proposal-reconcile drives approved/rejected proposals through braid-api's
       # single merge executor (POST /internal/proposal-decided). Backstop for lost Bolt
@@ -887,7 +889,7 @@ services:
       - RATE_LIMIT_MAX=100
       - RATE_LIMIT_WINDOW_MS=60000
       - QUERY_TIMEOUT_MS=${BASIS_QUERY_TIMEOUT_MS:-10000}
-      - LLM_TIMEOUT_MS=${BASIS_LLM_TIMEOUT_MS:-15000}
+      - LLM_TIMEOUT_MS=${BASIS_LLM_TIMEOUT_MS:-60000}
       - EXPLANATION_CACHE_TTL_SECONDS=${BASIS_EXPLANATION_CACHE_TTL:-3600}
       - BBB_PERMISSIONS_ENFORCE=${BBB_PERMISSIONS_ENFORCE:-warn}
       # Must be non-empty for the Bench internal query route + narrative path;

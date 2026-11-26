@@ -16,6 +16,8 @@ export default defineConfig({
     'src/bulwark-arm-key.ts',
     'src/burn-precheck-key.ts',
     'src/visibility-client.ts',
+    // The internal LLM proxy client (#283) carries INTERNAL_SERVICE_SECRET: server-only.
+    'src/internal-llm-client.ts',
   ],
   format: ['esm', 'cjs'],
   dts: true,

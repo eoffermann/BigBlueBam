@@ -13,12 +13,11 @@
  */
 import type { FastifyInstance } from 'fastify';
 import type Redis from 'ioredis';
-import { z } from 'zod';
 import { eq, and } from 'drizzle-orm';
 import {
   LLM_CALL_TIMEOUT_MAX_MS,
-  LLM_CALL_TIMEOUT_MIN_MS,
   LLM_UPSTREAM_TIMEOUT_CODE,
+  internalLlmChatRequestSchema,
   llmCallDeadlineMs,
   llmHoldWindowMs,
 } from '@bigbluebam/shared';
@@ -150,21 +149,11 @@ const requireInternalAuth = requireInternalSecretOrHelpdeskToken;
 // Request schema
 // ---------------------------------------------------------------------------
 
-const chatRequestSchema = z.object({
-  provider_id: z.string().uuid(),
-  messages: z.array(
-    z.object({
-      role: z.enum(['system', 'user', 'assistant']),
-      content: z.string(),
-    }),
-  ).min(1),
-  model: z.string().max(200).optional(),
-  max_tokens: z.number().int().positive().max(100000).optional(),
-  temperature: z.number().min(0).max(2).optional(),
-  // The upstream deadline for this call (#257): clamped to LLM_CALL_TIMEOUT_MAX_MS; absent means
-  // LLM_CALL_TIMEOUT_DEFAULT_MS (60 s, what every caller had before).
-  timeout_ms: z.number().int().min(LLM_CALL_TIMEOUT_MIN_MS).max(LLM_CALL_TIMEOUT_MAX_MS).optional(),
-});
+// The contract lives in @bigbluebam/shared (#283), next to llm-deadline.ts, and every caller builds
+// its body through the shared client (@bigbluebam/shared/internal-llm-client), so a field added
+// there reaches the proxy and every caller together. timeout_ms (#257) is bounded by
+// LLM_CALL_TIMEOUT_MIN_MS..LLM_CALL_TIMEOUT_MAX_MS; absent means LLM_CALL_TIMEOUT_DEFAULT_MS.
+const chatRequestSchema = internalLlmChatRequestSchema;
 
 /** True for the error fetch throws when AbortSignal.timeout fires. */
 function isTimeoutError(err: unknown): boolean {
