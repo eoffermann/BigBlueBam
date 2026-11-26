@@ -11,9 +11,17 @@ import { unzipSync, zipSync, strToU8, strFromU8 } from 'fflate';
  * - The zip is read with fflate (no native code). Every entry's declared size is checked
  *   against a total budget BEFORE it is inflated, and only the parts this reader needs are
  *   inflated at all (a zip bomb in an unrelated part costs nothing).
- * - XML is scanned with a small tag scanner, never a DOM parser: no DTDs, no entity
- *   expansion beyond the five predefined entities and numeric references, so no XXE and no
- *   billion-laughs.
+ * - XML is read by a single-pass tag scanner (XmlCursor below), never a DOM parser and never a
+ *   regular expression over the document: the cursor only moves forward, so every byte is looked
+ *   at once and reading is linear in the input (#270). An element that is never closed, a tag
+ *   nested where it cannot be (a row inside a row), a stray "<" inside a tag or a DTD is refused
+ *   at once as MALFORMED. No entity expansion beyond the five predefined entities and numeric
+ *   references, so no XXE and no billion-laughs.
+ * - What the reader PRODUCES is budgeted, not only what it inflates (#265, #273): a shared-string
+ *   cell costs ~20 bytes of XML but expands to the whole string every time it is used, so every
+ *   emitted cell is charged against maxCells (cell slots, padding included) and maxTotalChars
+ *   (decoded characters, shared-string expansions included), and each cell is cut at
+ *   maxCellChars. Going over maxCells or maxTotalChars throws TOO_LARGE before the grid grows.
  * - The writer emits every cell as an inline string (`t="inlineStr"`), which a spreadsheet
  *   shows as text and never evaluates as a formula. Callers that also export CSV should still
  *   neutralize formula prefixes (packages/shared/src/csv-safe.ts) so both downloads agree.
@@ -35,11 +43,19 @@ export interface XlsxReadLimits {
   maxRows?: number;
   /** Columns kept per row (default 200). */
   maxColumns?: number;
+  /** Cell slots produced across every sheet, empty padding included (default 1,000,000); more throws TOO_LARGE. */
+  maxCells?: number;
+  /** Characters kept per cell (default 32,767, Excel's own limit); longer cells are cut and `truncated` is set. */
+  maxCellChars?: number;
+  /** Decoded characters produced across every cell, shared-string expansions included (default 32 M); more throws TOO_LARGE. */
+  maxTotalChars?: number;
+  /** Entries in the shared-string table (default 1,000,000); more throws TOO_LARGE. */
+  maxSharedStrings?: number;
 }
 
 export interface XlsxReadResult {
   sheets: SheetGrid[];
-  /** True when a limit cut rows, columns or sheets off. */
+  /** True when a limit cut rows, columns, cells' text or sheets off. */
   truncated: boolean;
 }
 
@@ -55,7 +71,20 @@ export class XlsxError extends Error {
   }
 }
 
-const DEFAULTS = { maxUncompressedBytes: 32 * 1024 * 1024, maxSheets: 20, maxRows: 10_000, maxColumns: 200 };
+const DEFAULTS: Required<XlsxReadLimits> = {
+  maxUncompressedBytes: 32 * 1024 * 1024,
+  maxSheets: 20,
+  maxRows: 10_000,
+  maxColumns: 200,
+  maxCells: 1_000_000,
+  maxCellChars: 32_767,
+  maxTotalChars: 32 * 1024 * 1024,
+  maxSharedStrings: 1_000_000,
+};
+
+const MALFORMED_WORDS = 'This workbook could not be opened. Save it again from your spreadsheet app and retry.';
+const TOO_LARGE_WORDS = 'This workbook is too large to read here.';
+const TOO_MUCH_TEXT_WORDS = 'This workbook holds more cells or text than can be read here. Save just the questions and try again.';
 
 /** True when the bytes start like a zip archive (every xlsx is one). */
 export function looksLikeXlsx(bytes: Uint8Array): boolean {
@@ -98,14 +127,40 @@ export function escapeXmlText(s: string): string {
   return stripInvalidXmlChars(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
-/** Attributes of one start tag (`<c r="A1" t="s">` -> { r: 'A1', t: 's' }). Namespace prefixes kept. */
-function attrsOf(tag: string): Record<string, string> {
+const isSpace = (c: number) => c === 0x20 || c === 0x09 || c === 0x0a || c === 0x0d;
+
+/**
+ * Attributes of one start tag's attribute text (`r="A1" t="s"` -> { r: 'A1', t: 's' }), read in one
+ * forward pass (no regex backtracking). Namespace prefixes kept. Quotes are balanced: the cursor
+ * only hands over tags whose quotes closed.
+ */
+export function attrsOf(s: string): Record<string, string> {
   const out: Record<string, string> = {};
-  const re = /([A-Za-z_][\w:.-]*)\s*=\s*("([^"]*)"|'([^']*)')/g;
-  let m: RegExpExecArray | null = re.exec(tag);
-  while (m) {
-    out[m[1] as string] = decodeXmlText((m[3] ?? m[4] ?? '') as string);
-    m = re.exec(tag);
+  const n = s.length;
+  let i = 0;
+  while (i < n) {
+    while (i < n && isSpace(s.charCodeAt(i))) i++;
+    const start = i;
+    while (i < n) {
+      const c = s.charCodeAt(i);
+      if (isSpace(c) || c === 0x3d /* = */ || c === 0x2f /* / */) break;
+      i++;
+    }
+    const name = s.slice(start, i);
+    if (!name) {
+      i++;
+      continue;
+    }
+    while (i < n && isSpace(s.charCodeAt(i))) i++;
+    if (s.charCodeAt(i) !== 0x3d) continue;
+    i++;
+    while (i < n && isSpace(s.charCodeAt(i))) i++;
+    const q = s[i];
+    if (q !== '"' && q !== "'") continue;
+    const end = s.indexOf(q, i + 1);
+    if (end < 0) break;
+    out[name] = decodeXmlText(s.slice(i + 1, end));
+    i = end + 1;
   }
   return out;
 }
@@ -116,17 +171,132 @@ function local(name: string): string {
   return i >= 0 ? name.slice(i + 1) : name;
 }
 
-/** Concatenated text of every <t> inside a fragment, skipping phonetic runs (<rPh>). */
-function textRuns(fragment: string): string {
-  const noPhonetic = fragment.replace(/<(?:\w+:)?rPh\b[\s\S]*?<\/(?:\w+:)?rPh>/g, '');
-  let out = '';
-  const re = /<(?:\w+:)?t(?:\s[^>]*)?>([\s\S]*?)<\/(?:\w+:)?t>|<(?:\w+:)?t(?:\s[^>]*)?\/>/g;
-  let m: RegExpExecArray | null = re.exec(noPhonetic);
-  while (m) {
-    out += decodeXmlText(m[1] ?? '');
-    m = re.exec(noPhonetic);
+type XmlToken =
+  | { kind: 'open'; name: string; local: string; attrs: string; selfClosing: boolean }
+  | { kind: 'close'; name: string; local: string }
+  | { kind: 'text'; text: string; raw: boolean };
+
+const MAX_DEPTH = 128;
+
+/**
+ * A forward-only XML tag scanner (#270). Each call to next() starts where the last one ended and
+ * finds the next "<" with indexOf, so no byte is scanned twice and reading is linear. It keeps a
+ * stack of open elements: a close tag must match the innermost open one, and the document must
+ * end with nothing open; anything else is MALFORMED at the first place it goes wrong. Comments
+ * and processing instructions are skipped; CDATA is text; a DTD (`<!DOCTYPE`) is refused.
+ */
+export class XmlCursor {
+  private pos = 0;
+  private readonly stack: string[] = [];
+  constructor(private readonly s: string) {}
+
+  /** How many elements are open right now. */
+  get depth(): number {
+    return this.stack.length;
   }
-  return out;
+
+  next(): XmlToken | null {
+    const s = this.s;
+    const n = s.length;
+    for (;;) {
+      if (this.pos >= n) {
+        if (this.stack.length > 0) throw new XlsxError('MALFORMED', MALFORMED_WORDS);
+        return null;
+      }
+      const lt = s.indexOf('<', this.pos);
+      if (lt < 0) {
+        const text = s.slice(this.pos);
+        this.pos = n;
+        return { kind: 'text', text, raw: false };
+      }
+      if (lt > this.pos) {
+        const text = s.slice(this.pos, lt);
+        this.pos = lt;
+        return { kind: 'text', text, raw: false };
+      }
+      if (s.startsWith('<!--', lt)) {
+        const end = s.indexOf('-->', lt + 4);
+        if (end < 0) throw new XlsxError('MALFORMED', MALFORMED_WORDS);
+        this.pos = end + 3;
+        continue;
+      }
+      if (s.startsWith('<![CDATA[', lt)) {
+        const end = s.indexOf(']]>', lt + 9);
+        if (end < 0) throw new XlsxError('MALFORMED', MALFORMED_WORDS);
+        this.pos = end + 3;
+        return { kind: 'text', text: s.slice(lt + 9, end), raw: true };
+      }
+      if (s.startsWith('<?', lt)) {
+        const end = s.indexOf('?>', lt + 2);
+        if (end < 0) throw new XlsxError('MALFORMED', MALFORMED_WORDS);
+        this.pos = end + 2;
+        continue;
+      }
+      // `<!DOCTYPE` and any other declaration: a spreadsheet never writes one, and refusing it is
+      // what keeps entity definitions out entirely.
+      if (s.startsWith('<!', lt)) throw new XlsxError('MALFORMED', MALFORMED_WORDS);
+
+      // A tag: find its end, honouring quoted attribute values; a "<" inside a tag is malformed.
+      let i = lt + 1;
+      const closing = s.charCodeAt(i) === 0x2f;
+      if (closing) i++;
+      let quote = 0;
+      let j = i;
+      for (; j < n; j++) {
+        const c = s.charCodeAt(j);
+        if (quote !== 0) {
+          if (c === quote) quote = 0;
+        } else if (c === 0x22 || c === 0x27) quote = c;
+        else if (c === 0x3e /* > */) break;
+        else if (c === 0x3c /* < */) throw new XlsxError('MALFORMED', MALFORMED_WORDS);
+      }
+      if (j >= n) throw new XlsxError('MALFORMED', MALFORMED_WORDS);
+      this.pos = j + 1;
+      let body = s.slice(i, j);
+      const selfClosing = !closing && body.endsWith('/');
+      if (selfClosing) body = body.slice(0, -1);
+      let k = 0;
+      while (k < body.length && !isSpace(body.charCodeAt(k))) k++;
+      const name = body.slice(0, k);
+      if (!name) throw new XlsxError('MALFORMED', MALFORMED_WORDS);
+      if (closing) {
+        if (this.stack.pop() !== name) throw new XlsxError('MALFORMED', MALFORMED_WORDS);
+        return { kind: 'close', name, local: local(name) };
+      }
+      if (!selfClosing) {
+        if (this.stack.length >= MAX_DEPTH) throw new XlsxError('MALFORMED', MALFORMED_WORDS);
+        this.stack.push(name);
+      }
+      return { kind: 'open', name, local: local(name), attrs: body.slice(k), selfClosing };
+    }
+  }
+}
+
+/** Decoded text of a text token (CDATA is literal; character data has its entities decoded). */
+const tokenText = (t: { text: string; raw: boolean }) => (t.raw ? t.text : decodeXmlText(t.text));
+
+/** What every sheet of one workbook has produced so far, charged against the limits (#265, #273). */
+interface OutputBudget {
+  cells: number;
+  chars: number;
+  truncated: boolean;
+}
+
+function chargeCells(budget: OutputBudget, limits: Required<XlsxReadLimits>, n: number): void {
+  budget.cells += n;
+  if (budget.cells > limits.maxCells) throw new XlsxError('TOO_LARGE', TOO_MUCH_TEXT_WORDS);
+}
+
+/** A cell's value cut to maxCellChars and charged against maxTotalChars. */
+function chargeText(budget: OutputBudget, limits: Required<XlsxReadLimits>, value: string): string {
+  let v = value;
+  if (v.length > limits.maxCellChars) {
+    v = v.slice(0, limits.maxCellChars);
+    budget.truncated = true;
+  }
+  budget.chars += v.length;
+  if (budget.chars > limits.maxTotalChars) throw new XlsxError('TOO_LARGE', TOO_MUCH_TEXT_WORDS);
+  return v;
 }
 
 /** Zero-based column index of a cell reference's letters (`C7` -> 2). -1 when there are none. */
@@ -166,74 +336,218 @@ function normalizePartPath(target: string): string {
   return out.join('/');
 }
 
-function readSharedStrings(xml: string | undefined): string[] {
+/**
+ * The shared-string table: the concatenated <t> runs of each <si>, phonetic runs (<rPh>) skipped.
+ * One forward pass; an <si> or <t> opened inside another is MALFORMED. Each string is cut at
+ * maxCellChars (it can never be shown longer than that).
+ */
+function readSharedStrings(xml: string | undefined, limits: Required<XlsxReadLimits>, output: OutputBudget): string[] {
   if (!xml) return [];
   const out: string[] = [];
-  const re = /<(?:\w+:)?si\b[^>]*>([\s\S]*?)<\/(?:\w+:)?si>|<(?:\w+:)?si\b[^>]*\/>/g;
-  let m: RegExpExecArray | null = re.exec(xml);
-  while (m) {
-    out.push(textRuns(m[1] ?? ''));
-    m = re.exec(xml);
+  const cur = new XmlCursor(xml);
+  let inSi = false;
+  let inT = false;
+  let phonetic = 0;
+  let parts: string[] = [];
+  let len = 0;
+  for (let t = cur.next(); t; t = cur.next()) {
+    if (t.kind === 'open') {
+      if (t.local === 'si') {
+        if (inSi) throw new XlsxError('MALFORMED', MALFORMED_WORDS);
+        if (t.selfClosing) {
+          out.push('');
+        } else {
+          inSi = true;
+          parts = [];
+          len = 0;
+        }
+        if (out.length > limits.maxSharedStrings) throw new XlsxError('TOO_LARGE', TOO_MUCH_TEXT_WORDS);
+      } else if (inSi && t.local === 'rPh' && !t.selfClosing) phonetic += 1;
+      else if (inSi && t.local === 't' && !t.selfClosing && phonetic === 0) {
+        if (inT) throw new XlsxError('MALFORMED', MALFORMED_WORDS);
+        inT = true;
+      }
+    } else if (t.kind === 'close') {
+      if (t.local === 'si' && inSi) {
+        inSi = false;
+        inT = false;
+        phonetic = 0;
+        out.push(parts.join(''));
+        if (out.length > limits.maxSharedStrings) throw new XlsxError('TOO_LARGE', TOO_MUCH_TEXT_WORDS);
+      } else if (t.local === 'rPh' && phonetic > 0) phonetic -= 1;
+      else if (t.local === 't') inT = false;
+    } else if (inT && len < limits.maxCellChars) {
+      const text = tokenText(t);
+      parts.push(text);
+      len += text.length;
+      if (len > limits.maxCellChars) {
+        output.truncated = true;
+        const joined = parts.join('').slice(0, limits.maxCellChars);
+        parts = [joined];
+        len = joined.length;
+      }
+    }
   }
   return out;
 }
 
-function readSheet(xml: string, shared: string[], limits: Required<XlsxReadLimits>): { rows: string[][]; truncated: boolean } {
+/**
+ * One sheet's rows, in one forward pass. Stops at the row limit without reading further. Every
+ * cell slot (padding included) and every decoded character is charged to the workbook's budget.
+ */
+function readSheet(xml: string, shared: string[], limits: Required<XlsxReadLimits>, budget: OutputBudget): { rows: string[][]; truncated: boolean } {
   const rows: string[][] = [];
   let truncated = false;
-  const rowRe = /<(?:\w+:)?row\b([^>]*?)(?:\/>|>([\s\S]*?)<\/(?:\w+:)?row>)/g;
+  const cur = new XmlCursor(xml);
   let nextRow = 0;
-  let rm: RegExpExecArray | null = rowRe.exec(xml);
-  while (rm) {
-    const rowAttrs = attrsOf(rm[1] ?? '');
-    const rIndex = rowAttrs.r ? Number.parseInt(rowAttrs.r, 10) - 1 : nextRow;
-    const rowIndex = Number.isFinite(rIndex) && rIndex >= nextRow ? rIndex : nextRow;
-    nextRow = rowIndex + 1;
-    if (rowIndex >= limits.maxRows) {
+  let row: string[] | null = null;
+  let rowIndex = 0;
+  let nextCol = 0;
+  // The cell being read.
+  let cell: { col: number; type: string | undefined } | null = null;
+  let vParts: string[] | null = null;
+  let inV = false;
+  let inIs = false;
+  let inT = false;
+  let phonetic = 0;
+  let isParts: string[] = [];
+  let vLen = 0;
+  let isLen = 0;
+
+  const finishCell = () => {
+    if (!cell || !row) return;
+    const { col, type } = cell;
+    cell = null;
+    if (col >= limits.maxColumns) {
       truncated = true;
-      break;
+      return;
     }
-    const cells: string[] = [];
-    const body = rm[2] ?? '';
-    const cellRe = /<(?:\w+:)?c\b([^>]*?)(?:\/>|>([\s\S]*?)<\/(?:\w+:)?c>)/g;
-    let nextCol = 0;
-    let cm: RegExpExecArray | null = cellRe.exec(body);
-    while (cm) {
-      const a = attrsOf(cm[1] ?? '');
-      const ci = a.r ? columnIndexOf(a.r) : -1;
-      const col = ci >= nextCol ? ci : nextCol;
-      nextCol = col + 1;
-      if (col >= limits.maxColumns) {
-        truncated = true;
-        cm = cellRe.exec(body);
-        continue;
+    const v = vParts === null ? undefined : vParts.join('');
+    let value = '';
+    switch (type) {
+      case 's': {
+        const idx = v === undefined ? Number.NaN : Number.parseInt(v, 10);
+        value = Number.isInteger(idx) && idx >= 0 && idx < shared.length ? (shared[idx] as string) : '';
+        break;
       }
-      const inner = cm[2] ?? '';
-      const v = /<(?:\w+:)?v(?:\s[^>]*)?>([\s\S]*?)<\/(?:\w+:)?v>/.exec(inner)?.[1];
-      let value = '';
-      switch (a.t) {
-        case 's': {
-          const idx = v === undefined ? Number.NaN : Number.parseInt(v, 10);
-          value = Number.isInteger(idx) && idx >= 0 && idx < shared.length ? (shared[idx] as string) : '';
+      case 'inlineStr':
+        value = isParts.join('');
+        break;
+      case 'b':
+        value = v === undefined ? '' : v.trim() === '1' ? 'TRUE' : 'FALSE';
+        break;
+      default:
+        // n (number), str (formula string result), e (error), d (ISO date): the cached text.
+        value = v ?? '';
+    }
+    const pad = col - row.length;
+    chargeCells(budget, limits, (pad > 0 ? pad : 0) + 1);
+    while (row.length < col) row.push('');
+    row[col] = chargeText(budget, limits, value);
+  };
+
+  const finishRow = () => {
+    if (!row) return;
+    chargeCells(budget, limits, rowIndex - rows.length > 0 ? rowIndex - rows.length : 0);
+    while (rows.length < rowIndex) rows.push([]);
+    rows[rowIndex] = row;
+    row = null;
+  };
+
+  for (let t = cur.next(); t; t = cur.next()) {
+    if (t.kind === 'open') {
+      switch (t.local) {
+        case 'row': {
+          if (row || cell) throw new XlsxError('MALFORMED', MALFORMED_WORDS);
+          const a = attrsOf(t.attrs);
+          const rIndex = a.r ? Number.parseInt(a.r, 10) - 1 : nextRow;
+          rowIndex = Number.isFinite(rIndex) && rIndex >= nextRow ? rIndex : nextRow;
+          nextRow = rowIndex + 1;
+          if (rowIndex >= limits.maxRows) return { rows, truncated: true };
+          row = [];
+          nextCol = 0;
+          if (t.selfClosing) finishRow();
           break;
         }
-        case 'inlineStr':
-          value = textRuns(/<(?:\w+:)?is\b[^>]*>([\s\S]*?)<\/(?:\w+:)?is>/.exec(inner)?.[1] ?? '');
+        case 'c': {
+          if (!row || cell) throw new XlsxError('MALFORMED', MALFORMED_WORDS);
+          const a = attrsOf(t.attrs);
+          const ci = a.r ? columnIndexOf(a.r) : -1;
+          const col = ci >= nextCol ? ci : nextCol;
+          nextCol = col + 1;
+          cell = { col, type: a.t };
+          vParts = null;
+          isParts = [];
+          vLen = 0;
+          isLen = 0;
+          if (t.selfClosing) finishCell();
           break;
-        case 'b':
-          value = v === undefined ? '' : decodeXmlText(v).trim() === '1' ? 'TRUE' : 'FALSE';
+        }
+        case 'v':
+          if (!cell || inV) throw new XlsxError('MALFORMED', MALFORMED_WORDS);
+          vParts = [];
+          vLen = 0;
+          if (!t.selfClosing) inV = true;
+          break;
+        case 'is':
+          if (!cell || inIs) throw new XlsxError('MALFORMED', MALFORMED_WORDS);
+          if (!t.selfClosing) inIs = true;
+          break;
+        case 'rPh':
+          if (inIs && !t.selfClosing) phonetic += 1;
+          break;
+        case 't':
+          if (inIs && phonetic === 0 && !t.selfClosing) {
+            if (inT) throw new XlsxError('MALFORMED', MALFORMED_WORDS);
+            inT = true;
+          }
           break;
         default:
-          // n (number), str (formula string result), e (error), d (ISO date): the cached text.
-          value = v === undefined ? '' : decodeXmlText(v);
+          break;
       }
-      while (cells.length < col) cells.push('');
-      cells[col] = value;
-      cm = cellRe.exec(body);
+    } else if (t.kind === 'close') {
+      switch (t.local) {
+        case 'row':
+          if (row) finishRow();
+          break;
+        case 'c':
+          finishCell();
+          inV = false;
+          inIs = false;
+          inT = false;
+          phonetic = 0;
+          break;
+        case 'v':
+          inV = false;
+          break;
+        case 'is':
+          inIs = false;
+          inT = false;
+          break;
+        case 'rPh':
+          if (phonetic > 0) phonetic -= 1;
+          break;
+        case 't':
+          inT = false;
+          break;
+        default:
+          break;
+      }
+    } else if (inV && vParts) {
+      // A value is a number, an index or a short cached result; cap what is kept so a huge <v>
+      // costs no more than a cell can show.
+      if (vLen < limits.maxCellChars) {
+        const text = tokenText(t);
+        vParts.push(text);
+        vLen += text.length;
+      }
+    } else if (inT && inIs) {
+      if (isLen < limits.maxCellChars) {
+        const text = tokenText(t);
+        isParts.push(text);
+        isLen += text.length;
+      }
     }
-    while (rows.length < rowIndex) rows.push([]);
-    rows[rowIndex] = cells;
-    rm = rowRe.exec(xml);
   }
   return { rows, truncated };
 }
@@ -257,7 +571,7 @@ export function decodeXlsx(bytes: Uint8Array, limitsIn: XlsxReadLimits = {}): Xl
       },
     });
   } catch {
-    throw new XlsxError('MALFORMED', 'This workbook could not be opened. Save it again from your spreadsheet app and retry.');
+    throw new XlsxError('MALFORMED', MALFORMED_WORDS);
   }
   if (!declared.has('xl/workbook.xml')) throw new XlsxError('NOT_XLSX', 'This file is not an Excel workbook (.xlsx).');
 
@@ -267,41 +581,39 @@ export function decodeXlsx(bytes: Uint8Array, limitsIn: XlsxReadLimits = {}): Xl
     const wanted = names.filter((n) => declared.has(n));
     for (const n of wanted) {
       budget -= declared.get(n) ?? 0;
-      if (budget < 0) throw new XlsxError('TOO_LARGE', 'This workbook is too large to read here.');
+      if (budget < 0) throw new XlsxError('TOO_LARGE', TOO_LARGE_WORDS);
     }
     const set = new Set(wanted);
     let files: Record<string, Uint8Array>;
     try {
       files = unzipSync(bytes, { filter: (f) => set.has(f.name) });
     } catch {
-      throw new XlsxError('MALFORMED', 'This workbook could not be opened. Save it again from your spreadsheet app and retry.');
+      throw new XlsxError('MALFORMED', MALFORMED_WORDS);
     }
     const out: Record<string, string> = {};
     for (const [n, data] of Object.entries(files)) {
       // The declared size can lie; what was actually inflated is charged against the budget too.
       inflated += data.length;
-      if (inflated > limits.maxUncompressedBytes) throw new XlsxError('TOO_LARGE', 'This workbook is too large to read here.');
+      if (inflated > limits.maxUncompressedBytes) throw new XlsxError('TOO_LARGE', TOO_LARGE_WORDS);
       out[n] = strFromU8(data);
     }
     return out;
   };
 
   const meta = read(['xl/workbook.xml', 'xl/_rels/workbook.xml.rels', 'xl/sharedStrings.xml']);
-  const workbook = meta['xl/workbook.xml'] ?? '';
   const rels = new Map<string, string>();
-  const relRe = /<(?:\w+:)?Relationship\b([^>]*?)\/?>/g;
-  let rm: RegExpExecArray | null = relRe.exec(meta['xl/_rels/workbook.xml.rels'] ?? '');
-  while (rm) {
-    const a = attrsOf(rm[1] ?? '');
+  const relCur = new XmlCursor(meta['xl/_rels/workbook.xml.rels'] ?? '');
+  for (let t = relCur.next(); t; t = relCur.next()) {
+    if (t.kind !== 'open' || t.local !== 'Relationship') continue;
+    const a = attrsOf(t.attrs);
     if (a.Id && a.Target) rels.set(a.Id, normalizePartPath(a.Target));
-    rm = relRe.exec(meta['xl/_rels/workbook.xml.rels'] ?? '');
   }
   const sheetRefs: Array<{ name: string; path: string }> = [];
-  const sheetRe = /<(?:\w+:)?sheet\b([^>]*?)\/?>/g;
-  let sm: RegExpExecArray | null = sheetRe.exec(workbook);
+  const wbCur = new XmlCursor(meta['xl/workbook.xml'] ?? '');
   let truncated = false;
-  while (sm) {
-    const a = attrsOf(sm[1] ?? '');
+  for (let t = wbCur.next(); t; t = wbCur.next()) {
+    if (t.kind !== 'open' || t.local !== 'sheet') continue;
+    const a = attrsOf(t.attrs);
     const relId = Object.entries(a).find(([k]) => local(k) === 'id' && k !== 'sheetId')?.[1];
     const path = relId ? rels.get(relId) : undefined;
     if (a.name !== undefined && path) {
@@ -311,21 +623,21 @@ export function decodeXlsx(bytes: Uint8Array, limitsIn: XlsxReadLimits = {}): Xl
       }
       sheetRefs.push({ name: a.name, path });
     }
-    sm = sheetRe.exec(workbook);
   }
   if (sheetRefs.length === 0) throw new XlsxError('MALFORMED', 'This workbook has no sheets.');
 
-  const shared = readSharedStrings(meta['xl/sharedStrings.xml']);
+  const output: OutputBudget = { cells: 0, chars: 0, truncated: false };
+  const shared = readSharedStrings(meta['xl/sharedStrings.xml'], limits, output);
   const sheetXml = read(sheetRefs.map((s) => s.path));
   const sheets: SheetGrid[] = [];
   for (const ref of sheetRefs) {
     const xml = sheetXml[ref.path];
     if (xml === undefined) continue;
-    const r = readSheet(xml, shared, limits);
+    const r = readSheet(xml, shared, limits, output);
     if (r.truncated) truncated = true;
     sheets.push({ name: ref.name, rows: r.rows });
   }
-  return { sheets, truncated };
+  return { sheets, truncated: truncated || output.truncated };
 }
 
 /* ------------------------------------------------------------------ */
