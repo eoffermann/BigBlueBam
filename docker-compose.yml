@@ -161,10 +161,14 @@ services:
     # Published for local MCP clients (e.g. Claude Code): the nginx route
     # at https://localhost/mcp/ serves a self-signed cert that Node-based
     # clients reject, so they connect straight to the container instead
-    # (http://localhost:3001/). Production stays nginx-only — this mapping
-    # is a developer-host convenience.
+    # (http://localhost:3001/). Bound to 127.0.0.1 (#276): this file is also
+    # the production Compose deploy (scripts/deploy/platforms/docker-compose.mjs),
+    # and a 0.0.0.0 mapping put /tools/call and plaintext /mcp on every host
+    # interface, around nginx (which 404s /mcp/tools/call). Off-host clients
+    # use https://<host>/mcp/. scripts/lib/compose-published-ports.test.mjs
+    # keeps every non-edge port on loopback.
     ports:
-      - '${MCP_PORT:-3001}:3001'
+      - '127.0.0.1:${MCP_PORT:-3001}:3001'
     depends_on:
       api:
         condition: service_healthy
@@ -1632,9 +1636,10 @@ services:
     <<: *common
     profiles: ["mailhog"]
     image: mailhog/mailhog:latest
+    # Loopback only (#276): the UI shows every captured email, unauthenticated.
     ports:
-      - "${MAILHOG_SMTP_PORT:-1025}:1025"
-      - "${MAILHOG_UI_PORT:-8025}:8025"
+      - "127.0.0.1:${MAILHOG_SMTP_PORT:-1025}:1025"
+      - "127.0.0.1:${MAILHOG_UI_PORT:-8025}:8025"
     networks:
       - backend
 
