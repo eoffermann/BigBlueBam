@@ -123,10 +123,26 @@ export async function runReaper(deps: EngineDeps, opts: { organization_id?: stri
      WHERE status = 'running' AND (heartbeat_at IS NULL OR heartbeat_at < ${cutoff}) AND resume_count >= ${MAX_RESUMES}
        ${opts.organization_id ? deps.sql`AND organization_id = ${opts.organization_id}` : deps.sql``}
     RETURNING id`;
-  deps.log.info({ released: released.length, parked: parked.length }, `bastion-run-reaper: released ${released.length}, parked ${parked.length}`);
+  // Inline (in-request) compile runs are never resumed by a worker, so an expired one is marked
+  // `failed`, never released to `queued`: a queued row would hold the one-active slot forever
+  // (issue #193). The compile itself is one transaction now, so only a run left by an earlier
+  // build can be here.
+  const inlineFailed = await deps.sql`
+    UPDATE bastion_compile_runs
+       SET status = 'failed', completed_at = ${deps.now()},
+           error = 'This setup run stopped before it finished (the server restarted or lost its connection), so it was released.'
+     WHERE claimed_by = 'bastion-api:inline' AND status IN ('queued', 'running')
+       AND (heartbeat_at IS NULL OR heartbeat_at < ${cutoff})
+       ${opts.organization_id ? deps.sql`AND organization_id = ${opts.organization_id}` : deps.sql``}
+    RETURNING id`;
+  deps.log.info(
+    { released: released.length, parked: parked.length, inline_compiles_failed: inlineFailed.length },
+    `bastion-run-reaper: released ${released.length}, parked ${parked.length}, failed ${inlineFailed.length} stale inline compile runs`,
+  );
   return {
     released: released.map((r) => ({ run_id: r.id as string, organization_id: r.organization_id as string, resume_count: Number(r.resume_count) })),
     parked: parked.length,
+    inline_compiles_failed: inlineFailed.length,
   };
 }
 

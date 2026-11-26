@@ -30,7 +30,9 @@ type Services = {
   setup: typeof import('../../src/services/setup.service.js');
 };
 
-describe.skipIf(!DATABASE_URL)('Bastion M3 services (live database)', () => {
+// Generous per-test timeout: each case runs several org-scoped transactions, and under a loaded
+// runner (parallel DB suites) a 5 s default produced timing-only failures.
+describe.skipIf(!DATABASE_URL)('Bastion M3 services (live database)', { timeout: 60_000 }, () => {
   let sql: postgres.Sql;
   let s: Services;
   const viewer = {
