@@ -1184,7 +1184,30 @@ The winning seat's first-choice name, "Baseline", collides with Bursar's core vo
 
 ## Phase 6 - Spec hardening
 
-_(pending)_
+The `brainstorm-spec-writer` drafted `2026_11_25_20_03_APP_DESIGN_bastion.md` (commit 5f95f37c): 16 sections, 28 tables, 91 REST endpoints (30 with MCP tools, 61 deliberate skips), 22 MCP tools, 18 Bolt events, 47 permission actions, 14 worker jobs, migrations 0260-0266, internal port 4024. Grounding the draft in the code changed the design in several places: the platform has no MFA (so the MFA control is always manual evidence), the GitHub webhook records no reviews and drops PRs that mention no task (so review-before-merge needs an additive core-api change), Beacon has no read acknowledgements (Bastion keeps its own version-pinned attestations), and backups are platform-wide.
+
+### Round 1
+
+Five adversaries reviewed the draft in parallel. Full findings: `2026_11_25_20_03_SPEC_REVIEW_bastion_round1.md`.
+
+| Focus | Blocker | Major | Minor |
+|---|---|---|---|
+| Design | 1 | 7 | 1 |
+| Stability | 2 | 6 | 1 |
+| Security | 2 | 7 | 1 |
+| Best practices | 2 | 5 | 2 |
+| Infrastructure | 2 | 6 | 1 |
+| **Total** | **9** | **31** | **6** |
+
+The blockers: the flagship "can't prove yet" ranking had unmapped cases and would open on 60+ setup rows (design); evaluator slice, probe, engine and lease timeouts contradict each other, and nothing marks evidence stale, so infrastructure blips would read as compliance drift (stability); any signed-in user can download evidence through the shared `/files/*` route, and probes would report false passes once RLS enforcement is switched on (security); every Bastion Bolt event would be silently rejected at ingest, and registering on the Launchpad at M0 keeps CI red for nine milestones (best practices); Railway never gives existing services the new env vars, and the shared-bucket exposure again (infrastructure).
+
+The review also surfaced seven pre-existing platform defects, each confirmed against the code and filed: #121 (Bursar's SPA connects to a WebSocket bursar-api never serves), #122 (Bay guest tokens stored in plaintext), #123 (`GET /files/*` serves any object in the shared bucket to any signed-in user), #124 (the Bolt source list is encoded in four places and `'bursar'` is missing from the ingest enum, so Bursar's events are silently dropped), #125 (`publishBoltEvent` has no timeout), #126 (Railway `syncNew` never adds new env vars to existing services), #127 (the index.html no-cache rule omits five apps).
+
+Orchestrator direction for the fold-in: accept the scope trim (public trust page and custom-document frameworks move to v1.1), prefer org-level controls with a framework crosswalk over per-framework copies, register on the Launchpad only in the final milestone, and schedule platform fixes for #123, #124, #125, #126 and #127 as "fix the fact" changes in early milestones rather than Bastion-local workarounds.
+
+**Round 1 dispositions:** 43 accepted, 3 adapted, 0 rejected (per-finding lines in the spec's section 16). The adaptations: personal data moved to a separate editable table with only a keyed hash in the ledger, and auditor access logs pruned only through one guarded database function (security-9, best-practices-6); per-org LLM fairness through Redis semaphores in bastion-api rather than BullMQ grouping, which is a paid BullMQ Pro feature (infrastructure-8). After the fold-in the spec has 33 tables, 97 REST endpoints (34 with tools), 24 MCP tools, 48 permission actions, 23 Bolt events through an outbox, 19 worker jobs, migrations 0260-0268 plus the M10 permission files, and twelve milestones (M0 platform prerequisites through M11 Launchpad registration). Probes now run as reviewed database functions so RLS enforcement cannot hide rows from them.
+
+<!-- ROUND 2 -->
 
 ## Outcome
 
