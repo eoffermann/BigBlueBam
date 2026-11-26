@@ -2,6 +2,8 @@
 // stops starting probes at SLICE_START_CUTOFF_MS can still finish one probe, one bucket put and
 // one ledger lock wait inside the worker's engine call timeout.
 
+import { LLM_CALL_TIMEOUT_DEFAULT_MS, LLM_CALL_TIMEOUT_MAX_MS } from '@bigbluebam/shared';
+
 /** Stop starting probes once a slice has run this long. */
 export const SLICE_START_CUTOFF_MS = 12_000;
 /** Default per-probe statement timeout (BASTION_PROBE_TIMEOUT_MS). */
@@ -54,7 +56,10 @@ export const RUN_LEASE_MS = 300_000;
 export const STALE_HEARTBEAT_MS = 60_000;
 /** LLM slices (M7/M8): stop starting calls at 150 s including slot waits; worst case 210 s. */
 export const LLM_SLICE_START_CUTOFF_MS = 150_000;
-export const LLM_CALL_TIMEOUT_MS = 60_000;
+/** The default AI call deadline: the platform's one value (packages/shared llm-deadline.ts, #257). */
+export const LLM_CALL_TIMEOUT_MS = LLM_CALL_TIMEOUT_DEFAULT_MS;
+/** The longest deadline BASTION_LLM_TIMEOUT_MS may be set to (refused at boot above it). */
+export { LLM_CALL_TIMEOUT_MAX_MS };
 /** Above this replica lag (as_of minus last replay), probes run on the primary. */
 export const MAX_REPLICA_LAG_MS = 30_000;
 /** A queued run idle longer than this is re-enqueued by the tick (orphan rule). */

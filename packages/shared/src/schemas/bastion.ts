@@ -871,6 +871,12 @@ export type BastionEvaluateRunEngine = z.infer<typeof bastionEvaluateRunEngineSc
 export const bastionSweepEngineSchema = z
   .object({
     organization_id: z.string().uuid().optional(),
+    /**
+     * Which scheduled pass this call belongs to (the worker's job id, the same across that job's
+     * retries). gap-rank ties its resume cursor to it, so a cursor left by another pass is never
+     * resumed and no org is skipped for the day (#256). Engines without a cursor ignore it.
+     */
+    pass_id: z.string().min(1).max(200).optional(),
   })
   .strict();
 export type BastionSweepEngine = z.infer<typeof bastionSweepEngineSchema>;
@@ -1529,6 +1535,8 @@ export const bastionCompileSliceSchema = z.object({
   fallback_controls: z.number().int().nonnegative(),
   /** Of fallback_controls: answers that stopped at max_tokens (finish_reason 'length', #237). */
   cut_off_controls: z.number().int().nonnegative().optional(),
+  /** Of fallback_controls: AI calls that ran past their deadline (BASTION_LLM_TIMEOUT_MS, #257). */
+  timed_out_controls: z.number().int().nonnegative().optional(),
   slice_running: z.boolean(),
   released: z.boolean().optional(),
   waiting: z.enum(['ai_slot', 'ai_throttled']).nullable().optional(),

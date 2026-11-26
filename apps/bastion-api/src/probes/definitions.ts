@@ -45,6 +45,11 @@ const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? o
 const PASS: ProbeOutcome = { outcome: 'pass' };
 const FAIL: ProbeOutcome = { outcome: 'fail' };
 const unprovable = (reason: BastionStoredUnprovableReason): ProbeOutcome => ({ outcome: 'unprovable', reason });
+/** policy.attested v2: the linked article is retired, archived or expired in Beacon (#244). */
+const isWithdrawn = (r: BastionProbeResult): boolean => {
+  const state = str(r.summary, 'article_state');
+  return state === 'retired' || state === 'expired';
+};
 
 function populationSentence(r: BastionProbeResult, detailAllowed: boolean, noun: string): string {
   const checked = r.population_checked ?? [];
@@ -195,15 +200,23 @@ const IMPLS: Record<BastionProbeKey, Impl> = {
       `${plural(num(r.summary, 'executions'), 'automation run')} in ${num(r.summary, 'window_days')} days; ${num(r.summary, 'failed')} failed.`,
   },
   'policy.attested': {
+    // v2 (#244): a missing article proves nothing either way (unprovable); a retired, archived or
+    // expired one fails, so the check is never green on a policy the knowledge base withdrew.
     preconditions: (r) => {
       if (!bool(r.summary, 'policy_found')) return 'no_evidence_source';
+      if (str(r.summary, 'article_state') === 'missing') return 'no_evidence_source';
+      if (isWithdrawn(r)) return null;
       return num(r.summary, 'required_people') === 0 ? 'insufficient_data' : null;
     },
-    predicate: (r) => (num(r.summary, 'not_attested') > 0 ? FAIL : PASS),
-    explain: (r) =>
-      bool(r.summary, 'policy_found')
-        ? `${plural(num(r.summary, 'required_people'), 'person', 'people')} must read the current version; ${num(r.summary, 'not_attested')} have not.`
-        : 'No policy is linked to this check yet.',
+    predicate: (r) => (isWithdrawn(r) || num(r.summary, 'not_attested') > 0 ? FAIL : PASS),
+    explain: (r) => {
+      if (!bool(r.summary, 'policy_found')) return 'No policy is linked to this check yet.';
+      const state = str(r.summary, 'article_state');
+      if (state === 'missing') return 'The policy article no longer exists in Beacon.';
+      if (state === 'retired') return 'The policy article is retired or archived in Beacon, so nobody can acknowledge it.';
+      if (state === 'expired') return 'The policy article is past its review date in Beacon, so acknowledgements are paused until it is reviewed.';
+      return `${plural(num(r.summary, 'required_people'), 'person', 'people')} must read the current version; ${num(r.summary, 'not_attested')} have not.`;
+    },
   },
   'policy.current': {
     preconditions: (r) => (bool(r.summary, 'found') ? null : 'no_evidence_source'),

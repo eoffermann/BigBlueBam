@@ -120,6 +120,7 @@ describe.skipIf(!DATABASE_URL)('gap ranking is serialized per org (#230, live da
     // Budget 0 still ranks one org per call, so the pass makes progress and covers every org.
     expect(calls).toBeGreaterThanOrEqual(total);
     expect(ranked).toBeGreaterThanOrEqual(total);
-    expect(await deps.cursors.get('bastion:gap-rank:all')).toBe('');
+    // The pass's cursor ends empty (#256: the cursor names its pass).
+    expect(JSON.parse((await deps.cursors.get('bastion:gap-rank:all')) ?? '{}')).toMatchObject({ after: '' });
   });
 });

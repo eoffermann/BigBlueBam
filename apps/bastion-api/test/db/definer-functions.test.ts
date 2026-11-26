@@ -115,7 +115,8 @@ describe.skipIf(!DATABASE_URL)('bastion_% definer-function hardening', () => {
     const entry = procs.filter(
       (p) => /^bastion_probe_.+_v\d+$/.test(p.proname) || p.proname.startsWith('bastion_resolve_'),
     );
-    expect(entry.length).toBe(22);
+    // 22 from 0279, plus bastion_probe_policy_attested_v2 (0288, #244).
+    expect(entry.length).toBe(23);
     const bad = entry.filter((p) => !p.prosecdef || p.provolatile !== 's').map((p) => p.signature);
     expect(bad).toEqual([]);
   });

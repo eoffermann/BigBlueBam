@@ -692,7 +692,8 @@ async function seedBeacon(ctx) {
   const { orgId, adminId, mageProjectId } = ctx;
 
   const slug = `acme-tier-deals-playbook-${orgId.slice(0, 8)}`;
-  const [existingEntry] = await sql`SELECT id FROM beacon_entries WHERE slug = ${slug} LIMIT 1`;
+  // Slugs are unique per org (#246), so the idempotency probe is org-scoped.
+  const [existingEntry] = await sql`SELECT id FROM beacon_entries WHERE organization_id = ${orgId} AND slug = ${slug} LIMIT 1`;
   let entryId;
 
   if (existingEntry) {

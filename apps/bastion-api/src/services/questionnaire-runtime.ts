@@ -4,6 +4,7 @@
 
 import type { FastifyBaseLogger } from 'fastify';
 import type { Redis } from 'ioredis';
+import { llmHoldWindowMs } from '@bigbluebam/shared';
 import { env } from '../env.js';
 import { engineDeps } from '../engine/runtime.js';
 import { llmChat } from '../lib/llm-client.js';
@@ -33,7 +34,7 @@ export function autofillDeps(log: FastifyBaseLogger, redis: Redis): AutofillDeps
   return {
     engine: engineDeps(log, redis),
     llm: llmChat,
-    permits: createLlmPermits(redis, { log }),
+    permits: createLlmPermits(redis, { log, holdMs: llmHoldWindowMs(env.BASTION_LLM_TIMEOUT_MS) }),
     sliceLock: redisSliceLock(redis, 'bastion:autofill:slice:'),
     canAccess,
     background: true,

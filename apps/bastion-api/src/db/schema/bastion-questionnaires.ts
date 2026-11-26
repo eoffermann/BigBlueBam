@@ -30,6 +30,7 @@ export const bastionQuestionnaires = pgTable(
     owner_user_id: uuid('owner_user_id').references(() => users.id, { onDelete: 'set null' }),
     claimed_by: varchar('claimed_by', { length: 128 }),
     heartbeat_at: timestamp('heartbeat_at', { withTimezone: true }),
+    slice_token: uuid('slice_token'),
     // 0290: run state (#260, #261, #267, #271) and the source grid kept out of column_map (#265, #273).
     llm_calls_used: integer('llm_calls_used').default(0).notNull(),
     autofill_generation: integer('autofill_generation').default(0).notNull(),

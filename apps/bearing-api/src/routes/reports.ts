@@ -200,6 +200,7 @@ export default async function reportRoutes(fastify: FastifyInstance) {
     },
     async (request, reply) => {
       const query = exportKrQuerySchema.parse(request.query);
+      const orgId = request.user!.org_id;
 
       // If a goal_id is provided, export KRs for that goal.
       // Otherwise, fetch all goals in the org and export their KRs.
@@ -208,14 +209,14 @@ export default async function reportRoutes(fastify: FastifyInstance) {
         goalIds = [query.goal_id];
       } else {
         const result = await goalService.listGoals({
-          orgId: request.user!.org_id,
+          orgId,
           limit: 100,
         });
         let allGoals = [...result.data];
         let cursor = result.meta.next_cursor;
         while (cursor) {
           const page = await goalService.listGoals({
-            orgId: request.user!.org_id,
+            orgId,
             cursor,
             limit: 100,
           });
@@ -227,7 +228,9 @@ export default async function reportRoutes(fastify: FastifyInstance) {
 
       const allKrs: Record<string, unknown>[] = [];
       for (const gid of goalIds) {
-        const { data: krs } = await krService.listKeyResults(gid);
+        // goal_id is caller-supplied: scope to the caller's org (BRG-1, #246),
+        // so another org's goal id exports nothing.
+        const { data: krs } = await krService.listKeyResults(gid, orgId);
         for (const kr of krs) {
           allKrs.push({ ...kr, goal_id: gid });
         }

@@ -1,3 +1,4 @@
+import { LLM_CALL_TIMEOUT_DEFAULT_MS, LLM_CALL_TIMEOUT_MAX_MS, LLM_CALL_TIMEOUT_MIN_MS, LLM_HOLD_MARGIN_MS } from '@bigbluebam/shared';
 import { z } from 'zod';
 import { checkStableSecrets, formatStableSecretRefusal } from './boot/stable-secrets.js';
 import { BASTION_LLM_CALLS, LLM_MAX_TOKENS_MAX, LLM_MAX_TOKENS_MIN } from './library/llm-call-settings.js';
@@ -76,7 +77,10 @@ const envSchema = z.object({
   ),
 
   // Time budgets (spec 7.3).
-  BASTION_LLM_TIMEOUT_MS: z.coerce.number().int().positive().default(60000),
+  // One AI call's deadline, sent to the platform proxy as its upstream deadline (#257). Capped at
+  // the proxy's LLM_CALL_TIMEOUT_MAX_MS: a larger value would be silently cut there, so it is
+  // refused at boot instead. The permit hold window is derived from it (lib/llm-permits.ts).
+  BASTION_LLM_TIMEOUT_MS: z.coerce.number().int().min(LLM_CALL_TIMEOUT_MIN_MS).max(LLM_CALL_TIMEOUT_MAX_MS).default(LLM_CALL_TIMEOUT_DEFAULT_MS),
   // Output budgets per call kind (#237, #263, #264; library/llm-call-settings.ts). Reasoning
   // models spend part of the budget before answering.
   BASTION_LLM_MAX_TOKENS: maxTokensVar('compile'),
@@ -92,6 +96,16 @@ const envSchema = z.object({
 
   // Platform RLS posture; Bastion binds app.current_org_id per transaction regardless.
   BBB_RLS_ENFORCE: z.string().optional(),
+}).superRefine((e, ctx) => {
+  // A slice heartbeats between calls, not during one (#257): one call plus a permit wait must
+  // fit inside the run lease, or a healthy slice's run is reaped mid-call.
+  if (e.BASTION_LLM_TIMEOUT_MS + LLM_HOLD_MARGIN_MS > e.BASTION_RUN_LEASE_MS) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['BASTION_LLM_TIMEOUT_MS'],
+      message: `must be at least ${LLM_HOLD_MARGIN_MS} ms below BASTION_RUN_LEASE_MS (${e.BASTION_RUN_LEASE_MS})`,
+    });
+  }
 });
 
 export type Env = z.infer<typeof envSchema>;

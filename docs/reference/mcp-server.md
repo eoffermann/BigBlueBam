@@ -95,7 +95,7 @@ The canonical MCP endpoint for an MCP client is the `/mcp/` path on the public i
 | `https://DOMAIN/mcp/health` | `/health` | Liveness probe. Returns `{"status":"ok","server":"BigBlueBam MCP","version":"..."}`. No auth. |
 | `https://DOMAIN/mcp/sse` | `/sse` | SSE transport connection (only active when `MCP_TRANSPORT=sse`; the default is `streamable-http` and this route returns 404). |
 | `https://DOMAIN/mcp/messages` | `/messages` | SSE transport POST endpoint for client→server messages (only active when `MCP_TRANSPORT=sse`). |
-| `https://DOMAIN/mcp/tools/call` | `/tools/call` | Internal shared-secret direct-invocation route for service-to-service callers (bolt-api, worker, api). Not for external MCP clients — use `/mcp/` for that. |
+| _(none: nginx returns 404 for `/mcp/tools/call`)_ | `/tools/call` | Internal shared-secret direct-invocation route for service-to-service callers (bolt-api, worker, api), reached only on the private network at `MCP_INTERNAL_URL` (e.g. `http://mcp-server:3001/tools/call`). Not for external MCP clients — use `/mcp/` for that. |
 
 Configured in `infra/nginx/nginx-with-site.conf` (docker-compose) and `infra/nginx/nginx.conf` (baked-in fallback); the Railway flavor `infra/nginx/nginx.railway.conf` is auto-generated from the former. The routing matches `apps/mcp-server/src/server.ts`.
 
@@ -341,7 +341,7 @@ Knowledge base: Beacon CRUD, upsert-by-slug, hybrid search, verification lifecyc
 | `beacon_list` | List Beacons with optional filters and pagination. |
 | `beacon_get` | Retrieve a single Beacon by ID or slug. |
 | `beacon_update` | Update a Beacon (creates a new version). Provide only the fields to change. |
-| `beacon_upsert_by_slug` | Idempotent create-or-update of a Beacon entry by slug. Natural key is the globally-unique slug. On update, bumps version and writes a beacon_versions snapshot. Returns { data, created, idempotency_key } — `created` is true on insert, false on update. |
+| `beacon_upsert_by_slug` | Idempotent create-or-update of a Beacon entry by slug. Natural key is the slug within your organization (another org may use the same slug; its entry is never touched). On update, bumps version and writes a beacon_versions snapshot. Returns { data, created, idempotency_key } — `created` is true on insert, false on update. |
 | `beacon_retire` | Retire (soft-delete) a Beacon. |
 | `beacon_publish` | Transition a Beacon from Draft to Active. |
 | `beacon_verify` | Record a verification event on a Beacon (confirms content is still accurate). |

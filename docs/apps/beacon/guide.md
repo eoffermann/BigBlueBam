@@ -140,7 +140,7 @@ A presence strip on the article view shows who else is on a knowledge page, with
 | `beacon_tag_remove` | Remove a tag from a Beacon. | `id`, `tag` |
 | `beacon_tags_list` | List all tags in scope with usage counts. | `project_id`, `cursor`, `limit` |
 | `beacon_update` | Update a Beacon (creates a new version). Provide only the fields to change. | `id`, `title`, `summary`, `body_markdown`, `visibility`, `change_note` |
-| `beacon_upsert_by_slug` | Idempotent create-or-update of a Beacon entry by slug. Natural key is the globally-unique slug. On update, bumps version and writes a beacon_versions snapshot. Returns { data, created, idempotency_key } —  | `slug`, `title`, `summary`, `body_markdown`, `body_html`, `visibility`, `project_id`, `metadata`, `change_note` |
+| `beacon_upsert_by_slug` | Idempotent create-or-update of a Beacon entry by slug. Natural key is the slug within your organization (another org may use the same slug; its entry is never touched). On update, bumps version and writes a beacon_versions snapshot. Returns { data, created, idempotency_key } —  | `slug`, `title`, `summary`, `body_markdown`, `body_html`, `visibility`, `project_id`, `metadata`, `change_note` |
 | `beacon_verify` | Record a verification event on a Beacon (confirms content is still accurate). | `id`, `verification_type`, `outcome`, `confidence_score`, `notes` |
 | `beacon_version_get` | Get a specific version of a Beacon. | `id`, `version` |
 | `beacon_versions` | List the version history of a Beacon. | `id` |

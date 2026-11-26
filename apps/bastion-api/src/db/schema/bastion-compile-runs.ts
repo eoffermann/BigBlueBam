@@ -22,6 +22,7 @@ export const bastionCompileRuns = pgTable(
     resume_count: integer('resume_count').default(0).notNull(),
     claimed_by: varchar('claimed_by', { length: 128 }),
     heartbeat_at: timestamp('heartbeat_at', { withTimezone: true }),
+    slice_token: uuid('slice_token'),
     error: text('error'),
     started_by: uuid('started_by').references(() => users.id, { onDelete: 'set null' }),
     started_at: timestamp('started_at', { withTimezone: true }),
