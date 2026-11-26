@@ -27,6 +27,7 @@ import type { BastionProbeResult } from '@bigbluebam/shared';
 import { auditRaw } from '../lib/audit-raw.js';
 import { type CitedRef, labelRefs, labelsFor } from '../lib/ref-labels.js';
 import { isAdminViewer, type Viewer } from './types.js';
+import { type CanAccess, visibleRefs } from './decisions.service.js';
 
 
 const RUN_SELECT = `id, trigger, scope, control_id, nightly_for_date::text AS nightly_for_date, as_of, status, partial_reason,
@@ -134,7 +135,31 @@ function present(row: Record<string, unknown>, detail: boolean) {
   };
 }
 
-export async function listControlEvidence(deps: EngineDeps, viewer: Viewer, controlId: string, q: BastionEvidenceListQuery) {
+const refKey = (r: CitedRef) => `${r.entity_type}:${r.entity_id}`;
+
+/**
+ * The cited refs a detail viewer may see (spec 2.4, #227). Detail access (owner, admin, the
+ * control's owner) opens the evidence, not every row it cites: each ref still passes can_access
+ * for this reader, so a control owner sees no PR, key or person from outside their own reach.
+ */
+async function visibleRefKeys(canAccess: CanAccess, viewer: Viewer, refs: CitedRef[]): Promise<Set<string>> {
+  return new Set((await visibleRefs(canAccess, viewer, refs)).map(refKey));
+}
+
+function withVisibleRefs(row: Record<string, unknown>, detail: boolean, visible: Set<string>, names: Map<string, string>) {
+  const shaped = present(row, detail);
+  const all = detail ? ((row.cited_refs as CitedRef[] | null) ?? []) : [];
+  const refs = all.filter((r) => visible.has(refKey(r)));
+  return {
+    ...shaped,
+    cited_refs: detail ? refs : [],
+    hidden_citation_count: all.length - refs.length,
+    cited_labels: labelsFor(refs, names),
+    cited_items: refs.map((ref) => ({ ...ref, label: names.get(refKey(ref)) ?? null })),
+  };
+}
+
+export async function listControlEvidence(deps: EngineDeps, viewer: Viewer, controlId: string, q: BastionEvidenceListQuery, canAccess: CanAccess) {
   return orgTx(deps.sql, viewer.org_id, async (tx) => {
     const c = await tx`SELECT id FROM bastion_controls WHERE organization_id = ${viewer.org_id} AND id = ${controlId}`;
     if (!c[0]) throw new NotFoundError('We could not find that control.');
@@ -149,31 +174,28 @@ export async function listControlEvidence(deps: EngineDeps, viewer: Viewer, cont
     );
     const detail = await detailAllowed(tx, viewer, controlId);
     const page = pageOf(rows, q.limit, (r) => encodeIdCursor(r.id as string));
-    // Named chips for detail viewers (spec 6.2): "PR #42 in rescue-radio-firmware: ...".
+    // Named chips for detail viewers (spec 6.2): "PR #42 in rescue-radio-firmware: ...", only for
+    // refs that pass can_access for this reader.
     const allRefs = detail ? page.data.flatMap((r) => ((r as Record<string, unknown>).cited_refs as CitedRef[] | null) ?? []) : [];
-    const names = detail ? await labelRefs(tx, viewer.org_id, allRefs) : new Map<string, string>();
+    const visible = detail ? await visibleRefKeys(canAccess, viewer, allRefs) : new Set<string>();
+    const names = detail ? await labelRefs(tx, viewer.org_id, allRefs.filter((r) => visible.has(refKey(r)))) : new Map<string, string>();
     return {
       ...page,
-      data: page.data.map((r) => {
-        const shaped = present(r as Record<string, unknown>, detail);
-        const refs = detail ? (((r as Record<string, unknown>).cited_refs as CitedRef[] | null) ?? []) : [];
-        return {
-          ...shaped,
-          cited_labels: labelsFor(refs, names),
-          cited_items: refs.map((ref) => ({ ...ref, label: names.get(`${ref.entity_type}:${ref.entity_id}`) ?? null })),
-        };
-      }),
+      data: page.data.map((r) => withVisibleRefs(r as Record<string, unknown>, detail, visible, names)),
     };
   });
 }
 
-export async function getEvidence(deps: EngineDeps, viewer: Viewer, id: string) {
+export async function getEvidence(deps: EngineDeps, viewer: Viewer, id: string, canAccess: CanAccess) {
   return orgTx(deps.sql, viewer.org_id, async (tx) => {
     const rows = await tx.unsafe(`SELECT ${SNAPSHOT_SELECT} FROM bastion_evidence_snapshots s WHERE s.organization_id = $1 AND s.id = $2`, [viewer.org_id, id]);
     const row = rows[0] as Record<string, unknown> | undefined;
     if (!row) throw new NotFoundError('We could not find that evidence.');
     const detail = await detailAllowed(tx, viewer, row.control_id as string);
-    return { data: present(row, detail) };
+    const refs = detail ? ((row.cited_refs as CitedRef[] | null) ?? []) : [];
+    const visible = detail ? await visibleRefKeys(canAccess, viewer, refs) : new Set<string>();
+    const names = detail ? await labelRefs(tx, viewer.org_id, refs.filter((r) => visible.has(refKey(r)))) : new Map<string, string>();
+    return { data: withVisibleRefs(row, detail, visible, names) };
   });
 }
 

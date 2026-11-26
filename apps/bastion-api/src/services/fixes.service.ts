@@ -31,7 +31,7 @@ import { loadControlStates } from '../engine/numbers.js';
 import { enqueueBastionEvent, enqueueOutbox } from '../engine/outbox.js';
 import { enqueueProposalClose, remediationSettings } from '../engine/remediation.js';
 import type { CitedRef } from '../engine/status.js';
-import { anOrgAdmin, assertHumanDecider, citationVisible, type DecisionDeps, fileMirroredProposal } from './decisions.service.js';
+import { anOrgAdmin, assertHumanDecider, citationVisible, type DecisionDeps, fileMirroredProposal, visibleRefs } from './decisions.service.js';
 import type { Viewer } from './types.js';
 
 const DAY_MS = 86_400_000;
@@ -220,7 +220,7 @@ async function draftFor(d: DecisionDeps, tx: Tx, viewer: Viewer, g: Record<strin
   const cited: CitedRef[] = [];
   let dropped = 0;
   for (const r of refs) {
-    if (await citationVisible(d, viewer, r, (g.owner_user_id as string | null) ?? null)) cited.push(r);
+    if (await citationVisible(d.canAccess, viewer, r)) cited.push(r);
     else dropped += 1;
   }
 
@@ -384,8 +384,7 @@ const DRAFT_FROM = `FROM bastion_fix_drafts d
 async function shapeDraft(d: DecisionDeps, viewer: Viewer, r: Record<string, unknown>) {
   // Citations pass can_access again at read, for whoever is reading (spec 2.4).
   const refs = (r.cited_refs as CitedRef[] | null) ?? [];
-  const visible: CitedRef[] = [];
-  for (const ref of refs) if (await citationVisible(d, viewer, ref, (r.owner_user_id as string | null) ?? null)) visible.push(ref);
+  const visible = await visibleRefs(d.canAccess, viewer, refs);
   return {
     ...r,
     cited_refs: visible,

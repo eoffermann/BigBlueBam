@@ -12,6 +12,23 @@ export interface CitedRef {
   entity_id: string;
 }
 
+/**
+ * The can_access entity_type for a cited ref. App entities (`<app>.<type>`) pass through; the
+ * bare platform refs the probe SQL writes map onto their bam.* visibility types (#227), so a
+ * platform citation is checked like any other. Anything else has no visibility rule: null, and
+ * the caller drops it (fail closed).
+ */
+const PLATFORM_REF_ACCESS_TYPES: Record<string, string> = {
+  github_pr_event: 'bam.github_pr_event',
+  api_key: 'bam.api_key',
+  user: 'bam.user',
+};
+
+export function accessTypeOf(entityType: string): string | null {
+  if (entityType.includes('.')) return entityType;
+  return PLATFORM_REF_ACCESS_TYPES[entityType] ?? null;
+}
+
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const MAX_LABELS = 50;
 
@@ -20,7 +37,11 @@ function safe(label: string, fallback: string): string {
   return flat && !scanLabel(flat).suspected ? flat : fallback;
 }
 
-/** `${entity_type}:${entity_id}` -> a plain name. Unknown types and missing rows get none. */
+/**
+ * `${entity_type}:${entity_id}` -> a plain name. Unknown types and missing rows get none.
+ * Callers pass only refs that already passed can_access for the reader (visibleRefs in
+ * decisions.service.ts): this function reads names, it does not decide who may see them.
+ */
 export async function labelRefs(tx: Tx, orgId: string, refs: CitedRef[]): Promise<Map<string, string>> {
   const out = new Map<string, string>();
   const ids = (type: string) => [...new Set(refs.filter((r) => r.entity_type === type && UUID_RE.test(r.entity_id)).map((r) => r.entity_id))].slice(0, MAX_LABELS);

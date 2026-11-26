@@ -320,7 +320,7 @@ describe.skipIf(!DATABASE_URL)('M4 restore detection (live database)', () => {
     expect(runs.seen).toHaveLength(4);
     expect(new Set(runs.seen).size).toBe(4);
     expect(runs.pages).toBe(2);
-    const snaps = await walk((cursor) => evidence.listControlEvidence(deps, v, ctl!.id as string, { cursor, limit: 2 }) as never, 'id');
+    const snaps = await walk((cursor) => evidence.listControlEvidence(deps, v, ctl!.id as string, { cursor, limit: 2 }, async () => true) as never, 'id');
     expect(new Set(snaps.seen).size).toBe(3);
     const seals = await walk((cursor) => evidence.listSeals(deps, v, { cursor, limit: 2 }) as never, 'seal_date');
     expect(seals.seen).toEqual(['2026-03-15', '2026-02-15', '2026-01-15']);

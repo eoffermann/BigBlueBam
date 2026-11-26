@@ -14,7 +14,8 @@
 import { BASTION_SMALL_TEAM_HUMANS } from '@bigbluebam/shared';
 import { ForbiddenError } from '../lib/errors.js';
 import { type EngineDeps, orgTx, type Tx } from '../engine/context.js';
-import { isAdminViewer, type Viewer } from './types.js';
+import { accessTypeOf } from '../lib/ref-labels.js';
+import type { Viewer } from './types.js';
 
 /** Seeded by migration 0274 (the Bastion System service user). */
 export const BASTION_SYSTEM_USER_ID = '00000000-0000-0000-0000-0000000000b5';
@@ -29,13 +30,30 @@ export interface DecisionDeps {
 
 /**
  * Whether a cited ref may be shown to this person (spec 2.4: citations pass can_access at write
- * and at read). App entities (`<app>.<type>`, e.g. bam.task) go through can_access. Probe refs
- * to platform rows (`api_key`, `user`, `github_pr_event`) have no can_access type: they follow
- * the evidence detail rule instead (owners, admins and the control's owner, spec 3.1 explain()).
+ * and at read). Every ref goes through can_access, including the probe refs to platform rows
+ * (`github_pr_event`, `api_key`, `user`), which map onto bam.* visibility types (#227): owning a
+ * control does not widen what its owner may see. A ref with no visibility type is refused.
  */
-export async function citationVisible(d: DecisionDeps, viewer: Viewer, ref: { entity_type: string; entity_id: string }, controlOwnerId: string | null): Promise<boolean> {
-  if (!ref.entity_type.includes('.')) return isAdminViewer(viewer) || (!!controlOwnerId && controlOwnerId === viewer.id);
-  return d.canAccess(viewer.id, ref.entity_type, ref.entity_id).catch(() => false);
+export async function citationVisible(canAccess: CanAccess, viewer: Viewer, ref: { entity_type: string; entity_id: string }): Promise<boolean> {
+  const type = accessTypeOf(ref.entity_type);
+  if (!type) return false;
+  return canAccess(viewer.id, type, ref.entity_id).catch(() => false);
+}
+
+/** The refs this person may see, in order (one can_access per distinct ref). */
+export async function visibleRefs<T extends { entity_type: string; entity_id: string }>(canAccess: CanAccess, viewer: Viewer, refs: T[]): Promise<T[]> {
+  const verdicts = new Map<string, boolean>();
+  const out: T[] = [];
+  for (const r of refs) {
+    const key = `${r.entity_type}:${r.entity_id}`;
+    let ok = verdicts.get(key);
+    if (ok === undefined) {
+      ok = await citationVisible(canAccess, viewer, r);
+      verdicts.set(key, ok);
+    }
+    if (ok) out.push(r);
+  }
+  return out;
 }
 
 export async function activeHumanCount(tx: Tx, orgId: string): Promise<number> {

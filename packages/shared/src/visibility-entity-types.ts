@@ -59,6 +59,11 @@ export const VISIBILITY_ENTITY_TYPES = [
   'bastion.questionnaire',
   'bastion.fix_draft',
   'bastion.exception',
+  // Platform rows cited by compliance probes (#227): Bastion maps its probe refs
+  // (github_pr_event, api_key, user) onto these, so a citation passes can_access like any other.
+  'bam.github_pr_event',
+  'bam.api_key',
+  'bam.user',
 ] as const;
 
 export type VisibilityEntityType = (typeof VISIBILITY_ENTITY_TYPES)[number];

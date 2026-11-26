@@ -83,6 +83,9 @@ returns `allowed: false, reason: 'unsupported_entity_type'` (with a
 | `bastion.control`, `bastion.policy`, `bastion.exception` | `bastion_controls`, `bastion_policies`, `bastion_exceptions` | same org, any role except guest (viewers hold these reads, spec 5.5) |
 | `bastion.questionnaire`, `bastion.fix_draft` | `bastion_questionnaires`, `bastion_fix_drafts` | same org, member or above (viewers and guests hold no fix or questionnaire read) |
 | `bastion.manual_evidence` | `bastion_manual_evidence` | same org, any role except guest; a `restricted` item only for org admin/owner, its owner and its uploader |
+| `bam.github_pr_event` | `github_pr_events`      | follows `bam.project` for the event's `project_id`; an event with no project is org admin/owner only |
+| `bam.api_key`        | `api_keys`              | org admin/owner, or the key's holder (who must still be a member of every project the key is restricted to) |
+| `bam.user`           | `users` (via `organization_memberships`) | org admin/owner, or the person themselves (the `/b3/people` rule) |
 
 The Banter Feed entity-type registration
 (`docs/plans/banter-feed-design-document.md` §16) extended the original
@@ -98,6 +101,13 @@ is documentation that must be kept in lockstep with it.
 
 Bastion denial reasons: `bastion_role_not_granted` (guest, or a viewer
 asking for a fix draft or questionnaire) and `bastion_restricted_evidence`.
+
+The `bam.github_pr_event`, `bam.api_key` and `bam.user` types cover the
+platform rows compliance probes cite. Bastion stores them as bare
+`github_pr_event`, `api_key` and `user` refs and maps them onto these types
+before every check, so owning a control never widens what its owner sees.
+Their denial reasons are `not_project_member`, `not_key_holder` and
+`people_admin_only`.
 
 ## 3. Determining `asker_user_id`
 

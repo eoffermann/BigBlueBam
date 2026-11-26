@@ -97,8 +97,8 @@ export async function getException(engine: EngineDeps, viewer: Viewer, id: strin
 /** POST /exceptions (row 60). */
 export async function proposeException(d: DecisionDeps, viewer: Viewer, body: BastionExceptionPropose) {
   const now = d.engine.now();
-  const owner = await orgTx(d.engine.sql, viewer.org_id, async (tx) => {
-    const c = (await tx`SELECT id, owner_user_id FROM bastion_controls WHERE organization_id = ${viewer.org_id} AND id = ${body.control_id}`)[0];
+  await orgTx(d.engine.sql, viewer.org_id, async (tx) => {
+    const c = (await tx`SELECT id FROM bastion_controls WHERE organization_id = ${viewer.org_id} AND id = ${body.control_id}`)[0];
     if (!c) throw new NotFoundError('We could not find that control.');
     if (body.scope === 'entity') {
       // The item must be one this control's checks actually cite (latest evidence), so an
@@ -115,11 +115,10 @@ export async function proposeException(d: DecisionDeps, viewer: Viewer, body: Ba
         throw new ValidationFailure("That item is not one this control's checks found.", 'NOT_A_CITED_ITEM', [{ field: 'cited_entity_id', issue: 'not_cited' }]);
       }
     }
-    return (c.owner_user_id as string | null) ?? null;
   });
   if (body.scope === 'entity' && body.cited_entity_type && body.cited_entity_id) {
     // The cited item passes the visibility preflight for the person asking (spec 2.4, 2.8).
-    if (!(await citationVisible(d, viewer, { entity_type: body.cited_entity_type, entity_id: body.cited_entity_id }, owner))) {
+    if (!(await citationVisible(d.canAccess, viewer, { entity_type: body.cited_entity_type, entity_id: body.cited_entity_id }))) {
       throw new ValidationFailure('You cannot see the item this exception would cover.', 'CITATION_NOT_VISIBLE', [{ field: 'cited_entity_id', issue: 'not_visible' }]);
     }
   }

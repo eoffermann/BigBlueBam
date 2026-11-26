@@ -6,6 +6,9 @@ import { projects } from '../db/schema/projects.js';
 import { tasks } from '../db/schema/tasks.js';
 import { sprints } from '../db/schema/sprints.js';
 import { projectMemberships } from '../db/schema/project-memberships.js';
+import { apiKeys } from '../db/schema/api-keys.js';
+import { githubPrEvents } from '../db/schema/github-integrations.js';
+import { organizationMemberships } from '../db/schema/organization-memberships.js';
 import { resolveUserOrgRole } from './role-resolver.js';
 import {
   helpdeskTicketsStub,
@@ -102,6 +105,8 @@ export type PreflightReason =
   | 'bin_private_not_owner'
   | 'bastion_role_not_granted'
   | 'bastion_restricted_evidence'
+  | 'not_key_holder'
+  | 'people_admin_only'
   | 'unsupported_entity_type';
 
 export interface PreflightResult {
@@ -1695,6 +1700,13 @@ export async function preflightAccess(
       return preflightBastionOrgRow(asker, bastionFixDraftsStub, entityId, 'member');
     case 'bastion.manual_evidence':
       return preflightBastionManualEvidence(asker, entityId);
+    // Platform rows cited by compliance probes (#227)
+    case 'bam.github_pr_event':
+      return preflightGithubPrEvent(asker, entityId);
+    case 'bam.api_key':
+      return preflightApiKey(asker, entityId);
+    case 'bam.user':
+      return preflightUser(asker, entityId);
     default:
       return { allowed: false, reason: 'unsupported_entity_type' };
   }
@@ -1957,7 +1969,74 @@ async function preflightBastionManualEvidence(asker: AskerContext, id: string): 
   return { allowed: true, reason: 'ok', entity_org_id: row.organization_id };
 }
 
+// ---------------------------------------------------------------------------
+// bam.github_pr_event / bam.api_key / bam.user (#227)
+// ---------------------------------------------------------------------------
+//
+// Platform rows that compliance probes cite (Bastion's change-management and access controls).
+// They carry the same boundaries as the Bam surfaces that show them:
+//  - a PR event is scoped to the Bam project its integration is bound to (github_pr_events.
+//    project_id), so it follows bam.project; an event with no project is org-admin only;
+//  - an API key is visible to org admins and to the person who holds it, and a key restricted to
+//    projects stays hidden from its holder for any project they are no longer a member of;
+//  - a person is visible to org admins (the /b3/people rule) and to themselves.
+// Cross-org rows deny as not_found. A SuperUser counts as an org admin here.
+
+function isAdminAsker(asker: AskerContext): boolean {
+  return asker.is_superuser || isOrgAdmin(asker.role);
+}
+
+async function preflightGithubPrEvent(asker: AskerContext, id: string): Promise<PreflightResult> {
+  const rows = await db
+    .select({ id: githubPrEvents.id, org_id: githubPrEvents.org_id, project_id: githubPrEvents.project_id })
+    .from(githubPrEvents)
+    .where(eq(githubPrEvents.id, id))
+    .limit(1);
+  const row = rows[0];
+  if (!row || row.org_id !== asker.org_id) return { allowed: false, reason: 'not_found' };
+  if (isAdminAsker(asker)) return { allowed: true, reason: 'ok', entity_org_id: row.org_id };
+  if (!row.project_id) return { allowed: false, reason: 'not_project_member', entity_org_id: row.org_id };
+  const project = await preflightBamProject(asker, row.project_id);
+  if (!project.allowed) {
+    // A project in another org (or gone) must not leak through the event: deny as a project gate.
+    return { allowed: false, reason: 'not_project_member', entity_org_id: row.org_id };
+  }
+  return { allowed: true, reason: 'ok', entity_org_id: row.org_id };
+}
+
+async function preflightApiKey(asker: AskerContext, id: string): Promise<PreflightResult> {
+  const rows = await db
+    .select({ id: apiKeys.id, org_id: apiKeys.org_id, user_id: apiKeys.user_id, project_ids: apiKeys.project_ids })
+    .from(apiKeys)
+    .where(eq(apiKeys.id, id))
+    .limit(1);
+  const row = rows[0];
+  if (!row || row.org_id !== asker.org_id) return { allowed: false, reason: 'not_found' };
+  if (isAdminAsker(asker)) return { allowed: true, reason: 'ok', entity_org_id: row.org_id };
+  if (row.user_id !== asker.id) return { allowed: false, reason: 'not_key_holder', entity_org_id: row.org_id };
+  for (const projectId of row.project_ids ?? []) {
+    if (!(await isProjectMember(projectId, asker.id))) {
+      return { allowed: false, reason: 'not_project_member', entity_org_id: row.org_id };
+    }
+  }
+  return { allowed: true, reason: 'ok', entity_org_id: row.org_id };
+}
+
+async function preflightUser(asker: AskerContext, id: string): Promise<PreflightResult> {
+  const rows = await db
+    .select({ user_id: organizationMemberships.user_id })
+    .from(organizationMemberships)
+    .where(and(eq(organizationMemberships.user_id, id), eq(organizationMemberships.org_id, asker.org_id)))
+    .limit(1);
+  if (!rows[0]) return { allowed: false, reason: 'not_found' };
+  if (id === asker.id || isAdminAsker(asker)) return { allowed: true, reason: 'ok', entity_org_id: asker.org_id };
+  return { allowed: false, reason: 'people_admin_only', entity_org_id: asker.org_id };
+}
+
 export const __test__ = {
+  preflightGithubPrEvent,
+  preflightApiKey,
+  preflightUser,
   preflightBastionOrgRow,
   preflightBastionManualEvidence,
   preflightBurnEngagement,

@@ -11,6 +11,7 @@ import { rejectWhenImpersonating, requireAuth, requireSession } from '../plugins
 import { handled, idParam, notFound, validationError, viewerOf } from '../lib/http.js';
 import { engineDeps } from '../engine/runtime.js';
 import * as evidence from '../services/evidence.service.js';
+import { canAccess } from '../services/evidence-runtime.js';
 
 // Spec 5.1 rows 22-27 and 29-31 (M4). Restore acknowledgement is an integrity act: a cookie
 // session is required, impersonation is refused, the permission is ledger.acknowledge_restore,
@@ -60,14 +61,14 @@ export default async function evidenceRoutes(fastify: FastifyInstance) {
       limit: raw.limit || undefined,
     });
     if (!parsed.success) return validationError(request, reply, parsed.error);
-    return handled(request, reply, () => evidence.listControlEvidence(deps(), viewerOf(request), id, parsed.data));
+    return handled(request, reply, () => evidence.listControlEvidence(deps(), viewerOf(request), id, parsed.data, canAccess));
   });
 
   // Row 26.
   fastify.get('/evidence/:id', { preHandler: [requireAuth, can('bastion.evidence.read')] }, async (request, reply) => {
     const id = idParam(request);
     if (!id) return notFound(request, reply);
-    return handled(request, reply, () => evidence.getEvidence(deps(), viewerOf(request), id));
+    return handled(request, reply, () => evidence.getEvidence(deps(), viewerOf(request), id, canAccess));
   });
 
   // Row 27.

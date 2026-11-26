@@ -273,6 +273,11 @@ export function ControlDetailPage({ controlId, onNavigate }: { controlId: string
                     ))}
                   </div>
                 )}
+                {(s.hidden_citation_count ?? 0) > 0 && (
+                  <p className="text-xs text-zinc-500" data-testid="hidden-citations">
+                    {s.hidden_citation_count} cited item(s) are hidden because you cannot see them.
+                  </p>
+                )}
               </li>
             ))}
           </ul>
