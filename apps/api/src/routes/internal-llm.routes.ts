@@ -15,6 +15,13 @@ import type { FastifyInstance } from 'fastify';
 import type Redis from 'ioredis';
 import { z } from 'zod';
 import { eq, and } from 'drizzle-orm';
+import {
+  LLM_CALL_TIMEOUT_MAX_MS,
+  LLM_CALL_TIMEOUT_MIN_MS,
+  LLM_UPSTREAM_TIMEOUT_CODE,
+  llmCallDeadlineMs,
+  llmHoldWindowMs,
+} from '@bigbluebam/shared';
 import { db } from '../db/index.js';
 import { llmProviders } from '../db/schema/llm-providers.js';
 import { decryptApiKey } from '../services/llm-provider.service.js';
@@ -42,9 +49,9 @@ import { requireInternalSecretOrHelpdeskToken } from '../lib/internal-secret.js'
 // log at debug and admit.
 // ---------------------------------------------------------------------------
 
-// Generous upper bound on a single /chat call (upstream timeout is 60s); a token
-// older than this is treated as a leaked slot from a crashed request.
-const INFLIGHT_HOLD_WINDOW_MS = 90_000;
+// A token older than this is treated as a leaked slot from a crashed request. Derived from the
+// longest deadline a caller may ask for (#257), so a legitimately slow call never loses its slot.
+const INFLIGHT_HOLD_WINDOW_MS = llmHoldWindowMs(LLM_CALL_TIMEOUT_MAX_MS);
 
 function bucketKey(service: string): string {
   return `llm:bucket:${service}`;
@@ -154,7 +161,16 @@ const chatRequestSchema = z.object({
   model: z.string().max(200).optional(),
   max_tokens: z.number().int().positive().max(100000).optional(),
   temperature: z.number().min(0).max(2).optional(),
+  // The upstream deadline for this call (#257): clamped to LLM_CALL_TIMEOUT_MAX_MS; absent means
+  // LLM_CALL_TIMEOUT_DEFAULT_MS (60 s, what every caller had before).
+  timeout_ms: z.number().int().min(LLM_CALL_TIMEOUT_MIN_MS).max(LLM_CALL_TIMEOUT_MAX_MS).optional(),
 });
+
+/** True for the error fetch throws when AbortSignal.timeout fires. */
+function isTimeoutError(err: unknown): boolean {
+  const name = (err as { name?: string } | null)?.name;
+  return name === 'TimeoutError' || name === 'AbortError';
+}
 
 // ---------------------------------------------------------------------------
 // Route plugin
@@ -251,6 +267,7 @@ export default async function internalLlmRoutes(fastify: FastifyInstance) {
       const model = body.model ?? provider.model_id;
       const maxTokens = body.max_tokens ?? provider.max_tokens ?? 4096;
       const temperature = body.temperature ?? (provider.temperature != null ? Number(provider.temperature) : 0.7);
+      const deadlineMs = llmCallDeadlineMs(body.timeout_ms);
 
       try {
         if (provider.provider_type === 'anthropic') {
@@ -271,7 +288,7 @@ export default async function internalLlmRoutes(fastify: FastifyInstance) {
                 : {}),
               temperature,
             }),
-            signal: AbortSignal.timeout(60000),
+            signal: AbortSignal.timeout(deadlineMs),
           });
 
           if (!response.ok) {
@@ -318,7 +335,7 @@ export default async function internalLlmRoutes(fastify: FastifyInstance) {
               messages: body.messages,
               temperature,
             }),
-            signal: AbortSignal.timeout(60000),
+            signal: AbortSignal.timeout(deadlineMs),
           });
 
           if (!response.ok) {
@@ -350,6 +367,19 @@ export default async function internalLlmRoutes(fastify: FastifyInstance) {
         }
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Unknown error';
+        if (isTimeoutError(err)) {
+          // A deadline, not a broken provider (#257): its own status and code, so a caller can
+          // count timeouts apart and tell its operator to raise the deadline, not the token budget.
+          request.log.warn({ deadline_ms: deadlineMs, service }, 'internal-llm: upstream call ran past its deadline');
+          return reply.status(504).send({
+            error: {
+              code: LLM_UPSTREAM_TIMEOUT_CODE,
+              message: `The LLM provider did not answer within ${Math.round(deadlineMs / 1000)} s`,
+              details: [],
+              request_id: request.id,
+            },
+          });
+        }
         request.log.error({ err }, 'internal-llm: proxy call failed');
         return reply.status(502).send({
           error: {

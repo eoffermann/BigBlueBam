@@ -3,10 +3,10 @@ import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import postgres from 'postgres';
 import { orgTx } from '../../src/engine/context.js';
-import type { LlmChat } from '../../src/lib/llm-errors.js';
+import { type LlmChat, LlmTimeoutError } from '../../src/lib/llm-errors.js';
 import type { LlmPermits } from '../../src/lib/llm-permits.js';
 import { type CompileAiDeps, createQueuedAiRun, type SliceLock } from '../../src/services/compile-ai.service.js';
-import { clock, DATABASE_URL, makeDeps, seedOrg, wipeOrg } from './engine-harness.js';
+import { clock, DATABASE_URL, makeDeps, quietLog, seedOrg, wipeOrg } from './engine-harness.js';
 
 /**
  * Review batch 11, AI compile slices (live database):
@@ -210,6 +210,25 @@ describe.skipIf(!DATABASE_URL)('batch 11: AI compile slices (live database)', ()
     } finally {
       await restore();
     }
+  });
+
+  it('an AI call past its deadline is counted as timed out, apart from cut-offs and provider errors (#257)', async () => {
+    const s = await setUp('timeout');
+    const engine = makeDeps(sql, { clock: clock() });
+    const replica = await import('../../src/services/compile-ai.service.js?replica=f');
+    const llm: LlmChat = async ({ messages }) => {
+      const key = controlKeyOf(messages);
+      if (key === 'keys.rotation') throw new LlmTimeoutError(60_000, 504);
+      return recorded(key);
+    };
+    const d: CompileAiDeps = { engine, llm, permits: openPermits, sliceLock: redisDown, background: false, sliceCutoffMs: 60_000, llmTimeoutMs: 60_000 };
+    const done = await replica.compileSlice(d, { organization_id: s.org, run_id: s.runId, claimant: 'worker:W' });
+    expect(done).toMatchObject({ done: true, status: 'succeeded', timed_out_controls: 1, cut_off_controls: 0 });
+    const run = (await sql`SELECT drop_reasons FROM bastion_compile_runs WHERE id = ${s.runId}`)[0]!;
+    const p = run.drop_reasons as { timed_out_keys: string[]; fallback_keys: string[]; items: Array<{ reason?: string }> };
+    expect(p.timed_out_keys).toEqual(['keys.rotation']);
+    expect(p.fallback_keys).toContain('keys.rotation');
+    expect(quietLog.lines.some((l) => l.includes('ran past its 60 s deadline') && l.includes('raise BASTION_LLM_TIMEOUT_MS'))).toBe(true);
   });
 
   it('a slice that lost its fence writes nothing for the control it was on (#242)', async () => {

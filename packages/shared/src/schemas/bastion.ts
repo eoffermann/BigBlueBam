@@ -1535,6 +1535,8 @@ export const bastionCompileSliceSchema = z.object({
   fallback_controls: z.number().int().nonnegative(),
   /** Of fallback_controls: answers that stopped at max_tokens (finish_reason 'length', #237). */
   cut_off_controls: z.number().int().nonnegative().optional(),
+  /** Of fallback_controls: AI calls that ran past their deadline (BASTION_LLM_TIMEOUT_MS, #257). */
+  timed_out_controls: z.number().int().nonnegative().optional(),
   slice_running: z.boolean(),
   released: z.boolean().optional(),
   waiting: z.enum(['ai_slot', 'ai_throttled']).nullable().optional(),

@@ -4,6 +4,7 @@
 
 import type { FastifyBaseLogger } from 'fastify';
 import type { Redis } from 'ioredis';
+import { llmHoldWindowMs } from '@bigbluebam/shared';
 import { env } from '../env.js';
 import { orgTx } from '../engine/context.js';
 import { engineDeps } from '../engine/runtime.js';
@@ -23,7 +24,8 @@ export function compileAiDeps(log: FastifyBaseLogger, redis: Redis): CompileAiDe
   return {
     engine: engineDeps(log, redis),
     llm: llmChat,
-    permits: createLlmPermits(redis, { log }),
+    permits: createLlmPermits(redis, { log, holdMs: llmHoldWindowMs(env.BASTION_LLM_TIMEOUT_MS) }),
+    llmTimeoutMs: env.BASTION_LLM_TIMEOUT_MS,
     sliceLock: redisSliceLock(redis),
     background: true,
     maxTokens: env.BASTION_LLM_MAX_TOKENS,

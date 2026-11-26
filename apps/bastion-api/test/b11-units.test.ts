@@ -1,5 +1,12 @@
-import { describe, expect, it } from 'vitest';
-import { takeSliceLock } from '../src/services/compile-ai.service.js';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { LLM_CALL_TIMEOUT_MAX_MS, llmHoldWindowMs } from '@bigbluebam/shared';
+import { COMPILE_SLICE_LOCK_MS, cutOffAdvice, takeSliceLock, timeoutAdvice } from '../src/services/compile-ai.service.js';
+import { LlmError, LlmTimeoutError } from '../src/lib/llm-errors.js';
+import { LLM_SLICE_START_CUTOFF_MS, RUN_LEASE_MS } from '../src/engine/budgets.js';
+
+vi.mock('../src/env.js', () => ({
+  env: { INTERNAL_SERVICE_SECRET: 's'.repeat(32), BBB_API_INTERNAL_URL: 'http://api:4000', BASTION_LLM_TIMEOUT_MS: 120_000 },
+}));
 import { PROBE_CATALOG } from '../src/library/probe-catalog.js';
 import { decide, probeDefinition } from '../src/probes/definitions.js';
 import { RELEASE_IF_OWNER_LUA, redisSliceLock, type SliceLockRedis } from '../src/lib/slice-lock.js';
@@ -47,6 +54,45 @@ describe('policy.attested v2 decides on the article state (#244)', () => {
   });
   it('the catalog runs v2', () => {
     expect(PROBE_CATALOG.find((p) => p.key === 'policy.attested')?.version).toBe(2);
+  });
+});
+
+describe('one LLM deadline (#257)', () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('the client sends its deadline to the proxy and reads a 504 as a timeout, not a provider failure', async () => {
+    const { llmChat } = await import('../src/lib/llm-client.js');
+    const fetchMock = vi.fn(async () => ({
+      ok: false,
+      status: 504,
+      headers: new Headers(),
+      json: async () => ({ error: { code: 'UPSTREAM_TIMEOUT' } }),
+    }));
+    vi.stubGlobal('fetch', fetchMock);
+    const err = await llmChat({ providerId: 'p', messages: [{ role: 'user', content: 'x' }] }).catch((e) => e);
+    expect(err).toBeInstanceOf(LlmTimeoutError);
+    expect(err).toBeInstanceOf(LlmError);
+    const sent = JSON.parse(String((fetchMock.mock.calls[0] as unknown as [string, { body: string }])[1].body));
+    expect(sent.timeout_ms).toBe(120_000);
+    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: false, status: 502, headers: new Headers(), json: async () => ({ error: { code: 'UPSTREAM_ERROR' } }) })));
+    const other = await llmChat({ providerId: 'p', messages: [{ role: 'user', content: 'x' }] }).catch((e) => e);
+    expect(other).toBeInstanceOf(LlmError);
+    expect(other).not.toBeInstanceOf(LlmTimeoutError);
+  });
+
+  it('hold windows and the slice lock outlive the longest allowed call; one call fits in the run lease', () => {
+    expect(llmHoldWindowMs(120_000)).toBeGreaterThan(120_000);
+    expect(COMPILE_SLICE_LOCK_MS).toBeGreaterThan(LLM_SLICE_START_CUTOFF_MS + LLM_CALL_TIMEOUT_MAX_MS);
+    expect(LLM_CALL_TIMEOUT_MAX_MS).toBeLessThan(RUN_LEASE_MS);
+  });
+
+  it('the operator advice names the right knob for each case', () => {
+    const t = timeoutAdvice({ maxTokens: 8192, llmTimeoutMs: 60_000 });
+    expect(t).toContain('raise BASTION_LLM_TIMEOUT_MS (now 60 s');
+    expect(t).toContain('Do not raise BASTION_LLM_MAX_TOKENS');
+    expect(timeoutAdvice({ maxTokens: 8192, llmTimeoutMs: LLM_CALL_TIMEOUT_MAX_MS })).toContain('lower BASTION_LLM_MAX_TOKENS');
+    const c = cutOffAdvice({ maxTokens: 8192, llmTimeoutMs: 60_000 });
+    expect(c).toContain('raise BASTION_LLM_MAX_TOKENS AND raise BASTION_LLM_TIMEOUT_MS');
   });
 });
 

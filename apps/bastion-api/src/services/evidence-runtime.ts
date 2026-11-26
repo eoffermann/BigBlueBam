@@ -4,6 +4,7 @@
 import type { FastifyBaseLogger } from 'fastify';
 import type { Redis } from 'ioredis';
 import { preflightAccess } from '@bigbluebam/shared/visibility-client';
+import { llmHoldWindowMs } from '@bigbluebam/shared';
 import { env } from '../env.js';
 import { engineDeps } from '../engine/runtime.js';
 import { enqueueEvaluationRun, enqueueEvidenceIngest } from '../lib/queue.js';
@@ -52,7 +53,7 @@ export function decisionDeps(log: FastifyBaseLogger, redis: Redis): DecisionDeps
     // M8 (spec 2.4): the AI may reword drafted fixes; the template's words stay on any failure.
     reword: createReworder({
       resolveProvider: (orgId) => orgTx(engine.sql, orgId, (tx) => resolveLlmProviderId(tx, orgId)),
-      permits: createLlmPermits(redis, { log }),
+      permits: createLlmPermits(redis, { log, holdMs: llmHoldWindowMs(env.BASTION_LLM_TIMEOUT_MS) }),
       llm: llmChat,
       log,
     }),

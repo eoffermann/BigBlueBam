@@ -37,11 +37,12 @@ import {
   tsQueryTerms,
 } from '../library/questionnaire-draft.js';
 import type { SliceLock } from './compile-ai.service.js';
-import { resolveLlmProviderId, takeSliceLock } from './compile-ai.service.js';
+import { COMPILE_SLICE_LOCK_MS, resolveLlmProviderId, takeSliceLock } from './compile-ai.service.js';
 
 export const AUTOFILL_HEARTBEAT_EVERY_MS = 20_000;
 export const AUTOFILL_PERMIT_RETRY_MS = 2_000;
-export const AUTOFILL_SLICE_LOCK_MS = 240_000;
+/** Outlives the longest slice: the start cutoff plus one call at the longest allowed deadline (#257). */
+export const AUTOFILL_SLICE_LOCK_MS = COMPILE_SLICE_LOCK_MS;
 export const DEFAULT_MAX_LLM_CALLS_PER_QUESTIONNAIRE = 1200;
 const DEFAULT_FLOORS = { high: 0.8, medium: 0.55 };
 

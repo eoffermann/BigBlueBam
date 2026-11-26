@@ -19,12 +19,12 @@
 // (max_llm_calls_per_compile, default 400) is spent, that control gets the library's suggestions
 // verbatim. Everything lands as `proposed`; a person confirms.
 
-import type { BastionCompileSlice } from '@bigbluebam/shared';
+import { type BastionCompileSlice, LLM_CALL_TIMEOUT_MAX_MS, LLM_HOLD_MARGIN_MS } from '@bigbluebam/shared';
 import { type EngineDeps, orgTx, type Tx } from '../engine/context.js';
-import { LLM_SLICE_START_CUTOFF_MS, MAX_RESUMES, STALE_HEARTBEAT_MS } from '../engine/budgets.js';
+import { LLM_CALL_TIMEOUT_MS, LLM_SLICE_START_CUTOFF_MS, MAX_RESUMES, STALE_HEARTBEAT_MS } from '../engine/budgets.js';
 import { RunLeaseHeldError, RunNotFoundError } from '../engine/evaluator.js';
 import { enqueueBastionEvent } from '../engine/outbox.js';
-import { LlmError, LlmThrottledError, type LlmChat } from '../lib/llm-errors.js';
+import { LlmError, LlmThrottledError, LlmTimeoutError, type LlmChat } from '../lib/llm-errors.js';
 import type { LlmPermits } from '../lib/llm-permits.js';
 import {
   type ConnectedPopulations,
@@ -44,8 +44,8 @@ import {
 
 export const COMPILE_HEARTBEAT_EVERY_MS = 20_000;
 export const COMPILE_PERMIT_RETRY_MS = 2_000;
-/** A slice lock outlives the longest slice (150 s + one 60 s call) with margin. */
-export const COMPILE_SLICE_LOCK_MS = 240_000;
+/** A slice lock outlives the longest slice: the start cutoff plus one call at the longest allowed deadline, with margin (#257). */
+export const COMPILE_SLICE_LOCK_MS = LLM_SLICE_START_CUTOFF_MS + LLM_CALL_TIMEOUT_MAX_MS + LLM_HOLD_MARGIN_MS;
 /** Default cap when the org has no settings row (bastion_org_settings default). */
 export const DEFAULT_MAX_LLM_CALLS_PER_COMPILE = 400;
 
@@ -86,6 +86,8 @@ export interface CompileAiDeps {
   sliceCutoffMs?: number;
   /** The compile call's max_tokens (env BASTION_LLM_MAX_TOKENS; COMPILE_MAX_TOKENS_DEFAULT). */
   maxTokens?: number;
+  /** One call's deadline (env BASTION_LLM_TIMEOUT_MS), named in the operator warnings (#257). */
+  llmTimeoutMs?: number;
 }
 
 /** What the run row carries in drop_reasons while it runs (and after). */
@@ -99,6 +101,8 @@ export interface CompileProgress {
   fallback_keys: string[];
   /** Of fallback_keys: the controls whose AI answer stopped at max_tokens (#237), counted apart. */
   cut_off_keys: string[];
+  /** Of fallback_keys: the controls whose AI call ran past its deadline (#257), counted apart. */
+  timed_out_keys: string[];
   not_applicable: Array<{ control_key: string; ref_code: string; reason: string }>;
   withheld_labels: number;
   /** Controls whose write failed after an AI answer (#241): the next slice proposes the library's suggestions for them. */
@@ -116,6 +120,7 @@ function progressOf(raw: unknown, providerId: string | null): CompileProgress {
     done_keys: Array.isArray(p.done_keys) ? p.done_keys : [],
     fallback_keys: Array.isArray(p.fallback_keys) ? p.fallback_keys : [],
     cut_off_keys: Array.isArray(p.cut_off_keys) ? p.cut_off_keys : [],
+    timed_out_keys: Array.isArray(p.timed_out_keys) ? p.timed_out_keys : [],
     not_applicable: Array.isArray(p.not_applicable) ? p.not_applicable : [],
     withheld_labels: Number(p.withheld_labels ?? 0),
     retry_with_library: Array.isArray(p.retry_with_library) ? p.retry_with_library : [],
@@ -222,6 +227,7 @@ function sliceView(run: RunRow, running: boolean, extra: Partial<BastionCompileS
     llm_calls_used: Number(run.llm_calls_used),
     fallback_controls: p.fallback_keys.length,
     cut_off_controls: p.cut_off_keys.length,
+    timed_out_controls: p.timed_out_keys.length,
     slice_running: running,
     waiting: waitingState.get(run.id) ?? null,
     ...extra,
@@ -392,6 +398,28 @@ async function releaseRun(d: CompileAiDeps, run: RunRow, f: Fence): Promise<void
      WHERE id = ${run.id} AND organization_id = ${run.organization_id} AND claimed_by = ${f.claimant} AND slice_token = ${f.token} AND status = 'running'`);
 }
 
+/**
+ * The operator advice for an answer cut off at max_tokens (#237, #257). A bigger budget makes the
+ * call take longer, so the advice names the deadline too: raising only the budget against a fixed
+ * deadline turns cut-offs into timeouts.
+ */
+export function cutOffAdvice(d: Pick<CompileAiDeps, 'maxTokens' | 'llmTimeoutMs'>): string {
+  const tokens = d.maxTokens ?? COMPILE_MAX_TOKENS_DEFAULT;
+  const secs = Math.round((d.llmTimeoutMs ?? LLM_CALL_TIMEOUT_MS) / 1000);
+  return `bastion-compile: the AI answer stopped at max_tokens (finish_reason length, BASTION_LLM_MAX_TOKENS=${tokens}); if this repeats, raise BASTION_LLM_MAX_TOKENS AND raise BASTION_LLM_TIMEOUT_MS (now ${secs} s, at most ${LLM_CALL_TIMEOUT_MAX_MS / 1000} s) to match, since a bigger answer takes longer`;
+}
+
+/** The operator advice for a call that ran past its deadline (#257). */
+export function timeoutAdvice(d: Pick<CompileAiDeps, 'maxTokens' | 'llmTimeoutMs'>): string {
+  const tokens = d.maxTokens ?? COMPILE_MAX_TOKENS_DEFAULT;
+  const ms = d.llmTimeoutMs ?? LLM_CALL_TIMEOUT_MS;
+  const raise =
+    ms < LLM_CALL_TIMEOUT_MAX_MS
+      ? `raise BASTION_LLM_TIMEOUT_MS (now ${Math.round(ms / 1000)} s, at most ${LLM_CALL_TIMEOUT_MAX_MS / 1000} s)`
+      : `BASTION_LLM_TIMEOUT_MS is already at its ${LLM_CALL_TIMEOUT_MAX_MS / 1000} s cap, so lower BASTION_LLM_MAX_TOKENS (now ${tokens}) or use a faster model`;
+  return `bastion-compile: the AI call ran past its ${Math.round(ms / 1000)} s deadline (BASTION_LLM_MAX_TOKENS=${tokens}); if this repeats, ${raise}. Do not raise BASTION_LLM_MAX_TOKENS for this: it makes calls longer`;
+}
+
 export const SLICE_FAILED_RETRYING = 'Setup hit a problem while writing its suggestions and is trying again.';
 export const SLICE_FAILED_PARKED = 'Setup hit the same problem several times and stopped. Start it again from Setup; if it stops again, tell your administrator.';
 
@@ -415,7 +443,7 @@ async function failSlice(d: CompileAiDeps, run: RunRow, f: Fence, controlKey: st
 
 type AiOutcome =
   | { kind: 'answer'; content: string; finish_reason: string | null; withheld: number }
-  | { kind: 'fallback'; reason: string }
+  | { kind: 'fallback'; reason: string; timedOut?: boolean }
   | { kind: 'out_of_time' };
 
 /** One AI call for one control, waiting for a leased permit within the slice budget. */
@@ -463,6 +491,8 @@ async function askAi(
         await sleep(wait);
         continue;
       }
+      // A deadline is its own reason (#257): the knob is the timeout, not a broken provider.
+      if (err instanceof LlmTimeoutError) return { kind: 'fallback', reason: `${err.message}, so the library suggestions were proposed`, timedOut: true };
       return { kind: 'fallback', reason: err instanceof LlmError ? `the AI call failed (${err.message})` : 'the AI call failed' };
     } finally {
       await admission.release();
@@ -520,6 +550,7 @@ async function runSlice(d: CompileAiDeps, run: RunRow, fence: Fence, current: Sl
     let fallbackReason: string | null = null;
     let withheld = 0;
     let cutOff = false;
+    let timedOut = false;
     if (!lib) fallbackReason = null;
     else if (progress.retry_with_library.includes(c.control_key)) fallbackReason = 'the AI answer for this control could not be saved, so the library suggestions were proposed';
     else if (!providerId) fallbackReason = 'no AI provider is set up, so the library suggestions were proposed';
@@ -543,8 +574,13 @@ async function runSlice(d: CompileAiDeps, run: RunRow, fence: Fence, current: Sl
         RETURNING llm_calls_used`);
       if (!counted[0]) throw new ClaimLostError();
       calls = Number(counted[0].llm_calls_used);
-      if (outcome.kind === 'fallback') fallbackReason = outcome.reason;
-      else {
+      if (outcome.kind === 'fallback') {
+        fallbackReason = outcome.reason;
+        // Counted apart (#257): a run full of timeouts means the deadline is too short for the
+        // model at this token budget; the knob is the deadline, NOT a bigger token budget.
+        timedOut = outcome.timedOut === true;
+        if (timedOut) d.engine.log.warn({ run_id: run.id, control_key: c.control_key }, timeoutAdvice(d));
+      } else {
         withheld = outcome.withheld;
         const parsed = parseTailoringResponse(outcome.content, outcome.finish_reason);
         if (parsed.ok) tailored = tailoredSuggestions(c.control_key, parsed.value, { requirements: c.requirements, connected: populations, control: lib });
@@ -553,7 +589,7 @@ async function runSlice(d: CompileAiDeps, run: RunRow, fence: Fence, current: Sl
           // Counted apart (#237): a run full of cut-off answers means the budget is too small for
           // the model, not that the provider is broken.
           cutOff = parsed.cut_off === true;
-          if (cutOff) d.engine.log.warn({ run_id: run.id, control_key: c.control_key }, 'bastion-compile: the AI answer stopped at max_tokens (finish_reason length); raise BASTION_LLM_MAX_TOKENS if this repeats');
+          if (cutOff) d.engine.log.warn({ run_id: run.id, control_key: c.control_key }, cutOffAdvice(d));
         }
       }
     }
@@ -597,6 +633,7 @@ async function runSlice(d: CompileAiDeps, run: RunRow, fence: Fence, current: Sl
         done_keys: [...progress.done_keys, c.control_key],
         fallback_keys: plan.used_fallback ? [...progress.fallback_keys, c.control_key] : progress.fallback_keys,
         cut_off_keys: cutOff ? [...progress.cut_off_keys, c.control_key] : progress.cut_off_keys,
+        timed_out_keys: timedOut ? [...progress.timed_out_keys, c.control_key] : progress.timed_out_keys,
         not_applicable: [...progress.not_applicable, ...plan.not_applicable.map((n) => ({ control_key: c.control_key, ...n }))],
         withheld_labels: progress.withheld_labels + withheld,
       };
