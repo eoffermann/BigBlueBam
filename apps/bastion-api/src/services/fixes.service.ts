@@ -34,6 +34,7 @@ import { enqueueProposalClose, remediationSettings } from '../engine/remediation
 import type { CitedRef } from '../engine/status.js';
 import { anOrgAdmin, assertHumanDecider, citationVisible, type DecisionDeps, fileMirroredProposal, visibleRefs } from './decisions.service.js';
 import { cannotOpen } from '../lib/policy-access.js';
+import { populationVisibility } from '../lib/population-visibility.js';
 import { beaconEntryIdBySlug } from '../lib/beacon-slug.js';
 import type { Viewer } from './types.js';
 
@@ -251,7 +252,18 @@ async function draftFor(d: DecisionDeps, tx: Tx, viewer: Viewer, g: Record<strin
     }
     case 'config_change': {
       if (g.gap_kind === 'population_drift') {
-        const unlisted = (latest?.population_unlisted as unknown[] | null) ?? [];
+        // The unlisted members are repository names for the change.* probes: only those of Bam
+        // projects the drafter can open are named or proposed (#250, the evidence.service rule).
+        const rawUnlisted = (latest?.population_unlisted as unknown[] | null) ?? [];
+        const memberName = (m: unknown) =>
+          typeof m === 'string' ? m : String((m as { label?: unknown; value?: unknown })?.label ?? (m as { value?: unknown })?.value ?? '');
+        const canSee = await populationVisibility(tx, d.canAccess, viewer, rawUnlisted.map(memberName));
+        const unlisted = rawUnlisted.filter((m) => canSee(memberName(m)));
+        const hiddenCount = rawUnlisted.length - unlisted.length;
+        const hiddenNote =
+          hiddenCount > 0
+            ? ` ${hiddenCount} more ${hiddenCount === 1 ? 'is' : 'are'} in projects you don't have access to, so ${hiddenCount === 1 ? 'it is' : 'they are'} not named or added here.`
+            : '';
         const { quoted, suspect } = memberLabels(unlisted);
         const names = quoted.length > 0 ? quoted.join(', ') : `${unlisted.length} item${unlisted.length === 1 ? '' : 's'}`;
         const one = unlisted.length === 1;
@@ -261,7 +273,7 @@ async function draftFor(d: DecisionDeps, tx: Tx, viewer: Viewer, g: Record<strin
           ...base,
           suspect_label_count: suspect,
           title: `Add ${quoted.length === 1 ? quoted[0] : names} to what Bastion checks for "${control}"`.slice(0, 512),
-          body_markdown: `Bastion found ${unlisted.length} item${one ? '' : 's'} that ${one ? 'is' : 'are'} connected but not on the list it checks for "${control}": ${names}.${suspectNote}\n\nApproving files an updated list for one-click confirmation in the review queue.`,
+          body_markdown: `Bastion found ${unlisted.length} item${one ? '' : 's'} that ${one ? 'is' : 'are'} connected but not on the list it checks for "${control}": ${names}.${suspectNote}${hiddenNote}\n\nApproving files an updated list for one-click confirmation in the review queue.`,
           payload: { add_members: unlisted.slice(0, 200), assertion_id: g.assertion_id },
         };
       }

@@ -46,15 +46,28 @@ const PASS: ProbeOutcome = { outcome: 'pass' };
 const FAIL: ProbeOutcome = { outcome: 'fail' };
 const unprovable = (reason: BastionStoredUnprovableReason): ProbeOutcome => ({ outcome: 'unprovable', reason });
 
+/**
+ * "Checked 4 repositories (a, b, c, and 1 more you cannot see)." For a detail reader,
+ * population_checked holds only the names they may see (evidence.service.ts present(), #250) and
+ * population_hidden_count the rest, which are counted, never named.
+ */
 function populationSentence(r: BastionProbeResult, detailAllowed: boolean, noun: string): string {
   const checked = r.population_checked ?? [];
   const missing = r.population_missing ?? [];
   const unlisted = r.population_unlisted ?? [];
-  let out = `Checked ${plural(checked.length, noun)}`;
-  if (detailAllowed && checked.length > 0) out += ` (${checked.join(', ')})`;
+  const hidden = Math.max(0, Number((r as BastionProbeResult & { population_hidden_count?: number }).population_hidden_count ?? 0));
+  // "repository" -> "repositories", not "repositorys" (the default plural only appends "s").
+  const nouns = /[^aeiou]y$/.test(noun) ? `${noun.slice(0, -1)}ies` : `${noun}s`;
+  const count = (n: number) => plural(n, noun, nouns);
+  let out = `Checked ${count(checked.length + hidden)}`;
+  if (detailAllowed && checked.length > 0) {
+    out += ` (${checked.join(', ')}${hidden > 0 ? `, and ${hidden} more you cannot see` : ''})`;
+  } else if (detailAllowed && hidden > 0) {
+    out += ` (${hidden === 1 ? 'you cannot see it' : 'you cannot see them'})`;
+  }
   out += '.';
-  if (missing.length > 0) out += ` ${plural(missing.length, noun)} on the list ${missing.length === 1 ? 'is' : 'are'} not connected.`;
-  if (unlisted.length > 0) out += ` ${plural(unlisted.length, noun)} connected but not on the list.`;
+  if (missing.length > 0) out += ` ${count(missing.length)} on the list ${missing.length === 1 ? 'is' : 'are'} not connected.`;
+  if (unlisted.length > 0) out += ` ${count(unlisted.length)} connected but not on the list.`;
   return out;
 }
 
