@@ -1,10 +1,15 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { requireInternalSecret } from '../lib/internal-secret.js';
+import { createInternalSecretGuard } from '@bigbluebam/service-health';
+import { env } from '../env.js';
 import * as rateService from '../services/rate.service.js';
 import * as lineItemService from '../services/line-item.service.js';
 import { publishBoltEvent } from '../lib/bolt-events.js';
 import { loadOrg } from '../lib/bolt-event-enrich.js';
+
+// The suite-wide internal-route guard (#252, @bigbluebam/service-health): constant-time compare,
+// fails CLOSED with no secret configured, direct private-network peers only.
+const requireInternalSecret = createInternalSecretGuard({ secrets: () => [env.INTERNAL_SERVICE_SECRET] });
 
 /**
  * bill-api's service-to-service surface (Burn spec 9.2).

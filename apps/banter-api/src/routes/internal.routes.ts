@@ -1,6 +1,6 @@
-import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
+import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { timingSafeEqual } from 'node:crypto';
+import { createInternalSecretGuard, internalSecretPreHandler } from '@bigbluebam/service-health';
 import { env } from '../env.js';
 import { postActivityFeedMessage } from '../services/activity-feed.js';
 import { writeTranscriptSegment } from '../services/transcription.js';
@@ -15,41 +15,13 @@ const feedMessageSchema = z.object({
 });
 
 /**
- * Middleware that verifies X-Internal-Secret header against INTERNAL_SERVICE_SECRET.
- * If the secret is not configured, logs a warning but allows the request (graceful degradation).
+ * The suite-wide internal-route guard (#252, @bigbluebam/service-health): INTERNAL_SERVICE_SECRET
+ * in X-Internal-Secret or X-Internal-Service-Secret, constant-time, from a direct private-network
+ * peer. It fails CLOSED when the secret is not configured (this route used to fail open).
  */
-async function requireInternalSecret(
-  request: FastifyRequest,
-  reply: FastifyReply,
-) {
-  const configuredSecret = env.INTERNAL_SERVICE_SECRET;
-
-  if (!configuredSecret) {
-    request.log.warn(
-      'INTERNAL_SERVICE_SECRET is not configured — internal routes are unprotected. ' +
-      'Set INTERNAL_SERVICE_SECRET env var (min 32 chars) to secure service-to-service calls.',
-    );
-    return;
-  }
-
-  const providedSecret = request.headers['x-internal-secret'] as string | undefined;
-
-  const secretsMatch =
-    providedSecret &&
-    providedSecret.length === configuredSecret.length &&
-    timingSafeEqual(Buffer.from(providedSecret), Buffer.from(configuredSecret));
-
-  if (!secretsMatch) {
-    return reply.status(401).send({
-      error: {
-        code: 'UNAUTHORIZED',
-        message: 'Invalid or missing X-Internal-Secret header',
-        details: [],
-        request_id: request.id,
-      },
-    });
-  }
-}
+const requireInternalSecret = internalSecretPreHandler(
+  createInternalSecretGuard({ secrets: () => [env.INTERNAL_SERVICE_SECRET] }),
+);
 
 /**
  * Internal API routes — called by other services (Bam API, worker) within the Docker network.

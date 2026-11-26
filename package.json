@@ -38,6 +38,7 @@
     "check:workflow-timeouts": "node scripts/check-workflow-timeouts.mjs",
     "check:dockerfile-chown": "node scripts/check-dockerfile-chown.mjs",
     "check:no-coerce-boolean": "node scripts/check-no-coerce-boolean.mjs",
+    "check:internal-secret-guard": "node scripts/check-internal-secret-guard.mjs",
     "test:scripts": "node --test \"scripts/lib/*.test.mjs\" \"scripts/deploy/shared/*.nodetest.mjs\"",
     "test:deploy": "pnpm --filter @bigbluebam/api exec vitest run --config ../../scripts/deploy/shared/vitest.config.mjs",
     "check:permission-catalog": "node scripts/check-permission-catalog.mjs",

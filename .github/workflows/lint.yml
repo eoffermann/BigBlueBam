@@ -61,6 +61,11 @@ jobs:
       - name: No z.coerce.boolean
         run: pnpm check:no-coerce-boolean
 
+      # Issue #252: internal routes authenticate through the one shared guard in
+      # @bigbluebam/service-health; no service reads an internal-secret header itself.
+      - name: Internal-secret guard is shared
+        run: pnpm check:internal-secret-guard
+
       # Bolt event-catalog drift guard: every publishBoltEvent(source, event_type) call site
       # must be declared in apps/bolt-api/src/services/event-catalog.ts. Exists at
       # package.json but ran in no workflow until this build wired it in (Burn spec 8.2).

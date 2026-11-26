@@ -231,15 +231,27 @@ describe('project scoping is Burn-specific, not a Bulwark port (R2-S6)', () => {
 });
 
 describe('internal routes fail CLOSED on an empty secret (2.4 point 16)', () => {
-  it('rejects unconditionally before any timing-safe compare', () => {
-    const code = stripComments(readFileSync(join(SRC, 'lib', 'internal-secret.ts'), 'utf8'));
-    const guard = code.slice(code.indexOf('export function requireInternalSecret'));
-    const emptyCheckIdx = guard.indexOf('configured.length === 0');
-    const compareIdx = guard.indexOf('timingSafeEqual');
-    expect(emptyCheckIdx).toBeGreaterThan(-1);
-    expect(compareIdx).toBeGreaterThan(-1);
-    // The empty-secret rejection must come FIRST: timingSafeEqual('', '') is true.
-    expect(emptyCheckIdx).toBeLessThan(compareIdx);
+  it('uses the suite-wide guard, which rejects an empty secret before any compare (#252)', async () => {
+    // The guard is @bigbluebam/service-health's createInternalSecretGuard (its own tests cover the
+    // compare and the private-peer check); this route file only names the secret.
+    const source = routeSource('internal.routes.ts');
+    expect(source).toMatch(/createInternalSecretGuard\(\{ secrets: \(\) => \[env\.INTERNAL_SERVICE_SECRET\] \}\)/);
+    const { createInternalSecretGuard } = await import('@bigbluebam/service-health');
+    const sent: Array<{ status: number }> = [];
+    const reply = {
+      status(code: number) {
+        sent.push({ status: code });
+        return this;
+      },
+      send() {
+        return this;
+      },
+    };
+    const request = { id: 'r1', headers: { 'x-internal-secret': '' }, log: { error() {}, warn() {} }, raw: { socket: { remoteAddress: '127.0.0.1' } } };
+    // timingSafeEqual('', '') is true, so an empty configured secret must be refused outright.
+    const guard = createInternalSecretGuard({ secrets: () => [''] });
+    expect(guard(request as never, reply as never)).toBe(false);
+    expect(sent).toEqual([{ status: 401 }]);
   });
 
   it('every /internal route calls the guard', () => {

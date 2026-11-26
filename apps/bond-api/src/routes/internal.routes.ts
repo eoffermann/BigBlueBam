@@ -22,16 +22,16 @@
  *   reuses the idempotent upsert-by-email service, so re-submitting the same
  *   email does not create duplicate contacts.
  *
- * Mirrors apps/book-api/src/routes/internal.routes.ts so the posture is
- * identical across services: timing-safe compare against
- * env.INTERNAL_SERVICE_SECRET, 401 on mismatch, 503 if the secret is not
- * configured (fail-closed — never accept the request).
+ * Guarded by the suite-wide internal guard in @bigbluebam/service-health
+ * (#252): timing-safe compare against env.INTERNAL_SERVICE_SECRET in either
+ * internal-secret header, 401 on mismatch or when unconfigured (fail-closed),
+ * 403 for a caller that is not a direct private-network peer.
  */
 
-import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
+import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { and, eq } from 'drizzle-orm';
-import { timingSafeEqual } from 'node:crypto';
+import { createInternalSecretGuard } from '@bigbluebam/service-health';
 import { db } from '../db/index.js';
 import { env } from '../env.js';
 import { users, organizationMemberships } from '../db/schema/index.js';
@@ -41,55 +41,9 @@ import * as contactUpsertService from '../services/contact-upsert.service.js';
 // Internal-secret guard.
 // ─────────────────────────────────────────────────────────────────────
 
-function timingSafeStringEqual(a: string, b: string): boolean {
-  const bufA = Buffer.from(a, 'utf8');
-  const bufB = Buffer.from(b, 'utf8');
-  if (bufA.length !== bufB.length) {
-    // Constant-time op against ourselves so length mismatch does not
-    // leak via timing differences.
-    timingSafeEqual(bufA, bufA);
-    return false;
-  }
-  return timingSafeEqual(bufA, bufB);
-}
-
-function getInternalSecretHeader(request: FastifyRequest): string | undefined {
-  const header = request.headers['x-internal-service-secret'];
-  if (typeof header === 'string' && header.length > 0) return header;
-  if (Array.isArray(header) && header.length > 0) return header[0];
-  return undefined;
-}
-
-async function requireInternalSecret(
-  request: FastifyRequest,
-  reply: FastifyReply,
-): Promise<boolean> {
-  const expected = env.INTERNAL_SERVICE_SECRET;
-  if (!expected) {
-    await reply.status(503).send({
-      error: {
-        code: 'INTERNAL_AUTH_UNCONFIGURED',
-        message: 'Internal service secret is not configured on this Bond API instance',
-        details: [],
-        request_id: request.id,
-      },
-    });
-    return false;
-  }
-  const provided = getInternalSecretHeader(request);
-  if (!provided || !timingSafeStringEqual(provided, expected)) {
-    await reply.status(401).send({
-      error: {
-        code: 'UNAUTHORIZED',
-        message: 'Invalid or missing internal service secret',
-        details: [],
-        request_id: request.id,
-      },
-    });
-    return false;
-  }
-  return true;
-}
+// The suite-wide guard (#252, @bigbluebam/service-health): either internal-secret header,
+// constant-time, 401 when unconfigured or wrong, direct private-network peers only.
+const requireInternalSecret = createInternalSecretGuard({ secrets: () => [env.INTERNAL_SERVICE_SECRET] });
 
 // ─────────────────────────────────────────────────────────────────────
 // Schemas
