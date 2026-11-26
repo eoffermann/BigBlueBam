@@ -49,7 +49,7 @@ async function call(messages: unknown): Promise<{ content: string; finish_reason
     if (!res.ok) throw new Error(`proxy returned ${res.status}: ${(await res.text()).slice(0, 200)}`);
     const body = (await res.json()) as { data?: { content?: string; finish_reason?: string | null } };
     // House style for committed files: no em or en dashes (normalizeAiText does the same at run time).
-    const content = (body.data?.content ?? '').replace(/\s*[—–]\s*/g, ', ');
+    const content = (body.data?.content ?? '').replace(/\s*[\u2014\u2013]\s*/g, ', ');
     return { content, finish_reason: body.data?.finish_reason ?? null };
   }
 }

@@ -105,7 +105,7 @@ for (const [name, source] of [
     it('injection: nothing instruction-like reaches a proposal, and no dash breaks house style', () => {
       const suspect = plans.flatMap(({ key, plan }) => proposalTexts(plan).filter((t) => scanLabel(t).suspected).map((t) => `${key}: ${t.slice(0, 80)}`));
       expect(suspect).toEqual([]);
-      const dashed = plans.flatMap(({ key, plan }) => proposalTexts(plan).filter((t) => /[—–]/.test(t)).map(() => key));
+      const dashed = plans.flatMap(({ key, plan }) => proposalTexts(plan).filter((t) => /[\u2014\u2013]/.test(t)).map(() => key));
       expect(dashed).toEqual([]);
     });
 
@@ -143,7 +143,7 @@ describe('compiler corpus: what the hostile answers did', () => {
   });
 
   it('dashes in AI text become commas', () => {
-    expect(normalizeAiText('Changes — even small ones – get a second look')).toBe('Changes, even small ones, get a second look');
+    expect(normalizeAiText('Changes \u2014 even small ones \u2013 get a second look')).toBe('Changes, even small ones, get a second look');
   });
 });
 

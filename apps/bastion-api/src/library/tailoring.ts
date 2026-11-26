@@ -189,7 +189,7 @@ const CONFIRMATION_KEYS = ['population_confirmed_at', 'population_confirmed_by',
  */
 export function normalizeAiText(text: string): string {
   return text
-    .replace(/\s*[—–]\s*/g, ', ')
+    .replace(/\s*[\u2014\u2013]\s*/g, ', ')
     .replace(/\s+/g, ' ')
     .trim();
 }
