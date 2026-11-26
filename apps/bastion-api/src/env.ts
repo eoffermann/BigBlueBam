@@ -1,6 +1,10 @@
 import { z } from 'zod';
 import { checkStableSecrets, formatStableSecretRefusal } from './boot/stable-secrets.js';
-import { COMPILE_MAX_TOKENS_DEFAULT } from './library/compile-budget.js';
+import { BASTION_LLM_CALLS, LLM_MAX_TOKENS_MAX, LLM_MAX_TOKENS_MIN } from './library/llm-call-settings.js';
+
+/** One call kind's max_tokens override, with the bounds llm-call-settings.ts applies to recorders too. */
+const maxTokensVar = (kind: keyof typeof BASTION_LLM_CALLS) =>
+  z.coerce.number().int().min(LLM_MAX_TOKENS_MIN).max(LLM_MAX_TOKENS_MAX).default(BASTION_LLM_CALLS[kind].maxTokensDefault);
 
 const emptyToUndefined = (v: unknown) => (v === '' ? undefined : v);
 
@@ -73,8 +77,11 @@ const envSchema = z.object({
 
   // Time budgets (spec 7.3).
   BASTION_LLM_TIMEOUT_MS: z.coerce.number().int().positive().default(60000),
-  // The compile call's output budget (#237). Reasoning models spend part of it before answering.
-  BASTION_LLM_MAX_TOKENS: z.coerce.number().int().min(256).max(100000).default(COMPILE_MAX_TOKENS_DEFAULT),
+  // Output budgets per call kind (#237, #263, #264; library/llm-call-settings.ts). Reasoning
+  // models spend part of the budget before answering.
+  BASTION_LLM_MAX_TOKENS: maxTokensVar('compile'),
+  BASTION_QUESTIONNAIRE_MAX_TOKENS: maxTokensVar('questionnaire_draft'),
+  BASTION_REWORD_MAX_TOKENS: maxTokensVar('fix_reword'),
   BASTION_ENGINE_TIMEOUT_MS: z.coerce.number().int().positive().default(30000),
   BASTION_PROBE_TIMEOUT_MS: z.coerce.number().int().positive().default(8000),
   BASTION_PUT_TIMEOUT_MS: z.coerce.number().int().positive().default(5000),

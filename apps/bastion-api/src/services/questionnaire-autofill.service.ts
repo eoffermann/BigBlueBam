@@ -25,6 +25,7 @@ import { enqueueBastionEvent } from '../engine/outbox.js';
 import { scanLabel } from '../lib/injection-prescan.js';
 import { LlmError, LlmThrottledError, type LlmChat } from '../lib/llm-errors.js';
 import type { LlmPermits } from '../lib/llm-permits.js';
+import { BASTION_LLM_CALLS } from '../library/llm-call-settings.js';
 import {
   type BandResult,
   bandAnswer,
@@ -58,6 +59,8 @@ export interface AutofillDeps {
   sleep?: (ms: number) => Promise<void>;
   shuttingDown?: () => boolean;
   sliceCutoffMs?: number;
+  /** max_tokens per answer (env BASTION_QUESTIONNAIRE_MAX_TOKENS; llm-call-settings.ts questionnaire_draft). */
+  maxTokens?: number;
 }
 
 /* ------------------------------ retrieval ------------------------------ */
@@ -233,7 +236,7 @@ interface CallHooks {
 }
 
 async function askAi(
-  d: Pick<AutofillDeps, 'llm' | 'permits' | 'sleep' | 'shuttingDown'>,
+  d: Pick<AutofillDeps, 'llm' | 'permits' | 'sleep' | 'shuttingDown' | 'maxTokens'>,
   orgId: string,
   providerId: string,
   messages: ReturnType<typeof buildDraftMessages>,
@@ -263,9 +266,9 @@ async function askAi(
     }
     hooks.onWaiting(null);
     try {
-      // 2048, as the compile: reasoning models spend tokens before the answer (the recording at 700
-      // came back empty with finish_reason "length" on a sixth of the questions).
-      const res = await d.llm({ providerId, messages, maxTokens: 2048 });
+      // The questionnaire_draft budget (library/llm-call-settings.ts; env
+      // BASTION_QUESTIONNAIRE_MAX_TOKENS), the same value the corpus was recorded and is gated at.
+      const res = await d.llm({ providerId, messages, maxTokens: d.maxTokens ?? BASTION_LLM_CALLS.questionnaire_draft.maxTokensDefault });
       const parsed = parseDraftResponse(res.content, res.finish_reason);
       return { kind: 'answer', response: parsed.ok ? parsed.value : null, reason: parsed.ok ? null : parsed.reason };
     } catch (err) {
@@ -290,7 +293,7 @@ async function askAi(
  * low. Citations pass can_access for the caller.
  */
 export async function draftOneAnswer(
-  d: Pick<AutofillDeps, 'engine' | 'llm' | 'permits' | 'canAccess' | 'sleep'>,
+  d: Pick<AutofillDeps, 'engine' | 'llm' | 'permits' | 'canAccess' | 'sleep' | 'maxTokens'>,
   viewer: { id: string; org_id: string },
   body: BastionDraftAnswer,
   waitMs = 20_000,

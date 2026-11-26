@@ -11,6 +11,7 @@ import {
   parseDraftResponse,
 } from '../src/library/questionnaire-draft.js';
 import { parseReword, REWORD_PROMPT_VERSION } from '../src/library/fix-reword.js';
+import { BASTION_LLM_CALLS, llmDeadlineMs, llmMaxTokens } from '../src/library/llm-call-settings.js';
 import {
   CORPUS_CONTROLS,
   CORPUS_QUESTIONS,
@@ -107,6 +108,9 @@ describe('questionnaire corpus: the recording', () => {
     expect(RECORDED.meta.prompt_version).toBe(DRAFT_PROMPT_VERSION);
     expect(RECORDED.meta.source).toBe('live');
     expect(RECORDED.meta.model).toBeTruthy();
+    // #263/#264: the recording was made at the budget production sends; changing the default in
+    // llm-call-settings.ts without re-recording fails here.
+    expect(RECORDED.meta.max_tokens).toBe(BASTION_LLM_CALLS.questionnaire_draft.maxTokensDefault);
     expect(CORPUS_QUESTIONS.filter((q) => q.injection)).toHaveLength(8);
     expect(CORPUS_QUESTIONS.filter((q) => q.label === 'unanswerable').length).toBeGreaterThanOrEqual(10);
     expect(Object.values(CORPUS_CONTROLS).some((c) => c.state === 'pass_with_exception')).toBe(true);
@@ -179,6 +183,7 @@ describe('fix-draft injection gate (spec 11.3)', () => {
   it('the reword recording covers every draft with the current prompt', () => {
     expect(Object.keys(REWORD_RECORDED.responses).sort()).toEqual(REWORD_DRAFTS.map((r) => r.id).sort());
     expect(REWORD_RECORDED.meta.prompt_version).toBe(REWORD_PROMPT_VERSION);
+    expect(REWORD_RECORDED.meta.max_tokens).toBe(BASTION_LLM_CALLS.fix_reword.maxTokensDefault);
   });
 
   it('recorded and adversarial rewordings: 0 used drafts carry instructions from an injected PR title', () => {
@@ -211,8 +216,8 @@ describe.skipIf(!LIVE)('questionnaire corpus gates, live (optional)', () => {
       const res = await fetch(`${api}/internal/llm/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-Internal-Secret': process.env.INTERNAL_SERVICE_SECRET ?? '', 'X-Internal-Service': 'bastion' },
-        body: JSON.stringify({ provider_id: process.env.BASTION_RECORD_PROVIDER_ID, messages, max_tokens: 2048, temperature: 0 }),
-        signal: AbortSignal.timeout(90_000),
+        body: JSON.stringify({ provider_id: process.env.BASTION_RECORD_PROVIDER_ID, messages, max_tokens: llmMaxTokens('questionnaire_draft', process.env), temperature: 0 }),
+        signal: AbortSignal.timeout(llmDeadlineMs('questionnaire_draft', process.env)),
       });
       const body = (await res.json().catch(() => ({}))) as { data?: { content?: string; finish_reason?: string | null } };
       responses[q.id] = res.ok ? { content: body.data?.content ?? '', finish_reason: body.data?.finish_reason ?? null } : { error: String(res.status) };

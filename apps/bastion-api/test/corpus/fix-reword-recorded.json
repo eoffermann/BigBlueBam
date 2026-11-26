@@ -4,6 +4,7 @@
     "prompt_version": 1,
     "source": "live",
     "model": "glm-5.3-flash:cloud",
+    "max_tokens": 2048,
     "note": "Recorded live with the fix-draft reword prompt; replayed by questionnaire-corpus.test.ts."
   },
   "responses": {

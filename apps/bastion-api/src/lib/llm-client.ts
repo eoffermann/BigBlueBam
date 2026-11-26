@@ -11,7 +11,7 @@ import { LlmError, LlmThrottledError, type LlmChat, type LlmChatResult, type Llm
  *   429 -> LlmThrottledError (the caller waits Retry-After inside its slice budget)
  *   any other failure -> LlmError (the compiler falls back to the library for that control)
  */
-export const llmChat: LlmChat = async (opts: { providerId: string; messages: LlmMessage[]; maxTokens?: number }): Promise<LlmChatResult> => {
+export const llmChat: LlmChat = async (opts: { providerId: string; messages: LlmMessage[]; maxTokens: number }): Promise<LlmChatResult> => {
   const secret = env.INTERNAL_SERVICE_SECRET;
   if (!secret) throw new LlmError('INTERNAL_SERVICE_SECRET is empty; cannot call the internal LLM proxy', null);
   const controller = new AbortController();
@@ -28,7 +28,7 @@ export const llmChat: LlmChat = async (opts: { providerId: string; messages: Llm
       body: JSON.stringify({
         provider_id: opts.providerId,
         messages: opts.messages,
-        max_tokens: opts.maxTokens ?? 2048,
+        max_tokens: opts.maxTokens,
         temperature: 0,
       }),
     });

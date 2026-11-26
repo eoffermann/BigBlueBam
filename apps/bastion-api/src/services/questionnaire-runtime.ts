@@ -37,5 +37,6 @@ export function autofillDeps(log: FastifyBaseLogger, redis: Redis): AutofillDeps
     sliceLock: redisSliceLock(redis, 'bastion:autofill:slice:'),
     canAccess,
     background: true,
+    maxTokens: env.BASTION_QUESTIONNAIRE_MAX_TOKENS,
   };
 }
