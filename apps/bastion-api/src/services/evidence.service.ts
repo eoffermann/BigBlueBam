@@ -92,7 +92,7 @@ export async function getEvaluation(deps: EngineDeps, viewer: Viewer, id: string
 
 // ── Evidence snapshots ───────────────────────────────────────────────────────────────────
 
-const SNAPSHOT_SELECT = `s.id, s.evaluation_run_id, s.assertion_id, s.control_id, s.outcome, s.unprovable_reason, s.probe_key,
+export const SNAPSHOT_SELECT = `s.id, s.evaluation_run_id, s.assertion_id, s.control_id, s.outcome, s.unprovable_reason, s.probe_key,
   s.probe_version, s.params, s.query_fingerprint, s.population_checked, s.population_unlisted, s.window_start, s.window_end,
   s.summary, s.cited_refs, s.overflow_count, s.manual_evidence_ids, s.exception_ids, s.feed_record_count,
   s.replica_lag_ms, s.content_sha256, s.ledger_seq, s.created_at`;
@@ -107,7 +107,7 @@ async function detailAllowed(tx: Tx, viewer: Viewer, controlId: string): Promise
  * Shape one snapshot for a reader. explain() is counts-only unless the viewer may see detail
  * (owner, admin, or the control's owner); cited refs are dropped from the counts-only view.
  */
-function present(row: Record<string, unknown>, detail: boolean) {
+export function present(row: Record<string, unknown>, detail: boolean) {
   const def = row.probe_key ? probeDefinition(row.probe_key as string) : undefined;
   let explanation: string | null = null;
   if (def) {

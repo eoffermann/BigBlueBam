@@ -853,6 +853,13 @@ export const BASTION_ENGINE_NAMES = [
   'attestation-nudge',
   // M8
   'questionnaire-autofill',
+  // M9: the object sweep (intents), the off-site mirror after each database backup, the
+  // personal-data commitment checks the packet job asks for (the HMAC key stays in bastion-api),
+  // and the packet job's claim / progress / finish calls.
+  'object-sweep',
+  'mirror-objects',
+  'verify-commitments',
+  'export-packet',
 ] as const;
 export const BastionEngineName = z.enum(BASTION_ENGINE_NAMES);
 export type BastionEngineName = z.infer<typeof BastionEngineName>;
@@ -1842,3 +1849,399 @@ export const bastionQuestionnaireSliceSchema = z.object({
   waiting: z.enum(['ai_slot', 'ai_throttled']).nullable().optional(),
 });
 export type BastionQuestionnaireSlice = z.infer<typeof bastionQuestionnaireSliceSchema>;
+
+/* ------------------------------------------------------------------ */
+/*  M9: auditor rooms, audit packets, settings, sweep and mirror      */
+/* ------------------------------------------------------------------ */
+
+/**
+ * The auditor-room token travels in the URL FRAGMENT (`/bastion/room#<token>`), which browsers
+ * never send to a server, and reaches bastion-api only as this header (spec 5.2), so it never
+ * lands in an access log or a Referer.
+ */
+export const BASTION_ROOM_TOKEN_HEADER = 'x-bastion-room-token';
+/** The optional 6-digit room passcode, sent as a header on every room request. */
+export const BASTION_ROOM_PASSCODE_HEADER = 'x-bastion-room-passcode';
+/** Default lifetime of a new room (spec 5.2: mandatory expiry, default 30 days). */
+export const BASTION_ROOM_DEFAULT_DAYS = 30;
+/** Wrong passcodes before a room locks itself and its creator is told (spec 5.2). */
+export const BASTION_ROOM_PASSCODE_MAX_FAILURES = 5;
+/** Auditor questions a room may send per hour (spec 5.2). */
+export const BASTION_ROOM_REQUESTS_PER_HOUR = 20;
+/** Unknown-token misses per client address before a 15-minute lockout (spec 5.2). */
+export const BASTION_ROOM_TOKEN_MISSES = 10;
+export const BASTION_ROOM_TOKEN_MISS_WINDOW_S = 600;
+export const BASTION_ROOM_LOCKOUT_S = 900;
+/** Room requests per minute per resolved client address (spec 5.2). */
+export const BASTION_ROOM_RATE_PER_MINUTE = 120;
+/** The longest period one audit packet may cover (spec 7.2). */
+export const BASTION_PACKET_MAX_PERIOD_DAYS = 400;
+
+function periodDays(start: string, end: string): number {
+  return Math.round((Date.parse(`${end}T00:00:00Z`) - Date.parse(`${start}T00:00:00Z`)) / 86_400_000);
+}
+
+const auditPeriodFields = {
+  period_start: isoDate,
+  period_end: isoDate,
+};
+
+/** POST /auditor-rooms (row 85): session-only, never impersonated, confirm-gated. */
+export const bastionAuditorRoomCreateSchema = z
+  .object({
+    label: z.string().trim().min(1).max(256),
+    framework_id: z.string().uuid(),
+    ...auditPeriodFields,
+    /** Days the link works; at most the org's auditor_room_max_days and never above 180. */
+    expires_in_days: z.number().int().min(1).max(BASTION_AUDITOR_ROOM_MAX_DAYS).default(BASTION_ROOM_DEFAULT_DAYS),
+    passcode: z.string().regex(/^\d{6}$/, 'A passcode is 6 digits').optional(),
+    /** Default: every control the framework applies to. */
+    control_ids: z.array(z.string().uuid()).min(1).max(500).optional(),
+    /** The frozen allowlist of restricted evidence the auditor may see (spec 5.2). */
+    restricted_evidence_ids: z.array(z.string().uuid()).max(500).default([]),
+    confirm: z.literal(true),
+  })
+  .strict()
+  .refine((b) => b.period_start <= b.period_end, { message: 'The period must end on or after it starts', path: ['period_end'] });
+export type BastionAuditorRoomCreate = z.infer<typeof bastionAuditorRoomCreateSchema>;
+
+/** POST /auditor-rooms/:id/revoke (row 86). */
+export const bastionAuditorRoomRevokeSchema = z.object({ confirm: z.literal(true) }).strict();
+export type BastionAuditorRoomRevoke = z.infer<typeof bastionAuditorRoomRevokeSchema>;
+
+/** POST /auditor-rooms/:id/unlock (row 87): clears a passcode lockout. */
+export const bastionAuditorRoomUnlockSchema = z.object({}).strict();
+export type BastionAuditorRoomUnlock = z.infer<typeof bastionAuditorRoomUnlockSchema>;
+
+/** GET /auditor-rooms (row 84). */
+export const bastionAuditorRoomListQuerySchema = z
+  .object({
+    include_closed: boolQueryParam().optional(),
+  })
+  .strict();
+export type BastionAuditorRoomListQuery = z.infer<typeof bastionAuditorRoomListQuerySchema>;
+
+/** GET /auditor-rooms/:id/access-log (row 88), newest first. */
+export const bastionAccessLogQuerySchema = z
+  .object({
+    cursor: z.string().trim().min(1).max(200).optional(),
+    limit: z.coerce.number().int().min(1).max(200).default(100),
+  })
+  .strict();
+export type BastionAccessLogQuery = z.infer<typeof bastionAccessLogQuerySchema>;
+
+/** GET /auditor-requests (row 89). */
+export const bastionAuditorRequestListQuerySchema = z
+  .object({
+    room_id: z.string().uuid().optional(),
+    status: BastionAuditorRequestStatus.optional(),
+  })
+  .strict();
+export type BastionAuditorRequestListQuery = z.infer<typeof bastionAuditorRequestListQuerySchema>;
+
+/** PATCH /auditor-requests/:id (row 90): answer or close an auditor's question. */
+export const bastionAuditorRequestUpdateSchema = z
+  .object({
+    status: z.enum(['answered', 'closed']),
+    answer_note: z.string().trim().min(1).max(5000).optional(),
+  })
+  .strict()
+  .refine((b) => b.status !== 'answered' || !!b.answer_note, { message: 'Write the answer', path: ['answer_note'] });
+export type BastionAuditorRequestUpdate = z.infer<typeof bastionAuditorRequestUpdateSchema>;
+
+/** POST /public/room/requests (row 104): an auditor's question from inside the room. */
+export const bastionPublicRoomRequestSchema = z
+  .object({
+    control_id: z.string().uuid().optional(),
+    requester_name: z.string().trim().min(1).max(256),
+    body: z.string().trim().min(1).max(5000),
+  })
+  .strict();
+export type BastionPublicRoomRequest = z.infer<typeof bastionPublicRoomRequestSchema>;
+
+/** The state words a room and a packet show for a control (spec 2.3, 6.2). */
+export const BastionRoomControlState = z.enum(['met', 'not_met', 'risk_accepted', 'cant_prove', 'not_assessed']);
+export type BastionRoomControlState = z.infer<typeof BastionRoomControlState>;
+export const BASTION_ROOM_STATE_WORDS: Record<BastionRoomControlState, string> = {
+  met: 'Met',
+  not_met: 'Not met',
+  risk_accepted: 'Not met, risk accepted',
+  cant_prove: "Can't prove yet",
+  not_assessed: 'Not assessed',
+};
+
+/** POST /exports (row 91): one audit packet, built by the worker. */
+export const bastionExportCreateSchema = z
+  .object({
+    framework_id: z.string().uuid(),
+    ...auditPeriodFields,
+    include_restricted: z.boolean().default(false),
+  })
+  .strict()
+  .refine((b) => b.period_start <= b.period_end, { message: 'The period must end on or after it starts', path: ['period_end'] })
+  .refine((b) => periodDays(b.period_start, b.period_end) <= BASTION_PACKET_MAX_PERIOD_DAYS, {
+    message: `A packet covers at most ${BASTION_PACKET_MAX_PERIOD_DAYS} days`,
+    path: ['period_start'],
+  });
+export type BastionExportCreate = z.infer<typeof bastionExportCreateSchema>;
+
+/** GET /exports (row 92). */
+export const bastionExportListQuerySchema = z
+  .object({
+    status: BastionExportStatus.optional(),
+    limit: z.coerce.number().int().min(1).max(100).default(25),
+  })
+  .strict();
+export type BastionExportListQuery = z.infer<typeof bastionExportListQuerySchema>;
+
+/** The stages the packet job reports (spec 7.1), in order. */
+export const BastionPacketStage = z.enum(['collecting', 'checking_commitments', 'writing_evidence', 'rendering_summary', 'zipping', 'uploading']);
+export type BastionPacketStage = z.infer<typeof BastionPacketStage>;
+
+/** PATCH /settings (row 97). Every field optional; the medium floor stays below the high floor. */
+export const bastionSettingsUpdateSchema = z
+  .object({
+    remediation_tasks: BastionRemediationTasks.optional(),
+    timezone: z.string().trim().min(1).max(64).optional(),
+    evaluation_hour_local: z.number().int().min(0).max(23).optional(),
+    llm_provider_id: z.string().uuid().nullable().optional(),
+    stale_after_hours: z.number().int().min(12).max(168).optional(),
+    not_assessed_grace_days: z.number().int().min(0).max(90).optional(),
+    manual_expiry_warn_days: z.number().int().min(1).max(365).optional(),
+    questionnaire_high_floor: z.number().min(0.5).max(0.99).optional(),
+    questionnaire_medium_floor: z.number().min(0.1).max(0.95).optional(),
+    max_llm_calls_per_compile: z.number().int().min(0).max(5000).optional(),
+    max_llm_calls_per_questionnaire: z.number().int().min(0).max(10000).optional(),
+    max_rows_per_questionnaire: z.number().int().min(10).max(5000).optional(),
+    auditor_room_max_days: z.number().int().min(1).max(BASTION_AUDITOR_ROOM_MAX_DAYS).optional(),
+    /** 10 MB to 10 GB. */
+    max_packet_bytes: z.number().int().min(10 * 1024 * 1024).max(10 * 1024 * 1024 * 1024).optional(),
+  })
+  .strict()
+  .refine((b) => Object.keys(b).length > 0, { message: 'Nothing to change' })
+  .refine(
+    (b) => b.questionnaire_high_floor === undefined || b.questionnaire_medium_floor === undefined || b.questionnaire_medium_floor < b.questionnaire_high_floor,
+    { message: 'The "Check this" floor must be below the "Sure" floor', path: ['questionnaire_medium_floor'] },
+  );
+export type BastionSettingsUpdate = z.infer<typeof bastionSettingsUpdateSchema>;
+
+/** GET /delivery-problems (row 98): dead outbox rows. */
+export const bastionDeliveryProblemListQuerySchema = z
+  .object({
+    limit: z.coerce.number().int().min(1).max(200).default(50),
+  })
+  .strict();
+export type BastionDeliveryProblemListQuery = z.infer<typeof bastionDeliveryProblemListQuerySchema>;
+
+/** POST /delivery-problems/:id/retry (row 99). */
+export const bastionDeliveryRetrySchema = z.object({}).strict();
+export type BastionDeliveryRetry = z.infer<typeof bastionDeliveryRetrySchema>;
+
+/** GET /audit (row 100), newest first. */
+export const bastionAuditLogQuerySchema = z
+  .object({
+    action: z.string().trim().min(1).max(64).optional(),
+    subject_type: z.string().trim().min(1).max(48).optional(),
+    cursor: z.string().trim().min(1).max(200).optional(),
+    limit: z.coerce.number().int().min(1).max(200).default(50),
+  })
+  .strict();
+export type BastionAuditLogQuery = z.infer<typeof bastionAuditLogQuerySchema>;
+
+/** Worker queues (spec 7). object-sweep is scheduled; the other two are event-driven. */
+export const BASTION_OBJECT_SWEEP_QUEUE = 'bastion-object-sweep';
+export const BASTION_OBJECT_BACKUP_QUEUE = 'bastion-object-backup';
+export const BASTION_EXPORT_PACKET_QUEUE = 'bastion-export-packet';
+
+/** bastion-object-backup: enqueued by backup-database.job.ts after the backup is `completed`, jobId = backup id. */
+export interface BastionObjectBackupJobData {
+  backup_id: string;
+}
+
+/** bastion-export-packet: produced by POST /exports, jobId = packet id. */
+export interface BastionExportPacketJobData {
+  organization_id: string;
+  packet_id: string;
+}
+
+/** The jobId of a packet build (BullMQ forbids ':'). */
+export function bastionExportPacketJobId(packetId: string): string {
+  return `packet-${packetId}`;
+}
+
+/** Body of the mirror-objects engine: one budgeted pass after one database backup. */
+export const bastionMirrorEngineSchema = z
+  .object({
+    /** The platform_backups row the pass follows; absent for an operator's manual pass. */
+    backup_id: z.string().uuid().optional(),
+  })
+  .strict();
+export type BastionMirrorEngine = z.infer<typeof bastionMirrorEngineSchema>;
+
+/** platform_backups.bastion_mirror_status values (spec 9.7). */
+export const BastionMirrorStatus = z.enum(['not_configured', 'running', 'completed', 'partial', 'failed']);
+export type BastionMirrorStatus = z.infer<typeof BastionMirrorStatus>;
+
+/** 200 `data` of the mirror-objects engine. `complete: false` means call again (the budget ran out). */
+export const bastionMirrorResultSchema = z.object({
+  status: BastionMirrorStatus,
+  mirrored: z.number().int().nonnegative(),
+  bytes: z.number().int().nonnegative(),
+  failed: z.number().int().nonnegative(),
+  removed_redacted: z.number().int().nonnegative(),
+  seals_and_records: z.number().int().nonnegative(),
+  remaining: z.number().int().nonnegative(),
+  cursor: z.string().nullable(),
+  complete: z.boolean(),
+  error: z.string().nullable().optional(),
+});
+export type BastionMirrorResult = z.infer<typeof bastionMirrorResultSchema>;
+
+/** 200 `data` of the object-sweep engine. */
+export const bastionObjectSweepResultSchema = z.object({
+  checked: z.number().int().nonnegative(),
+  removed_orphans: z.number().int().nonnegative(),
+  cleared_intents: z.number().int().nonnegative(),
+  deleted_redacted: z.number().int().nonnegative(),
+  failed: z.number().int().nonnegative(),
+  paused_orgs: z.number().int().nonnegative(),
+  complete: z.boolean(),
+});
+export type BastionObjectSweepResult = z.infer<typeof bastionObjectSweepResultSchema>;
+
+/** One personal-data holder whose commitment the packet records (spec 7.2). */
+export const bastionCommitmentHolderSchema = z
+  .object({
+    holder_kind: BastionPersonalDataHolderKind,
+    holder_id: z.string().uuid(),
+  })
+  .strict();
+export type BastionCommitmentHolder = z.infer<typeof bastionCommitmentHolderSchema>;
+
+/** Body of the verify-commitments engine: the HMAC key never leaves bastion-api. */
+export const bastionVerifyCommitmentsEngineSchema = z
+  .object({
+    organization_id: z.string().uuid(),
+    holders: z.array(bastionCommitmentHolderSchema).min(1).max(1000),
+  })
+  .strict();
+export type BastionVerifyCommitmentsEngine = z.infer<typeof bastionVerifyCommitmentsEngineSchema>;
+
+/** Per holder: whether the recorded names still match their commitment (spec 7.2). */
+export const BastionCommitmentResult = z.enum(['intact', 'pd_mismatch', 'key_changed', 'redacted', 'no_personal_data']);
+export type BastionCommitmentResult = z.infer<typeof BastionCommitmentResult>;
+
+export const bastionVerifyCommitmentsResultSchema = z.object({
+  results: z.array(
+    z.object({
+      holder_kind: BastionPersonalDataHolderKind,
+      holder_id: z.string().uuid(),
+      result: BastionCommitmentResult,
+    }),
+  ),
+});
+export type BastionVerifyCommitmentsResult = z.infer<typeof bastionVerifyCommitmentsResultSchema>;
+
+const packetEngineBase = {
+  organization_id: z.string().uuid(),
+  packet_id: z.string().uuid(),
+  claimant: z.string().min(1).max(128),
+};
+
+/** Body of the export-packet engine: the job's claim, progress, finish and fail calls. */
+export const bastionExportPacketEngineSchema = z.discriminatedUnion('action', [
+  z.object({ action: z.literal('claim'), ...packetEngineBase }).strict(),
+  z
+    .object({
+      action: z.literal('progress'),
+      ...packetEngineBase,
+      stage: BastionPacketStage,
+      progress: z.number().int().nonnegative(),
+    })
+    .strict(),
+  z
+    .object({
+      action: z.literal('finish'),
+      ...packetEngineBase,
+      object_key: z.string().min(1).max(512),
+      content_sha256: z.string().regex(/^[0-9a-f]{64}$/),
+      size_bytes: z.number().int().nonnegative(),
+    })
+    .strict(),
+  z.object({ action: z.literal('fail'), ...packetEngineBase, error: z.string().min(1).max(2000) }).strict(),
+]);
+export type BastionExportPacketEngine = z.infer<typeof bastionExportPacketEngineSchema>;
+
+/** What the packet job writes, assembled by bastion-api on claim (one place for the rules). */
+export const bastionPacketContentsSchema = z.object({
+  packet: z.object({
+    id: z.string().uuid(),
+    organization_id: z.string().uuid(),
+    period_start: z.string(),
+    period_end: z.string(),
+    include_restricted: z.boolean(),
+    max_packet_bytes: z.number().int().positive(),
+    object_key: z.string(),
+  }),
+  organization_name: z.string(),
+  framework: z.object({ id: z.string().uuid(), name: z.string(), template_key: z.string(), is_iso: z.boolean() }),
+  generated_at: z.string(),
+  controls: z.array(
+    z.object({
+      control_key: z.string(),
+      title: z.string(),
+      category: z.string().nullable(),
+      owner: z.string().nullable(),
+      state: BastionRoomControlState,
+      state_words: z.string(),
+      reason: z.string().nullable(),
+      requirement_codes: z.array(z.string()),
+      last_evaluated_at: z.string().nullable(),
+    }),
+  ),
+  evidence: z.array(
+    z.object({
+      snapshot_id: z.string().uuid(),
+      control_key: z.string(),
+      outcome: z.string(),
+      reason: z.string().nullable(),
+      recorded_at: z.string(),
+      object_key: z.string().nullable(),
+      content_sha256: z.string(),
+      redacted: z.boolean(),
+      path: z.string(),
+    }),
+  ),
+  files: z.array(
+    z.object({
+      manual_evidence_id: z.string().uuid(),
+      title: z.string(),
+      kind: z.string(),
+      control_keys: z.array(z.string()),
+      object_key: z.string().nullable(),
+      content_sha256: z.string().nullable(),
+      size_bytes: z.number().int().nonnegative().nullable(),
+      restricted: z.boolean(),
+      redacted: z.boolean(),
+      path: z.string(),
+    }),
+  ),
+  attestations_csv: z.string(),
+  exceptions_csv: z.string(),
+  drift_csv: z.string(),
+  soa_csv: z.string().nullable(),
+  seals: z.array(z.record(z.unknown())),
+  public_keys: z.array(z.object({ signing_key_id: z.string(), public_key_hex: z.string(), current: z.boolean() })),
+  restore_notices: z.array(z.string()),
+  holders: z.array(bastionCommitmentHolderSchema),
+});
+export type BastionPacketContents = z.infer<typeof bastionPacketContentsSchema>;
+
+/** 200 `data` of export-packet `claim`: contents to write, or why the packet cannot be built. */
+export const bastionPacketClaimSchema = z.object({
+  claimed: z.boolean(),
+  status: BastionExportStatus,
+  error: z.string().nullable().optional(),
+  contents: bastionPacketContentsSchema.nullable(),
+});
+export type BastionPacketClaim = z.infer<typeof bastionPacketClaimSchema>;

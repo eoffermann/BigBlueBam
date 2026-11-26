@@ -14,7 +14,7 @@
 // org stay blocked until an owner resolves the row.
 
 import { randomUUID } from 'node:crypto';
-import { withStorageTimeout } from '@bigbluebam/storage';
+import { type ObjectStat, type StorageDriver, withStorageTimeout } from '@bigbluebam/storage';
 import { compareEpochSeq, verifySeal } from '../lib/ledger-canonical.js';
 import { type EngineDeps, orgTx, type Tx } from './context.js';
 import { enqueueBastionEvent } from './outbox.js';
@@ -65,15 +65,20 @@ async function readJson(deps: EngineDeps, key: string): Promise<unknown> {
 async function listAll(deps: EngineDeps, prefix: string): Promise<string[]> {
   const storage = deps.storage;
   if (!storage) throw new StorageUnavailableError();
-  const keys: string[] = [];
+  return (await listObjects(storage, prefix, deps.putTimeoutMs)).map((o) => o.key);
+}
+
+/** Every object under a prefix, page by page (the seal check, the mirror and the restore CLI). */
+export async function listObjects(storage: StorageDriver, prefix: string, timeoutMs: number): Promise<ObjectStat[]> {
+  const out: ObjectStat[] = [];
   let cursor: string | undefined;
   for (let page = 0; page < 1000; page++) {
-    const res = await withStorageTimeout('list', storage.list(prefix, cursor), deps.putTimeoutMs);
-    for (const o of res.objects) keys.push(o.key);
+    const res = await withStorageTimeout('list', storage.list(prefix, cursor), timeoutMs);
+    out.push(...res.objects);
     if (!res.cursor) break;
     cursor = res.cursor;
   }
-  return keys;
+  return out;
 }
 
 // Column ranges the identity is written into (0275_bastion_evidence.sql). bucket_epoch and

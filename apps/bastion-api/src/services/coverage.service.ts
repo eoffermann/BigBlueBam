@@ -27,7 +27,8 @@ const STATE_WORDS: Record<string, string> = {
   unprovable: "Can't prove yet",
 };
 
-const REASON_WORDS: Record<string, string> = {
+/** One sentence per "can't prove" reason (spec 3.2), shared with the auditor room and the packet. */
+export const REASON_WORDS: Record<string, string> = {
   not_yet_confirmed: 'Nobody has confirmed how to check this yet.',
   no_evidence_source: 'Nothing in the suite can show this. Upload evidence or connect a source.',
   source_not_connected: "This could be checked automatically, but the source isn't connected.",

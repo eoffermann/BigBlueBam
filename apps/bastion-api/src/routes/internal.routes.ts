@@ -8,7 +8,14 @@ import {
   bastionInternalEventSchema,
   bastionQuestionnaireEngineSchema,
   bastionSweepEngineSchema,
+  bastionExportPacketEngineSchema,
+  bastionMirrorEngineSchema,
+  bastionVerifyCommitmentsEngineSchema,
 } from '@bigbluebam/shared';
+import { mirrorObjects, objectSweep } from '../engine/objects.js';
+import { verifyCommitments } from '../engine/commitments.js';
+import { exportPacketEngine, reapPackets } from '../services/packet.service.js';
+import { backupStorage } from '../services/evidence-runtime.js';
 import { requireInternalSecret } from '../lib/internal-secret.js';
 import { validationError } from '../lib/http.js';
 import { canonicalJson, sha256Hex } from '../lib/ledger-canonical.js';
@@ -128,11 +135,31 @@ export default async function internalRoutes(fastify: FastifyInstance) {
       }
     }
 
+    // M9 (spec 7.2, 9.7): the off-site mirror after each database backup, the packet job's
+    // personal-data commitment checks (the HMAC key stays here) and its claim/progress/finish calls.
+    if (name === 'mirror-objects') {
+      const parsed = bastionMirrorEngineSchema.safeParse(request.body ?? {});
+      if (!parsed.success) return validationError(request, reply, parsed.error);
+      return { data: await mirrorObjects(deps(), backupStorage(), parsed.data) };
+    }
+    if (name === 'verify-commitments') {
+      const parsed = bastionVerifyCommitmentsEngineSchema.safeParse(request.body ?? {});
+      if (!parsed.success) return validationError(request, reply, parsed.error);
+      return { data: await verifyCommitments(deps(), parsed.data.organization_id, parsed.data.holders) };
+    }
+    if (name === 'export-packet') {
+      const parsed = bastionExportPacketEngineSchema.safeParse(request.body ?? {});
+      if (!parsed.success) return validationError(request, reply, parsed.error);
+      return { data: await exportPacketEngine(deps(), parsed.data) };
+    }
+
     const parsed = bastionSweepEngineSchema.safeParse(request.body ?? {});
     if (!parsed.success) return validationError(request, reply, parsed.error);
     const opts = parsed.data;
     const d = deps();
     switch (name) {
+      case 'object-sweep':
+        return { data: await objectSweep(d, opts) };
       case 'evaluate-tick':
         return { data: await evaluateTick(d, opts) };
       case 'outbox-drain':
@@ -161,8 +188,12 @@ export default async function internalRoutes(fastify: FastifyInstance) {
         return { data: await ledgerSeal(d, opts) };
       case 'ledger-verify':
         return { data: await ledgerVerify(d, publishedSealKeyMap(), opts) };
-      case 'run-reaper':
-        return { data: await runReaper(d, opts) };
+      case 'run-reaper': {
+        const reaped = await runReaper(d, opts);
+        // M9: stalled audit packets are failed with "build it again".
+        const packets = await reapPackets(d, opts);
+        return { data: { ...reaped, packets_failed: packets.failed } };
+      }
       case 'evaluation-missed':
         return { data: await evaluationMissed(d, opts) };
       case 'weekly-readiness':
