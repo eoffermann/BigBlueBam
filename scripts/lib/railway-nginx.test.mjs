@@ -52,13 +52,17 @@ test('runtime-resolved `set $var host:port;` upstreams move to railway.internal'
   assert.equal(counts.rewrittenSetUpstream, 3);
 });
 
-test('location-level `resolver 127.0.0.11` becomes the __RESOLVER__ placeholder', () => {
+test('location-level `resolver 127.0.0.11` is dropped so the server-level resolver applies (#172)', () => {
   const { out, counts } = transformNginxForRailway(SOURCE, hosts);
-  assert.match(out, /^\s+resolver __RESOLVER__ valid=10s ipv6=off;$/m);
-  assert.equal(counts.rewrittenResolver, 1);
-  // Only the comment still mentions Docker's resolver.
+  assert.equal(counts.droppedResolver, 1);
   const live = out.split('\n').filter((l) => !/^\s*#/.test(l));
+  // Only the comment still mentions Docker's resolver.
   assert.equal(live.filter((l) => l.includes('127.0.0.11')).length, 0);
+  // Exactly one live resolver remains: the server-level one, with no ipv6=off.
+  const resolvers = live.filter((l) => /^\s*resolver\b/.test(l));
+  assert.deepEqual(resolvers, ['    resolver __RESOLVER__ valid=10s;']);
+  // The /bastion/api/ location keeps its runtime-resolved upstream.
+  assert.match(out, /location \/bastion\/api\/ \{\n\s+set \$bastion_api bastion-api\.railway\.internal:8080;/);
 });
 
 test('comments are never rewritten', () => {
@@ -82,4 +86,19 @@ test('the committed nginx.railway.conf has no Docker resolver and no compose-onl
   assert.equal(live.filter((l) => /\bresolver\s+127\.0\.0\.11\b/.test(l)).length, 0);
   const composeSet = live.filter((l) => /^\s*set\s+\$\w+\s+["']?[a-z][a-z0-9-]*:\d+["']?\s*;/.test(l));
   assert.deepEqual(composeSet, []);
+});
+
+test('the committed nginx.railway.conf has no location-level resolver and no ipv6=off (#172)', () => {
+  const conf = readFileSync(join(REPO_ROOT, 'infra', 'nginx', 'nginx.railway.conf'), 'utf8');
+  const lines = conf.split(/\r?\n/);
+  let depth = 0;
+  const resolvers = [];
+  for (const line of lines) {
+    const code = line.replace(/#.*$/, '');
+    if (/^\s*resolver\b/.test(code)) resolvers.push({ depth, line: line.trim() });
+    depth += (code.match(/\{/g) ?? []).length - (code.match(/\}/g) ?? []).length;
+  }
+  // One resolver, at server level (inside `server {`, depth 1), never inside a location.
+  assert.deepEqual(resolvers, [{ depth: 1, line: 'resolver __RESOLVER__ valid=10s;' }]);
+  assert.equal(lines.filter((l) => !/^\s*#/.test(l) && /ipv6=off/.test(l)).length, 0);
 });

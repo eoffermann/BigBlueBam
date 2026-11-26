@@ -441,7 +441,7 @@ for (const m of manifests) {
   process.stdout.write(`  - ${m.name.padEnd(14)} ${m.kind.padEnd(8)} ${m.file}\n`);
 }
 process.stdout.write(
-  `\nWrote nginx.railway.conf (${nginxResult.rewrittenProxyPass} upstreams + ${nginxResult.rewrittenSetUpstream} set-variable upstreams + ${nginxResult.rewrittenResolver} docker resolvers + ${nginxResult.rewrittenListen} listen + ${nginxResult.rewrittenVariable} dynamic-DNS proxy_pass directives rewritten)\n`,
+  `\nWrote nginx.railway.conf (${nginxResult.rewrittenProxyPass} upstreams + ${nginxResult.rewrittenSetUpstream} set-variable upstreams + ${nginxResult.rewrittenListen} listen + ${nginxResult.rewrittenVariable} dynamic-DNS proxy_pass directives rewritten; ${nginxResult.droppedResolver} location-level docker resolvers dropped)\n`,
 );
 process.stdout.write(`  - ${nginxResult.path}\n`);
 process.stdout.write(`\nWrote env-vars.md\n`);

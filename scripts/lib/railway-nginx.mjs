@@ -7,7 +7,7 @@
 //   1b. `set $<var> <known-host>:<port>;` (a runtime-resolved upstream, written so nginx
 //       boots even when that upstream is down) -> `<host>.railway.internal:<port|8080>`.
 //   1c. `resolver 127.0.0.11 ...;` (Docker's embedded DNS, which does not exist on
-//       Railway) -> `resolver __RESOLVER__ ...;`, filled in by infra/nginx/entrypoint.sh.
+//       Railway) is dropped, so the server-level resolver from step 3 applies (#172).
 //   2. `__HTTP_LISTEN__` / `__TLS_LISTEN_BLOCK__` placeholders and any `listen N;` -> 8080.
 //   3. A server-level `resolver __RESOLVER__ valid=10s;` after the first listen.
 //   4. Static `proxy_pass http://<host>.railway.internal:<port>[/uri];` -> a `set`
@@ -37,7 +37,7 @@ export function transformNginxForRailway(source, { validHosts, appHosts }) {
   const counts = {
     rewrittenProxyPass: 0,
     rewrittenSetUpstream: 0,
-    rewrittenResolver: 0,
+    droppedResolver: 0,
     rewrittenListen: 0,
     rewrittenVariable: 0,
   };
@@ -64,12 +64,19 @@ export function transformNginxForRailway(source, { validHosts, appHosts }) {
     return `${prefix}${quote}${host}.railway.internal:${railwayPortFor(host, port)}${quote}${rest}`;
   });
 
-  // 1c. Docker's embedded DNS resolver -> the entrypoint-filled placeholder.
-  out = mapLines(out, (line) => {
-    const replaced = line.replace(/^(\s*resolver\s+)127\.0\.0\.11(?=[\s;])/, '$1__RESOLVER__');
-    if (replaced !== line) counts.rewrittenResolver++;
-    return replaced;
-  });
+  // 1c. Docker's embedded DNS resolver lines are DROPPED (issue #172). A location-level
+  //     resolver overrides the server-level one injected in step 3, and the compose
+  //     source's `ipv6=off` would make every request through it fail on Railway's
+  //     IPv6-only private network. With the line gone, the server-level
+  //     `resolver __RESOLVER__` (filled in by infra/nginx/entrypoint.sh) applies.
+  out = out
+    .split('\n')
+    .filter((line) => {
+      if (isComment(line) || !/^\s*resolver\s+127\.0\.0\.11(?=[\s;])/.test(line)) return true;
+      counts.droppedResolver++;
+      return false;
+    })
+    .join('\n');
 
   // 2. Listen placeholders and literal listen directives.
   out = out.replace(/^\s*__HTTP_LISTEN__\s*$/m, `    listen ${RAILWAY_DYNAMIC_PORT};`);
