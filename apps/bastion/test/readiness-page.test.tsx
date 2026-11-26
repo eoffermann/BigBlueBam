@@ -1,11 +1,11 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { screen, cleanup, fireEvent } from '@testing-library/react';
+import { screen, cleanup, fireEvent, waitFor } from '@testing-library/react';
 
 vi.mock('@bigbluebam/ui/impersonation-banner', () => ({ impersonateHeader: () => ({}), getImpersonation: () => null }));
 
 import { ReadinessPage } from '@/pages/readiness';
 import { CoveragePage } from '@/pages/coverage';
-import { jsonResponse, routedFetch, wrap } from './helpers';
+import { jsonResponse, routedFetch, settled, wrap } from './helpers';
 
 const NUMBERS = { proven_by_suite: 20, proven_by_evidence: 3, not_met: 6, risk_accepted: 1, cant_prove: 13, not_set_up: 4, checked: 42, total: 46 };
 
@@ -88,12 +88,13 @@ describe('ReadinessPage', () => {
   });
 
   it('the framework picker asks for that framework and the numbers change', async () => {
-    wrap(<ReadinessPage />);
+    const { qc } = wrap(<ReadinessPage />);
     await screen.findByTestId('n-suite');
     fireEvent.change(screen.getByLabelText('Framework'), { target: { value: 'f-iso' } });
-    await vi.waitFor(() => expect(screen.getByTestId('headline')).toHaveTextContent('41 of 45 controls checked'));
+    await waitFor(() => expect(screen.getByTestId('headline')).toHaveTextContent('41 of 45 controls checked'));
     expect(fetchMock.mock.calls.some(([u]) => new URL(String(u)).searchParams.get('framework_id') === 'f-iso')).toBe(true);
     expect(screen.getByTestId('n-suite')).toHaveTextContent('18');
+    await settled(qc);
   });
 });
 

@@ -4,6 +4,7 @@ import { useCan } from '@bigbluebam/ui/use-can';
 import { getImpersonation } from '@bigbluebam/ui/impersonation-banner';
 import type { BastionManualEvidenceCreate } from '@bigbluebam/shared';
 import type { EvidenceItem, FeedRow, MintedKey } from '@/lib/api';
+import { binAssetIdFrom, NOT_A_BIN_LINK } from '@/lib/bin-link';
 import { friendlyError } from '@/lib/errors';
 import { useAuthStore } from '@/stores/auth.store';
 import {
@@ -128,7 +129,8 @@ function EvidenceCard({ item, canReview, canWithdraw }: { item: EvidenceItem; ca
               </button>
             </>
           ) : (
-            <button type="button" className={secondary} onClick={() => setConfirming(true)}>
+            // Withdrawal is a person's act and refuses impersonation (#217).
+            <button type="button" className={secondary} disabled={impersonating} onClick={() => setConfirming(true)}>
               Withdraw
             </button>
           )}
@@ -185,11 +187,19 @@ function AddEvidenceForm({ onDone }: { onDone: () => void }) {
     sensitivity: 'standard' as 'standard' | 'restricted',
     confirm: false,
   });
+  const [linkError, setLinkError] = useState<string | null>(null);
   const set = (k: keyof typeof f) => (e: { target: { value: string } }) => setF({ ...f, [k]: e.target.value });
 
   const submit = (e: FormEvent) => {
     e.preventDefault();
     if (!user) return;
+    // A pasted Bin link (or a bare id) becomes the asset id; anything else gets plain words (#219).
+    const assetId = kind === 'file' ? binAssetIdFrom(f.bin_asset_id) : null;
+    if (kind === 'file' && !assetId) {
+      setLinkError(NOT_A_BIN_LINK);
+      return;
+    }
+    setLinkError(null);
     const common = {
       title: f.title,
       source_system: f.source_system,
@@ -202,7 +212,7 @@ function AddEvidenceForm({ onDone }: { onDone: () => void }) {
       uploader_statement: true as const,
     };
     const body: BastionManualEvidenceCreate =
-      kind === 'file' ? { kind: 'file', bin_asset_id: f.bin_asset_id.trim(), ...common } : { kind: 'attestation_statement', statement: f.statement, ...common };
+      kind === 'file' && assetId ? { kind: 'file', bin_asset_id: assetId, ...common } : { kind: 'attestation_statement', statement: f.statement, ...common };
     create.mutate(body, { onSuccess: onDone });
   };
 
@@ -218,8 +228,19 @@ function AddEvidenceForm({ onDone }: { onDone: () => void }) {
       </div>
       {kind === 'file' ? (
         <label className="block text-sm">
-          The file's Bin link or code (upload it to Bin first)
-          <input className={input} value={f.bin_asset_id} onChange={set('bin_asset_id')} required />
+          Paste the file's link from Bin (upload it to Bin first)
+          <input
+            className={input}
+            value={f.bin_asset_id}
+            onChange={(e) => {
+              setLinkError(null);
+              set('bin_asset_id')(e);
+            }}
+            placeholder="https://.../bin/assets/..."
+            aria-invalid={linkError !== null}
+            required
+          />
+          {linkError && <span className="block text-xs text-red-600">{linkError}</span>}
         </label>
       ) : (
         <label className="block text-sm">
@@ -283,6 +304,7 @@ function FeedKeys({ feed }: { feed: FeedRow }) {
   const mint = useMintFeedKey();
   const revoke = useRevokeFeedKey();
   const [shown, setShown] = useState<MintedKey | null>(null);
+  const [confirmingRevoke, setConfirmingRevoke] = useState<string | null>(null);
   return (
     <div className="pl-3 space-y-2">
       {feed.source_kind === 'api_push' && (
@@ -318,14 +340,32 @@ function FeedKeys({ feed }: { feed: FeedRow }) {
               Key ending {k.last4 ?? '????'}
               {k.label ? ` (${k.label})` : ''}: {k.status === 'active' ? 'in use' : k.status === 'grace' ? 'being replaced' : 'revoked'}
             </span>
-            {k.status !== 'revoked' && (
-              <button type="button" className={secondary} disabled={revoke.isPending} onClick={() => revoke.mutate(k.id)}>
-                Revoke
-              </button>
-            )}
+            {k.status !== 'revoked' &&
+              (confirmingRevoke === k.id ? (
+                // The same two-step confirmation as Withdraw (#219): revoking cannot be undone.
+                <>
+                  <span className="text-zinc-700 dark:text-zinc-300">Revoke this key? The system using it will stop being able to send records.</span>
+                  <button
+                    type="button"
+                    className={primary}
+                    disabled={revoke.isPending}
+                    onClick={() => revoke.mutate(k.id, { onSuccess: () => setConfirmingRevoke(null) })}
+                  >
+                    Yes, revoke
+                  </button>
+                  <button type="button" className={secondary} onClick={() => setConfirmingRevoke(null)}>
+                    Cancel
+                  </button>
+                </>
+              ) : (
+                <button type="button" className={secondary} disabled={revoke.isPending} onClick={() => setConfirmingRevoke(k.id)}>
+                  Revoke
+                </button>
+              ))}
           </li>
         ))}
       </ul>
+      {revoke.error && <p className="text-xs text-red-600">{friendlyError(revoke.error)}</p>}
     </div>
   );
 }

@@ -1,7 +1,7 @@
-import { render } from '@testing-library/react';
+import { render, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
-import { vi } from 'vitest';
+import { expect, vi } from 'vitest';
 import { PermissionsProvider } from '@bigbluebam/ui/permissions-context';
 
 /** Every Bastion action the M3 pages gate on (an owner's matrix). */
@@ -42,11 +42,20 @@ export const VIEWER_PERMISSIONS: Record<string, boolean> = {
 export function wrap(ui: ReactNode, permissions: Record<string, boolean> = ALL_BASTION_PERMISSIONS) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
   const fetcher = async () => ({ data: { permissions } });
-  return render(
+  const view = render(
     <QueryClientProvider client={qc}>
       <PermissionsProvider fetcher={fetcher}>{ui}</PermissionsProvider>
     </QueryClientProvider>,
   );
+  return Object.assign(view, { qc });
+}
+
+/**
+ * Wait (inside act, via Testing Library) until no query is fetching and no mutation is running,
+ * so a mutation's invalidation refetches settle before the test ends (#224).
+ */
+export async function settled(qc: QueryClient) {
+  await waitFor(() => expect(qc.isFetching() + qc.isMutating()).toBe(0));
 }
 
 export function jsonResponse(status: number, body: unknown) {

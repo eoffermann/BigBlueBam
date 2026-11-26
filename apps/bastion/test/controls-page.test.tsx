@@ -1,10 +1,10 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { screen, cleanup, fireEvent } from '@testing-library/react';
+import { screen, cleanup, fireEvent, waitFor } from '@testing-library/react';
 
 vi.mock('@bigbluebam/ui/impersonation-banner', () => ({ impersonateHeader: () => ({}), getImpersonation: () => null }));
 
 import { ControlsPage } from '@/pages/controls';
-import { VIEWER_PERMISSIONS, jsonResponse, routedFetch, setupState, wrap } from './helpers';
+import { VIEWER_PERMISSIONS, jsonResponse, routedFetch, settled, setupState, wrap } from './helpers';
 
 const CONTROLS = {
   data: [
@@ -45,12 +45,13 @@ describe('ControlsPage', () => {
   });
 
   it('asks for the framework view when one is picked', async () => {
-    wrap(<ControlsPage onNavigate={() => {}} />);
+    const { qc } = wrap(<ControlsPage onNavigate={() => {}} />);
     await screen.findByTestId('not-set-up-count');
     fireEvent.change(await screen.findByLabelText('Framework'), { target: { value: 'f-soc' } });
-    await vi.waitFor(() =>
+    await waitFor(() =>
       expect(fetchMock.mock.calls.some(([u]) => new URL(String(u)).searchParams.get('framework_id') === 'f-soc')).toBe(true),
     );
+    await settled(qc);
   });
 
   it('teaches the next step when nothing is adopted', async () => {
