@@ -388,3 +388,132 @@ export interface ControlsResponse {
   counts: SetupCounts;
   framework_id: string | null;
 }
+
+/* ------------------------------------------------------------------ */
+/*  M6: gaps, fixes, exceptions, drift, control detail                 */
+/* ------------------------------------------------------------------ */
+
+export interface GapRow {
+  id: string;
+  control_id: string;
+  control_title: string;
+  owner_name: string | null;
+  assertion_id: string | null;
+  assertion_statement: string | null;
+  gap_kind: string;
+  gap_words: string;
+  risk_score: number;
+  fix_template: string | null;
+  fix_words: string | null;
+  fix_cost: number | null;
+  status: string;
+  dismissed_reason: string | null;
+  latest_fix_draft_id: string | null;
+}
+
+export interface AcceptedRisk {
+  id: string;
+  control_id: string;
+  control_title: string;
+  scope: 'entity' | 'assertion';
+  reason: string;
+  expires_at: string;
+  owner_name: string | null;
+  approved_by_name: string | null;
+  small_team_self_approval: boolean;
+  approval_label: string | null;
+}
+
+export interface GapsResponse {
+  data: GapRow[];
+  stale: { gap_kind: 'stale'; gap_words: string; control_count: number; message: string } | null;
+  accepted_risks: AcceptedRisk[];
+  sort: 'risk' | 'quick_wins';
+}
+
+export interface FixDraftRow {
+  id: string;
+  gap_id: string | null;
+  template: string;
+  template_words: string;
+  title: string;
+  body_markdown: string | null;
+  payload: Record<string, unknown>;
+  cited_refs: Array<{ entity_type: string; entity_id: string }>;
+  hidden_citation_count: number;
+  status: string;
+  decided_by_name: string | null;
+  decided_at: string | null;
+  created_by_name: string | null;
+  created_by_kind: string | null;
+  created_at: string;
+  gap_kind: string | null;
+  gap_words: string | null;
+  control_id: string | null;
+  control_title: string | null;
+  owner_user_id: string | null;
+  owner_name: string | null;
+  proposal_expires_at: string | null;
+}
+
+export interface ExceptionRow {
+  id: string;
+  control_id: string;
+  control_title: string;
+  owner_user_id: string | null;
+  owner_name: string | null;
+  assertion_id: string | null;
+  assertion_statement: string | null;
+  scope: 'entity' | 'assertion';
+  cited_entity_type: string | null;
+  cited_entity_id: string | null;
+  reason: string;
+  compensating_note: string | null;
+  status: 'proposed' | 'active' | 'expired' | 'rejected';
+  proposed_by: string;
+  proposed_by_name: string | null;
+  decided_by_name: string | null;
+  decided_at: string | null;
+  small_team_self_approval: boolean;
+  approval_label: string | null;
+  expires_at: string;
+  days_left: number;
+  created_at: string;
+}
+
+export interface DriftRow {
+  id: string;
+  control_id: string;
+  control_title: string;
+  from_words: string;
+  to_words: string;
+  reason: string;
+  reason_words: string;
+  task_status: string;
+  task_words: string;
+  bam_task_human_id: string | null;
+  acknowledged_by_name: string | null;
+  acknowledged_at: string | null;
+  detected_at: string;
+}
+
+export interface ControlDetail {
+  id: string;
+  title: string;
+  plain_summary: string | null;
+  owner_user_id: string | null;
+  risk_weight: number;
+  setup_state: 'set_up' | 'not_set_up' | 'not_applicable' | null;
+  requirements: Array<{ id: string; framework_id: string; ref_code: string; applicability: string }>;
+  assertions: AssertionRow[];
+}
+
+export interface EvidenceSnapshotRow {
+  id: string;
+  assertion_id: string;
+  outcome: 'pass' | 'fail' | 'unprovable';
+  unprovable_reason: string | null;
+  explanation: string | null;
+  cited_refs: Array<{ entity_type: string; entity_id: string }>;
+  created_at: string;
+}

@@ -1,4 +1,4 @@
-import { Archive, Castle, Gauge, ListChecks, Map as MapIcon, Settings2 } from 'lucide-react';
+import { Archive, Castle, Gauge, Inbox, ListChecks, Map as MapIcon, Settings2, Wrench } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/stores/auth.store';
 import { SidebarPlatformFooter } from '@bigbluebam/ui/sidebar-footer';
@@ -17,6 +17,8 @@ const nav: Array<{
   pages: ActiveRoute['page'][];
 }> = [
   { label: 'Readiness', icon: Gauge, path: '/', pages: ['home'] },
+  { label: 'What to fix first', icon: Wrench, path: '/gaps', pages: ['gaps'] },
+  { label: 'Review queue', icon: Inbox, path: '/review', pages: ['review'] },
   { label: 'Controls', icon: ListChecks, path: '/controls', pages: ['controls'] },
   { label: 'Evidence map', icon: MapIcon, path: '/coverage', pages: ['coverage'] },
   { label: 'Evidence locker', icon: Archive, path: '/evidence', pages: ['evidence'] },

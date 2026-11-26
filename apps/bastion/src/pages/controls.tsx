@@ -1,12 +1,13 @@
 import { useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import { useCan } from '@bigbluebam/ui/use-can';
-import type { ControlRow } from '@/lib/api';
+import type { ControlRow, CoverageRow } from '@/lib/api';
 import { friendlyError } from '@/lib/errors';
-import { useControls, useSetup } from '@/hooks/use-bastion';
+import { useControls, useCoverage, useSetup } from '@/hooks/use-bastion';
 
-// Controls list stub (spec 6.1 /bastion/controls). M3 shows whether each control is set up; the
-// effective states and evidence arrive with the evaluator (M4) and Readiness (M5).
+// Controls (spec 6.1 /bastion/controls): whether each control is set up and, once checked, its
+// effective state in words from the one numbers loader (via the Evidence map read). Each row
+// opens Control detail.
 
 const STATE_WORDS: Record<NonNullable<ControlRow['setup_state']>, string> = {
   set_up: 'Set up',
@@ -14,11 +15,19 @@ const STATE_WORDS: Record<NonNullable<ControlRow['setup_state']>, string> = {
   not_applicable: 'Does not apply',
 };
 
-function ControlItem({ c }: { c: ControlRow }) {
+function ControlItem({ c, state, onOpen }: { c: ControlRow; state?: CoverageRow; onOpen: () => void }) {
   return (
-    <li className="flex items-start justify-between gap-4 py-3">
+    <li className="flex items-start justify-between gap-4 py-3" data-testid="control-row">
       <div>
-        <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">{c.title}</p>
+        <button type="button" className="text-sm font-medium text-primary-700 dark:text-primary-400 hover:underline text-left" onClick={onOpen}>
+          {c.title}
+        </button>
+        {state && state.set_up && (
+          <p className="text-xs text-zinc-600 dark:text-zinc-400" data-testid="control-row-state">
+            {state.state_words}
+            {state.owner_name ? ` · Owner: ${state.owner_name}` : ''}
+          </p>
+        )}
         <div className="mt-1 flex flex-wrap gap-1">
           {c.requirements.map((r) => (
             <span
@@ -42,6 +51,8 @@ export function ControlsPage({ onNavigate }: { onNavigate: (path: string) => voi
   // Adopting a framework is a framework.write action; people without it are told who can (#194).
   const canSetUp = useCan('bastion.framework.write');
   const controls = useControls({ framework_id: frameworkId || undefined });
+  const coverage = useCoverage({ framework_id: frameworkId || undefined });
+  const stateOf = (id: string) => coverage.data?.data.find((r) => r.control_id === id);
   const frameworks = setup.data?.data.frameworks ?? [];
 
   if (controls.isLoading) {
@@ -113,7 +124,7 @@ export function ControlsPage({ onNavigate }: { onNavigate: (path: string) => voi
           </div>
           <ul className="divide-y divide-zinc-200 dark:divide-zinc-800 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-4">
             {inScope.map((c) => (
-              <ControlItem key={c.id} c={c} />
+              <ControlItem key={c.id} c={c} state={stateOf(c.id)} onOpen={() => onNavigate(`/controls/${c.id}`)} />
             ))}
           </ul>
           {excluded.length > 0 && (
@@ -121,7 +132,7 @@ export function ControlsPage({ onNavigate }: { onNavigate: (path: string) => voi
               <h2 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">Does not apply ({excluded.length})</h2>
               <ul className="divide-y divide-zinc-200 dark:divide-zinc-800 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-4 mt-2">
                 {excluded.map((c) => (
-                  <ControlItem key={c.id} c={c} />
+                  <ControlItem key={c.id} c={c} onOpen={() => onNavigate(`/controls/${c.id}`)} />
                 ))}
               </ul>
             </div>
