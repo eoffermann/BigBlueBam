@@ -222,7 +222,7 @@ export function tailoredSuggestions(controlKey: string, answer: TailoringRespons
       drop(`AI check ${entry.key}`, 'its wording looked like an instruction');
       continue;
     }
-    const params: Record<string, unknown> = { ...(c.params ?? {}) };
+    let params: Record<string, unknown> = { ...(c.params ?? {}) };
     let strippedStamp = false;
     for (const k of CONFIRMATION_KEYS) {
       if (k in params) {
@@ -247,7 +247,9 @@ export function tailoredSuggestions(controlKey: string, answer: TailoringRespons
         params.expected_population = [...new Set(kept)];
         params.population_labels = Object.fromEntries(connected.filter((m) => kept.includes(m.value)).map((m) => [m.value, m.label]));
       } else {
-        delete params.expected_population;
+        // Nothing connected survived: leave the list out so the validator proposes the connected set.
+        const { expected_population: _none, ...rest } = params;
+        params = rest;
       }
     }
     out.probes.push({ probe_key: entry.key, params, predicate: c.predicate ?? {}, plain_statement: statement.text });

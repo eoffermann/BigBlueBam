@@ -245,8 +245,8 @@ describe('bastion-compile loop (M7)', () => {
       maxPolls: 2,
     });
     expect(r).toBe('requeued');
-    expect(add.mock.calls[0]![1]).toEqual({ organization_id: 'o', run_id: 'r', resume_count: 2, claimant: 'worker-compile:j1' });
-    expect(add.mock.calls[0]![2].jobId).toMatch(/^compile-r-r2-g\d+$/);
+    expect(add.mock.calls[0]?.[1]).toEqual({ organization_id: 'o', run_id: 'r', resume_count: 2, claimant: 'worker-compile:j1' });
+    expect(add.mock.calls[0]?.[2].jobId).toMatch(/^compile-r-r2-g\d+$/);
   });
 
   it('a slice that drifts from the shared contract fails loudly', async () => {
@@ -294,8 +294,8 @@ describe('bastion-evaluate-tick and engine jobs', () => {
     const add = vi.fn();
     const compileAdd = vi.fn();
     expect(await processBastionEvaluateTickJob(job({}), silent, { post, queue: { add }, compileQueue: { add: compileAdd } })).toBe(0);
-    expect(compileAdd.mock.calls[0]![2].jobId).toBe(`compile-${R1}-r1-g9`);
-    expect(compileAdd.mock.calls[0]![2].removeOnComplete).toEqual({ count: 100 });
+    expect(compileAdd.mock.calls[0]?.[2].jobId).toBe(`compile-${R1}-r1-g9`);
+    expect(compileAdd.mock.calls[0]?.[2].removeOnComplete).toEqual({ count: 100 });
     // An older bastion-api without compile_runs still parses (the field defaults to []).
     const old = vi.fn().mockResolvedValue({ ok: true, status: 200, data: { data: { runs: [] } } });
     expect(await processBastionEvaluateTickJob(job({}), silent, { post: old, queue: { add }, compileQueue: { add: compileAdd } })).toBe(0);

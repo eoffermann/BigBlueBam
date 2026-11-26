@@ -49,14 +49,16 @@ export function createLlmPermits(
   const perOrg = opts.orgLimit ?? LLM_PERMITS_PER_ORG;
   const open: Admission = { admitted: true, failOpen: true, release: async () => {} };
 
-  async function take(key: string, limit: number, token: string): Promise<boolean> {
+  // `r` is the non-null client, passed explicitly: a missing client is handled (admit, fail-open by
+  // design) in tryAdmit before take() is ever reached, never by optional chaining here.
+  async function take(r: PermitRedis, key: string, limit: number, token: string): Promise<boolean> {
     const t = now();
-    await redis!.zremrangebyscore(key, 0, t - hold);
-    await redis!.zadd(key, t, token);
-    await redis!.pexpire(key, hold);
-    const n = await redis!.zcard(key);
+    await r.zremrangebyscore(key, 0, t - hold);
+    await r.zadd(key, t, token);
+    await r.pexpire(key, hold);
+    const n = await r.zcard(key);
     if (n > limit) {
-      await redis!.zrem(key, token).catch(() => undefined);
+      await r.zrem(key, token).catch(() => undefined);
       return false;
     }
     return true;
@@ -68,8 +70,8 @@ export function createLlmPermits(
       const token = randomUUID();
       const okey = orgKey(orgId);
       try {
-        if (!(await take(SERVICE_KEY, svcLimit, token))) return { admitted: false };
-        if (!(await take(okey, perOrg, token))) {
+        if (!(await take(redis, SERVICE_KEY, svcLimit, token))) return { admitted: false };
+        if (!(await take(redis, okey, perOrg, token))) {
           await redis.zrem(SERVICE_KEY, token).catch(() => undefined);
           return { admitted: false };
         }

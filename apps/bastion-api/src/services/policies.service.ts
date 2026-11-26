@@ -488,7 +488,8 @@ export async function requestAttestations(d: PolicyDeps, viewer: Viewer, id: str
     const p = await loadPolicy(tx, viewer.org_id, id);
     if (p.status !== 'active') throw new ConflictError('This policy was retired.', 'POLICY_RETIRED');
     const facts = await duePeople(tx, viewer.org_id, id, now);
-    const targets = body.user_ids ? facts.not_attested_ids.filter((u) => body.user_ids!.includes(u)) : facts.not_attested_ids;
+    const only = body.user_ids;
+    const targets = only ? facts.not_attested_ids.filter((u) => only.includes(u)) : facts.not_attested_ids;
     let nudged = 0;
     for (const u of targets) {
       const fresh = await enqueueBastionEvent(

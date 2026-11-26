@@ -24,7 +24,7 @@ import type { Job, Queue } from 'bullmq';
 import type { Logger } from 'pino';
 import { bastionCompileJobId, bastionCompileSliceSchema, bastionRunClaimedErrorSchema, type BastionCompileJobData } from '@bigbluebam/shared';
 import { SCHEDULED_JOB_RETENTION } from '../lib/job-retention.js';
-import { bodyData, parseContract, postBastion } from './bastion-shared.js';
+import { bodyData, parseContract, type postBastion } from './bastion-shared.js';
 
 export const COMPILE_POLL_INTERVAL_MS = 15_000;
 export const COMPILE_MAX_POLLS = 960;
