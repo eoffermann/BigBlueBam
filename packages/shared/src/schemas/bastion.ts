@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { BEACON_SLUG } from '../suite-links.js';
 
 // Bastion (continuous compliance evidence) shared schemas.
 //
@@ -1273,17 +1274,40 @@ export type BastionFixDecide = z.infer<typeof bastionFixDecideSchema>;
 export const BastionFixAppliedEntityType = z.enum(['beacon.entry', 'bolt.rule']);
 export type BastionFixAppliedEntityType = z.infer<typeof BastionFixAppliedEntityType>;
 
-/** POST /fix-drafts/:id/mark-applied (row 57). */
+/**
+ * A Beacon article slug, as the address bar shows it (/beacon/<slug>), for routes that accept a
+ * pasted Beacon link (#232, #239). bastion-api resolves it to the article id in the org.
+ */
+export const bastionBeaconSlugSchema = z
+  .string()
+  .trim()
+  .toLowerCase()
+  .max(256)
+  .regex(BEACON_SLUG, "That doesn't look like a Beacon article link");
+
+/**
+ * POST /fix-drafts/:id/mark-applied (row 57). What was made is named by its id, or, for a Beacon
+ * article, by the slug in its link (#232); never both.
+ */
 export const bastionFixMarkAppliedSchema = z
   .object({
     applied_entity_type: BastionFixAppliedEntityType.nullable().optional(),
     applied_entity_id: z.string().uuid().nullable().optional(),
+    applied_entity_slug: bastionBeaconSlugSchema.nullable().optional(),
     note: z.string().trim().max(2000).nullable().optional(),
   })
   .strict()
-  .refine((b) => !!b.applied_entity_type === !!b.applied_entity_id, {
-    message: 'Give both the kind of thing you made and its id, or neither',
-    path: ['applied_entity_id'],
+  .superRefine((b, ctx) => {
+    const named = !!b.applied_entity_id || !!b.applied_entity_slug;
+    if (!!b.applied_entity_type !== named) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Give both the kind of thing you made and its link, or neither', path: ['applied_entity_id'] });
+    }
+    if (b.applied_entity_id && b.applied_entity_slug) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Give the id or the link, not both', path: ['applied_entity_slug'] });
+    }
+    if (b.applied_entity_slug && b.applied_entity_type !== 'beacon.entry') {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Only a Beacon article can be named by its link', path: ['applied_entity_slug'] });
+    }
   });
 export type BastionFixMarkApplied = z.infer<typeof bastionFixMarkAppliedSchema>;
 
@@ -1497,10 +1521,14 @@ export const bastionCompileSliceSchema = z.object({
 });
 export type BastionCompileSlice = z.infer<typeof bastionCompileSliceSchema>;
 
-/** POST /policies (row 65): link a Beacon article as a policy people read and acknowledge. */
-export const bastionPolicyCreateSchema = z
+/**
+ * POST /policies (row 65): link a Beacon article as a policy people read and acknowledge. The article is named by its id, or by the slug in the link Beacon
+ * shows (/beacon/<slug>), which bastion-api resolves in the org (#239); exactly one of the two.
+ */
+export const bastionPolicyCreateFields = z
   .object({
-    beacon_entry_id: z.string().uuid(),
+    beacon_entry_id: z.string().uuid().optional(),
+    beacon_slug: bastionBeaconSlugSchema.optional(),
     audience: bastionPolicyAudienceSchema.default({ kind: 'all' }),
     cadence_days: z.number().int().min(1).max(1095).default(365),
     owner_user_id: z.string().uuid().nullable().optional(),
@@ -1511,6 +1539,10 @@ export const bastionPolicyCreateSchema = z
     control_id: z.string().uuid().optional(),
   })
   .strict();
+export const bastionPolicyCreateSchema = bastionPolicyCreateFields.refine((b) => !!b.beacon_entry_id !== !!b.beacon_slug, {
+  message: 'Paste the link to the Beacon article',
+  path: ['beacon_entry_id'],
+});
 export type BastionPolicyCreate = z.infer<typeof bastionPolicyCreateSchema>;
 
 /** PATCH /policies/:id (row 66). Retiring keeps every attestation (they are immutable). */

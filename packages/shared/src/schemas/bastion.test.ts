@@ -56,7 +56,30 @@ import {
   bastionPolicyAudienceSchema,
   bastionProbeFunctionName,
   bastionDriftListQuerySchema,
+  bastionFixMarkAppliedSchema,
+  bastionPolicyCreateSchema,
 } from './bastion.js';
+
+describe('pasted links name things by id or Beacon slug (#232, #239)', () => {
+  const ID = '0b5e0000-0000-4000-8000-00000000b001';
+  it('mark-applied: a type with an id or (Beacon only) a slug, never both, never a slug for Bolt', () => {
+    expect(bastionFixMarkAppliedSchema.safeParse({ applied_entity_type: 'bolt.rule', applied_entity_id: ID }).success).toBe(true);
+    expect(bastionFixMarkAppliedSchema.safeParse({ applied_entity_type: 'beacon.entry', applied_entity_slug: 'Island-Policy' }).data).toMatchObject({
+      applied_entity_slug: 'island-policy',
+    });
+    expect(bastionFixMarkAppliedSchema.safeParse({}).success).toBe(true);
+    expect(bastionFixMarkAppliedSchema.safeParse({ applied_entity_type: 'bolt.rule', applied_entity_slug: 'x' }).success).toBe(false);
+    expect(bastionFixMarkAppliedSchema.safeParse({ applied_entity_type: 'beacon.entry', applied_entity_id: ID, applied_entity_slug: 'x' }).success).toBe(false);
+    expect(bastionFixMarkAppliedSchema.safeParse({ applied_entity_type: 'beacon.entry' }).success).toBe(false);
+  });
+  it('policy create: exactly one of beacon_entry_id and beacon_slug', () => {
+    expect(bastionPolicyCreateSchema.safeParse({ beacon_slug: 'island-information-security-policy' }).success).toBe(true);
+    expect(bastionPolicyCreateSchema.safeParse({ beacon_entry_id: ID }).success).toBe(true);
+    expect(bastionPolicyCreateSchema.safeParse({}).success).toBe(false);
+    expect(bastionPolicyCreateSchema.safeParse({ beacon_entry_id: ID, beacon_slug: 'a' }).success).toBe(false);
+    expect(bastionPolicyCreateSchema.safeParse({ beacon_slug: 'not a slug!' }).success).toBe(false);
+  });
+});
 
 describe('boolean query parameters (#215, #231)', () => {
   it("'false' parses as false, 'true' as true, anything else is refused", () => {

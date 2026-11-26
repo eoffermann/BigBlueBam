@@ -191,6 +191,24 @@ describe.skipIf(!DATABASE_URL)('M7 policies and version-pinned attestation (live
     await sql`UPDATE beacon_entries SET visibility = 'Organization' WHERE id = ${s.entry}`;
   });
 
+  it('links an article by the slug in its Beacon link (#239); an unknown slug or another org reads not found', async () => {
+    const s = await setUp('slug');
+    const d = deps();
+    const owner = viewer(s.org, s.owner);
+    const [{ slug }] = (await sql`SELECT slug FROM beacon_entries WHERE id = ${s.entry}`) as unknown as Array<{ slug: string }>;
+    await expect(createPolicy(d, owner, { beacon_slug: 'no-such-article', audience: { kind: 'all' }, cadence_days: 365 })).rejects.toMatchObject({
+      name: 'NotFoundError',
+    });
+    const other = await setUp('slug-other');
+    await expect(createPolicy(d, viewer(other.org, other.owner), { beacon_slug: slug, audience: { kind: 'all' }, cadence_days: 365 })).rejects.toMatchObject({
+      name: 'NotFoundError',
+    });
+    const created = await createPolicy(d, owner, { beacon_slug: slug, audience: { kind: 'all' }, cadence_days: 365 });
+    expect(created.data.beacon_entry_id).toBe(s.entry);
+    // The same article by id is the same policy.
+    await expect(createPolicy(d, owner, { beacon_entry_id: s.entry, audience: { kind: 'all' }, cadence_days: 365 })).rejects.toMatchObject({ code: 'POLICY_ALREADY_LINKED' });
+  });
+
   it('names the people who cannot open the policy, and nudges once per person, version and day', async () => {
     const s = await setUp('nudge');
     const blocked = new Set([s.people[1]!]);

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { ChevronDown, ChevronRight, Loader2 } from 'lucide-react';
 import { useCan } from '@bigbluebam/ui/use-can';
+import { SUITE_LINK_REFUSAL, suiteLinkId, suiteLinkRef } from '@bigbluebam/shared';
 import type { PolicyRow } from '@/lib/api';
 import { friendlyError } from '@/lib/errors';
 import { useCreatePolicy, usePolicies, usePolicyAttestations, useRequestAttestations, useUpdatePolicy } from '@/hooks/use-bastion';
@@ -9,7 +10,6 @@ import { useCreatePolicy, usePolicies, usePolicyAttestations, useRequestAttestat
 // current version and who has not, and who cannot even open it. Linking, nudging and retiring are
 // hidden from people who may not do them (useCan), never shown as an unexplained disabled button.
 
-const UUID_IN_TEXT = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
 
 function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
@@ -121,10 +121,20 @@ function PolicyItem({ p }: { p: PolicyRow }) {
   );
 }
 
-/** Accept a Beacon article link (".../beacon/<id>...") or a bare id; returns the id or null. */
+/**
+ * What a pasted Beacon link names: the article id, or the slug Beacon puts in its address bar
+ * (/beacon/island-information-security-policy), which bastion-api resolves (#239). Null when the
+ * paste is not a Beacon article link.
+ */
+export function beaconArticleFrom(text: string): { beacon_entry_id: string } | { beacon_slug: string } | null {
+  const ref = suiteLinkRef(text, 'beacon');
+  if (!ref) return null;
+  return 'id' in ref ? { beacon_entry_id: ref.id } : { beacon_slug: ref.slug };
+}
+
+/** The article id in a pasted id-form link or bare id (slug links: use beaconArticleFrom). */
 export function beaconEntryIdFrom(text: string): string | null {
-  const m = UUID_IN_TEXT.exec(text.trim());
-  return m ? m[0].toLowerCase() : null;
+  return suiteLinkId(text, 'beacon');
 }
 
 function LinkPolicyForm() {
@@ -132,7 +142,7 @@ function LinkPolicyForm() {
   const [open, setOpen] = useState(false);
   const [article, setArticle] = useState('');
   const [days, setDays] = useState(365);
-  const entryId = beaconEntryIdFrom(article);
+  const target = beaconArticleFrom(article);
   if (!open) {
     return (
       <button type="button" className={primary} onClick={() => setOpen(true)}>
@@ -145,9 +155,9 @@ function LinkPolicyForm() {
       className="space-y-3 rounded-lg border border-zinc-200 dark:border-zinc-800 p-4"
       onSubmit={(e) => {
         e.preventDefault();
-        if (!entryId) return;
+        if (!target) return;
         create.mutate(
-          { beacon_entry_id: entryId, audience: { kind: 'all' }, cadence_days: days },
+          { ...target, audience: { kind: 'all' }, cadence_days: days },
           {
             onSuccess: () => {
               setOpen(false);
@@ -179,14 +189,14 @@ function LinkPolicyForm() {
       </label>
       <p className="text-xs text-zinc-500">Everyone in your organization will be asked to read it. The article must be shared with everyone in Beacon.</p>
       <div className="flex gap-2">
-        <button type="submit" className={primary} disabled={!entryId || create.isPending}>
+        <button type="submit" className={primary} disabled={!target || create.isPending}>
           Link this policy
         </button>
         <button type="button" className={secondary} onClick={() => setOpen(false)}>
           Cancel
         </button>
       </div>
-      {article && !entryId && <p className="text-xs text-amber-700">That does not look like a Beacon article link.</p>}
+      {article && !target && <p className="text-xs text-amber-700">{SUITE_LINK_REFUSAL.beacon}</p>}
       {create.error && <p className="text-xs text-red-600">{friendlyError(create.error)}</p>}
     </form>
   );

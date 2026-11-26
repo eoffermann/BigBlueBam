@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Loader2 } from 'lucide-react';
+import { SUITE_LINK_REFUSAL, suiteLinkRef } from '@bigbluebam/shared';
 import { getImpersonation } from '@bigbluebam/ui/impersonation-banner';
 import { useCan } from '@bigbluebam/ui/use-can';
 import type { ExceptionRow, FixDraftRow } from '@/lib/api';
@@ -139,8 +140,13 @@ function ExceptionCard({ e, onNavigate }: { e: ExceptionRow; onNavigate: (path: 
 function AppliedCard({ d }: { d: FixDraftRow }) {
   const canMark = useCan('bastion.fix.mark_applied');
   const mark = useMarkFixApplied();
-  const [ruleId, setRuleId] = useState('');
-  const kind = d.template === 'bolt_rule' ? 'bolt.rule' : d.template === 'policy_draft' ? 'beacon.entry' : null;
+  const [link, setLink] = useState('');
+  const kind: 'bolt.rule' | 'beacon.entry' | null = d.template === 'bolt_rule' ? 'bolt.rule' : d.template === 'policy_draft' ? 'beacon.entry' : null;
+  const app = kind === 'bolt.rule' ? 'bolt' : 'beacon';
+  // A pasted Bolt or Beacon link (or a bare id), never a raw-id field (#232, the #219 pattern).
+  const ref = kind && link.trim() ? suiteLinkRef(link, app) : null;
+  const refused = !!kind && !!link.trim() && !ref;
+  const label = kind === 'bolt.rule' ? 'Paste the link to the automation you made in Bolt (optional)' : 'Paste the link to the article you wrote in Beacon (optional)';
   if (!canMark) return null;
   return (
     <li className="py-3 flex flex-wrap items-center justify-between gap-3">
@@ -152,22 +158,25 @@ function AppliedCard({ d }: { d: FixDraftRow }) {
         className="flex gap-2"
         onSubmit={(ev) => {
           ev.preventDefault();
-          mark.mutate({ id: d.id, ...(kind && ruleId.trim() ? { applied_entity_type: kind, applied_entity_id: ruleId.trim() } : {}) });
+          if (refused) return;
+          const named = kind && ref ? ('id' in ref ? { applied_entity_type: kind, applied_entity_id: ref.id } : { applied_entity_type: kind, applied_entity_slug: ref.slug }) : {};
+          mark.mutate({ id: d.id, ...named });
         }}
       >
         {kind && (
           <input
-            aria-label={kind === 'bolt.rule' ? 'Bolt automation id (optional)' : 'Beacon article id (optional)'}
-            placeholder={kind === 'bolt.rule' ? 'Bolt automation id (optional)' : 'Beacon article id (optional)'}
-            className="rounded-md border border-zinc-300 dark:border-zinc-700 bg-transparent px-2 py-1 text-xs w-64"
-            value={ruleId}
-            onChange={(ev) => setRuleId(ev.target.value)}
+            aria-label={label}
+            placeholder={label}
+            className="rounded-md border border-zinc-300 dark:border-zinc-700 bg-transparent px-2 py-1 text-xs w-80"
+            value={link}
+            onChange={(ev) => setLink(ev.target.value)}
           />
         )}
-        <button type="submit" disabled={mark.isPending} className="px-3 py-1 rounded-md text-xs bg-zinc-800 text-white disabled:opacity-50">
+        <button type="submit" disabled={mark.isPending || refused} className="px-3 py-1 rounded-md text-xs bg-zinc-800 text-white disabled:opacity-50">
           Mark as done
         </button>
       </form>
+      {refused && kind && <p className="w-full text-xs text-red-600">{SUITE_LINK_REFUSAL[app]}</p>}
       {mark.error && <p className="w-full text-xs text-red-600">{friendlyError(mark.error)}</p>}
     </li>
   );

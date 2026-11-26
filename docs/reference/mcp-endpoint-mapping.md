@@ -2268,7 +2268,7 @@ AI procurement leveling & spend-baseline monitor. 20 `bursar_*` tools (spec sect
 | `GET /v1/fix-drafts` | `bastion_list_fix_drafts` | Drafted fixes; cited items re-checked with `can_access` for the reader | Review queue (`pages/review.tsx`); Control detail |
 | `GET /v1/fix-drafts/:id` | `bastion_list_fix_drafts` | One drafted fix | Review queue |
 | `POST /v1/fix-drafts/:id/decide` | — _(skip: auth: session required (spec 2.8, #136); humans decide in Bastion, control owner or `control.write`, impersonation refused)_ | Approve or reject a fix; approval files what the template promises; the mirror is closed through the api | Review queue "Approve", "Reject" |
-| `POST /v1/fix-drafts/:id/mark-applied` | `bastion_mark_fix_applied` | Record what a person did elsewhere (a Beacon draft or a Bolt rule), linked from the fix | Review queue "Mark as done" |
+| `POST /v1/fix-drafts/:id/mark-applied` | `bastion_mark_fix_applied` | Record what a person did elsewhere (a Beacon draft or a Bolt rule), linked from the fix; named by id or, for a Beacon article, `applied_entity_slug` from its pasted link | Review queue "Mark as done" (paste the Bolt or Beacon link) |
 | `GET /v1/exceptions` | `bastion_list_exceptions` | Accepted risks with owner, scope, expiry, approver and the small-team label | Control detail; Review queue |
 | `GET /v1/exceptions/:id` | `bastion_list_exceptions` | One exception | Control detail |
 | `POST /v1/exceptions` | `bastion_propose_exception` | Propose accepting a risk (one item up to 365 days, a whole check up to 90 days) | Control detail "Accept this as a risk" |
@@ -2276,14 +2276,14 @@ AI procurement leveling & spend-baseline monitor. 20 `bursar_*` tools (spec sect
 | `GET /v1/drift` | `bastion_list_drift` | Controls that got worse, the reason and what happened to their Bam task | Control detail |
 | `POST /v1/drift/:id/acknowledge` | `bastion_acknowledge_drift` | Record who has seen a drift | Control detail "Acknowledge" |
 | `GET /v1/policies` | `bastion_attestation_status` | Linked Beacon policies: audience, re-read cadence, owner, still shared with everyone, Beacon's expiry, "X of Y have read the current version" | Policies (`pages/policies.tsx`) |
-| `POST /v1/policies` | `bastion_create_policy` | Link a Beacon article shared with everyone (Organization or Public) as a policy; optional `control_id` proposes that control's two policy checks pinned to it | Policies "Link a Beacon article" |
+| `POST /v1/policies` | `bastion_create_policy` | Link a Beacon article shared with everyone (Organization or Public) as a policy, by `beacon_entry_id` or by the `beacon_slug` from its Beacon link (resolved in the org); optional `control_id` proposes that control's two policy checks pinned to it | Policies "Link a Beacon article" |
 | `PATCH /v1/policies/:id` | `bastion_update_policy` | Audience, cadence, owner, retire | Policies "Retire" |
 | `GET /v1/policies/:id/body` | `bastion_get_policy_body` | The frozen `beacon_versions` body of the current version with its SHA-256 (what is shown is what is hashed); visibility re-checked on every request | Policies to read (`pages/attest.tsx`) |
 | `GET /v1/policies/:id/attestations` | `bastion_attestation_status` | Who has read the current version, who has not, and "N people can't open this policy" (`can_access` per member) | Policies (expanded row) |
 | `GET /v1/me/attestations` | `bastion_my_attestations` | The caller's own policies to read and whether each is due | Policies to read |
 | `POST /v1/policies/:id/attest` | — _(skip: auth: session required (spec 2.8, #136); only the person acknowledges, never an agent or an impersonator)_ | "I have read and understood this": pinned to the served version and body hash, ledgered, personal data committed by HMAC | Policies to read "I have read and understood this" |
 | `POST /v1/policies/:id/request-attestations` | `bastion_request_attestations` | Nudge the people still due (`attestation.overdue`, once per person, version and day) | Policies "Ask people to read it" |
-| `POST /v1/internal/engines/:name` | — _(skip: internal service-to-service; the worker's thin jobs call it with the internal secret)_ | evaluate-tick, evaluate-run, outbox-drain, ledger-seal, ledger-verify, run-reaper, evaluation-missed, weekly-readiness, retention, evidence-ingest, evidence-expiry, gap-rank, proposal-reconcile | worker |
+| `POST /v1/internal/engines/:name` | — _(skip: internal service-to-service; the worker's thin jobs call it with the internal secret)_ | evaluate-tick, evaluate-run, outbox-drain (re-drives deliveries held by a broken Compliance project first), ledger-seal, ledger-verify, run-reaper, evaluation-missed, weekly-readiness, retention, evidence-ingest, evidence-expiry, gap-rank (time-budgeted, resumable), proposal-reconcile, compile, attestation-nudge | worker |
 | `POST /v1/internal/events` | — _(skip: internal service-to-service; bolt-api's bastion dispatch hook)_ | Durable inbox for consumed events (deduplicated per org) | bolt-api |
 | `GET /health`, `GET /health/ready`, `GET /metrics` | — _(skip: probe)_ | Health / readiness (Postgres and Redis only) / metrics | — |
 

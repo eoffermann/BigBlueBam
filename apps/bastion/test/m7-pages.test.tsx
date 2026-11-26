@@ -7,7 +7,7 @@ vi.mock('@bigbluebam/ui/impersonation-banner', () => ({
   getImpersonation: () => (impersonating ? { user_id: 'u-g', display_name: 'Gilligan' } : null),
 }));
 
-import { PoliciesPage, beaconEntryIdFrom } from '@/pages/policies';
+import { PoliciesPage, beaconArticleFrom, beaconEntryIdFrom } from '@/pages/policies';
 import { AttestPage } from '@/pages/attest';
 import { useAuthStore } from '@/stores/auth.store';
 import { ALL_BASTION_PERMISSIONS, VIEWER_PERMISSIONS, jsonResponse, routedFetch, settled, wrap } from './helpers';
@@ -144,6 +144,28 @@ describe('Policies', () => {
   it('takes a Beacon article link or id', () => {
     expect(beaconEntryIdFrom(`https://example.test/beacon/${ENTRY_ID.toUpperCase()}?x=1`)).toBe(ENTRY_ID);
     expect(beaconEntryIdFrom('not a link')).toBeNull();
+    expect(beaconArticleFrom('https://bigbluebam.example/beacon/island-information-security-policy')).toEqual({
+      beacon_slug: 'island-information-security-policy',
+    });
+    expect(beaconArticleFrom(ENTRY_ID)).toEqual({ beacon_entry_id: ENTRY_ID });
+    expect(beaconArticleFrom('not a link')).toBeNull();
+  });
+
+  it('links an article from the slug link Beacon shows (#239)', async () => {
+    const { qc } = wrap(<PoliciesPage />, OWNER);
+    fireEvent.click(await screen.findByText('Link a Beacon article'));
+    const input = screen.getByPlaceholderText('Open the article in Beacon and copy the address');
+    fireEvent.change(input, { target: { value: 'not a link' } });
+    expect(screen.getByText(/doesn't look like a Beacon article link/)).toBeInTheDocument();
+    fireEvent.change(input, { target: { value: 'https://bigbluebam.example/beacon/island-information-security-policy' } });
+    expect(screen.queryByText(/doesn't look like a Beacon article link/)).toBeNull();
+    fireEvent.submit(input.closest('form')!);
+    await waitFor(() => {
+      const call = fetchMock.mock.calls.find(([u, i]) => String(u).endsWith('/policies') && i?.method === 'POST');
+      expect(call).toBeDefined();
+      expect(JSON.parse(String(call![1]!.body))).toMatchObject({ beacon_slug: 'island-information-security-policy', audience: { kind: 'all' } });
+    });
+    await settled(qc);
   });
 });
 

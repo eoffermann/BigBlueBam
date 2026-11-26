@@ -21,6 +21,7 @@
 
 import type { BastionAttest, BastionPolicyCreate, BastionPolicyListQuery, BastionPolicyUpdate, BastionRequestAttestations } from '@bigbluebam/shared';
 import { auditRaw } from '../lib/audit-raw.js';
+import { beaconEntryIdBySlug } from '../lib/beacon-slug.js';
 import { ConflictError, ForbiddenError, NotFoundError, ValidationFailure } from '../lib/errors.js';
 import { canonicalJson, sha256Hex } from '../lib/ledger-canonical.js';
 import { type EngineDeps, orgTx, type Tx, utcDate } from '../engine/context.js';
@@ -198,12 +199,16 @@ async function assertMembers(tx: Tx, orgId: string, ids: string[], field: string
 /** POST /policies (row 65). */
 export async function createPolicy(d: PolicyDeps, viewer: Viewer, body: BastionPolicyCreate) {
   const entry = await orgTx(d.engine.sql, viewer.org_id, async (tx) => {
+    // The link Beacon shows names the article by slug (#239); an id still works.
+    const entryId = body.beacon_slug ? await beaconEntryIdBySlug(tx, viewer.org_id, body.beacon_slug) : (body.beacon_entry_id ?? null);
+    if (!entryId) throw new NotFoundError('We could not find that Beacon article.');
     const e = (await tx`SELECT id, title, status::text AS status, visibility::text AS visibility FROM beacon_entries
-                         WHERE id = ${body.beacon_entry_id} AND organization_id = ${viewer.org_id}`)[0];
+                         WHERE id = ${entryId} AND organization_id = ${viewer.org_id}`)[0];
     if (!e) throw new NotFoundError('We could not find that Beacon article.');
     return e;
   });
-  if (!(await d.canAccess(viewer.id, 'beacon.entry', body.beacon_entry_id).catch(() => false))) {
+  const beaconEntryId = String(entry.id);
+  if (!(await d.canAccess(viewer.id, 'beacon.entry', beaconEntryId).catch(() => false))) {
     throw new NotFoundError('We could not find that Beacon article.');
   }
   if (!sharedWithEveryone(String(entry.visibility))) {
@@ -221,7 +226,7 @@ export async function createPolicy(d: PolicyDeps, viewer: Viewer, body: BastionP
     }
     const ins = await tx`
       INSERT INTO bastion_policies (organization_id, beacon_entry_id, title_cache, audience, cadence_days, owner_user_id)
-      VALUES (${viewer.org_id}, ${body.beacon_entry_id}, ${String(entry.title).slice(0, 512)}, ${tx.json(body.audience as never)},
+      VALUES (${viewer.org_id}, ${beaconEntryId}, ${String(entry.title).slice(0, 512)}, ${tx.json(body.audience as never)},
               ${body.cadence_days}, ${body.owner_user_id ?? viewer.id})
       ON CONFLICT (organization_id, beacon_entry_id) DO NOTHING
       RETURNING id`;
@@ -230,9 +235,9 @@ export async function createPolicy(d: PolicyDeps, viewer: Viewer, body: BastionP
     // spec 8.3: bastion.policy -> beacon.entry (references), in the same transaction.
     await tx`
       INSERT INTO entity_links (org_id, src_type, src_id, dst_type, dst_id, link_kind, created_by)
-      VALUES (${viewer.org_id}, 'bastion.policy', ${pid}, 'beacon.entry', ${body.beacon_entry_id}, 'references', ${viewer.id})
+      VALUES (${viewer.org_id}, 'bastion.policy', ${pid}, 'beacon.entry', ${beaconEntryId}, 'references', ${viewer.id})
       ON CONFLICT DO NOTHING`;
-    await auditRaw(tx, viewer, 'policy.create', { type: 'policy', id: pid }, { beacon_entry_id: body.beacon_entry_id, audience: body.audience.kind, cadence_days: body.cadence_days });
+    await auditRaw(tx, viewer, 'policy.create', { type: 'policy', id: pid }, { beacon_entry_id: beaconEntryId, audience: body.audience.kind, cadence_days: body.cadence_days });
     return pid;
   });
   const proposed = body.control_id && d.pinChecks ? await d.pinChecks(viewer, body.control_id, id) : [];

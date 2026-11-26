@@ -33,6 +33,7 @@ import { enqueueProposalClose, remediationSettings } from '../engine/remediation
 import type { CitedRef } from '../engine/status.js';
 import { anOrgAdmin, assertHumanDecider, citationVisible, type DecisionDeps, fileMirroredProposal, visibleRefs } from './decisions.service.js';
 import { cannotOpen } from '../lib/policy-access.js';
+import { beaconEntryIdBySlug } from '../lib/beacon-slug.js';
 import type { Viewer } from './types.js';
 
 const DAY_MS = 86_400_000;
@@ -574,25 +575,30 @@ export async function markFixApplied(d: DecisionDeps, viewer: Viewer, id: string
     const r = (await tx`SELECT id, status, template FROM bastion_fix_drafts WHERE organization_id = ${viewer.org_id} AND id = ${id} FOR UPDATE`)[0];
     if (!r) throw new NotFoundError('We could not find that fix.');
     if (r.status !== 'approved') throw new ConflictError('Only an approved fix can be marked as done.', 'FIX_NOT_APPROVED');
-    if (body.applied_entity_type && body.applied_entity_id) {
-      if (!(await d.canAccess(viewer.id, body.applied_entity_type, body.applied_entity_id).catch(() => false))) {
+    // A pasted Beacon link names the article by slug (#232); resolve it, then check it like an id.
+    const appliedId = body.applied_entity_slug
+      ? await beaconEntryIdBySlug(tx, viewer.org_id, body.applied_entity_slug)
+      : (body.applied_entity_id ?? null);
+    if (body.applied_entity_slug && !appliedId) throw new NotFoundError('We could not find what you made, or you cannot see it.');
+    if (body.applied_entity_type && appliedId) {
+      if (!(await d.canAccess(viewer.id, body.applied_entity_type, appliedId).catch(() => false))) {
         throw new NotFoundError('We could not find what you made, or you cannot see it.');
       }
     }
     await tx`
       UPDATE bastion_fix_drafts SET status = 'applied', applied_entity_type = ${body.applied_entity_type ?? null},
-             applied_entity_id = ${body.applied_entity_id ?? null}
+             applied_entity_id = ${appliedId}
        WHERE id = ${id}`;
-    if (body.applied_entity_type && body.applied_entity_id) {
+    if (body.applied_entity_type && appliedId) {
       // spec 8.3: bastion.fix_draft -> the applied beacon.entry or bolt.rule.
       await tx`
         INSERT INTO entity_links (org_id, src_type, src_id, dst_type, dst_id, link_kind, created_by)
-        VALUES (${viewer.org_id}, 'bastion.fix_draft', ${id}, ${body.applied_entity_type}, ${body.applied_entity_id}, 'derived_from', ${viewer.id})
+        VALUES (${viewer.org_id}, 'bastion.fix_draft', ${id}, ${body.applied_entity_type}, ${appliedId}, 'derived_from', ${viewer.id})
         ON CONFLICT DO NOTHING`;
     }
     await auditRaw(tx, viewer, 'fix.mark_applied', { type: 'fix_draft', id }, {
       applied_entity_type: body.applied_entity_type ?? null,
-      applied_entity_id: body.applied_entity_id ?? null,
+      applied_entity_id: appliedId,
       note: body.note ?? null,
     });
   });

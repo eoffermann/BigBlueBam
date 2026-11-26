@@ -153,6 +153,33 @@ describe('Review queue', () => {
     await settled(qc);
   });
 
+  it('"Mark as done" takes a pasted Bolt automation link, refusing anything else in plain words (#232)', async () => {
+    const RULE = '0b0b0b0b-0000-4000-8000-0000000000b1';
+    const rule = { ...DRAFT, id: 'd2', template: 'bolt_rule', template_words: 'Add a Bolt automation', title: 'Turn on the rescue-radio check', status: 'approved', decided_by_name: 'Skipper' };
+    fetchMock = routedFetch({
+      'GET /bastion/api/v1/fix-drafts': (_i, url) => jsonResponse(200, { data: url.searchParams.get('status') === 'approved' ? [rule] : [] }),
+      'POST /bastion/api/v1/fix-drafts/d2/mark-applied': () => jsonResponse(200, { data: { ...rule, status: 'applied' } }),
+      'GET /bastion/api/v1/exceptions': () => jsonResponse(200, { data: [] }),
+      'GET /bastion/api/v1/setup': () => jsonResponse(200, setupState()),
+      'GET /bastion/api/v1/manual-evidence': () => jsonResponse(200, { data: [], counts: {} }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    const { qc } = wrap(<ReviewPage onNavigate={() => {}} />, OWNER);
+    const input = await screen.findByLabelText('Paste the link to the automation you made in Bolt (optional)');
+    fireEvent.change(input, { target: { value: 'rule 42' } });
+    expect(screen.getByText(/doesn't look like a Bolt automation link/)).toBeInTheDocument();
+    expect(screen.getByText('Mark as done')).toBeDisabled();
+    fireEvent.change(input, { target: { value: `https://bigbluebam.example/bolt/automations/${RULE}` } });
+    expect(screen.queryByText(/doesn't look like a Bolt automation link/)).toBeNull();
+    fireEvent.click(screen.getByText('Mark as done'));
+    await waitFor(() => {
+      const call = fetchMock.mock.calls.find(([u, i]) => String(u).includes('/fix-drafts/d2/mark-applied') && i?.method === 'POST');
+      expect(call).toBeDefined();
+      expect(JSON.parse(String(call![1]!.body))).toMatchObject({ applied_entity_type: 'bolt.rule', applied_entity_id: RULE });
+    });
+    await settled(qc);
+  });
+
   it('deciding is disabled while impersonating, with the reason', async () => {
     impersonating = true;
     wrap(<ReviewPage onNavigate={() => {}} />, OWNER);

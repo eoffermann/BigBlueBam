@@ -10,6 +10,8 @@ export * from './bolt-sources.js';
 export * from './launchpad-apps.js';
 // The single can_access entity_type allowlist (api visibility service and the MCP tool).
 export * from './visibility-entity-types.js';
+// What a pasted Bin / Bolt / Beacon link names (#232, #239): the SPA and bastion-api read links alike.
+export * from './suite-links.js';
 export * from './bolt-graph.js';
 export * from './bolt-graph-shape.js';
 export * from './bolt-automation-versions/index.js';

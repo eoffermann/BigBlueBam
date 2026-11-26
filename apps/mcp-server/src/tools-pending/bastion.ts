@@ -36,7 +36,7 @@ import {
   bastionManualEvidenceListQuerySchema,
 } from '@bigbluebam/shared';
 // M7 policy tools (registerBastionPolicyTools at the very end).
-import { bastionPolicyAudienceSchema, bastionPolicyCreateSchema, bastionPolicyUpdateSchema } from '@bigbluebam/shared';
+import { bastionPolicyAudienceSchema, bastionPolicyCreateFields, bastionPolicyCreateSchema, bastionPolicyUpdateSchema } from '@bigbluebam/shared';
 import {
   BastionAuditorRequestStatus,
   bastionAdoptFrameworkSchema,
@@ -873,16 +873,17 @@ export function registerBastionDecisionTools(server: McpServer, client: BastionC
   registerTool(server, {
     name: 'bastion_mark_fix_applied',
     description:
-      'Record that an approved fix was carried out elsewhere (POST /fix-drafts/:id/mark-applied), optionally naming what was made: the Beacon policy draft (beacon.entry) or the Bolt automation (bolt.rule). The named item must be visible to the caller; a link from the fix to it is recorded. 409 FIX_NOT_APPROVED unless a person approved the fix first. Needs bastion.fix.mark_applied.',
+      'Record that an approved fix was carried out elsewhere (POST /fix-drafts/:id/mark-applied), optionally naming what was made: the Beacon policy draft (beacon.entry) or the Bolt automation (bolt.rule), by applied_entity_id, or for a Beacon article by applied_entity_slug (the last part of its /beacon/<slug> link). The named item must be visible to the caller; a link from the fix to it is recorded. 409 FIX_NOT_APPROVED unless a person approved the fix first. Needs bastion.fix.mark_applied.',
     input: {
       fix_draft_id: z.string().uuid(),
       ...bastionFixMarkAppliedSchema.innerType().shape,
     },
     returns: z.record(z.unknown()),
-    handler: async ({ fix_draft_id, applied_entity_type, applied_entity_id, note }) => {
+    handler: async ({ fix_draft_id, applied_entity_type, applied_entity_id, applied_entity_slug, note }) => {
       const r = await client.markFixApplied(fix_draft_id, {
         applied_entity_type: applied_entity_type ?? null,
         applied_entity_id: applied_entity_id ?? null,
+        ...(applied_entity_slug ? { applied_entity_slug } : {}),
         note: note ?? null,
       });
       return r.ok ? ok(r.data) : err('marking the fix done', r.data);
@@ -1017,14 +1018,10 @@ export function registerBastionPolicyTools(server: McpServer, client: BastionCli
   registerTool(server, {
     name: 'bastion_create_policy',
     description:
-      'Link a Beacon article as a policy people must read and acknowledge (POST /policies). The article must be shared with everyone (Beacon visibility Organization or Public; else 409 POLICY_NOT_SHARED). audience is everyone (default) or a list of members; cadence_days is how often it must be re-read (default 365). With control_id, Bastion proposes that control\'s two policy checks (read and acknowledged; kept current) pinned to this policy, for a person to confirm. 409 POLICY_ALREADY_LINKED. Needs bastion.policy.write (owners and admins).',
-    input: {
-      beacon_entry_id: z.string().uuid(),
-      audience: bastionPolicyAudienceSchema.optional(),
-      cadence_days: z.number().int().min(1).max(1095).optional(),
-      owner_user_id: z.string().uuid().optional(),
-      control_id: z.string().uuid().optional(),
-    },
+      'Link a Beacon article as a policy people must read and acknowledge (POST /policies). Name the article by beacon_entry_id, or by beacon_slug (the last part of its Beacon link, /beacon/<slug>). The article must be shared with everyone (Beacon visibility Organization or Public; else 409 POLICY_NOT_SHARED). audience is everyone (default) or a list of members; cadence_days is how often it must be re-read (default 365). With control_id, Bastion proposes that control\'s two policy checks (read and acknowledged; kept current) pinned to this policy, for a person to confirm. 409 POLICY_ALREADY_LINKED. Needs bastion.policy.write (owners and admins).',
+    // The route's own fields (#239: beacon_entry_id, or the beacon_slug from an article link);
+    // the handler re-parses with the full schema for "exactly one of the two".
+    input: { ...bastionPolicyCreateFields.shape },
     returns: z.record(z.unknown()),
     handler: async (input) => {
       const parsed = bastionPolicyCreateSchema.safeParse(input);

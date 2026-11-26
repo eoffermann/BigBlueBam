@@ -223,7 +223,8 @@ export function useMyAttestations() {
 export function useCreatePolicy() {
   const invalidate = useInvalidate();
   return useMutation({
-    mutationFn: (body: { beacon_entry_id: string; audience?: PolicyAudience; cadence_days?: number; control_id?: string }) =>
+    // The article by id, or by the slug in the link Beacon shows (#239); the server resolves it.
+    mutationFn: (body: ({ beacon_entry_id: string } | { beacon_slug: string }) & { audience?: PolicyAudience; cadence_days?: number; control_id?: string }) =>
       api.post<{ data: PolicyRow }>('/policies', body),
     onSuccess: invalidate,
   });
@@ -396,10 +397,12 @@ export function useDecideFix() {
 export function useMarkFixApplied() {
   const invalidate = useInvalidate();
   return useMutation({
-    mutationFn: (args: { id: string; applied_entity_type?: 'beacon.entry' | 'bolt.rule'; applied_entity_id?: string; note?: string }) =>
+    // What was made, by id, or (a Beacon article) by the slug in its link (#232).
+    mutationFn: (args: { id: string; applied_entity_type?: 'beacon.entry' | 'bolt.rule'; applied_entity_id?: string; applied_entity_slug?: string; note?: string }) =>
       api.post(`/fix-drafts/${args.id}/mark-applied`, {
         applied_entity_type: args.applied_entity_type ?? null,
         applied_entity_id: args.applied_entity_id ?? null,
+        ...(args.applied_entity_slug ? { applied_entity_slug: args.applied_entity_slug } : {}),
         note: args.note ?? null,
       }),
     onSuccess: invalidate,
