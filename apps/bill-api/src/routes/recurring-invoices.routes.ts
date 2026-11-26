@@ -209,7 +209,10 @@ export default async function recurringInvoiceRoutes(fastify: FastifyInstance) {
     {
       preHandler: [
         requireAuth,
-        fastify.requireCan('bill.recurring_invoice.generate_now'),
+        // Was 'bill.recurring_invoice.generate_now', an id never in the catalog
+        // (found by the #153 route-coverage check). Generating now is managing the
+        // schedule, so it shares the schedule's update permission.
+        fastify.requireCan('bill.recurring_invoice.update'),
         requireScope('read_write'),
       ],
     },

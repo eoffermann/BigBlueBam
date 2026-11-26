@@ -63,7 +63,7 @@ export default async function crossProductRoutes(fastify: FastifyInstance) {
   // ─── Promote graph → Bam tasks (returns the plan) ────────────────────
   fastify.post<{ Params: { id: string } }>(
     '/diagrams/:id/promote-to-tasks',
-    { preHandler: [requireAuth, requireScope('read_write')] },
+    { preHandler: [requireAuth, requireScope('read_write'), fastify.requireCan('blueprint.diagram.promote')] },
     async (request, reply) => {
       const body = promoteSchema.parse(request.body);
       const orgId = request.user!.org_id;
@@ -96,7 +96,7 @@ export default async function crossProductRoutes(fastify: FastifyInstance) {
   // ─── Generate diagram ← Bam tasks ────────────────────────────────────
   fastify.post(
     '/diagrams/from-bam',
-    { preHandler: [requireAuth, requireScope('read_write')] },
+    { preHandler: [requireAuth, requireScope('read_write'), fastify.requireCan('blueprint.diagram.write')] },
     async (request, reply) => {
       const body = generateSchema.parse(request.body);
       const orgId = request.user!.org_id;

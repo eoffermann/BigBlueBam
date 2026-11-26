@@ -104,7 +104,7 @@ export function buildSurfaceHuddleRoomName(
 export default async function livekitRoutes(fastify: FastifyInstance) {
   fastify.post(
     '/rooms/:id/token',
-    { preHandler: [requireAuth] },
+    { preHandler: [requireAuth, fastify.requireCan('bureau.call.join')] },
     async (request, reply) => {
       const { id: roomId } = request.params as { id: string };
       const user = request.user!;
@@ -218,7 +218,7 @@ export default async function livekitRoutes(fastify: FastifyInstance) {
    */
   fastify.post(
     '/surface-huddle/token',
-    { preHandler: [requireAuth] },
+    { preHandler: [requireAuth, fastify.requireCan('bureau.call.join')] },
     async (request, reply) => {
       const user = request.user!;
 

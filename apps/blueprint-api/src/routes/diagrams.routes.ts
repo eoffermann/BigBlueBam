@@ -69,7 +69,7 @@ function emitBolt(eventType: string, payload: Record<string, unknown>, orgId: st
 
 export default async function diagramRoutes(fastify: FastifyInstance) {
   // ─── List + Create ──────────────────────────────────────────────────
-  fastify.get('/diagrams', { preHandler: [requireAuth] }, async (request, reply) => {
+  fastify.get('/diagrams', { preHandler: [requireAuth, fastify.requireCan('blueprint.diagram.read')] }, async (request, reply) => {
     const query = request.query as Record<string, string>;
     const rows = await svc.listDiagrams(request.user!.org_id, request.user!.id, {
       project_id: query.project_id,
@@ -82,7 +82,7 @@ export default async function diagramRoutes(fastify: FastifyInstance) {
 
   fastify.post(
     '/diagrams',
-    { preHandler: [requireAuth, requireScope('read_write')] },
+    { preHandler: [requireAuth, requireScope('read_write'), fastify.requireCan('blueprint.diagram.write')] },
     async (request, reply) => {
       const body = createDiagramSchema.parse(request.body);
       const orgId = request.user!.org_id;
@@ -107,7 +107,7 @@ export default async function diagramRoutes(fastify: FastifyInstance) {
   // ─── Per-diagram ────────────────────────────────────────────────────
   fastify.get<{ Params: { id: string } }>(
     '/diagrams/:id',
-    { preHandler: [requireAuth] },
+    { preHandler: [requireAuth, fastify.requireCan('blueprint.diagram.read')] },
     async (request, reply) => {
       try {
         const row = await svc.assertCanRead(
@@ -126,7 +126,7 @@ export default async function diagramRoutes(fastify: FastifyInstance) {
 
   fastify.patch<{ Params: { id: string } }>(
     '/diagrams/:id',
-    { preHandler: [requireAuth, requireScope('read_write')] },
+    { preHandler: [requireAuth, requireScope('read_write'), fastify.requireCan('blueprint.diagram.write')] },
     async (request, reply) => {
       const body = updateDiagramSchema.parse(request.body);
       const orgId = request.user!.org_id;
@@ -151,7 +151,7 @@ export default async function diagramRoutes(fastify: FastifyInstance) {
 
   fastify.post<{ Params: { id: string } }>(
     '/diagrams/:id/archive',
-    { preHandler: [requireAuth, requireScope('admin')] },
+    { preHandler: [requireAuth, requireScope('admin'), fastify.requireCan('blueprint.diagram.archive')] },
     async (request, reply) => {
       const orgId = request.user!.org_id;
       const userId = request.user!.id;
@@ -170,7 +170,7 @@ export default async function diagramRoutes(fastify: FastifyInstance) {
   // ─── Graph payload ──────────────────────────────────────────────────
   fastify.get<{ Params: { id: string } }>(
     '/diagrams/:id/graph',
-    { preHandler: [requireAuth] },
+    { preHandler: [requireAuth, fastify.requireCan('blueprint.diagram.read')] },
     async (request, reply) => {
       try {
         await svc.assertCanRead(request.user!.org_id, request.user!.id, request.params.id);
@@ -187,7 +187,7 @@ export default async function diagramRoutes(fastify: FastifyInstance) {
   // ─── Nodes (read) ───────────────────────────────────────────────────
   fastify.get<{ Params: { id: string } }>(
     '/diagrams/:id/nodes',
-    { preHandler: [requireAuth] },
+    { preHandler: [requireAuth, fastify.requireCan('blueprint.diagram.read')] },
     async (request, reply) => {
       try {
         await svc.assertCanRead(request.user!.org_id, request.user!.id, request.params.id);
@@ -204,7 +204,7 @@ export default async function diagramRoutes(fastify: FastifyInstance) {
   // ─── Edges (read) ───────────────────────────────────────────────────
   fastify.get<{ Params: { id: string } }>(
     '/diagrams/:id/edges',
-    { preHandler: [requireAuth] },
+    { preHandler: [requireAuth, fastify.requireCan('blueprint.diagram.read')] },
     async (request, reply) => {
       try {
         await svc.assertCanRead(request.user!.org_id, request.user!.id, request.params.id);
@@ -229,7 +229,7 @@ export default async function diagramRoutes(fastify: FastifyInstance) {
 
   fastify.post<{ Params: { id: string } }>(
     '/diagrams/:id/layout',
-    { preHandler: [requireAuth, requireScope('read_write')] },
+    { preHandler: [requireAuth, requireScope('read_write'), fastify.requireCan('blueprint.diagram.write')] },
     async (request, reply) => {
       const body = layoutSchema.parse(request.body ?? {});
       const orgId = request.user!.org_id;
@@ -302,7 +302,7 @@ export default async function diagramRoutes(fastify: FastifyInstance) {
 
   fastify.post<{ Params: { id: string } }>(
     '/diagrams/:id/generate',
-    { preHandler: [requireAuth, requireScope('read_write')] },
+    { preHandler: [requireAuth, requireScope('read_write'), fastify.requireCan('blueprint.diagram.write')] },
     async (request, reply) => {
       const body = generateSchema.parse(request.body);
       const orgId = request.user!.org_id;
@@ -373,7 +373,7 @@ export default async function diagramRoutes(fastify: FastifyInstance) {
 
   fastify.post<{ Params: { id: string } }>(
     '/diagrams/:id/import',
-    { preHandler: [requireAuth, requireScope('read_write')] },
+    { preHandler: [requireAuth, requireScope('read_write'), fastify.requireCan('blueprint.diagram.write')] },
     async (request, reply) => {
       const body = importSchema.parse(request.body);
       const orgId = request.user!.org_id;
@@ -395,7 +395,7 @@ export default async function diagramRoutes(fastify: FastifyInstance) {
 
   fastify.get<{ Params: { id: string }; Querystring: { format?: string } }>(
     '/diagrams/:id/export',
-    { preHandler: [requireAuth] },
+    { preHandler: [requireAuth, fastify.requireCan('blueprint.diagram.read')] },
     async (request, reply) => {
       const format = (request.query.format ?? 'json') as 'json' | 'mermaid' | 'svg' | 'png';
       try {
@@ -414,7 +414,7 @@ export default async function diagramRoutes(fastify: FastifyInstance) {
   // ─── Versions ───────────────────────────────────────────────────────
   fastify.get<{ Params: { id: string } }>(
     '/diagrams/:id/versions',
-    { preHandler: [requireAuth] },
+    { preHandler: [requireAuth, fastify.requireCan('blueprint.diagram.read')] },
     async (request, reply) => {
       try {
         const rows = await svc.listVersions(request.user!.org_id, request.params.id);
@@ -429,7 +429,7 @@ export default async function diagramRoutes(fastify: FastifyInstance) {
 
   fastify.post<{ Params: { id: string } }>(
     '/diagrams/:id/versions',
-    { preHandler: [requireAuth, requireScope('read_write')] },
+    { preHandler: [requireAuth, requireScope('read_write'), fastify.requireCan('blueprint.diagram.write')] },
     async (request, reply) => {
       const body = z.object({ label: z.string().max(200).nullable().optional() }).parse(request.body ?? {});
       try {
@@ -450,7 +450,7 @@ export default async function diagramRoutes(fastify: FastifyInstance) {
 
   fastify.post<{ Params: { id: string; n: string } }>(
     '/diagrams/:id/versions/:n/restore',
-    { preHandler: [requireAuth, requireScope('read_write')] },
+    { preHandler: [requireAuth, requireScope('read_write'), fastify.requireCan('blueprint.diagram.write')] },
     async (request, reply) => {
       const versionNumber = Number.parseInt(request.params.n, 10);
       if (!Number.isFinite(versionNumber)) {
@@ -481,7 +481,7 @@ export default async function diagramRoutes(fastify: FastifyInstance) {
   // ─── Stars ──────────────────────────────────────────────────────────
   fastify.post<{ Params: { id: string } }>(
     '/diagrams/:id/star',
-    { preHandler: [requireAuth] },
+    { preHandler: [requireAuth, fastify.requireCan('blueprint.diagram.star')] },
     async (request, reply) => {
       try {
         await svc.starDiagram(request.user!.org_id, request.user!.id, request.params.id);
@@ -496,7 +496,7 @@ export default async function diagramRoutes(fastify: FastifyInstance) {
 
   fastify.delete<{ Params: { id: string } }>(
     '/diagrams/:id/star',
-    { preHandler: [requireAuth] },
+    { preHandler: [requireAuth, fastify.requireCan('blueprint.diagram.star')] },
     async (request, reply) => {
       try {
         await svc.unstarDiagram(request.user!.org_id, request.user!.id, request.params.id);
@@ -512,7 +512,7 @@ export default async function diagramRoutes(fastify: FastifyInstance) {
   // ─── Collaborators ──────────────────────────────────────────────────
   fastify.get<{ Params: { id: string } }>(
     '/diagrams/:id/collaborators',
-    { preHandler: [requireAuth] },
+    { preHandler: [requireAuth, fastify.requireCan('blueprint.diagram.read')] },
     async (request, reply) => {
       try {
         const rows = await svc.listCollaborators(request.user!.org_id, request.params.id);
@@ -532,7 +532,7 @@ export default async function diagramRoutes(fastify: FastifyInstance) {
 
   fastify.post<{ Params: { id: string } }>(
     '/diagrams/:id/collaborators',
-    { preHandler: [requireAuth, requireScope('read_write')] },
+    { preHandler: [requireAuth, requireScope('read_write'), fastify.requireCan('blueprint.collaborator.write')] },
     async (request, reply) => {
       const body = addCollabSchema.parse(request.body);
       try {
@@ -553,7 +553,7 @@ export default async function diagramRoutes(fastify: FastifyInstance) {
 
   fastify.delete<{ Params: { id: string; userId: string } }>(
     '/diagrams/:id/collaborators/:userId',
-    { preHandler: [requireAuth, requireScope('read_write')] },
+    { preHandler: [requireAuth, requireScope('read_write'), fastify.requireCan('blueprint.collaborator.write')] },
     async (request, reply) => {
       try {
         await svc.removeCollaborator(
@@ -573,7 +573,7 @@ export default async function diagramRoutes(fastify: FastifyInstance) {
   // ─── Comments ───────────────────────────────────────────────────────
   fastify.get<{ Params: { id: string } }>(
     '/diagrams/:id/comments',
-    { preHandler: [requireAuth] },
+    { preHandler: [requireAuth, fastify.requireCan('blueprint.diagram.read')] },
     async (request, reply) => {
       try {
         const rows = await svc.listComments(request.user!.org_id, request.params.id);
@@ -594,7 +594,7 @@ export default async function diagramRoutes(fastify: FastifyInstance) {
 
   fastify.post<{ Params: { id: string } }>(
     '/diagrams/:id/comments',
-    { preHandler: [requireAuth] },
+    { preHandler: [requireAuth, fastify.requireCan('blueprint.comment.write')] },
     async (request, reply) => {
       const body = addCommentSchema.parse(request.body);
       const orgId = request.user!.org_id;
@@ -630,7 +630,7 @@ export default async function diagramRoutes(fastify: FastifyInstance) {
 
   fastify.patch<{ Params: { id: string; cid: string } }>(
     '/diagrams/:id/comments/:cid',
-    { preHandler: [requireAuth] },
+    { preHandler: [requireAuth, fastify.requireCan('blueprint.comment.write')] },
     async (request, reply) => {
       const body = patchCommentSchema.parse(request.body);
       try {

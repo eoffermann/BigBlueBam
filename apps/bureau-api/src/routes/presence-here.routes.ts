@@ -94,7 +94,7 @@ interface OccupantHit {
 export default async function presenceHereRoutes(fastify: FastifyInstance) {
   fastify.get(
     '/presence/here',
-    { preHandler: [requireAuth] },
+    { preHandler: [requireAuth, fastify.requireCan('bureau.presence.read')] },
     async (request, reply) => {
       const user = request.user!;
 

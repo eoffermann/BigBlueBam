@@ -109,7 +109,7 @@ export default async function floorsRoutes(fastify: FastifyInstance) {
   // so the /admin/floors UI can show + restore them.
   fastify.get(
     '/floors',
-    { preHandler: [requireAuth] },
+    { preHandler: [requireAuth, fastify.requireCan('bureau.floor.read')] },
     async (request, reply) => {
       const user = request.user!;
       const query = listFloorsQuery.parse(request.query);
@@ -144,7 +144,7 @@ export default async function floorsRoutes(fastify: FastifyInstance) {
   // GET /v1/floors/:id — floor metadata + layout + occupancy by room
   fastify.get(
     '/floors/:id',
-    { preHandler: [requireAuth] },
+    { preHandler: [requireAuth, fastify.requireCan('bureau.floor.read')] },
     async (request, reply) => {
       const { id } = request.params as { id: string };
       const user = request.user!;
@@ -206,7 +206,7 @@ export default async function floorsRoutes(fastify: FastifyInstance) {
   // POST /v1/floors — create floor. Admin/owner only.
   fastify.post(
     '/floors',
-    { preHandler: [requireAuth] },
+    { preHandler: [requireAuth, fastify.requireCan('bureau.floor.write')] },
     async (request, reply) => {
       const user = request.user!;
 
@@ -284,7 +284,7 @@ export default async function floorsRoutes(fastify: FastifyInstance) {
   // PATCH /v1/floors/:id — update floor. Admin/owner only.
   fastify.patch(
     '/floors/:id',
-    { preHandler: [requireAuth] },
+    { preHandler: [requireAuth, fastify.requireCan('bureau.floor.write')] },
     async (request, reply) => {
       const { id } = request.params as { id: string };
       const user = request.user!;
@@ -353,7 +353,7 @@ export default async function floorsRoutes(fastify: FastifyInstance) {
   // DELETE /v1/floors/:id — soft-delete. Admin/owner only.
   fastify.delete(
     '/floors/:id',
-    { preHandler: [requireAuth] },
+    { preHandler: [requireAuth, fastify.requireCan('bureau.floor.write')] },
     async (request, reply) => {
       const { id } = request.params as { id: string };
       const user = request.user!;
@@ -405,7 +405,7 @@ export default async function floorsRoutes(fastify: FastifyInstance) {
   // The MinIO upload itself is a separate concern; this just stores the URL.
   fastify.post(
     '/floors/:id/background',
-    { preHandler: [requireAuth] },
+    { preHandler: [requireAuth, fastify.requireCan('bureau.floor.write')] },
     async (request, reply) => {
       const { id } = request.params as { id: string };
       const user = request.user!;

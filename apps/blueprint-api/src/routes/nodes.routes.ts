@@ -73,7 +73,7 @@ const linkEntitySchema = z.object({
 export default async function nodeRoutes(fastify: FastifyInstance) {
   fastify.post<{ Params: { id: string } }>(
     '/diagrams/:id/nodes',
-    { preHandler: [requireAuth, requireScope('read_write')] },
+    { preHandler: [requireAuth, requireScope('read_write'), fastify.requireCan('blueprint.diagram.write')] },
     async (request, reply) => {
       const body = createNodeSchema.parse(request.body);
       const orgId = request.user!.org_id;
@@ -105,7 +105,7 @@ export default async function nodeRoutes(fastify: FastifyInstance) {
 
   fastify.patch<{ Params: { id: string; nodeId: string } }>(
     '/diagrams/:id/nodes/:nodeId',
-    { preHandler: [requireAuth, requireScope('read_write')] },
+    { preHandler: [requireAuth, requireScope('read_write'), fastify.requireCan('blueprint.diagram.write')] },
     async (request, reply) => {
       const body = updateNodeSchema.parse(request.body);
       const orgId = request.user!.org_id;
@@ -131,7 +131,7 @@ export default async function nodeRoutes(fastify: FastifyInstance) {
 
   fastify.post<{ Params: { id: string; nodeId: string } }>(
     '/diagrams/:id/nodes/:nodeId/move',
-    { preHandler: [requireAuth, requireScope('read_write')] },
+    { preHandler: [requireAuth, requireScope('read_write'), fastify.requireCan('blueprint.diagram.write')] },
     async (request, reply) => {
       const body = moveNodeSchema.parse(request.body);
       const orgId = request.user!.org_id;
@@ -168,7 +168,7 @@ export default async function nodeRoutes(fastify: FastifyInstance) {
 
   fastify.post<{ Params: { id: string; nodeId: string } }>(
     '/diagrams/:id/nodes/:nodeId/duplicate',
-    { preHandler: [requireAuth, requireScope('read_write')] },
+    { preHandler: [requireAuth, requireScope('read_write'), fastify.requireCan('blueprint.diagram.write')] },
     async (request, reply) => {
       const body = duplicateSchema.parse(request.body ?? {});
       const orgId = request.user!.org_id;
@@ -210,7 +210,7 @@ export default async function nodeRoutes(fastify: FastifyInstance) {
 
   fastify.delete<{ Params: { id: string; nodeId: string } }>(
     '/diagrams/:id/nodes/:nodeId',
-    { preHandler: [requireAuth, requireScope('read_write')] },
+    { preHandler: [requireAuth, requireScope('read_write'), fastify.requireCan('blueprint.diagram.write')] },
     async (request, reply) => {
       const orgId = request.user!.org_id;
       const userId = request.user!.id;
@@ -235,7 +235,7 @@ export default async function nodeRoutes(fastify: FastifyInstance) {
   // ─── Cross-product: link / promote ──────────────────────────────────
   fastify.post<{ Params: { id: string; nodeId: string } }>(
     '/diagrams/:id/nodes/:nodeId/link-entity',
-    { preHandler: [requireAuth, requireScope('read_write')] },
+    { preHandler: [requireAuth, requireScope('read_write'), fastify.requireCan('blueprint.diagram.write')] },
     async (request, reply) => {
       const body = linkEntitySchema.parse(request.body);
       const orgId = request.user!.org_id;
@@ -257,7 +257,7 @@ export default async function nodeRoutes(fastify: FastifyInstance) {
 
   fastify.post<{ Params: { id: string; nodeId: string } }>(
     '/diagrams/:id/nodes/:nodeId/promote-to-task',
-    { preHandler: [requireAuth, requireScope('read_write')] },
+    { preHandler: [requireAuth, requireScope('read_write'), fastify.requireCan('blueprint.diagram.promote')] },
     async (request, reply) => {
       const body = promoteSchema.parse(request.body);
       // The actual task creation lives in the Bam api. Blueprint records

@@ -69,7 +69,7 @@ export default async function knocksRoutes(fastify: FastifyInstance) {
   // POST /v1/knocks — visitor knocks on an office door
   fastify.post(
     '/knocks',
-    { preHandler: [requireAuth] },
+    { preHandler: [requireAuth, fastify.requireCan('bureau.knock.create')] },
     async (request, reply) => {
       const user = request.user!;
 
@@ -230,7 +230,7 @@ export default async function knocksRoutes(fastify: FastifyInstance) {
   // POST /v1/knocks/leave-note — DND fallback: send a Banter DM to the owner
   fastify.post(
     '/knocks/leave-note',
-    { preHandler: [requireAuth] },
+    { preHandler: [requireAuth, fastify.requireCan('bureau.knock.create')] },
     async (request, reply) => {
       const user = request.user!;
 
@@ -330,7 +330,7 @@ export default async function knocksRoutes(fastify: FastifyInstance) {
   // PATCH /v1/knocks/:id — owner resolves the knock
   fastify.patch(
     '/knocks/:id',
-    { preHandler: [requireAuth] },
+    { preHandler: [requireAuth, fastify.requireCan('bureau.knock.respond')] },
     async (request, reply) => {
       const { id: knockId } = request.params as { id: string };
       const user = request.user!;
@@ -402,7 +402,7 @@ export default async function knocksRoutes(fastify: FastifyInstance) {
   // GET /v1/knocks/inbox — pending knocks where caller is the owner
   fastify.get(
     '/knocks/inbox',
-    { preHandler: [requireAuth] },
+    { preHandler: [requireAuth, fastify.requireCan('bureau.knock.read')] },
     async (request, reply) => {
       const user = request.user!;
 

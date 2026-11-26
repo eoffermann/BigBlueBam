@@ -10,6 +10,7 @@ import { healthCheckPlugin } from '@bigbluebam/service-health';
 import { db, connection } from './db/index.js';
 import redisPlugin from './plugins/redis.js';
 import authPlugin from './plugins/auth.js';
+import permissionsPlugin from './plugins/permissions.js';
 import floorsRoutes from './routes/floors.routes.js';
 import roomsRoutes from './routes/rooms.routes.js';
 import settingsRoutes from './routes/settings.routes.js';
@@ -99,6 +100,10 @@ await fastify.register(redisPlugin);
 // Auth plugin
 await fastify.register(authPlugin);
 
+// Per-action permissions (issue #153): decorates fastify.requireCan, which
+// every route module below uses, so it must register before them.
+await fastify.register(permissionsPlugin);
+
 // Health + readiness probes (shared plugin)
 await fastify.register(healthCheckPlugin, {
   service: 'bureau-api',
@@ -119,8 +124,8 @@ await fastify.register(healthCheckPlugin, {
 //   - presence.routes.ts   — heartbeat + active-room presence tracking
 //   - settings.routes.ts   — per-org Bureau policy + defaults
 //   - livekit.routes.ts    — mints LiveKit access tokens for room joins
-// Workstream 2 will also wire a websocket handler (presence + knock fan-out)
-// and the per-action permissions plugin once the bureau permission_keys land.
+// Workstream 2 will also wire a websocket handler (presence + knock fan-out).
+// The per-action permissions plugin is registered above (issue #153).
 // ─────────────────────────────────────────────────────────────────────
 
 // Agent A (workstream 2): admin surfaces — floors, rooms, ACL, door, settings.

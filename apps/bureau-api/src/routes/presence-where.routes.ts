@@ -70,7 +70,7 @@ function classifyUrlApp(rawUrl: string): string | null {
 export default async function presenceWhereRoutes(fastify: FastifyInstance) {
   fastify.get(
     '/presence/where/:userId',
-    { preHandler: [requireAuth] },
+    { preHandler: [requireAuth, fastify.requireCan('bureau.presence.read')] },
     async (request, reply) => {
       const user = request.user!;
 

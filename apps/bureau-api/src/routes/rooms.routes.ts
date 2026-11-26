@@ -157,7 +157,7 @@ export default async function roomsRoutes(fastify: FastifyInstance) {
   // summary intentionally omits).
   fastify.get(
     '/rooms',
-    { preHandler: [requireAuth] },
+    { preHandler: [requireAuth, fastify.requireCan('bureau.room.read')] },
     async (request, reply) => {
       const user = request.user!;
       const parsed = listRoomsQuery.safeParse(request.query);
@@ -211,7 +211,7 @@ export default async function roomsRoutes(fastify: FastifyInstance) {
   // GET /v1/rooms/:id — room detail + occupants
   fastify.get(
     '/rooms/:id',
-    { preHandler: [requireAuth] },
+    { preHandler: [requireAuth, fastify.requireCan('bureau.room.read')] },
     async (request, reply) => {
       const { id } = request.params as { id: string };
       const user = request.user!;
@@ -243,7 +243,7 @@ export default async function roomsRoutes(fastify: FastifyInstance) {
   // Admin/owner OR (if bureau_settings.members_can_create_rooms) members.
   fastify.post(
     '/rooms',
-    { preHandler: [requireAuth] },
+    { preHandler: [requireAuth, fastify.requireCan('bureau.room.write')] },
     async (request, reply) => {
       const user = request.user!;
       const body = createRoomBody.parse(request.body);
@@ -325,7 +325,7 @@ export default async function roomsRoutes(fastify: FastifyInstance) {
   // Admin/owner OR room owner (offices) OR room manager (via bureau_room_acl).
   fastify.patch(
     '/rooms/:id',
-    { preHandler: [requireAuth] },
+    { preHandler: [requireAuth, fastify.requireCan('bureau.room.write')] },
     async (request, reply) => {
       const { id } = request.params as { id: string };
       const user = request.user!;
@@ -398,7 +398,7 @@ export default async function roomsRoutes(fastify: FastifyInstance) {
   // DELETE /v1/rooms/:id — soft-delete. Admin/owner only.
   fastify.delete(
     '/rooms/:id',
-    { preHandler: [requireAuth] },
+    { preHandler: [requireAuth, fastify.requireCan('bureau.room.write')] },
     async (request, reply) => {
       const { id } = request.params as { id: string };
       const user = request.user!;
@@ -439,7 +439,7 @@ export default async function roomsRoutes(fastify: FastifyInstance) {
   // Admin/owner OR room manager.
   fastify.post(
     '/rooms/:id/acl',
-    { preHandler: [requireAuth] },
+    { preHandler: [requireAuth, fastify.requireCan('bureau.room.write')] },
     async (request, reply) => {
       const { id } = request.params as { id: string };
       const user = request.user!;
@@ -513,7 +513,7 @@ export default async function roomsRoutes(fastify: FastifyInstance) {
   // Admin/owner OR room manager.
   fastify.delete(
     '/rooms/:id/acl/:userId',
-    { preHandler: [requireAuth] },
+    { preHandler: [requireAuth, fastify.requireCan('bureau.room.write')] },
     async (request, reply) => {
       const { id, userId } = request.params as { id: string; userId: string };
       const user = request.user!;
@@ -577,7 +577,7 @@ export default async function roomsRoutes(fastify: FastifyInstance) {
   // Office owner only for offices; room manager for shared rooms.
   fastify.patch(
     '/rooms/:id/door',
-    { preHandler: [requireAuth] },
+    { preHandler: [requireAuth, fastify.requireCan('bureau.room.write')] },
     async (request, reply) => {
       const { id } = request.params as { id: string };
       const user = request.user!;

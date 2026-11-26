@@ -1,10 +1,10 @@
 {
   "counts": {
-    "total": 1490,
+    "total": 1519,
     "mcp_tools_scanned": 885,
     "rest_routes_scanned": 889,
-    "read_permissions": 578,
-    "destructive_permissions": 144
+    "read_permissions": 588,
+    "destructive_permissions": 145
   },
   "permissions": [
     {
@@ -16597,6 +16597,125 @@
       ]
     },
     {
+      "id": "blueprint.collaborator.write",
+      "app": "blueprint",
+      "resource": "collaborator",
+      "verb": "write",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "hand_authored (migration 0267)",
+          "file": "diagrams.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "blueprint.comment.write",
+      "app": "blueprint",
+      "resource": "comment",
+      "verb": "write",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "hand_authored (migration 0267)",
+          "file": "diagrams.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "blueprint.diagram.archive",
+      "app": "blueprint",
+      "resource": "diagram",
+      "verb": "archive",
+      "is_destructive": true,
+      "is_read": false,
+      "requires_confirmation": true,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "hand_authored (migration 0267)",
+          "file": "diagrams.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "blueprint.diagram.promote",
+      "app": "blueprint",
+      "resource": "diagram",
+      "verb": "promote",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "hand_authored (migration 0267)",
+          "file": "diagrams.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "blueprint.diagram.read",
+      "app": "blueprint",
+      "resource": "diagram",
+      "verb": "read",
+      "is_destructive": false,
+      "is_read": true,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "hand_authored (migration 0267)",
+          "file": "diagrams.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "blueprint.diagram.star",
+      "app": "blueprint",
+      "resource": "diagram",
+      "verb": "star",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "hand_authored (migration 0267)",
+          "file": "diagrams.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "blueprint.diagram.write",
+      "app": "blueprint",
+      "resource": "diagram",
+      "verb": "write",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "hand_authored (migration 0267)",
+          "file": "diagrams.routes.ts"
+        }
+      ]
+    },
+    {
       "id": "board.board_chat.create",
       "app": "board",
       "resource": "board_chat",
@@ -23757,6 +23876,380 @@
           "source": "rest",
           "ref": "hand_authored (migration 0237)",
           "file": "bulwark.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "bureau.booking.read",
+      "app": "bureau",
+      "resource": "booking",
+      "verb": "read",
+      "is_destructive": false,
+      "is_read": true,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "hand_authored (migration 0267)",
+          "file": "rooms.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "bureau.booking.write",
+      "app": "bureau",
+      "resource": "booking",
+      "verb": "write",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "hand_authored (migration 0267)",
+          "file": "rooms.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "bureau.call.join",
+      "app": "bureau",
+      "resource": "call",
+      "verb": "join",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "hand_authored (migration 0267)",
+          "file": "rooms.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "bureau.call.ring",
+      "app": "bureau",
+      "resource": "call",
+      "verb": "ring",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "hand_authored (migration 0267)",
+          "file": "rooms.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "bureau.chat.configure",
+      "app": "bureau",
+      "resource": "chat",
+      "verb": "configure",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "hand_authored (migration 0267)",
+          "file": "rooms.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "bureau.chat.read",
+      "app": "bureau",
+      "resource": "chat",
+      "verb": "read",
+      "is_destructive": false,
+      "is_read": true,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "hand_authored (migration 0267)",
+          "file": "rooms.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "bureau.floor.read",
+      "app": "bureau",
+      "resource": "floor",
+      "verb": "read",
+      "is_destructive": false,
+      "is_read": true,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "hand_authored (migration 0267)",
+          "file": "rooms.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "bureau.floor.write",
+      "app": "bureau",
+      "resource": "floor",
+      "verb": "write",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "hand_authored (migration 0267)",
+          "file": "rooms.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "bureau.knock.create",
+      "app": "bureau",
+      "resource": "knock",
+      "verb": "create",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "hand_authored (migration 0267)",
+          "file": "rooms.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "bureau.knock.read",
+      "app": "bureau",
+      "resource": "knock",
+      "verb": "read",
+      "is_destructive": false,
+      "is_read": true,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "hand_authored (migration 0267)",
+          "file": "rooms.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "bureau.knock.respond",
+      "app": "bureau",
+      "resource": "knock",
+      "verb": "respond",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "hand_authored (migration 0267)",
+          "file": "rooms.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "bureau.office.assign",
+      "app": "bureau",
+      "resource": "office",
+      "verb": "assign",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "hand_authored (migration 0267)",
+          "file": "rooms.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "bureau.office.read",
+      "app": "bureau",
+      "resource": "office",
+      "verb": "read",
+      "is_destructive": false,
+      "is_read": true,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "hand_authored (migration 0267)",
+          "file": "rooms.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "bureau.presence.read",
+      "app": "bureau",
+      "resource": "presence",
+      "verb": "read",
+      "is_destructive": false,
+      "is_read": true,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "hand_authored (migration 0267)",
+          "file": "rooms.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "bureau.room.read",
+      "app": "bureau",
+      "resource": "room",
+      "verb": "read",
+      "is_destructive": false,
+      "is_read": true,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "hand_authored (migration 0267)",
+          "file": "rooms.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "bureau.room.write",
+      "app": "bureau",
+      "resource": "room",
+      "verb": "write",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "hand_authored (migration 0267)",
+          "file": "rooms.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "bureau.settings.read",
+      "app": "bureau",
+      "resource": "settings",
+      "verb": "read",
+      "is_destructive": false,
+      "is_read": true,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "hand_authored (migration 0267)",
+          "file": "rooms.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "bureau.settings.write",
+      "app": "bureau",
+      "resource": "settings",
+      "verb": "write",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "hand_authored (migration 0267)",
+          "file": "rooms.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "bureau.status.update",
+      "app": "bureau",
+      "resource": "status",
+      "verb": "update",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "hand_authored (migration 0267)",
+          "file": "rooms.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "bureau.summon.create",
+      "app": "bureau",
+      "resource": "summon",
+      "verb": "create",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "hand_authored (migration 0267)",
+          "file": "rooms.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "bureau.summon.grant_access",
+      "app": "bureau",
+      "resource": "summon",
+      "verb": "grant_access",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "hand_authored (migration 0267)",
+          "file": "rooms.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "bureau.summon.read",
+      "app": "bureau",
+      "resource": "summon",
+      "verb": "read",
+      "is_destructive": false,
+      "is_read": true,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "hand_authored (migration 0267)",
+          "file": "rooms.routes.ts"
         }
       ]
     },

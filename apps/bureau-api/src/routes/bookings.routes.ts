@@ -77,7 +77,7 @@ export default async function bookingsRoutes(fastify: FastifyInstance) {
   // GET /v1/rooms/:id/bookings — list reservations in a window
   fastify.get(
     '/rooms/:id/bookings',
-    { preHandler: [requireAuth] },
+    { preHandler: [requireAuth, fastify.requireCan('bureau.booking.read')] },
     async (request, reply) => {
       const { id: roomId } = request.params as { id: string };
       const user = request.user!;
@@ -146,7 +146,7 @@ export default async function bookingsRoutes(fastify: FastifyInstance) {
   // POST /v1/rooms/:id/bookings — create a reservation
   fastify.post(
     '/rooms/:id/bookings',
-    { preHandler: [requireAuth] },
+    { preHandler: [requireAuth, fastify.requireCan('bureau.booking.write')] },
     async (request, reply) => {
       const { id: roomId } = request.params as { id: string };
       const user = request.user!;
@@ -285,7 +285,7 @@ export default async function bookingsRoutes(fastify: FastifyInstance) {
   // PATCH /v1/bookings/:id — organizer or admin/owner
   fastify.patch(
     '/bookings/:id',
-    { preHandler: [requireAuth] },
+    { preHandler: [requireAuth, fastify.requireCan('bureau.booking.write')] },
     async (request, reply) => {
       const { id: bookingId } = request.params as { id: string };
       const user = request.user!;
@@ -416,7 +416,7 @@ export default async function bookingsRoutes(fastify: FastifyInstance) {
   // DELETE /v1/bookings/:id — soft cancel
   fastify.delete(
     '/bookings/:id',
-    { preHandler: [requireAuth] },
+    { preHandler: [requireAuth, fastify.requireCan('bureau.booking.write')] },
     async (request, reply) => {
       const { id: bookingId } = request.params as { id: string };
       const user = request.user!;

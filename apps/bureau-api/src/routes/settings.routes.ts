@@ -58,7 +58,7 @@ export default async function settingsRoutes(fastify: FastifyInstance) {
   // GET /v1/settings — org Bureau settings (creates a default row if none exists).
   fastify.get(
     '/settings',
-    { preHandler: [requireAuth] },
+    { preHandler: [requireAuth, fastify.requireCan('bureau.settings.read')] },
     async (request, reply) => {
       const user = request.user!;
       const settings = await ensureSettings(user.org_id);
@@ -81,7 +81,7 @@ export default async function settingsRoutes(fastify: FastifyInstance) {
   // PATCH /v1/settings — update settings fields. Admin/owner only.
   fastify.patch(
     '/settings',
-    { preHandler: [requireAuth] },
+    { preHandler: [requireAuth, fastify.requireCan('bureau.settings.write')] },
     async (request, reply) => {
       const user = request.user!;
 

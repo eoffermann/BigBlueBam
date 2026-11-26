@@ -51,7 +51,7 @@ export default async function officesRoutes(fastify: FastifyInstance) {
   // owners report, that's a separate endpoint.
   fastify.get(
     '/offices',
-    { preHandler: [requireAuth] },
+    { preHandler: [requireAuth, fastify.requireCan('bureau.office.read')] },
     async (request, reply) => {
       const user = request.user!;
       if (!user.is_superuser && !isOrgAdminOrOwner(user.role)) {
@@ -119,7 +119,7 @@ export default async function officesRoutes(fastify: FastifyInstance) {
   // POST /v1/offices/assign — admin/owner only
   fastify.post(
     '/offices/assign',
-    { preHandler: [requireAuth] },
+    { preHandler: [requireAuth, fastify.requireCan('bureau.office.assign')] },
     async (request, reply) => {
       const user = request.user!;
       if (!user.is_superuser && !isOrgAdminOrOwner(user.role)) {
@@ -182,7 +182,7 @@ export default async function officesRoutes(fastify: FastifyInstance) {
   // GET /v1/offices/mine — return the room owned by the caller (if any)
   fastify.get(
     '/offices/mine',
-    { preHandler: [requireAuth] },
+    { preHandler: [requireAuth, fastify.requireCan('bureau.office.read')] },
     async (request, reply) => {
       const user = request.user!;
 

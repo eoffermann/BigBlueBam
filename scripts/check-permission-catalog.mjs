@@ -17,7 +17,7 @@
 // Mirrors the pattern from scripts/check-bolt-catalog.mjs.
 
 import { execSync } from 'node:child_process';
-import { readFileSync, mkdtempSync, copyFileSync, existsSync, mkdirSync } from 'node:fs';
+import { readFileSync, readdirSync, mkdtempSync, copyFileSync, existsSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { resolve, join, dirname } from 'node:path';
 
@@ -214,5 +214,86 @@ function checkDb() {
   process.exit(1);
 }
 
-regenerate();
-checkDb();
+// ─── Route coverage (issue #153) ──────────────────────────────────────
+//
+// Blueprint and Bureau shipped with routes that contributed nothing to the
+// catalog, so requireCan could not gate them and no built-in group granted
+// anything for them, and the manifest diff above could not notice (a missing
+// app produces no drift). Every app with apps/<dir>/src/routes must now
+// contribute at least one catalog action from its route files, either
+// path-derived by the generator's route scan or as a literal id passed to
+// requireCan()/can() in a route file, unless it is exempted below with a
+// reason. Every literal id a route file passes must also exist in the catalog.
+
+const ROUTE_COVERAGE_EXEMPT = {
+  'mcp-server': 'MCP transport routes (/tools/call, /mcp); its tools are catalogued by the tool scan',
+};
+
+const LITERAL_ID_RE = /(?:requireCan|\bcan)\(\s*['"`]([a-z][a-z0-9_]*\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*)['"`]/g;
+
+function listTsFiles(dir) {
+  const out = [];
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const p = join(dir, entry.name);
+    if (entry.isDirectory()) out.push(...listTsFiles(p));
+    else if (entry.name.endsWith('.ts')) out.push(p);
+  }
+  return out;
+}
+
+export function routeCoverageProblems(root = ROOT, manifest = null) {
+  const m = manifest ?? JSON.parse(readFile(join(root, 'docs/permissions-action-manifest.json')));
+  const catalog = new Set(m.permissions.map((p) => p.id));
+  const appsDir = join(root, 'apps');
+  const problems = [];
+  const coverage = {};
+  for (const dir of readdirSync(appsDir).sort()) {
+    const routesDir = join(appsDir, dir, 'src/routes');
+    if (!existsSync(routesDir)) continue;
+    const prefix = dir === 'api' ? 'bam' : dir.replace(/-api$/, '');
+    const literal = new Set();
+    for (const file of listTsFiles(routesDir)) {
+      const text = readFile(file);
+      for (const match of text.matchAll(LITERAL_ID_RE)) {
+        if (catalog.has(match[1])) literal.add(match[1]);
+        else problems.push(`apps/${dir}: route file ${file.slice(routesDir.length + 1)} passes '${match[1]}', which is not in the catalog`);
+      }
+    }
+    const scanned = m.permissions.filter(
+      (p) => p.app === prefix && p.sources?.some((s) => s.source === 'rest' && !String(s.ref).startsWith('hand_authored')),
+    ).length;
+    coverage[dir] = scanned + literal.size;
+    if (Object.prototype.hasOwnProperty.call(ROUTE_COVERAGE_EXEMPT, dir)) continue;
+    if (coverage[dir] === 0) {
+      problems.push(
+        `apps/${dir}: its route files contribute zero catalog actions. Gate its routes with requireCan('<app>.<resource>.<verb>') ` +
+          'ids (hand-authored in scripts/generate-permission-manifest.mjs, plus a delta migration and built-in group defaults), ' +
+          'or add it to ROUTE_COVERAGE_EXEMPT in scripts/check-permission-catalog.mjs with a reason.',
+      );
+    }
+  }
+  for (const dir of Object.keys(ROUTE_COVERAGE_EXEMPT)) {
+    if (!existsSync(join(appsDir, dir, 'src/routes'))) {
+      problems.push(`ROUTE_COVERAGE_EXEMPT lists '${dir}', which has no apps/${dir}/src/routes`);
+    }
+  }
+  return { problems, coverage };
+}
+
+function checkRouteCoverage() {
+  const { problems, coverage } = routeCoverageProblems();
+  if (problems.length > 0) {
+    console.error('✗ permission catalog route coverage:');
+    for (const p of problems) console.error(`    ${p}`);
+    process.exit(1);
+  }
+  const apps = Object.keys(coverage).length;
+  console.log(`✓ every route-bearing app contributes catalog actions (${apps} apps, ${Object.keys(ROUTE_COVERAGE_EXEMPT).length} exempt)`);
+}
+
+const isMain = process.argv[1] && resolve(process.argv[1]) === resolve(new URL(import.meta.url).pathname.replace(/^\/([A-Za-z]):\//, '$1:/'));
+if (isMain) {
+  regenerate();
+  checkRouteCoverage();
+  checkDb();
+}

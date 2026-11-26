@@ -50,7 +50,7 @@ export default async function summonsRoutes(fastify: FastifyInstance) {
   // ───── POST /v1/summon ──────────────────────────────────────────
   fastify.post(
     '/summon',
-    { preHandler: [requireAuth] },
+    { preHandler: [requireAuth, fastify.requireCan('bureau.summon.create')] },
     async (request, reply) => {
       const user = request.user!;
 
@@ -174,7 +174,7 @@ export default async function summonsRoutes(fastify: FastifyInstance) {
   // ───── GET /v1/summons/:id ──────────────────────────────────────
   fastify.get(
     '/summons/:id',
-    { preHandler: [requireAuth] },
+    { preHandler: [requireAuth, fastify.requireCan('bureau.summon.read')] },
     async (request, reply) => {
       const { id } = request.params as { id: string };
       const user = request.user!;
@@ -212,7 +212,7 @@ export default async function summonsRoutes(fastify: FastifyInstance) {
   // ───── POST /v1/summons/:id/grant-access ────────────────────────
   fastify.post(
     '/summons/:id/grant-access',
-    { preHandler: [requireAuth] },
+    { preHandler: [requireAuth, fastify.requireCan('bureau.summon.grant_access')] },
     async (request, reply) => {
       const { id } = request.params as { id: string };
       const user = request.user!;

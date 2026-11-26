@@ -150,7 +150,7 @@ export default async function meStatusRoutes(fastify: FastifyInstance) {
   // ── GET /v1/presence — org-wide presence snapshot ──
   fastify.get(
     '/presence',
-    { preHandler: [requireAuth] },
+    { preHandler: [requireAuth, fastify.requireCan('bureau.presence.read')] },
     async (request, reply) => {
       const user = request.user!;
       const byUser = await scanOrgPresence(fastify, user.org_id);
@@ -193,7 +193,7 @@ export default async function meStatusRoutes(fastify: FastifyInstance) {
   // ── GET /v1/presence/locate?user=<id> — current room/floor of one user ──
   fastify.get(
     '/presence/locate',
-    { preHandler: [requireAuth] },
+    { preHandler: [requireAuth, fastify.requireCan('bureau.presence.read')] },
     async (request, reply) => {
       const user = request.user!;
       const parsed = locateQuery.safeParse(request.query);
@@ -272,7 +272,7 @@ export default async function meStatusRoutes(fastify: FastifyInstance) {
   // ── PATCH /v1/me/status — set + persist the caller's status ──
   fastify.patch(
     '/me/status',
-    { preHandler: [requireAuth] },
+    { preHandler: [requireAuth, fastify.requireCan('bureau.status.update')] },
     async (request, reply) => {
       const user = request.user!;
       const parsed = setStatusBody.safeParse(request.body);

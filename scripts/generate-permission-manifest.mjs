@@ -90,11 +90,9 @@ const NOT_ROUTE_SCANNED = {
   'bulwark-api': 'satellite; hand-authored bulwark.* ids',
   'burn-api': 'satellite; hand-authored burn.* ids',
   'bursar-api': 'satellite; hand-authored bursar.* ids',
-  // Not yet catalogued: their routes enforce org/role checks in-route and use no
-  // requireCan() ids. Moving them to scanned would add ~their whole route surface
-  // to the catalog and needs a seed delta migration; tracked as a follow-up.
-  'blueprint-api': 'not yet catalogued (no requireCan ids)',
-  'bureau-api': 'not yet catalogued (no requireCan ids)',
+  // Issue #153: coarse hand-authored ids, called from every route via requireCan().
+  'blueprint-api': 'hand-authored blueprint.* ids',
+  'bureau-api': 'hand-authored bureau.* ids',
   // The MCP server's own routes (/tools/call etc.) are transport, not app actions.
   'mcp-server': 'MCP transport routes; tools are scanned separately',
 };
@@ -968,6 +966,45 @@ function buildManifest() {
     { id: 'bursar.library.write', app: 'bursar', resource: 'library', verb: 'write', is_read: false, is_destructive: false, requires_confirmation: false, requires_superuser: false },
     { id: 'bursar.settings.read', app: 'bursar', resource: 'settings', verb: 'read', is_read: true, is_destructive: false, requires_confirmation: false, requires_superuser: false },
     { id: 'bursar.settings.write', app: 'bursar', resource: 'settings', verb: 'write', is_read: false, is_destructive: false, requires_confirmation: false, requires_superuser: false },
+    // Blueprint (issue #153). blueprint-api's routes are hand-authored like the satellites:
+    // path derivation would mint ~40 near-duplicate ids (diagram_node_move.move,
+    // diagram_version_restore.create, ...) for a product whose real authorization is
+    // diagram-level, so the routes call requireCan() with these coarse ids and the
+    // blueprint_ MCP tools stay out of EXPLICIT_TOOL_OVERRIDES (satellite deferral).
+    // Explicit flags on every row. Only diagram.archive is manifest-destructive. Keep in
+    // sync with the delta migration and 0268_blueprint_bureau_builtin_group_defaults.sql.
+    { id: 'blueprint.diagram.read', app: 'blueprint', resource: 'diagram', verb: 'read', is_read: true, is_destructive: false, requires_confirmation: false, requires_superuser: false },
+    { id: 'blueprint.diagram.write', app: 'blueprint', resource: 'diagram', verb: 'write', is_read: false, is_destructive: false, requires_confirmation: false, requires_superuser: false },
+    { id: 'blueprint.diagram.archive', app: 'blueprint', resource: 'diagram', verb: 'archive', is_read: false, is_destructive: true, requires_confirmation: true, requires_superuser: false },
+    { id: 'blueprint.diagram.star', app: 'blueprint', resource: 'diagram', verb: 'star', is_read: false, is_destructive: false, requires_confirmation: false, requires_superuser: false },
+    { id: 'blueprint.diagram.promote', app: 'blueprint', resource: 'diagram', verb: 'promote', is_read: false, is_destructive: false, requires_confirmation: false, requires_superuser: false },
+    { id: 'blueprint.collaborator.write', app: 'blueprint', resource: 'collaborator', verb: 'write', is_read: false, is_destructive: false, requires_confirmation: false, requires_superuser: false },
+    { id: 'blueprint.comment.write', app: 'blueprint', resource: 'comment', verb: 'write', is_read: false, is_destructive: false, requires_confirmation: false, requires_superuser: false },
+    // Bureau (issue #153), same hand-authored shape. The routes keep their in-route role
+    // checks (admin-only floors/settings/office assignment/chat retention, room ACLs); these
+    // ids add the platform permission gate on top. Explicit flags on every row.
+    { id: 'bureau.floor.read', app: 'bureau', resource: 'floor', verb: 'read', is_read: true, is_destructive: false, requires_confirmation: false, requires_superuser: false },
+    { id: 'bureau.floor.write', app: 'bureau', resource: 'floor', verb: 'write', is_read: false, is_destructive: false, requires_confirmation: false, requires_superuser: false },
+    { id: 'bureau.room.read', app: 'bureau', resource: 'room', verb: 'read', is_read: true, is_destructive: false, requires_confirmation: false, requires_superuser: false },
+    { id: 'bureau.room.write', app: 'bureau', resource: 'room', verb: 'write', is_read: false, is_destructive: false, requires_confirmation: false, requires_superuser: false },
+    { id: 'bureau.booking.read', app: 'bureau', resource: 'booking', verb: 'read', is_read: true, is_destructive: false, requires_confirmation: false, requires_superuser: false },
+    { id: 'bureau.booking.write', app: 'bureau', resource: 'booking', verb: 'write', is_read: false, is_destructive: false, requires_confirmation: false, requires_superuser: false },
+    { id: 'bureau.chat.read', app: 'bureau', resource: 'chat', verb: 'read', is_read: true, is_destructive: false, requires_confirmation: false, requires_superuser: false },
+    { id: 'bureau.chat.configure', app: 'bureau', resource: 'chat', verb: 'configure', is_read: false, is_destructive: false, requires_confirmation: false, requires_superuser: false },
+    { id: 'bureau.presence.read', app: 'bureau', resource: 'presence', verb: 'read', is_read: true, is_destructive: false, requires_confirmation: false, requires_superuser: false },
+    { id: 'bureau.status.update', app: 'bureau', resource: 'status', verb: 'update', is_read: false, is_destructive: false, requires_confirmation: false, requires_superuser: false },
+    { id: 'bureau.office.read', app: 'bureau', resource: 'office', verb: 'read', is_read: true, is_destructive: false, requires_confirmation: false, requires_superuser: false },
+    { id: 'bureau.office.assign', app: 'bureau', resource: 'office', verb: 'assign', is_read: false, is_destructive: false, requires_confirmation: false, requires_superuser: false },
+    { id: 'bureau.knock.read', app: 'bureau', resource: 'knock', verb: 'read', is_read: true, is_destructive: false, requires_confirmation: false, requires_superuser: false },
+    { id: 'bureau.knock.create', app: 'bureau', resource: 'knock', verb: 'create', is_read: false, is_destructive: false, requires_confirmation: false, requires_superuser: false },
+    { id: 'bureau.knock.respond', app: 'bureau', resource: 'knock', verb: 'respond', is_read: false, is_destructive: false, requires_confirmation: false, requires_superuser: false },
+    { id: 'bureau.call.join', app: 'bureau', resource: 'call', verb: 'join', is_read: false, is_destructive: false, requires_confirmation: false, requires_superuser: false },
+    { id: 'bureau.call.ring', app: 'bureau', resource: 'call', verb: 'ring', is_read: false, is_destructive: false, requires_confirmation: false, requires_superuser: false },
+    { id: 'bureau.summon.read', app: 'bureau', resource: 'summon', verb: 'read', is_read: true, is_destructive: false, requires_confirmation: false, requires_superuser: false },
+    { id: 'bureau.summon.create', app: 'bureau', resource: 'summon', verb: 'create', is_read: false, is_destructive: false, requires_confirmation: false, requires_superuser: false },
+    { id: 'bureau.summon.grant_access', app: 'bureau', resource: 'summon', verb: 'grant_access', is_read: false, is_destructive: false, requires_confirmation: false, requires_superuser: false },
+    { id: 'bureau.settings.read', app: 'bureau', resource: 'settings', verb: 'read', is_read: true, is_destructive: false, requires_confirmation: false, requires_superuser: false },
+    { id: 'bureau.settings.write', app: 'bureau', resource: 'settings', verb: 'write', is_read: false, is_destructive: false, requires_confirmation: false, requires_superuser: false },
   ];
   for (const c of HAND_AUTHORED) {
     if (!byId.has(c.id)) {
@@ -1007,6 +1044,14 @@ function buildManifest() {
       if (c.id.startsWith('bursar.')) {
         migrationLabel = '0258';
         sourceFile = 'bursar.routes.ts';
+      }
+      if (c.id.startsWith('blueprint.')) {
+        migrationLabel = '0267';
+        sourceFile = 'diagrams.routes.ts';
+      }
+      if (c.id.startsWith('bureau.')) {
+        migrationLabel = '0267';
+        sourceFile = 'rooms.routes.ts';
       }
       byId.set(c.id, {
         id: c.id,

@@ -212,10 +212,13 @@ export default async function expenseRoutes(fastify: FastifyInstance) {
     },
   );
 
-  // POST /expenses/:id/reimburse — mark an approved expense as reimbursed
+  // POST /expenses/:id/reimburse — mark an approved expense as reimbursed.
+  // Gated by bill.expense.approve (owner/admin by default): the former id
+  // 'bill.expense.reimburse' was never in the catalog, so the resolver treated it
+  // as unknown and let anyone through (found by the #153 route-coverage check).
   fastify.post<{ Params: { id: string } }>(
     '/expenses/:id/reimburse',
-    { preHandler: [requireAuth, fastify.requireCan('bill.expense.reimburse'), requireScope('read_write')] },
+    { preHandler: [requireAuth, fastify.requireCan('bill.expense.approve'), requireScope('read_write')] },
     async (request, reply) => {
       const expense = await expenseService.reimburseExpense(
         request.params.id,

@@ -34,7 +34,7 @@ function isOrgAdmin(user: { role?: string | null; is_superuser?: boolean }): boo
 export default async function chatRoutes(fastify: FastifyInstance) {
   fastify.get<{ Querystring: { search?: string } }>(
     '/chat/rooms',
-    { preHandler: [requireAuth] },
+    { preHandler: [requireAuth, fastify.requireCan('bureau.chat.read')] },
     async (request, reply) => {
       const user = request.user!;
       const rooms = await chat.listRoomsForUser(
@@ -48,7 +48,7 @@ export default async function chatRoutes(fastify: FastifyInstance) {
 
   fastify.get<{ Params: { roomKey: string }; Querystring: { before?: string; limit?: string } }>(
     '/chat/rooms/:roomKey/messages',
-    { preHandler: [requireAuth] },
+    { preHandler: [requireAuth, fastify.requireCan('bureau.chat.read')] },
     async (request, reply) => {
       const user = request.user!;
       const roomKey = request.params.roomKey;
@@ -88,7 +88,7 @@ export default async function chatRoutes(fastify: FastifyInstance) {
 
   fastify.patch<{ Params: { roomKey: string } }>(
     '/chat/rooms/:roomKey/retention',
-    { preHandler: [requireAuth] },
+    { preHandler: [requireAuth, fastify.requireCan('bureau.chat.configure')] },
     async (request, reply) => {
       const user = request.user!;
       if (!isOrgAdmin(user)) {

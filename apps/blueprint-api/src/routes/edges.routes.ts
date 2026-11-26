@@ -47,7 +47,7 @@ const updateEdgeSchema = z.object({
 export default async function edgeRoutes(fastify: FastifyInstance) {
   fastify.post<{ Params: { id: string } }>(
     '/diagrams/:id/edges',
-    { preHandler: [requireAuth, requireScope('read_write')] },
+    { preHandler: [requireAuth, requireScope('read_write'), fastify.requireCan('blueprint.diagram.write')] },
     async (request, reply) => {
       const body = createEdgeSchema.parse(request.body);
       const orgId = request.user!.org_id;
@@ -79,7 +79,7 @@ export default async function edgeRoutes(fastify: FastifyInstance) {
 
   fastify.patch<{ Params: { id: string; edgeId: string } }>(
     '/diagrams/:id/edges/:edgeId',
-    { preHandler: [requireAuth, requireScope('read_write')] },
+    { preHandler: [requireAuth, requireScope('read_write'), fastify.requireCan('blueprint.diagram.write')] },
     async (request, reply) => {
       const body = updateEdgeSchema.parse(request.body);
       const orgId = request.user!.org_id;
@@ -105,7 +105,7 @@ export default async function edgeRoutes(fastify: FastifyInstance) {
 
   fastify.delete<{ Params: { id: string; edgeId: string } }>(
     '/diagrams/:id/edges/:edgeId',
-    { preHandler: [requireAuth, requireScope('read_write')] },
+    { preHandler: [requireAuth, requireScope('read_write'), fastify.requireCan('blueprint.diagram.write')] },
     async (request, reply) => {
       const orgId = request.user!.org_id;
       const userId = request.user!.id;

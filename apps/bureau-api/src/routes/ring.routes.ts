@@ -95,7 +95,7 @@ const ringBody = z.object({
 export default async function ringRoutes(fastify: FastifyInstance) {
   fastify.post(
     '/ring',
-    { preHandler: [requireAuth] },
+    { preHandler: [requireAuth, fastify.requireCan('bureau.call.ring')] },
     async (request, reply) => {
       const user = request.user!;
 
