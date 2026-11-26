@@ -1,0 +1,38 @@
+name: Setup Node 22 and pnpm
+description: >-
+  Node 22 plus the pnpm pinned by the root package.json `packageManager` field, activated through
+  Corepack, with the pnpm store cached. The one place every workflow gets pnpm from (issue #197).
+  pnpm/action-setup is deliberately not used: v6 bootstraps pnpm v11 and prints a PNPM_HOME
+  layout [WARN] (#190), and v5's self-installer prints Node DEP0169 url.parse() (#197). Corepack
+  ships with Node, so there is no self-installer in the path at all. Requires a prior checkout.
+
+runs:
+  using: composite
+  steps:
+    - name: Setup Node 22
+      uses: actions/setup-node@v7
+      with:
+        node-version: 22
+
+    - name: Activate pnpm with Corepack (version from package.json packageManager)
+      shell: bash
+      env:
+        COREPACK_ENABLE_DOWNLOAD_PROMPT: '0'
+      run: |
+        pm="$(node -p "require('./package.json').packageManager")"
+        case "$pm" in
+          pnpm@*) ;;
+          *) echo "::error::package.json packageManager must pin pnpm (found '$pm')"; exit 1 ;;
+        esac
+        corepack enable
+        corepack prepare "$pm" --activate
+        echo "pnpm $(pnpm --version) active (pinned $pm)"
+        [ "pnpm@$(pnpm --version)" = "$pm" ] || { echo "::error::active pnpm does not match $pm"; exit 1; }
+
+    # Second setup-node call: Node 22 is already in the tool cache, and pnpm now exists, so the
+    # built-in pnpm store cache can resolve `pnpm store path`.
+    - name: Cache the pnpm store
+      uses: actions/setup-node@v7
+      with:
+        node-version: 22
+        cache: pnpm

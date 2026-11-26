@@ -68,18 +68,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
-      - name: Install pnpm
-        # v5 (node24) installs the pinned pnpm directly. v6 bootstraps pnpm v11 and self-updates
-        # down to 9.x, printing a PNPM_HOME layout [WARN] in every job (issue #190).
-        uses: pnpm/action-setup@v5
-        with:
-          version: 9.15.4
-
-      - name: Setup Node 22
-        uses: actions/setup-node@v7
-        with:
-          node-version: 22
-          cache: pnpm
+      - name: Setup Node 22 and pnpm
+        # Corepack activates the pnpm pinned by package.json packageManager (issues #190, #197).
+        uses: ./.github/actions/setup-node-pnpm
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
