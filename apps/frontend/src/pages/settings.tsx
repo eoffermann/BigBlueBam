@@ -18,6 +18,7 @@ import { PriorityManager } from '@/components/settings/priority-manager';
 import { AvatarPicker } from '@/components/settings/avatar-picker';
 import { usePriorities, priorityInlineStyle } from '@/hooks/use-priorities';
 import { timezoneSelectOptions } from '@/lib/timezones';
+import { launchpadRows, type LaunchpadRow } from '@/lib/launchpad-catalog';
 import { SettingsFtueTour, type SettingsTab } from '@/components/ftue/settings-tour';
 
 /** Notification preference keys shown in the Notifications tab. */
@@ -2398,40 +2399,24 @@ function TasksTab({ onOpenPriorityManager }: TasksTabProps) {
 interface LaunchpadConfigResponse {
   data: {
     catalog: string[];
+    catalog_detail?: LaunchpadRow[];
     org_override: string[] | null;
     platform_default: string[] | null;
   };
 }
 
-const ORG_LAUNCHPAD_APP_CATALOG: { id: string; name: string; description: string }[] = [
-  { id: 'b3', name: 'Bam', description: 'Project Management' },
-  { id: 'banter', name: 'Banter', description: 'Team Messaging' },
-  { id: 'beacon', name: 'Beacon', description: 'Knowledge Base' },
-  { id: 'bond', name: 'Bond', description: 'CRM' },
-  { id: 'blast', name: 'Blast', description: 'Email Campaigns' },
-  { id: 'bill', name: 'Bill', description: 'Invoicing' },
-  { id: 'blank', name: 'Blank', description: 'Forms' },
-  { id: 'book', name: 'Book', description: 'Scheduling' },
-  { id: 'bench', name: 'Bench', description: 'Analytics' },
-  { id: 'brief', name: 'Brief', description: 'Documents' },
-  { id: 'bolt', name: 'Bolt', description: 'Automations' },
-  { id: 'bearing', name: 'Bearing', description: 'Goals & OKRs' },
-  { id: 'board', name: 'Board', description: 'Whiteboards' },
-  { id: 'helpdesk', name: 'Helpdesk', description: 'Customer Support' },
-];
-
-function OrgLaunchpadTab({ canEdit }: { canEdit: boolean }) {
+export function OrgLaunchpadTab({ canEdit }: { canEdit: boolean }) {
   const queryClient = useQueryClient();
   const { data, isLoading } = useQuery({
     queryKey: ['org', 'launchpad-apps'],
     queryFn: () => api.get<LaunchpadConfigResponse>('/org/launchpad-apps'),
   });
 
+  // Issue #158: rows come from the server catalog (every app), never a hand-kept list.
+  const appRows = launchpadRows(data?.data?.catalog_detail);
   const orgOverride = data?.data?.org_override ?? null;
   const platformDefault = data?.data?.platform_default ?? null;
-  const platformAllows = new Set<string>(
-    platformDefault ?? ORG_LAUNCHPAD_APP_CATALOG.map((a) => a.id),
-  );
+  const platformAllows = new Set<string>(platformDefault ?? appRows.map((a) => a.id));
 
   const [draft, setDraft] = useState<string[] | null>(null);
   useEffect(() => {
@@ -2513,7 +2498,7 @@ function OrgLaunchpadTab({ canEdit }: { canEdit: boolean }) {
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-            {ORG_LAUNCHPAD_APP_CATALOG.map((app) => {
+            {appRows.map((app) => {
               const platformDisabled = !platformAllows.has(app.id);
               const checked = enabledSet.has(app.id) && !platformDisabled;
               return (

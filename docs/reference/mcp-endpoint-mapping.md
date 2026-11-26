@@ -352,7 +352,7 @@ MCP tool modules in scope: `me-tools`, `member-tools`, `user-resolver-tools`, `p
 | `PUT /org/smtp-settings` | — _(skip: org SMTP admin — secret-bearing config, UI-only)_ | Set org SMTP override | `apps/frontend/src/components/settings/org-smtp-settings-form.tsx` |
 | `DELETE /org/smtp-settings` | — _(skip: org SMTP admin — secret-bearing config, UI-only)_ | Clear org SMTP override (revert to platform) | `apps/frontend/src/components/settings/org-smtp-settings-form.tsx` |
 | `POST /org/smtp-settings/test` | — _(skip: org SMTP admin — verify/send, UI-only)_ | Verify org-effective SMTP relay | `apps/frontend/src/components/settings/org-smtp-settings-form.tsx` |
-| `GET /org/launchpad-apps` | — _(skip: resolver; `set_org_launchpad_apps` covers the override)_ | Get org Launchpad override + platform default | `apps/frontend/src/pages/settings.tsx` |
+| `GET /org/launchpad-apps` | — _(skip: resolver; `set_org_launchpad_apps` covers the override)_ | Get org Launchpad override + platform default, plus `catalog_detail` (every app's name/description/path) that the Org Launchpad tab renders its rows from (#158) | `apps/frontend/src/pages/settings.tsx` |
 | `PUT /org/launchpad-apps` | `set_org_launchpad_apps` | Set/clear org Launchpad override | `apps/frontend/src/pages/settings.tsx` |
 | `GET /org/members` | `list_members` | List org members (guest-scoped subset) | `apps/frontend/src/pages/people/index.tsx` |
 | `PATCH /org/members/:userId` | `bam_update_member_role` | Update member org role | `apps/frontend/src/pages/people/detail.tsx` |

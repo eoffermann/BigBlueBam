@@ -35,6 +35,7 @@
 import type { FastifyInstance } from 'fastify';
 import { and, eq } from 'drizzle-orm';
 import { z } from 'zod';
+import { launchpadAppFromUrl } from '@bigbluebam/shared';
 import { db } from '../db/index.js';
 import { organizationMemberships, users } from '../db/schema/index.js';
 import { requireAuth } from '../plugins/auth.js';
@@ -50,21 +51,8 @@ const paramsSchema = z.object({
 /** Mirrors presence-here.routes.ts::classifyUrlApp — first path segment
  *  → cross-app-access app name; null = no preflight available (allow). */
 function classifyUrlApp(rawUrl: string): string | null {
-  try {
-    const parsed = new URL(rawUrl, 'http://localhost');
-    const segments = parsed.pathname.split('/').filter(Boolean);
-    const first = segments[0];
-    if (!first) return null;
-    if (first === 'b3') return 'bam';
-    const KNOWN = new Set([
-      'board', 'brief', 'blueprint', 'bond', 'beacon', 'helpdesk',
-      'banter', 'bolt', 'bearing', 'blast', 'bench', 'book', 'blank', 'bill',
-    ]);
-    if (KNOWN.has(first)) return first;
-    return null;
-  } catch {
-    return null;
-  }
+  // Issue #158: the shared Launchpad app list, same as presence-here.
+  return launchpadAppFromUrl(rawUrl);
 }
 
 export default async function presenceWhereRoutes(fastify: FastifyInstance) {

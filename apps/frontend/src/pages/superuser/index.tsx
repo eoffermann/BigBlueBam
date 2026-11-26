@@ -19,6 +19,7 @@ import { SmtpSettingsCard } from '@/components/superuser/smtp-settings-card';
 import { AvScanSettingsCard } from '@/components/superuser/av-scan-settings-card';
 import { SuperuserLogsTab } from './logs';
 import { SuperuserBackupsTab } from './backups';
+import { rootRedirectOptions, useLaunchpadCatalog } from '@/lib/launchpad-catalog';
 
 interface SuperuserPageProps {
   onNavigate: (path: string) => void;
@@ -773,21 +774,10 @@ interface SystemSettingRow {
   updated_at: string;
 }
 
-const ROOT_REDIRECT_OPTIONS = [
-  { value: 'site', label: 'Marketing Site (/)' },
-  { value: 'b3', label: 'Bam (/b3/)' },
-  { value: 'banter', label: 'Banter (/banter/)' },
-  { value: 'beacon', label: 'Beacon (/beacon/)' },
-  { value: 'brief', label: 'Brief (/brief/)' },
-  { value: 'bolt', label: 'Bolt (/bolt/)' },
-  { value: 'bearing', label: 'Bearing (/bearing/)' },
-  { value: 'board', label: 'Board (/board/)' },
-  { value: 'bond', label: 'Bond (/bond/)' },
-  { value: 'helpdesk', label: 'Helpdesk (/helpdesk/)' },
-];
-
 function PlatformTab() {
   const queryClient = useQueryClient();
+  // Issue #158: the site plus every Launchpad app, from the shared list the api validates against.
+  const rootRedirectChoices = rootRedirectOptions(useLaunchpadCatalog());
   const { data, isLoading } = useQuery({
     queryKey: ['superuser', 'platform-settings'],
     queryFn: () => api.get<PlatformSettingsResponse>('/superuser/platform-settings'),
@@ -967,7 +957,7 @@ function PlatformTab() {
                 </div>
               ) : (
                 <Select
-                  options={ROOT_REDIRECT_OPTIONS}
+                  options={rootRedirectChoices}
                   value={currentRedirect}
                   onValueChange={(val) => updateRedirect.mutate(val)}
                   placeholder="Select redirect target..."
@@ -1004,25 +994,10 @@ function PlatformTab() {
 
 // ─── Launchpad Defaults (SuperUser) ─────────────────────────────────────────
 
-const LAUNCHPAD_APP_CATALOG: { id: string; name: string; description: string }[] = [
-  { id: 'b3', name: 'Bam', description: 'Project Management' },
-  { id: 'banter', name: 'Banter', description: 'Team Messaging' },
-  { id: 'beacon', name: 'Beacon', description: 'Knowledge Base' },
-  { id: 'bond', name: 'Bond', description: 'CRM' },
-  { id: 'blast', name: 'Blast', description: 'Email Campaigns' },
-  { id: 'bill', name: 'Bill', description: 'Invoicing' },
-  { id: 'blank', name: 'Blank', description: 'Forms' },
-  { id: 'book', name: 'Book', description: 'Scheduling' },
-  { id: 'bench', name: 'Bench', description: 'Analytics' },
-  { id: 'brief', name: 'Brief', description: 'Documents' },
-  { id: 'bolt', name: 'Bolt', description: 'Automations' },
-  { id: 'bearing', name: 'Bearing', description: 'Goals & OKRs' },
-  { id: 'board', name: 'Board', description: 'Whiteboards' },
-  { id: 'helpdesk', name: 'Helpdesk', description: 'Customer Support' },
-];
-
-function LaunchpadDefaultsCard() {
+export function LaunchpadDefaultsCard() {
   const queryClient = useQueryClient();
+  // Issue #158: every app, from the server catalog (never a hand-kept list).
+  const appRows = useLaunchpadCatalog();
   const { data, isLoading } = useQuery({
     queryKey: ['system-settings', 'launchpad_default_apps'],
     queryFn: async () => {
@@ -1060,7 +1035,7 @@ function LaunchpadDefaultsCard() {
   }, [data]);
 
   const isOverride = draft !== null;
-  const enabledSet = new Set(isOverride ? (draft as string[]) : LAUNCHPAD_APP_CATALOG.map((a) => a.id));
+  const enabledSet = new Set(isOverride ? (draft as string[]) : appRows.map((a) => a.id));
 
   const save = useMutation({
     mutationFn: (apps: string[] | null) =>
@@ -1073,7 +1048,7 @@ function LaunchpadDefaultsCard() {
   const toggleApp = (id: string) => {
     if (!isOverride) {
       // Switching from "all enabled" → explicit list of all minus this one.
-      const allMinus = LAUNCHPAD_APP_CATALOG.map((a) => a.id).filter((x) => x !== id);
+      const allMinus = appRows.map((a) => a.id).filter((x) => x !== id);
       setDraft(allMinus);
       return;
     }
@@ -1122,7 +1097,7 @@ function LaunchpadDefaultsCard() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => setDraft(stored ?? LAUNCHPAD_APP_CATALOG.map((a) => a.id))}
+                  onClick={() => setDraft(stored ?? appRows.map((a) => a.id))}
                   className={`rounded-md px-2 py-1 text-xs ${
                     isOverride
                       ? 'bg-primary-100 text-primary-700 dark:bg-primary-900/40 dark:text-primary-300'
@@ -1134,7 +1109,7 @@ function LaunchpadDefaultsCard() {
               </div>
 
               <div className="mt-4 grid grid-cols-2 sm:grid-cols-3 gap-2">
-                {LAUNCHPAD_APP_CATALOG.map((app) => {
+                {appRows.map((app) => {
                   const checked = enabledSet.has(app.id);
                   return (
                     <label

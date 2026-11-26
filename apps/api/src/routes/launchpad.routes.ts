@@ -113,6 +113,9 @@ export default async function launchpadRoutes(fastify: FastifyInstance) {
       return {
         data: {
           catalog: LAUNCHPAD_APP_IDS,
+          // Issue #158: the Org Launchpad tab renders its rows from this, so every
+          // app appears (it used to hand-code 14 and silently drop the rest on save).
+          catalog_detail: LAUNCHPAD_CATALOG,
           org_override: orgOverride,
           platform_default: platformDefault,
         },

@@ -43,3 +43,29 @@ export const LAUNCHPAD_APP_IDS = [
 ] as const;
 
 export type LaunchpadAppId = (typeof LAUNCHPAD_APP_IDS)[number];
+
+/**
+ * Valid values of the `root_redirect` system setting (issue #158): the marketing
+ * site or any Launchpad app. The api validates against this and resolves each
+ * app id to its LAUNCHPAD_CATALOG path; the SuperUser page renders its options
+ * from it, so the two can no longer disagree.
+ */
+export const ROOT_REDIRECT_VALUES = ['site', ...LAUNCHPAD_APP_IDS] as const;
+
+export type RootRedirectValue = (typeof ROOT_REDIRECT_VALUES)[number];
+
+/**
+ * The Launchpad app a suite URL points into, by its first path segment
+ * (`/board/...` is `board`; `/b3/...` is Bam, reported as `bam`), or null for a
+ * URL outside the suite's apps. Every app is served under `/<id>/` (issue #158).
+ */
+export function launchpadAppFromUrl(rawUrl: string): string | null {
+  try {
+    const first = new URL(rawUrl, 'http://localhost').pathname.split('/').filter(Boolean)[0];
+    if (!first) return null;
+    if (first === 'b3') return 'bam';
+    return (LAUNCHPAD_APP_IDS as readonly string[]).includes(first) ? first : null;
+  } catch {
+    return null;
+  }
+}

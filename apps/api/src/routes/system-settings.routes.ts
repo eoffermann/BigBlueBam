@@ -16,7 +16,12 @@ import {
   resolveSmtpFromSettings,
 } from '@bigbluebam/smtp-resolver';
 import { env } from '../env.js';
-import { LAUNCHPAD_APP_IDS, type LaunchpadAppId } from '@bigbluebam/shared';
+import {
+  LAUNCHPAD_APP_IDS,
+  ROOT_REDIRECT_VALUES,
+  type LaunchpadAppId,
+  type RootRedirectValue,
+} from '@bigbluebam/shared';
 import {
   clearPolicyCache,
   generatePasswordFromPolicy,
@@ -81,38 +86,17 @@ export const LAUNCHPAD_CATALOG: readonly LaunchpadAppEntry[] = [
   { id: 'bursar', name: 'Bursar', description: 'Vendor Procurement', icon_name: 'shopping-cart', color: '#0f766e', path: '/bursar/' },
 ];
 
-// Valid values for the root_redirect setting
-const ROOT_REDIRECT_VALUES = [
-  'site',
-  'b3',
-  'banter',
-  'beacon',
-  'brief',
-  'bolt',
-  'bearing',
-  'board',
-  'bond',
-  'bursar',
-  'helpdesk',
-] as const;
+// Valid values for the root_redirect setting: the marketing site or any
+// Launchpad app (issue #158). One shared list (@bigbluebam/shared) that the
+// SuperUser page also renders from; the path for each app comes from its
+// LAUNCHPAD_CATALOG row, so validating and resolving can no longer drift apart
+// (a value that validated but did not resolve used to redirect nowhere).
+export { ROOT_REDIRECT_VALUES };
 
-type RootRedirectValue = (typeof ROOT_REDIRECT_VALUES)[number];
-
-// Map setting value to URL path
-const REDIRECT_MAP: Record<RootRedirectValue, string | null> = {
-  site: null, // null means no redirect — serve marketing site
-  b3: '/b3/',
-  banter: '/banter/',
-  beacon: '/beacon/',
-  brief: '/brief/',
-  bolt: '/bolt/',
-  bearing: '/bearing/',
-  board: '/board/',
-  bond: '/bond/',
-  // Both halves are required. ROOT_REDIRECT_VALUES alone makes the setting VALIDATE and
-  // then fail to resolve, which presents as a redirect that silently does nothing.
-  bursar: '/bursar/',
-  helpdesk: '/helpdesk/',
+// Map setting value to URL path. null means no redirect (serve the marketing site).
+export const REDIRECT_MAP: Record<RootRedirectValue, string | null> = {
+  site: null,
+  ...(Object.fromEntries(LAUNCHPAD_CATALOG.map((a) => [a.id, a.path])) as Record<LaunchpadAppId, string>),
 };
 
 // Per-key value validators
