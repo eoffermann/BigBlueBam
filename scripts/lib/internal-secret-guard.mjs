@@ -11,11 +11,10 @@ const READS = [
   new RegExp(String.raw`\bheaderValue\(\s*\w+\s*,\s*${HEADER}`, 'i'),
 ];
 
-/** The shared guard itself, plus tracked exceptions (each with the issue that removes it). */
+/** The shared guard itself (its framework-free core and the Fastify wrapper). No exceptions. */
 export const ALLOWED = new Map([
+  ['packages/service-health/src/internal-peer.ts', 'the shared guard core'],
   ['packages/service-health/src/internal-secret.ts', 'the shared guard'],
-  // Raw node:http, and the image does not build service-health yet: #277.
-  ['apps/mcp-server/src/routes/tools-call.ts', '#277'],
 ]);
 
 function walk(dir, out) {

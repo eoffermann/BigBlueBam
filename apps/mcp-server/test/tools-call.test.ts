@@ -10,12 +10,14 @@ const TOKEN = 'bbam_svc_test_token';
 
 // Minimal IncomingMessage stand-in: handleToolsCall only reads `.headers` and
 // streams the body via req.on('data'/'end'). Readable.from gives us both.
-function makeReq(body: unknown, headers: Record<string, string>) {
+function makeReq(body: unknown, headers: Record<string, string>, remoteAddress = '172.18.0.6') {
   const json = typeof body === 'string' ? body : JSON.stringify(body);
   const req = Readable.from([Buffer.from(json)]) as unknown as {
     headers: Record<string, string>;
   } & Readable;
   req.headers = headers;
+  // The TCP peer: by default a compose-network caller (the worker's bolt-execute job).
+  Object.defineProperty(req, 'socket', { value: { remoteAddress } });
   return req;
 }
 
@@ -108,6 +110,39 @@ describe('handleToolsCall (internal /tools/call route)', () => {
       deps,
     );
     expect(res.statusCode).toBe(401);
+  });
+
+  it('accepts the X-Internal-Service-Secret header name too (the shared guard reads both, #277)', async () => {
+    const { deps } = makeDeps();
+    const res = makeRes();
+    await handleToolsCall(
+      makeReq({ name: 'get_server_info', arguments: {} }, { 'x-internal-service-secret': SECRET }),
+      res as unknown as ServerResponse,
+      deps,
+    );
+    expect(res.statusCode).toBe(200);
+  });
+
+  it('returns 403 for the right secret relayed by the edge nginx (X-Forwarded-For) (#277)', async () => {
+    const { deps } = makeDeps();
+    const res = makeRes();
+    await handleToolsCall(
+      makeReq({ name: 'x' }, { 'x-internal-secret': SECRET, 'x-forwarded-for': '203.0.113.9' }),
+      res as unknown as ServerResponse,
+      deps,
+    );
+    expect(res.statusCode).toBe(403);
+  });
+
+  it('returns 403 for the right secret from a public socket peer, e.g. a published host port (#277)', async () => {
+    const { deps } = makeDeps();
+    const res = makeRes();
+    await handleToolsCall(
+      makeReq({ name: 'x' }, { 'x-internal-secret': SECRET }, '203.0.113.9'),
+      res as unknown as ServerResponse,
+      deps,
+    );
+    expect(res.statusCode).toBe(403);
   });
 
   it('returns 400 when name is missing', async () => {

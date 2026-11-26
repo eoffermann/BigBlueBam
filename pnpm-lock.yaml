@@ -4675,6 +4675,9 @@ importers:
       '@bigbluebam/permissions':
         specifier: workspace:*
         version: link:../../packages/permissions
+      '@bigbluebam/service-health':
+        specifier: workspace:*
+        version: link:../../packages/service-health
       '@bigbluebam/shared':
         specifier: workspace:*
         version: link:../../packages/shared
