@@ -181,6 +181,8 @@ export interface SetupState {
   company_profile: Record<string, unknown>;
   compliance_project: { id: string; name: string; archived: boolean } | null;
   proposed_checks: AssertionRow[];
+  /** The connected sets a population check may list, by name (issue #195). */
+  connected_populations?: Record<PopulationView['kind'], Array<{ value: string; label: string }>>;
   steps: {
     frameworks: { done: boolean };
     profile: { done: boolean; answered: number; total: number };

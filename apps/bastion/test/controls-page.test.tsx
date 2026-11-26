@@ -4,7 +4,7 @@ import { screen, cleanup, fireEvent } from '@testing-library/react';
 vi.mock('@bigbluebam/ui/impersonation-banner', () => ({ impersonateHeader: () => ({}), getImpersonation: () => null }));
 
 import { ControlsPage } from '@/pages/controls';
-import { jsonResponse, routedFetch, setupState, wrap } from './helpers';
+import { VIEWER_PERMISSIONS, jsonResponse, routedFetch, setupState, wrap } from './helpers';
 
 const CONTROLS = {
   data: [
@@ -64,5 +64,28 @@ describe('ControlsPage', () => {
     expect(await screen.findByText('Adopt a framework in Setup to see your controls.')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Go to Setup' }));
     expect(onNavigate).toHaveBeenCalledWith('/setup');
+  });
+
+  it('tells someone who cannot adopt a framework to ask an admin, with no Setup button (#194)', async () => {
+    fetchMock = routedFetch({
+      'GET /bastion/api/v1/controls': () => jsonResponse(200, { data: [], counts: { total: 0, set_up: 0, not_set_up: 0, not_applicable: 0 }, framework_id: null }),
+      'GET /bastion/api/v1/setup': () => jsonResponse(200, setupState()),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    wrap(<ControlsPage onNavigate={() => {}} />, VIEWER_PERMISSIONS);
+    expect(await screen.findByText('No framework has been adopted yet. Ask an admin to set up Bastion.')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Go to Setup' })).toBeNull();
+  });
+
+  it('a refused load reads as a plain sentence (#194)', async () => {
+    fetchMock = routedFetch({
+      'GET /bastion/api/v1/controls': () =>
+        jsonResponse(403, { error: { code: 'PERMISSION_DENIED', message: 'Permission denied: bastion.control.read' } }),
+      'GET /bastion/api/v1/setup': () => jsonResponse(200, setupState()),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    wrap(<ControlsPage onNavigate={() => {}} />, VIEWER_PERMISSIONS);
+    expect(await screen.findByText('You do not have permission to do this. Ask an admin of your organization.')).toBeInTheDocument();
+    expect(document.body.textContent).not.toContain('bastion.control.read');
   });
 });

@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { Loader2 } from 'lucide-react';
-import { ApiError, type ControlRow } from '@/lib/api';
+import { useCan } from '@bigbluebam/ui/use-can';
+import type { ControlRow } from '@/lib/api';
+import { friendlyError } from '@/lib/errors';
 import { useControls, useSetup } from '@/hooks/use-bastion';
 
 // Controls list stub (spec 6.1 /bastion/controls). M3 shows whether each control is set up; the
@@ -37,6 +39,8 @@ function ControlItem({ c }: { c: ControlRow }) {
 export function ControlsPage({ onNavigate }: { onNavigate: (path: string) => void }) {
   const [frameworkId, setFrameworkId] = useState('');
   const setup = useSetup();
+  // Adopting a framework is a framework.write action; people without it are told who can (#194).
+  const canSetUp = useCan('bastion.framework.write');
   const controls = useControls({ framework_id: frameworkId || undefined });
   const frameworks = setup.data?.data.frameworks ?? [];
 
@@ -50,7 +54,7 @@ export function ControlsPage({ onNavigate }: { onNavigate: (path: string) => voi
   if (controls.error || !controls.data) {
     return (
       <p className="p-8 text-sm text-red-600">
-        {controls.error instanceof ApiError ? controls.error.message : 'Controls could not be loaded.'}
+        {controls.error ? friendlyError(controls.error) : 'Controls could not be loaded.'}
       </p>
     );
   }
@@ -80,14 +84,22 @@ export function ControlsPage({ onNavigate }: { onNavigate: (path: string) => voi
 
       {rows.length === 0 ? (
         <div className="rounded-xl border border-dashed border-zinc-300 dark:border-zinc-700 p-8 text-center space-y-3">
-          <p className="text-sm text-zinc-700 dark:text-zinc-300">Adopt a framework in Setup to see your controls.</p>
-          <button
-            type="button"
-            className="px-3 py-1.5 rounded-lg text-sm font-medium bg-primary-600 text-white hover:bg-primary-700"
-            onClick={() => onNavigate('/setup')}
-          >
-            Go to Setup
-          </button>
+          {canSetUp ? (
+            <>
+              <p className="text-sm text-zinc-700 dark:text-zinc-300">Adopt a framework in Setup to see your controls.</p>
+              <button
+                type="button"
+                className="px-3 py-1.5 rounded-lg text-sm font-medium bg-primary-600 text-white hover:bg-primary-700"
+                onClick={() => onNavigate('/setup')}
+              >
+                Go to Setup
+              </button>
+            </>
+          ) : (
+            <p className="text-sm text-zinc-700 dark:text-zinc-300">
+              No framework has been adopted yet. Ask an admin to set up Bastion.
+            </p>
+          )}
         </div>
       ) : (
         <>

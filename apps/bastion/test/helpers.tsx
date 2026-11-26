@@ -2,10 +2,34 @@ import { render } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
 import { vi } from 'vitest';
+import { PermissionsProvider } from '@bigbluebam/ui/permissions-context';
 
-export function wrap(ui: ReactNode) {
+/** Every Bastion action the M3 pages gate on (an owner's matrix). */
+export const ALL_BASTION_PERMISSIONS: Record<string, boolean> = {
+  'bastion.framework.read': true,
+  'bastion.framework.write': true,
+  'bastion.framework.compile': true,
+  'bastion.control.read': true,
+  'bastion.control.write': true,
+  'bastion.assertion.propose': true,
+  'bastion.assertion.confirm': true,
+};
+
+/** A viewer's matrix (spec 5.5): reads only. */
+export const VIEWER_PERMISSIONS: Record<string, boolean> = {
+  'bastion.framework.read': true,
+  'bastion.control.read': true,
+};
+
+/** Render inside the providers main.tsx mounts, with the given permission matrix. */
+export function wrap(ui: ReactNode, permissions: Record<string, boolean> = ALL_BASTION_PERMISSIONS) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
-  return render(<QueryClientProvider client={qc}>{ui}</QueryClientProvider>);
+  const fetcher = async () => ({ data: { permissions } });
+  return render(
+    <QueryClientProvider client={qc}>
+      <PermissionsProvider fetcher={fetcher}>{ui}</PermissionsProvider>
+    </QueryClientProvider>,
+  );
 }
 
 export function jsonResponse(status: number, body: unknown) {

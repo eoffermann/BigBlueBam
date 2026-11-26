@@ -8,7 +8,7 @@ vi.mock('@bigbluebam/ui/impersonation-banner', () => ({
 }));
 
 import { SetupPage } from '@/pages/setup';
-import { EMPTY_STEPS, jsonResponse, routedFetch, setupState, wrap } from './helpers';
+import { EMPTY_STEPS, VIEWER_PERMISSIONS, jsonResponse, routedFetch, setupState, wrap } from './helpers';
 
 const POP_CHECK = {
   id: 'a-pop',
@@ -52,7 +52,12 @@ const REQS = {
 
 let posts: Array<{ path: string; body: unknown; headers: Record<string, string> }>;
 
-function mount(state = setupState({ proposed_checks: [POP_CHECK], frameworks: [ISO], steps: { ...EMPTY_STEPS, applicability: { done: false, frameworks: [] } } })) {
+type Routes = Parameters<typeof routedFetch>[0];
+
+function mount(
+  state = setupState({ proposed_checks: [POP_CHECK], frameworks: [ISO], steps: { ...EMPTY_STEPS, applicability: { done: false, frameworks: [] } } }),
+  opts: { permissions?: Record<string, boolean>; routes?: Routes; templates?: unknown[] } = {},
+) {
   posts = [];
   const record = (init: RequestInit, url: URL) => {
     posts.push({ path: url.pathname, body: init.body ? JSON.parse(String(init.body)) : undefined, headers: (init.headers ?? {}) as Record<string, string> });
@@ -61,7 +66,7 @@ function mount(state = setupState({ proposed_checks: [POP_CHECK], frameworks: [I
     'fetch',
     routedFetch({
       'GET /bastion/api/v1/setup': () => jsonResponse(200, state),
-      'GET /bastion/api/v1/library/templates': () => jsonResponse(200, { data: [] }),
+      'GET /bastion/api/v1/library/templates': () => jsonResponse(200, { data: opts.templates ?? [] }),
       'GET /bastion/api/v1/frameworks/f-iso/requirements': () => jsonResponse(200, REQS),
       'POST /bastion/api/v1/assertions/a-pop/confirm': (init, url) => {
         record(init, url);
@@ -79,9 +84,18 @@ function mount(state = setupState({ proposed_checks: [POP_CHECK], frameworks: [I
         record(init, url);
         return jsonResponse(200, { data: { links_updated: 2 } });
       },
+      ...(opts.routes ?? {}),
     }),
   );
-  wrap(<SetupPage />);
+  wrap(<SetupPage />, opts.permissions);
+}
+
+/** Record a request the way the built-in routes do (for routes a test adds). */
+function recorded(respond: () => Response) {
+  return (init: RequestInit, url: URL) => {
+    posts.push({ path: url.pathname, body: init.body ? JSON.parse(String(init.body)) : undefined, headers: (init.headers ?? {}) as Record<string, string> });
+    return respond();
+  };
 }
 
 beforeEach(() => {
@@ -98,7 +112,7 @@ describe('Setup wizard', () => {
   it('keeps Confirm off on a population check until "This is the complete list" is ticked', async () => {
     mount();
     const card = await screen.findByTestId('check-a-pop');
-    const confirm = within(card).getByRole('button', { name: 'Confirm' });
+    const confirm = await within(card).findByRole('button', { name: 'Confirm' });
     expect(within(card).getByText('castaways/rescue-radio-firmware')).toBeInTheDocument();
     expect(confirm).toBeDisabled();
     fireEvent.click(within(card).getByLabelText('This is the complete list'));
@@ -113,7 +127,7 @@ describe('Setup wizard', () => {
     mount();
     const card = await screen.findByTestId('check-a-pop');
     fireEvent.click(within(card).getByLabelText('This is the complete list'));
-    expect(within(card).getByRole('button', { name: 'Confirm' })).toBeDisabled();
+    expect(await within(card).findByRole('button', { name: 'Confirm' })).toBeDisabled();
     expect(within(card).getByRole('button', { name: 'Reject' })).toBeDisabled();
     expect(screen.getByText(/Only that person can confirm or reject checks/)).toBeInTheDocument();
   });
@@ -142,5 +156,125 @@ describe('Setup wizard', () => {
         { ref_code: 'A.5.2', applicability: 'applicable' },
       ],
     });
+  });
+});
+
+const SOC2_TEMPLATE = {
+  template_key: 'soc2',
+  name: 'SOC 2',
+  description: 'Trust services criteria.',
+  is_iso: false,
+  requirement_count: 33,
+  control_count: 46,
+  adopted_framework_id: null,
+};
+
+describe('Setup wizard permissions (#194)', () => {
+  it('an owner sees the write actions', async () => {
+    mount(undefined, { templates: [SOC2_TEMPLATE] });
+    expect(await screen.findByRole('button', { name: 'Adopt SOC 2' })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: 'Save answers' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Use an existing project' })).toBeInTheDocument();
+  });
+
+  it('a viewer without bastion.framework.write sees no write action and is told who can finish setup', async () => {
+    mount(undefined, { templates: [SOC2_TEMPLATE], permissions: VIEWER_PERMISSIONS });
+    expect(await screen.findByText('SOC 2')).toBeInTheDocument();
+    await screen.findByText('Ask an admin to finish setting up Bastion. You can see where setup stands below.');
+    for (const name of [
+      'Adopt SOC 2',
+      'Save answers',
+      'Create a "Compliance" project for me',
+      'Use an existing project',
+      'Confirm',
+      'Reject',
+      'Add repository',
+      'Everything else applies',
+      'Does not apply',
+    ]) {
+      expect(screen.queryByRole('button', { name })).toBeNull();
+    }
+    expect(screen.queryByRole('button', { name: /^Remove / })).toBeNull();
+    expect(screen.getByText('An admin of your organization confirms or rejects these checks.')).toBeInTheDocument();
+  });
+
+  it('a permission refusal reads as a plain sentence, never a permission id', async () => {
+    mount(undefined, {
+      routes: {
+        'PATCH /bastion/api/v1/setup/profile': () =>
+          jsonResponse(403, {
+            error: { code: 'PERMISSION_DENIED', message: 'Permission denied: bastion.framework.write', request_id: 'req_1' },
+          }),
+      },
+    });
+    fireEvent.click(await screen.findByRole('button', { name: 'Save answers' }));
+    expect(await screen.findByText('You do not have permission to do this. Ask an admin of your organization.')).toBeInTheDocument();
+    expect(document.body.textContent).not.toContain('bastion.framework.write');
+    expect(document.body.textContent).not.toContain('Permission denied');
+  });
+});
+
+const APP_ID = '7a1b2c3d-0000-4000-8000-00000000a001';
+const APP_CHECK = {
+  ...POP_CHECK,
+  id: 'a-apps',
+  control_title: 'Logs are kept long enough',
+  probe_key: 'logging.retention_floor',
+  plain_statement: 'Every listed app keeps its logs for at least 90 days.',
+  population: { kind: 'blip_apps', members: [], confirmed_at: null, confirmed_by: null },
+};
+const CONNECTED = {
+  github_repos: [{ value: 'castaways/rescue-radio-firmware', label: 'castaways/rescue-radio-firmware' }],
+  blip_apps: [{ value: APP_ID, label: 'Lagoon Booking Site' }],
+};
+
+describe('Population lists (#195)', () => {
+  it('an empty app list explains the next step, offers the org\'s apps by name, and keeps Confirm off', async () => {
+    mount(setupState({ proposed_checks: [APP_CHECK], connected_populations: CONNECTED }), {
+      routes: {
+        'POST /bastion/api/v1/assertions/a-apps/revise': recorded(() => jsonResponse(200, { data: APP_CHECK })),
+      },
+    });
+    const card = await screen.findByTestId('check-a-apps');
+    expect(within(card).getByTestId('population-empty')).toHaveTextContent(
+      'No apps are listed yet. Add the apps Bastion should watch, or reject this check.',
+    );
+    expect(await within(card).findByRole('button', { name: 'Confirm' })).toBeDisabled();
+    expect(within(card).queryByLabelText('This is the complete list')).toBeNull();
+    const picker = await within(card).findByLabelText('Add an app');
+    expect(within(picker).getByRole('option', { name: 'Lagoon Booking Site' })).toBeInTheDocument();
+    fireEvent.change(picker, { target: { value: APP_ID } });
+    fireEvent.click(within(card).getByRole('button', { name: 'Add app' }));
+    await waitFor(() => expect(posts.some((p) => p.path.endsWith('/a-apps/revise'))).toBe(true));
+    expect(posts.find((p) => p.path.endsWith('/a-apps/revise'))?.body).toEqual({ expected_population: [APP_ID] });
+  });
+
+  it('with no tracked apps at all, says to add apps in Blip first', async () => {
+    mount(setupState({ proposed_checks: [APP_CHECK], connected_populations: { ...CONNECTED, blip_apps: [] } }));
+    const card = await screen.findByTestId('check-a-apps');
+    expect(within(card).getByTestId('population-empty')).toHaveTextContent('No apps are tracked in Blip yet.');
+    expect(within(card).queryByLabelText('Add an app')).toBeNull();
+  });
+
+  it('every member can be removed (a revision), and an app is shown by name even if stored with its id', async () => {
+    const listed = {
+      ...APP_CHECK,
+      population: { ...APP_CHECK.population, members: [{ value: APP_ID, label: APP_ID }] },
+    };
+    mount(setupState({ proposed_checks: [listed, POP_CHECK], connected_populations: CONNECTED }), {
+      routes: {
+        'POST /bastion/api/v1/assertions/a-apps/revise': recorded(() => jsonResponse(200, { data: APP_CHECK })),
+        'POST /bastion/api/v1/assertions/a-pop/revise': recorded(() => jsonResponse(200, { data: POP_CHECK })),
+      },
+    });
+    const apps = await screen.findByTestId('check-a-apps');
+    expect(within(apps).getByText('Lagoon Booking Site')).toBeInTheDocument();
+    expect(apps.textContent).not.toContain(APP_ID);
+    fireEvent.click(await within(apps).findByRole('button', { name: 'Remove Lagoon Booking Site' }));
+    const repos = screen.getByTestId('check-a-pop');
+    fireEvent.click(within(repos).getByRole('button', { name: 'Remove castaways/rescue-radio-firmware' }));
+    await waitFor(() => expect(posts.filter((p) => p.path.endsWith('/revise'))).toHaveLength(2));
+    expect(posts.find((p) => p.path.endsWith('/a-apps/revise'))?.body).toEqual({ expected_population: [] });
+    expect(posts.find((p) => p.path.endsWith('/a-pop/revise'))?.body).toEqual({ expected_population: [] });
   });
 });
