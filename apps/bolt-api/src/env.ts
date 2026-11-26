@@ -29,6 +29,8 @@ const envSchema = z.object({
   // Bursar ingest target (spec 16.2). bolt-api forwards the 3 subscribed bill/braid events here so
   // Bursar's durable inbox (/v1/internal/events) ingests spend and re-points braid_profile_id.
   BURSAR_API_INTERNAL_URL: z.string().default('http://bursar-api:4023'),
+  // Bastion dispatch target (Bastion spec 8, consumed from M4). Bare origin, no /v1 suffix.
+  BASTION_API_INTERNAL_URL: z.string().default('http://bastion-api:4024'),
 
   COOKIE_DOMAIN: z.string().optional(),
   COOKIE_SECURE: z.coerce.boolean().default(false),

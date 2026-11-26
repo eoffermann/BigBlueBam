@@ -198,6 +198,7 @@ services:
       BULWARK_API_URL: http://bulwark-api:4021/v1
       BURN_API_URL: http://burn-api:4022/v1
       BURSAR_API_URL: http://bursar-api:4023/v1
+      BASTION_API_URL: http://bastion-api:4024/v1
       BILL_API_URL: http://bill-api:4014/v1
       BLANK_API_URL: http://blank-api:4013/v1
       BIN_API_URL: http://bin-api:4016/v1
@@ -280,6 +281,12 @@ services:
       # callers into burn-api's /v1/internal/engines routes, and the bill-recurring-generate
       # gate calls burn-api's precheck (Burn spec §8.1 / §9.3).
       BURN_API_INTERNAL_URL: http://burn-api:4022
+      # Bastion jobs are thin HTTP callers into bastion-api's internal engines, and the
+      # audit-packet job reads Bastion's own bucket with the shared S3_* credentials (spec
+      # 9.1). The worker deliberately gets neither BASTION_PD_HMAC_KEY nor the off-site
+      # BASTION_BACKUP_S3_* credentials: each secret lives in exactly one service.
+      BASTION_API_INTERNAL_URL: http://bastion-api:4024
+      BASTION_S3_BUCKET: ${BASTION_S3_BUCKET:-bigbluebam-bastion}
     volumes:
       # Read-only view of what livekit-config rendered/advertised, for
       # the hourly livekit-ip-drift job: it re-detects the public IP via
@@ -314,6 +321,12 @@ services:
         # Promoted to service_healthy at M9. Note this does NOT protect against the config
         # -load NXDOMAIN failure mode -- nginx resolves literal upstream hostnames when it
         # parses the config, which is a config problem, not a dependency-ordering one.
+        condition: service_started
+      bastion-api:
+        # service_started, NOT service_healthy (spec 9.1): an unhealthy bastion-api (for
+        # example one refusing to start over a missing stable secret) must never hold the
+        # whole suite's nginx down. nginx resolves bastion-api at request time (see the
+        # runtime resolver in nginx-with-site.conf), so its absence only 502s /bastion/api/.
         condition: service_started
       helpdesk-api:
         condition: service_healthy
@@ -612,6 +625,9 @@ services:
       # Burn live-ingest transport (Burn spec §8.3): bolt-api forwards the 16 subscribed
       # events to burn-api's durable inbox at /v1/internal/events.
       - BURN_API_INTERNAL_URL=http://burn-api:4022
+      # Bastion dispatch hook (spec 8, M4): bolt-api hands Bastion's outbox events back to
+      # bastion-api's internal routes. Configured at M1 so the value exists everywhere first.
+      - BASTION_API_INTERNAL_URL=http://bastion-api:4024
       # Wave D Phase 3: per-action permission enforcement at this satellite.
       # Calls the resolver via HTTP at $BBB_API_INTERNAL_URL.
       - BBB_PERMISSIONS_ENFORCE=${BBB_PERMISSIONS_ENFORCE:-warn}
@@ -1083,6 +1099,81 @@ services:
       # configured against one never reports healthy and blocks every service_healthy
       # dependent.
       test: ["CMD", "curl", "-sf", "http://localhost:4023/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    restart: unless-stopped
+    networks:
+      - backend
+      - frontend
+
+  bastion-api:
+    <<: *common
+    build:
+      context: .
+      dockerfile: apps/bastion-api/Dockerfile
+      target: production
+    environment:
+      - DATABASE_URL=postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-bigbluebam}
+      - DATABASE_READ_URL=${DATABASE_READ_URL:-}
+      - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379
+      - SESSION_SECRET=${SESSION_SECRET}
+      # api (permission resolver, system-error recorder) and bolt-api (events) are
+      # request-time dependencies only, deliberately NOT in depends_on.
+      - BBB_API_INTERNAL_URL=http://api:4000
+      - BOLT_API_INTERNAL_URL=http://bolt-api:4006
+      - NODE_ENV=production
+      - PORT=4024
+      - HOST=0.0.0.0
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+      - CORS_ORIGIN=${CORS_ORIGIN:-http://localhost}
+      - RATE_LIMIT_MAX=100
+      - RATE_LIMIT_WINDOW_MS=60000
+      - INTERNAL_SERVICE_SECRET=${INTERNAL_SERVICE_SECRET:-}
+      # NOTE: BBB_PERMISSIONS_ENFORCE is deliberately NOT set. Bastion's per-action enforcement
+      # is a hardcoded, fail-closed boot invariant, never an env-driven setting.
+      # Proxies whose X-Forwarded-For entries are trusted (spec 5.2): 1 for this stack's nginx.
+      # Installs behind Cloudflare or Caddy in front of nginx set 2.
+      - BASTION_TRUST_PROXY_HOPS=${BASTION_TRUST_PROXY_HOPS:-1}
+      # Bastion's OWN bucket (spec 3.3 / 9.1), never the shared uploads bucket. Storage is
+      # optional for bastion-api: with empty credentials it starts and reports that evidence
+      # storage is not set up. `:-`, not `:?`, so a missing MinIO credential never aborts
+      # `docker compose up` for the whole suite.
+      - S3_ENDPOINT=http://minio:9000
+      - S3_ACCESS_KEY=${MINIO_ROOT_USER:-}
+      - S3_SECRET_KEY=${MINIO_ROOT_PASSWORD:-}
+      - S3_REGION=${S3_REGION:-us-east-1}
+      - BASTION_S3_BUCKET=${BASTION_S3_BUCKET:-bigbluebam-bastion}
+      # Off-site evidence backup (spec 9.7, M9); unset disables the mirror.
+      - BASTION_BACKUP_S3_ENDPOINT=${BASTION_BACKUP_S3_ENDPOINT:-}
+      - BASTION_BACKUP_S3_BUCKET=${BASTION_BACKUP_S3_BUCKET:-}
+      - BASTION_BACKUP_S3_ACCESS_KEY=${BASTION_BACKUP_S3_ACCESS_KEY:-}
+      - BASTION_BACKUP_S3_SECRET_KEY=${BASTION_BACKUP_S3_SECRET_KEY:-}
+      # Stable secrets (spec 9.4). `:-`, NEVER `:?`: a `:?` would abort `docker compose up`
+      # for all 30 services. bastion-api alone refuses to start with a plain message naming
+      # the missing .env line. Generated once by ./scripts/deploy.sh; never change them.
+      - BASTION_SEAL_SIGNING_KEY=${BASTION_SEAL_SIGNING_KEY:-}
+      - BASTION_PD_HMAC_KEY=${BASTION_PD_HMAC_KEY:-}
+      - BASTION_ROOM_IP_SALT=${BASTION_ROOM_IP_SALT:-}
+      - BASTION_FEED_KEY_PEPPER=${BASTION_FEED_KEY_PEPPER:-}
+      - BASTION_LLM_TIMEOUT_MS=${BASTION_LLM_TIMEOUT_MS:-60000}
+      - BASTION_ENGINE_TIMEOUT_MS=${BASTION_ENGINE_TIMEOUT_MS:-30000}
+      - BASTION_PROBE_TIMEOUT_MS=${BASTION_PROBE_TIMEOUT_MS:-8000}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_started
+    # SIGTERM drain long enough to finish an in-flight LLM call (spec 7.3).
+    stop_grace_period: 75s
+    healthcheck:
+      # /health, NOT /readyz (there is no /readyz anywhere in this platform).
+      test: ["CMD", "curl", "-sf", "http://localhost:4024/health"]
       interval: 10s
       timeout: 5s
       retries: 3

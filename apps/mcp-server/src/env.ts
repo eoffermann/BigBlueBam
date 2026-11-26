@@ -28,6 +28,8 @@ const envSchema = z.object({
   BULWARK_API_URL: z.string().url().default('http://bulwark-api:4021/v1'),
   BURN_API_URL: z.string().url().default('http://burn-api:4022/v1'),
   BURSAR_API_URL: z.string().url().default('http://bursar-api:4023/v1'),
+  // Bastion client base (carries /v1, like every satellite client). Tools land at M11.
+  BASTION_API_URL: z.string().url().default('http://bastion-api:4024/v1'),
   BILL_API_URL: z.string().url().default('http://bill-api:4014/v1'),
   BLANK_API_URL: z.string().url().default('http://blank-api:4013/v1'),
   BLUEPRINT_API_URL: z.string().url().default('http://blueprint-api:4015/v1'),
