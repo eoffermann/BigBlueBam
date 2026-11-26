@@ -18,11 +18,14 @@ import {
   approveQuestionnaire,
   createQuestionnaire,
   exportQuestionnaire,
+  getQuestionnaire,
   listAnswerLibrary,
   listItems,
+  listQuestionnaires,
   reviewItem,
   startAutofill,
   updateAnswerLibrary,
+  updateQuestionnaire,
   type QuestionnaireDeps,
 } from '../../src/services/questionnaires.service.js';
 import { rewordFixDraft } from '../../src/services/fixes.service.js';
@@ -288,6 +291,43 @@ describe.skipIf(!DATABASE_URL)('M8 questionnaires (live database)', () => {
     // A Bin file still being scanned is refused, plainly.
     const pending = qdeps(s.engine, { bin: { ...bin, loadAsset: async () => ({ id: asset, org_id: s.org, scan_status: 'pending', current_version_id: version }) }, bucket });
     await expect(createQuestionnaire(pending, owner, { title: 'x', source: { kind: 'bin_asset', bin_asset_id: asset } })).rejects.toMatchObject({ code: 'FILE_NOT_SCANNED_YET' });
+  });
+
+  it('keeps the source grid out of column_map; list never carries it, get carries only the preview (#265, #273)', async () => {
+    const s = await setUp('grid');
+    const owner = viewer(s.org, s.owner);
+    const d = qdeps(s.engine);
+    const q = (await createQuestionnaire(d, owner, { title: 'Grid storage', source: { kind: 'pasted', text: PASTED, format: 'tsv' } })).data as unknown as {
+      id: string;
+      sheet_preview: Array<{ rows: string[][] }>;
+    };
+    const [row] = await sql`SELECT column_map, source_grid, source_preview, source_truncated FROM bastion_questionnaires WHERE id = ${q.id}`;
+    expect(Object.keys(row!.column_map as object).sort()).toEqual(['guessed', 'sheets']);
+    expect((row!.source_grid as { sheets: unknown[] }).sheets).toHaveLength(1);
+    expect(row!.source_preview).not.toBeNull();
+    expect(row!.source_truncated).toBe(false);
+    expect(q.sheet_preview[0]!.rows[0]).toEqual(['Question', 'Answer']);
+
+    const listed = (await listQuestionnaires(d, owner, { limit: 50 })).data.find((x) => (x as { id: string }).id === q.id) as Record<string, unknown>;
+    expect(listed.sheet_preview).toBeUndefined();
+    expect(JSON.stringify(listed)).not.toContain('Do you require two-step sign-in');
+    expect(listed.column_map).toEqual({ sheets: expect.any(Array), guessed: true });
+
+    // A row from before 0290 has no stored preview: get computes it once from the grid and keeps it.
+    await sql`UPDATE bastion_questionnaires SET source_preview = NULL WHERE id = ${q.id}`;
+    const again = (await getQuestionnaire(d, owner, q.id)).data as unknown as { sheet_preview: Array<{ rows: string[][] }> };
+    expect(again.sheet_preview[0]!.rows[0]).toEqual(['Question', 'Answer']);
+    expect((await sql`SELECT source_preview IS NOT NULL AS kept FROM bastion_questionnaires WHERE id = ${q.id}`)[0]!.kept).toBe(true);
+
+    // Changing the mapping reads the grid from source_grid and keeps the requester recorded by autofill.
+    await sql`UPDATE bastion_questionnaires SET column_map = column_map || '{"autofill_requested_by":"someone"}'::jsonb WHERE id = ${q.id}`;
+    await updateQuestionnaire(d, owner, q.id, {
+      column_map: { sheets: [{ sheet_name: '', header_row: 0, first_row: 1, question_column: 0, answer_column: 1, yes_no_column: null, section_column: null, answer_kind: 'text' }] },
+    });
+    const [mapped] = await sql`SELECT column_map, row_count FROM bastion_questionnaires WHERE id = ${q.id}`;
+    expect(mapped!.row_count).toBe(5);
+    expect((mapped!.column_map as { autofill_requested_by: string; guessed: boolean }).autofill_requested_by).toBe('someone');
+    expect((mapped!.column_map as { guessed: boolean }).guessed).toBe(false);
   });
 
   it('SIGTERM releases; the reaper releases stale claims and parks after three; the tick finds orphans', async () => {

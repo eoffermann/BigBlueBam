@@ -1635,6 +1635,16 @@ export const BASTION_QUESTIONNAIRE_MAX_PASTED_CHARS = 500_000;
 export const BASTION_QUESTIONNAIRE_MAX_COLUMNS = 40;
 /** Cell text kept per cell (the question column is 4000, the database limit). */
 export const BASTION_QUESTIONNAIRE_MAX_CELL_CHARS = 4000;
+/**
+ * Cells kept across every sheet of one questionnaire, empty cells before a filled one included
+ * (#265, #273). A file holding more is refused, not stored.
+ */
+export const BASTION_QUESTIONNAIRE_MAX_CELLS = 200_000;
+/**
+ * Characters kept across every cell of one questionnaire, a repeated (shared) cell counted every
+ * time it appears (#265, #273). This, not the file size, bounds what is read and stored.
+ */
+export const BASTION_QUESTIONNAIRE_MAX_TOTAL_CHARS = 4_000_000;
 
 /** Plain words for the three confidence bands (spec 6.1). */
 export const BASTION_CONFIDENCE_WORDS: Record<BastionConfidenceBand, string> = {

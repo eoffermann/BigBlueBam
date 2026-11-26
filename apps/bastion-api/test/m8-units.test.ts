@@ -78,6 +78,28 @@ describe('questionnaire parsing and mapping', () => {
     }
   });
 
+  it('refuses a shared-string fan-out and a cell flood before storing anything (#265, #273)', () => {
+    // 1,050 rows x 40 cells x 100 characters = 4.2 million characters, over Bastion's 4 million.
+    // (The shared-string form of the same attack, a few KB zipped, is in the structured-data
+    // reader's own tests; this checks Bastion hands the reader its budget.)
+    const wide = encodeXlsx([{ name: 'A', rows: Array.from({ length: 1050 }, (_, r) => Array.from({ length: 40 }, (_, c) => `${r}:${c} `.padEnd(100, 'x'))) }]);
+    const amplified = wide;
+    const codeOf = (fn: () => unknown) => {
+      try {
+        fn();
+        return null;
+      } catch (e) {
+        return (e as ValidationFailure).code;
+      }
+    };
+    expect(codeOf(() => parseQuestionnaireBytes(amplified, 1000))).toBe('QUESTIONNAIRE_TOO_LARGE');
+    // The same budget holds for CSV and pasted rows (4.2 MB of text, under the 5 MB file cap).
+    const line = `${Array.from({ length: 40 }, () => 'y'.repeat(99)).join(',')}\n`;
+    expect(codeOf(() => parseQuestionnaireBytes(enc(line.repeat(1050)), 1000))).toBe('QUESTIONNAIRE_TOO_LARGE');
+    // Long cells are fine while the total stays inside the budget (20 rows x 30 cells x 3,999 characters).
+    expect(codeOf(() => parsePastedQuestionnaire(`${'x'.repeat(3999)}\t`.repeat(30).concat('\n').repeat(20), 'tsv', 1000))).toBe(null);
+  });
+
   it('writes answers back into the layout, adding Answer and Yes/No columns, and neutralizes formulas', () => {
     const parsed = parsePastedQuestionnaire('Question\n=HYPERLINK("http://evil")\nDo you encrypt laptops?\n', 'tsv', 1000);
     const map = guessColumnMap(parsed);

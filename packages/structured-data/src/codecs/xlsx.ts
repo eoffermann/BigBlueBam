@@ -558,7 +558,11 @@ function readSheet(xml: string, shared: string[], limits: Required<XlsxReadLimit
  * parts (`MALFORMED`).
  */
 export function decodeXlsx(bytes: Uint8Array, limitsIn: XlsxReadLimits = {}): XlsxReadResult {
-  const limits: Required<XlsxReadLimits> = { ...DEFAULTS, ...limitsIn };
+  // An undefined field keeps its default (a spread would let `undefined` switch a limit off).
+  const limits: Required<XlsxReadLimits> = { ...DEFAULTS };
+  for (const [k, v] of Object.entries(limitsIn) as Array<[keyof XlsxReadLimits, number | undefined]>) {
+    if (typeof v === 'number' && Number.isFinite(v)) limits[k] = v;
+  }
   if (!looksLikeXlsx(bytes)) throw new XlsxError('NOT_XLSX', 'This file is not an Excel workbook (.xlsx).');
 
   // Pass 1: list entries (declared sizes) without inflating anything.

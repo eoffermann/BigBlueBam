@@ -212,6 +212,10 @@ describe('xlsx reader: decoded output is budgeted (#265, #273)', () => {
     expect(decodeXlsx(wb, { maxCells: 100 }).sheets[0]?.rows[0]).toHaveLength(100);
   });
 
+  it('an undefined limit keeps its default instead of switching the limit off', () => {
+    expect(codeOf(() => decodeXlsx(amplified(10_000, 40), { maxRows: 20_000, maxTotalChars: undefined, maxCells: undefined }))).toBe('TOO_LARGE');
+  });
+
   it('cuts a cell at maxCellChars and says so', () => {
     const { sheets, truncated } = decodeXlsx(amplified(1, 2), { maxCellChars: 100 });
     expect(truncated).toBe(true);
