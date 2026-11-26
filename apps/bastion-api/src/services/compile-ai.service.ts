@@ -49,10 +49,28 @@ export const COMPILE_SLICE_LOCK_MS = 240_000;
 /** Default cap when the org has no settings row (bastion_org_settings default). */
 export const DEFAULT_MAX_LLM_CALLS_PER_COMPILE = 400;
 
-/** Prevents two slices of one run at once, across bastion-api replicas (Redis) and in-process. */
+/**
+ * A fast cross-replica pre-check against starting two slices of one run (Redis in production).
+ * It is NOT the correctness fence (#242): that is the run row's slice_token in Postgres, which
+ * every slice write is conditioned on. `acquire` answers the holder's token, or null when another
+ * slice holds it; it THROWS when the backend is unreachable, and the caller then relies on the
+ * Postgres fence alone (never "treat as acquired" with nothing behind it). `release` deletes the
+ * lock only while it still carries `token` (compare-and-delete), so a slice that outlived its TTL
+ * can never delete the next slice's lock.
+ */
 export interface SliceLock {
-  acquire(runId: string, ttlMs: number): Promise<boolean>;
-  release(runId: string): Promise<void>;
+  acquire(key: string, ttlMs: number): Promise<string | null>;
+  release(key: string, token: string): Promise<void>;
+}
+
+/** Take the pre-check lock: a token, null when held elsewhere, or 'unavailable' (Postgres fences alone). */
+export async function takeSliceLock(lock: SliceLock, key: string, ttlMs: number, log: { warn(o: object, m?: string): void }): Promise<string | null | 'unavailable'> {
+  try {
+    return await lock.acquire(key, ttlMs);
+  } catch (err) {
+    log.warn({ key, err: (err as Error).message }, 'bastion: slice lock unavailable; the run row slice_token alone fences this slice');
+    return 'unavailable';
+  }
 }
 
 export interface CompileAiDeps {
@@ -169,6 +187,7 @@ interface RunRow {
   resume_count: number;
   started_by: string | null;
   drop_reasons: unknown;
+  slice_token: string | null;
 }
 
 const active = new Map<string, Promise<void>>();
@@ -222,33 +241,59 @@ export async function compileSlice(d: CompileAiDeps, body: { organization_id: st
   if (['succeeded', 'failed', 'partial'].includes(run.status)) return sliceView(run, false);
   if (active.has(runId)) return sliceView(run, true);
 
+  // The Redis pre-check first (#242): held elsewhere means a slice is running on another replica.
+  // Unreachable is NOT "acquired with nothing behind it": the slice_token claim below fences alone.
+  const lockToken = await takeSliceLock(d.sliceLock, runId, COMPILE_SLICE_LOCK_MS, d.engine.log);
+  if (lockToken === null) return sliceView(run, true);
+  const releaseLock = async () => {
+    if (lockToken !== 'unavailable') await d.sliceLock.release(runId, lockToken).catch(() => undefined);
+  };
+
   const now = d.engine.now();
   const takeoverBefore = new Date(now.getTime() - d.engine.leaseMs);
-  const claimed = await orgTx(d.engine.sql, orgId, (tx) => tx`
-    UPDATE bastion_compile_runs
-       SET status = 'running', claimed_by = ${claimant}, heartbeat_at = ${now}, started_at = coalesce(started_at, ${now})
-     WHERE organization_id = ${orgId} AND id = ${runId} AND status IN ('queued', 'running')
-       AND claimed_by IS DISTINCT FROM 'bastion-api:inline'
-       AND (claimed_by IS NULL OR claimed_by = ${claimant} OR heartbeat_at IS NULL OR heartbeat_at < ${takeoverBefore})
-    RETURNING *`);
+  // The Postgres fence (#242): a fresh slice_token, only when no live slice holds the row. The
+  // worker polls every replica with the SAME claimant, so `claimed_by = claimant` alone let two
+  // replicas run two slices of one run; the token makes the second claim miss.
+  let claimed: readonly Record<string, unknown>[];
+  try {
+    claimed = await orgTx(d.engine.sql, orgId, (tx) => tx`
+      UPDATE bastion_compile_runs
+         SET status = 'running', claimed_by = ${claimant}, heartbeat_at = ${now}, started_at = coalesce(started_at, ${now}),
+             slice_token = gen_random_uuid()
+       WHERE organization_id = ${orgId} AND id = ${runId} AND status IN ('queued', 'running')
+         AND claimed_by IS DISTINCT FROM 'bastion-api:inline'
+         AND (claimed_by IS NULL OR claimed_by = ${claimant} OR heartbeat_at IS NULL OR heartbeat_at < ${takeoverBefore})
+         AND (slice_token IS NULL OR heartbeat_at IS NULL OR heartbeat_at < ${takeoverBefore})
+      RETURNING *`);
+  } catch (err) {
+    await releaseLock();
+    throw err;
+  }
   if (!claimed[0]) {
+    await releaseLock();
     const cur = await readRun(d, orgId, runId);
     if (!cur) throw new RunNotFoundError();
     if (['succeeded', 'failed', 'partial'].includes(cur.status)) return sliceView(cur, false);
+    // Our own claimant with a live slice on another replica: report it running, do not start one.
+    if (cur.claimed_by === claimant && cur.slice_token) return sliceView(cur, true);
     const stale = !cur.heartbeat_at || now.getTime() - new Date(cur.heartbeat_at).getTime() > STALE_HEARTBEAT_MS;
     throw new RunLeaseHeldError(cur.claimed_by, stale);
   }
   const mine = claimed[0] as unknown as RunRow;
-  if (!(await d.sliceLock.acquire(runId, COMPILE_SLICE_LOCK_MS).catch(() => true))) return sliceView(mine, true);
+  const fence: Fence = { claimant, token: String(mine.slice_token) };
 
-  const slice = runSlice(d, mine, claimant)
+  const slice = runSlice(d, mine, fence)
     .catch((err) => {
       d.engine.log.error({ run_id: runId, err: (err as Error).message }, 'bastion-compile: slice failed');
     })
     .finally(async () => {
       active.delete(runId);
       waitingState.delete(runId);
-      await d.sliceLock.release(runId).catch(() => undefined);
+      // The slice is over: free the row for the next poll (only while it still carries our token).
+      await orgTx(d.engine.sql, orgId, (tx) => tx`
+        UPDATE bastion_compile_runs SET slice_token = NULL
+         WHERE organization_id = ${orgId} AND id = ${runId} AND slice_token = ${fence.token}`).catch(() => undefined);
+      await releaseLock();
     });
   active.set(runId, slice);
   if (!d.background) {
@@ -303,21 +348,28 @@ async function loadPlanContext(tx: Tx, orgId: string, frameworkId: string) {
   };
 }
 
-async function heartbeat(d: CompileAiDeps, run: RunRow, claimant: string): Promise<void> {
+/** One slice's ownership of the run row: the worker's claimant AND this slice's token (#242). */
+interface Fence {
+  claimant: string;
+  token: string;
+}
+
+async function heartbeat(d: CompileAiDeps, run: RunRow, f: Fence): Promise<void> {
   const r = await orgTx(d.engine.sql, run.organization_id, (tx) => tx`
     UPDATE bastion_compile_runs SET heartbeat_at = ${d.engine.now()}
-     WHERE id = ${run.id} AND organization_id = ${run.organization_id} AND claimed_by = ${claimant} AND status = 'running'
+     WHERE id = ${run.id} AND organization_id = ${run.organization_id} AND claimed_by = ${f.claimant} AND slice_token = ${f.token} AND status = 'running'
     RETURNING id`);
   if (!r[0]) throw new ClaimLostError();
 }
 
-async function releaseRun(d: CompileAiDeps, run: RunRow, claimant: string): Promise<void> {
+async function releaseRun(d: CompileAiDeps, run: RunRow, f: Fence): Promise<void> {
   await orgTx(d.engine.sql, run.organization_id, (tx) => tx`
     UPDATE bastion_compile_runs
        SET status = CASE WHEN resume_count + 1 >= ${MAX_RESUMES} THEN 'partial' ELSE 'queued' END,
            error = CASE WHEN resume_count + 1 >= ${MAX_RESUMES} THEN 'Setup stopped several times before it finished. Start it again from Setup.' ELSE error END,
-           claimed_by = NULL, heartbeat_at = NULL, resume_count = resume_count + 1
-     WHERE id = ${run.id} AND organization_id = ${run.organization_id} AND claimed_by = ${claimant} AND status = 'running'`);
+           completed_at = CASE WHEN resume_count + 1 >= ${MAX_RESUMES} THEN ${d.engine.now()}::timestamptz ELSE completed_at END,
+           claimed_by = NULL, heartbeat_at = NULL, slice_token = NULL, resume_count = resume_count + 1
+     WHERE id = ${run.id} AND organization_id = ${run.organization_id} AND claimed_by = ${f.claimant} AND slice_token = ${f.token} AND status = 'running'`);
 }
 
 type AiOutcome =
@@ -329,7 +381,7 @@ type AiOutcome =
 async function askAi(
   d: CompileAiDeps,
   run: RunRow,
-  claimant: string,
+  fence: Fence,
   providerId: string,
   messages: ReturnType<typeof buildTailoringMessages>,
   sliceStart: number,
@@ -351,7 +403,7 @@ async function askAi(
       }
       waitingState.set(run.id, 'ai_slot');
       if (Date.now() - lastBeat >= COMPILE_HEARTBEAT_EVERY_MS) {
-        await heartbeat(d, run, claimant);
+        await heartbeat(d, run, fence);
         lastBeat = Date.now();
       }
       await sleep(COMPILE_PERMIT_RETRY_MS);
@@ -377,15 +429,16 @@ async function askAi(
   }
 }
 
-async function runSlice(d: CompileAiDeps, run: RunRow, claimant: string): Promise<void> {
+async function runSlice(d: CompileAiDeps, run: RunRow, fence: Fence): Promise<void> {
   const sliceStart = Date.now();
   const cutoff = d.sliceCutoffMs ?? LLM_SLICE_START_CUTOFF_MS;
   const orgId = run.organization_id;
   const ctx = await orgTx(d.engine.sql, orgId, (tx) => loadPlanContext(tx, orgId, run.framework_id));
   if (!ctx.framework || ctx.framework.status === 'archived') {
     await orgTx(d.engine.sql, orgId, (tx) => tx`
-      UPDATE bastion_compile_runs SET status = 'failed', error = 'The framework was archived or removed.', completed_at = ${d.engine.now()}, claimed_by = NULL
-       WHERE id = ${run.id} AND claimed_by = ${claimant}`);
+      UPDATE bastion_compile_runs
+         SET status = 'failed', error = 'The framework was archived or removed.', completed_at = ${d.engine.now()}, claimed_by = NULL, slice_token = NULL
+       WHERE id = ${run.id} AND organization_id = ${orgId} AND claimed_by = ${fence.claimant} AND slice_token = ${fence.token}`);
     return;
   }
   const populations = await orgTx(d.engine.sql, orgId, (tx) => connectedPopulationsRaw(tx, orgId));
@@ -399,7 +452,9 @@ async function runSlice(d: CompileAiDeps, run: RunRow, claimant: string): Promis
     `bastion-compile: framework '${name}' slice starting; controls ${progress.done_keys.length}/${total} llm_calls ${calls} (a call takes 10-20 s; a whole compile 1-2 hours)`,
   );
   if (Number(run.controls_total) !== total) {
-    await orgTx(d.engine.sql, orgId, (tx) => tx`UPDATE bastion_compile_runs SET controls_total = ${total} WHERE id = ${run.id} AND claimed_by = ${claimant}`);
+    await orgTx(d.engine.sql, orgId, (tx) => tx`
+      UPDATE bastion_compile_runs SET controls_total = ${total}
+       WHERE id = ${run.id} AND organization_id = ${orgId} AND claimed_by = ${fence.claimant} AND slice_token = ${fence.token}`);
   }
 
   const done = new Set(progress.done_keys);
@@ -407,7 +462,7 @@ async function runSlice(d: CompileAiDeps, run: RunRow, claimant: string): Promis
   for (const c of ctx.controls) {
     if (done.has(c.control_key)) continue;
     if (stopping || d.shuttingDown?.()) {
-      await releaseRun(d, run, claimant);
+      await releaseRun(d, run, fence);
       d.engine.log.info({ run_id: run.id }, 'bastion-compile: shutting down; the run was released and will resume');
       return;
     }
@@ -427,10 +482,10 @@ async function runSlice(d: CompileAiDeps, run: RunRow, claimant: string): Promis
     else if (calls >= ctx.maxCalls) fallbackReason = `the AI call budget for this run (${ctx.maxCalls}) was used up, so the library suggestions were proposed`;
     else {
       const messages = buildTailoringMessages({ control: lib, requirements: c.requirements, profile: ctx.profile, connected: populations });
-      const outcome = await askAi(d, run, claimant, providerId, messages, sliceStart, cutoff);
+      const outcome = await askAi(d, run, fence, providerId, messages, sliceStart, cutoff);
       if (outcome.kind === 'out_of_time') {
         if (stopping || d.shuttingDown?.()) {
-          await releaseRun(d, run, claimant);
+          await releaseRun(d, run, fence);
           return;
         }
         break;
@@ -451,8 +506,18 @@ async function runSlice(d: CompileAiDeps, run: RunRow, claimant: string): Promis
       }
     }
 
-    // One transaction per control: re-read what the control has, plan, insert, record progress.
+    // One transaction per control: lock the run row ON OUR FENCE (#242), re-read the progress it
+    // holds (never this slice's in-memory copy, which another slice may have moved), skip a control
+    // already written, then plan, insert and record progress. A slice that lost its fence stops
+    // here, before writing a single assertion.
     const written = await orgTx(d.engine.sql, orgId, async (tx) => {
+      const locked = (await tx`
+        SELECT drop_reasons FROM bastion_compile_runs
+         WHERE id = ${run.id} AND organization_id = ${orgId} AND claimed_by = ${fence.claimant} AND slice_token = ${fence.token} AND status = 'running'
+         FOR UPDATE`)[0];
+      if (!locked) throw new ClaimLostError();
+      progress = progressOf(locked.drop_reasons, providerId);
+      if (progress.done_keys.includes(c.control_key)) return null;
       const existing = await tx`
         SELECT kind, probe_key, manual_evidence_spec, review_status FROM bastion_assertions
          WHERE organization_id = ${orgId} AND control_id = ${c.id}`;
@@ -488,12 +553,13 @@ async function runSlice(d: CompileAiDeps, run: RunRow, claimant: string): Promis
            SET controls_done = ${progress.done_keys.length}, assertions_proposed = assertions_proposed + ${plan.planned.length},
                assertions_dropped = assertions_dropped + ${plan.dropped.length}, llm_calls_used = ${calls},
                drop_reasons = ${tx.json(progress as never)}, heartbeat_at = ${d.engine.now()}
-         WHERE id = ${run.id} AND organization_id = ${orgId} AND claimed_by = ${claimant} AND status = 'running'
+         WHERE id = ${run.id} AND organization_id = ${orgId} AND claimed_by = ${fence.claimant} AND slice_token = ${fence.token} AND status = 'running'
         RETURNING assertions_proposed, assertions_dropped`;
       if (!upd[0]) throw new ClaimLostError();
       return { planned: plan.planned.length, dropped: plan.dropped.length, proposed_total: Number(upd[0].assertions_proposed), dropped_total: Number(upd[0].assertions_dropped) };
     });
     done.add(c.control_key);
+    if (!written) continue;
     d.engine.log.info(
       { run_id: run.id },
       `bastion-compile: framework '${name}' controls ${done.size}/${total} proposed ${written.proposed_total} dropped ${written.dropped_total} llm_calls ${calls} fallback=${progress.fallback_keys.length > 0} elapsed_ms=${Date.now() - sliceStart}`,
@@ -504,17 +570,17 @@ async function runSlice(d: CompileAiDeps, run: RunRow, claimant: string): Promis
     d.engine.log.info({ run_id: run.id }, `bastion-compile: slice ended at ${done.size}/${total}; the worker starts the next one`);
     return;
   }
-  await finishRun(d, run, claimant, progress, total);
+  await finishRun(d, run, fence, progress, total);
 }
 
-async function finishRun(d: CompileAiDeps, run: RunRow, claimant: string, progress: CompileProgress, total: number): Promise<void> {
+async function finishRun(d: CompileAiDeps, run: RunRow, fence: Fence, progress: CompileProgress, total: number): Promise<void> {
   const orgId = run.organization_id;
   const allFallback = total > 0 && progress.fallback_keys.length === total;
   await orgTx(d.engine.sql, orgId, async (tx) => {
     const r = await tx`
       UPDATE bastion_compile_runs
-         SET status = 'succeeded', used_fallback = ${allFallback}, completed_at = ${d.engine.now()}, heartbeat_at = ${d.engine.now()}
-       WHERE id = ${run.id} AND organization_id = ${orgId} AND claimed_by = ${claimant} AND status = 'running'
+         SET status = 'succeeded', used_fallback = ${allFallback}, completed_at = ${d.engine.now()}, heartbeat_at = ${d.engine.now()}, slice_token = NULL
+       WHERE id = ${run.id} AND organization_id = ${orgId} AND claimed_by = ${fence.claimant} AND slice_token = ${fence.token} AND status = 'running'
       RETURNING assertions_proposed, assertions_dropped, llm_calls_used`;
     const row = r[0];
     if (!row) throw new ClaimLostError();
@@ -560,14 +626,14 @@ export async function orphanedCompileRuns(engine: EngineDeps, olderThan: Date, o
 export async function reapCompileRuns(engine: EngineDeps, cutoff: Date, organizationId?: string) {
   const released = await engine.sql`
     UPDATE bastion_compile_runs
-       SET status = 'queued', claimed_by = NULL, heartbeat_at = NULL, resume_count = resume_count + 1
+       SET status = 'queued', claimed_by = NULL, heartbeat_at = NULL, slice_token = NULL, resume_count = resume_count + 1
      WHERE status = 'running' AND claimed_by IS NOT NULL AND claimed_by <> 'bastion-api:inline'
        AND (heartbeat_at IS NULL OR heartbeat_at < ${cutoff}) AND resume_count < ${MAX_RESUMES}
        ${organizationId ? engine.sql`AND organization_id = ${organizationId}` : engine.sql``}
     RETURNING id`;
   const parked = await engine.sql`
     UPDATE bastion_compile_runs
-       SET status = 'partial', claimed_by = NULL, completed_at = ${engine.now()},
+       SET status = 'partial', claimed_by = NULL, slice_token = NULL, completed_at = ${engine.now()},
            error = 'Setup stopped several times before it finished. Start it again from Setup.'
      WHERE status = 'running' AND claimed_by IS NOT NULL AND claimed_by <> 'bastion-api:inline'
        AND (heartbeat_at IS NULL OR heartbeat_at < ${cutoff}) AND resume_count >= ${MAX_RESUMES}

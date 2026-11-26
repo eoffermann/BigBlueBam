@@ -12,21 +12,12 @@ import { llmChat } from '../lib/llm-client.js';
 import { createLlmPermits } from '../lib/llm-permits.js';
 import { enqueueCompileRun } from '../lib/queue.js';
 import { compileFramework, type CompileLogger } from './compile.service.js';
-import { type CompileAiDeps, createQueuedAiRun, resolveLlmProviderId, type SliceLock } from './compile-ai.service.js';
+import { type CompileAiDeps, createQueuedAiRun, resolveLlmProviderId } from './compile-ai.service.js';
 import { isUniqueViolation } from './shared.js';
 import type { Viewer } from './types.js';
+import { redisSliceLock } from '../lib/slice-lock.js';
 
-export function redisSliceLock(redis: Redis, prefix = 'bastion:compile:slice:'): SliceLock {
-  const key = (runId: string) => `${prefix}${runId}`;
-  return {
-    // Fail open on a Redis error: the in-process map still prevents a second slice here, and the
-    // run claim still fences every write.
-    acquire: async (runId, ttlMs) => (await redis.set(key(runId), String(process.pid), 'PX', ttlMs, 'NX').catch(() => 'OK')) === 'OK',
-    release: async (runId) => {
-      await redis.del(key(runId)).catch(() => undefined);
-    },
-  };
-}
+export { redisSliceLock };
 
 export function compileAiDeps(log: FastifyBaseLogger, redis: Redis): CompileAiDeps {
   return {
