@@ -338,6 +338,8 @@ import {
   BASTION_EVALUATION_MISSED_QUEUE,
   BASTION_WEEKLY_READINESS_QUEUE,
   BASTION_RETENTION_QUEUE,
+  BASTION_EVIDENCE_INGEST_QUEUE,
+  BASTION_EVIDENCE_EXPIRY_QUEUE,
   type BastionEvaluateRunJobData,
   type BastionSweepJobData,
 } from '@bigbluebam/shared';
@@ -2739,6 +2741,10 @@ registerBastionSweep(BASTION_RUN_REAPER_QUEUE, makeBastionEngineJob('run-reaper'
 registerBastionSweep(BASTION_EVALUATION_MISSED_QUEUE, makeBastionEngineJob('evaluation-missed', bastionEngineDeps), { id: 'bastion-evaluation-missed-hourly', pattern: '0 * * * *' });
 registerBastionSweep(BASTION_WEEKLY_READINESS_QUEUE, makeBastionEngineJob('weekly-readiness', bastionEngineDeps), { id: 'bastion-weekly-readiness-monday', pattern: '0 13 * * 1' });
 registerBastionSweep(BASTION_RETENTION_QUEUE, makeBastionEngineJob('retention', bastionEngineDeps), { id: 'bastion-retention-daily', pattern: '20 5 * * *' });
+// M5: pending-scan retries and Bolt-event feeds (event, produced by bastion-api after an upload
+// waiting on its scan, plus this 10-minute sweep); expiring and expired evidence daily.
+registerBastionSweep(BASTION_EVIDENCE_INGEST_QUEUE, makeBastionEngineJob('evidence-ingest', bastionEngineDeps), { id: 'bastion-evidence-ingest-10min', pattern: '*/10 * * * *' });
+registerBastionSweep(BASTION_EVIDENCE_EXPIRY_QUEUE, makeBastionEngineJob('evidence-expiry', bastionEngineDeps), { id: 'bastion-evidence-expiry-daily', pattern: '10 6 * * *' });
 
 // §1 Wave 5 banter subs — pattern-match consumer.
 // Subscribes to the banter:events Redis channel (the same fan-out used by
