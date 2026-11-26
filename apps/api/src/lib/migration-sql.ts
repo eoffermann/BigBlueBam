@@ -10,7 +10,9 @@
 //
 // scripts/lib/sql-top-level.mjs carries the same scanner for the migration
 // linter (rule `no-transaction-control`), which rejects such statements in new
-// migrations. Keep the two in step.
+// migrations. apps/api/test/migration-sql-parity.test.ts runs both copies over
+// every migration plus edge-case fixtures and fails on any difference, so a
+// change here must land in sql-top-level.mjs in the same commit (issue #149).
 
 export interface TopLevelStatement {
   /** Statement text without the trailing semicolon. */

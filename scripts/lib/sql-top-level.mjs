@@ -2,8 +2,10 @@
 //
 // Mirrors splitTopLevelStatements / isTransactionControl in
 // apps/api/src/lib/migration-sql.ts (the migrate runner cannot import from
-// scripts/, and this script cannot import TypeScript). Keep the two in step;
-// scripts/lib/sql-top-level.test.mjs pins the shared behavior.
+// scripts/, and this script cannot import TypeScript). The two must stay
+// identical: apps/api/test/migration-sql-parity.test.ts runs both over every
+// migration plus edge-case fixtures and fails on any difference (issue #149).
+// scripts/lib/sql-top-level.test.mjs covers the linter-only behavior.
 
 /**
  * Split SQL into top-level statements, honoring '...' and "..." quoting,
