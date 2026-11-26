@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+const emptyToUndefined = (v: unknown) => (v === '' ? undefined : v);
+
 const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
   PORT: z.coerce.number().int().positive().default(4014),
@@ -51,10 +53,17 @@ const envSchema = z.object({
   SMTP_USER: z.string().optional(),
   SMTP_PASS: z.string().optional(),
 
-  // MinIO
-  MINIO_ENDPOINT: z.string().default('minio:9000'),
-  MINIO_ACCESS_KEY: z.string().optional(),
-  MINIO_SECRET_KEY: z.string().optional(),
+  // Object storage (issue #145). The suite-wide S3/MinIO settings, read through
+  // @bigbluebam/storage for expense receipts (and directly by the invoice PDF
+  // download). Endpoint and credentials have NO fallback: when they are unset,
+  // receipt upload/download answers 503 STORAGE_NOT_CONFIGURED instead of
+  // guessing at default MinIO credentials.
+  // Compose passes `${MINIO_ROOT_USER:-}`, so an empty string means "unset".
+  S3_ENDPOINT: z.preprocess(emptyToUndefined, z.string().url().optional()),
+  S3_ACCESS_KEY: z.preprocess(emptyToUndefined, z.string().optional()),
+  S3_SECRET_KEY: z.preprocess(emptyToUndefined, z.string().optional()),
+  S3_BUCKET: z.string().min(1).default('bigbluebam-uploads'),
+  S3_REGION: z.string().default('us-east-1'),
 
   // Wave D Phase 3: per-action permission enforcement. Mirrors the api's
   // BBB_PERMISSIONS_ENFORCE. 'warn' calls the resolver and records

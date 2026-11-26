@@ -53,7 +53,7 @@ A tool/command "corresponds" to the endpoint(s) its handler calls. Sections are 
 | Blueprint | 38 | 35 | 3 | 1 |
 | Book | 33 | 25 | 8 | 0 |
 | Blank | 24 | 18 | 6 | 1 |
-| Bill | 53 | 47 | 6 | 0 |
+| Bill | 54 | 47 | 7 | 0 |
 | Bureau | 42 | 37 | 5 | 0 |
 | Bin | 32 | 19 | 13 | 0 |
 | Bay | 20 | 14 | 6 | 0 |
@@ -65,7 +65,7 @@ A tool/command "corresponds" to the endpoint(s) its handler calls. Sections are 
 | Burn | 48 | 19 | 29 | 0 |
 | Bursar | 79 | 22 | 57 | 0 |
 | Cross-app platform | 43 | 32 | 11 | 6 |
-| **Total** | **1262** | **874** | **388** | **17** |
+| **Total** | **1263** | **874** | **389** | **17** |
 
 _Counts are summed from the per-section tables (each row's REST endpoint counted once even when several MCP tools share it). After the `feat/mcp-endpoint-parity` build the "with an MCP tool" total roughly doubled (≈334 → ≈690). Of the ~247 endpoints still tool-less, the large majority are now annotated `— _(skip: …)_` with a reason — auth/OAuth/session, public-inbound (forms/booking/portal/tracking), multipart/binary upload, binary export (PDF/SVG/CSV/.ics), raw credential/API-key admin, SuperUser/permission/account admin (Bam org/admin held to a deliberately conservative scope this pass), Yjs/scene/WebSocket realtime sync, internal/service-to-service routes, and slug/name resolvers done internally — plus the deferred Helpdesk `X-Agent-Key` agent routes. Some endpoints are shared by multiple MCP tools and many are internal / webhook / public-inbound (not user-facing), so treat the totals as close approximations of the surface size, not an exact public-API inventory. The remaining intentional gaps cluster in **Bam org/admin** (SuperUser & permissions admin, integrations, credentials — UI/CLI-only) and a few per-app binary/upload/realtime tails._
 
@@ -1591,7 +1591,8 @@ or `/helpdesk/agents`) segment in-code.
 | `POST /bill/api/v1/expenses/:id/approve` | `bill_approve_expense` | Approve an expense | `apps/bill/src/pages/expense-list.tsx` |
 | `POST /bill/api/v1/expenses/:id/reject` | `bill_reject_expense` | Reject an expense | `apps/bill/src/pages/expense-list.tsx` |
 | `POST /bill/api/v1/expenses/:id/reimburse` | — _(skip: deferred — UI-only terminal state transition, approved→reimbursed)_ | Mark an approved expense reimbursed | `apps/bill/src/pages/expense-list.tsx` |
-| `POST /bill/api/v1/expenses/:id/receipt` | — _(skip: multipart receipt upload)_ | Upload a receipt file | `apps/bill/src/pages/expense-new.tsx` |
+| `POST /bill/api/v1/expenses/:id/receipt` | — _(skip: multipart receipt upload)_ | Upload a receipt file to the configured S3 bucket via `@bigbluebam/storage` (#145); sets `receipt_url` to the download route below; 503 `STORAGE_NOT_CONFIGURED` without S3 settings | — |
+| `GET /bill/api/v1/expenses/:id/receipt` | — _(skip: multipart/binary download)_ | Download the expense's uploaded receipt as an attachment (#145); requires `bill.expense.list`, org-scoped, key pinned to the expense | `apps/bill/src/pages/expense-list.tsx` |
 | `GET /bill/api/v1/invoices` | `bill_list_invoices` | List invoices (filters) | `apps/bill/src/hooks/use-invoices.ts` |
 | `POST /bill/api/v1/invoices` | `bill_create_invoice` | Create a draft invoice | `apps/bill/src/hooks/use-invoices.ts` |
 | `GET /bill/api/v1/invoices/:id` | `bill_get_invoice` | Get invoice detail | `apps/bill/src/pages/invoice-detail.tsx` |

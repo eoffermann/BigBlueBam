@@ -1,52 +1,23 @@
 /**
- * Receipt upload service for bill expenses.
+ * Receipt upload and download for bill expenses.
  *
- * Uploads receipt files to MinIO under bill/receipts/<expense-id>.<ext>
- * and updates the expense row with the receipt URL and metadata.
+ * Issue #145: receipts are stored through @bigbluebam/storage with the
+ * configured S3_* bucket and credentials (lib/receipt-storage.ts) under
+ * bill/receipts/<expense-id>.<ext>, and served only by the authorized
+ * GET /v1/expenses/:id/receipt route. The expense row's receipt_url is that
+ * route's path, never a /files/... URL.
  */
 
-import { Client as MinioClient } from 'minio';
 import { eq, and } from 'drizzle-orm';
+import path from 'node:path';
 import { db } from '../db/index.js';
 import { billExpenses } from '../db/schema/index.js';
-import { env } from '../env.js';
-import path from 'node:path';
-
-// ---------------------------------------------------------------------------
-// MinIO client singleton
-// ---------------------------------------------------------------------------
-
-let _minio: MinioClient | null = null;
-
-function getMinio(): MinioClient {
-  if (!_minio) {
-    const endpoint = env.MINIO_ENDPOINT;
-    const [host, portStr] = endpoint.split(':');
-    _minio = new MinioClient({
-      endPoint: host!,
-      port: portStr ? Number.parseInt(portStr, 10) : 9000,
-      useSSL: false,
-      accessKey: env.MINIO_ACCESS_KEY ?? 'minioadmin',
-      secretKey: env.MINIO_SECRET_KEY ?? 'minioadmin',
-    });
-  }
-  return _minio;
-}
-
-const BUCKET = 'bigbluebam';
-const RECEIPT_PREFIX = 'bill/receipts';
-
-// Allowed receipt file extensions and their MIME types
-const ALLOWED_TYPES: Record<string, string> = {
-  '.jpg': 'image/jpeg',
-  '.jpeg': 'image/jpeg',
-  '.png': 'image/png',
-  '.gif': 'image/gif',
-  '.webp': 'image/webp',
-  '.pdf': 'application/pdf',
-  '.heic': 'image/heic',
-  '.heif': 'image/heif',
-};
+import {
+  RECEIPT_TYPES,
+  getReceiptDriver,
+  receiptDownloadPath,
+  receiptKey,
+} from '../lib/receipt-storage.js';
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
 
@@ -54,20 +25,27 @@ const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
 // Helpers
 // ---------------------------------------------------------------------------
 
-function badRequest(msg: string): Error {
+function billError(statusCode: number, code: string, msg: string): Error {
   const err = new Error(msg) as Error & { statusCode: number; code: string };
-  err.statusCode = 400;
-  err.code = 'BAD_REQUEST';
+  err.statusCode = statusCode;
+  err.code = code;
   err.name = 'BillError';
   return err;
 }
 
-function notFound(msg: string): Error {
-  const err = new Error(msg) as Error & { statusCode: number; code: string };
-  err.statusCode = 404;
-  err.code = 'NOT_FOUND';
-  err.name = 'BillError';
-  return err;
+const badRequest = (msg: string) => billError(400, 'BAD_REQUEST', msg);
+const notFound = (msg: string) => billError(404, 'NOT_FOUND', msg);
+const storageNotConfigured = () =>
+  billError(
+    503,
+    'STORAGE_NOT_CONFIGURED',
+    'Receipt storage is not configured on this server (S3_ENDPOINT, S3_ACCESS_KEY and S3_SECRET_KEY are required)',
+  );
+
+function requireDriver() {
+  const driver = getReceiptDriver();
+  if (!driver) throw storageNotConfigured();
+  return driver;
 }
 
 // ---------------------------------------------------------------------------
@@ -92,28 +70,23 @@ export async function uploadReceipt(
   const [expense] = await db
     .select({ id: billExpenses.id })
     .from(billExpenses)
-    .where(
-      and(
-        eq(billExpenses.id, expenseId),
-        eq(billExpenses.organization_id, orgId),
-      ),
-    )
+    .where(and(eq(billExpenses.id, expenseId), eq(billExpenses.organization_id, orgId)))
     .limit(1);
 
   if (!expense) throw notFound('Expense not found');
 
   // 2. Validate file extension
   const ext = path.extname(file.filename).toLowerCase();
-  if (!ALLOWED_TYPES[ext]) {
-    throw badRequest(
-      `Unsupported file type: ${ext}. Allowed: ${Object.keys(ALLOWED_TYPES).join(', ')}`,
-    );
+  const contentType = RECEIPT_TYPES[ext];
+  if (!contentType) {
+    throw badRequest(`Unsupported file type: ${ext}. Allowed: ${Object.keys(RECEIPT_TYPES).join(', ')}`);
   }
+
+  const driver = requireDriver();
 
   // 3. Read file into buffer (with size limit)
   const chunks: Buffer[] = [];
   let totalSize = 0;
-
   for await (const chunk of file.file) {
     const buf = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk as unknown as Uint8Array);
     totalSize += buf.length;
@@ -122,33 +95,28 @@ export async function uploadReceipt(
     }
     chunks.push(buf);
   }
-
   const buffer = Buffer.concat(chunks);
 
-  // 4. Upload to MinIO
-  const objectName = `${RECEIPT_PREFIX}/${expenseId}${ext}`;
-  const minio = getMinio();
-
-  // Ensure bucket exists
-  const bucketExists = await minio.bucketExists(BUCKET);
-  if (!bucketExists) {
-    await minio.makeBucket(BUCKET);
+  // 4. Store it in the configured bucket. A replacement receipt with a different
+  //    extension would otherwise leave the old object behind; remove it.
+  const key = receiptKey(expenseId, ext);
+  await driver.put(key, buffer, { contentType, size: buffer.length });
+  for (const otherExt of Object.keys(RECEIPT_TYPES)) {
+    if (otherExt === ext) continue;
+    const other = receiptKey(expenseId, otherExt);
+    if (await driver.stat(other).catch(() => null)) {
+      await driver.delete(other).catch(() => undefined);
+    }
   }
 
-  await minio.putObject(BUCKET, objectName, buffer, buffer.length, {
-    'Content-Type': ALLOWED_TYPES[ext]!,
-  });
-
-  // 5. Build the public URL
-  const receiptUrl = `/files/${objectName}`;
-
-  // 6. Update the expense row
+  // 5. Point the expense at the authorized download route
+  const receiptUrl = receiptDownloadPath(expenseId);
   await db
     .update(billExpenses)
     .set({
       receipt_url: receiptUrl,
       receipt_filename: file.filename,
-      receipt_mime_type: ALLOWED_TYPES[ext],
+      receipt_mime_type: contentType,
       receipt_size_bytes: buffer.length,
       receipt_uploaded_at: new Date(),
       updated_at: new Date(),
@@ -158,7 +126,50 @@ export async function uploadReceipt(
   return {
     receipt_url: receiptUrl,
     receipt_filename: file.filename,
-    receipt_mime_type: ALLOWED_TYPES[ext]!,
+    receipt_mime_type: contentType,
     receipt_size_bytes: buffer.length,
   };
+}
+
+// ---------------------------------------------------------------------------
+// Download receipt
+// ---------------------------------------------------------------------------
+
+/**
+ * Open the stored receipt for an expense the caller may see. The expense is
+ * looked up org-scoped (another org's expense is a 404), and the object key is
+ * derived from that row, so only this expense's own receipt can be read.
+ */
+export async function openReceipt(
+  expenseId: string,
+  orgId: string,
+): Promise<{ stream: NodeJS.ReadableStream; contentType: string; size: number; filename: string }> {
+  const [expense] = await db
+    .select({
+      id: billExpenses.id,
+      receipt_filename: billExpenses.receipt_filename,
+      receipt_mime_type: billExpenses.receipt_mime_type,
+      receipt_uploaded_at: billExpenses.receipt_uploaded_at,
+    })
+    .from(billExpenses)
+    .where(and(eq(billExpenses.id, expenseId), eq(billExpenses.organization_id, orgId)))
+    .limit(1);
+
+  if (!expense) throw notFound('Expense not found');
+  if (!expense.receipt_uploaded_at || !expense.receipt_filename) {
+    throw billError(404, 'RECEIPT_NOT_FOUND', 'This expense has no uploaded receipt');
+  }
+
+  const ext = path.extname(expense.receipt_filename).toLowerCase();
+  const contentType = RECEIPT_TYPES[ext];
+  if (!contentType) throw billError(404, 'RECEIPT_NOT_FOUND', 'This expense has no uploaded receipt');
+
+  const driver = requireDriver();
+  let obj: { stream: NodeJS.ReadableStream; size: number };
+  try {
+    obj = await driver.getStream(receiptKey(expense.id, ext));
+  } catch {
+    throw billError(404, 'RECEIPT_NOT_FOUND', 'The receipt file is missing from storage');
+  }
+  return { stream: obj.stream, contentType, size: obj.size, filename: expense.receipt_filename };
 }

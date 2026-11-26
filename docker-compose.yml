@@ -1170,6 +1170,8 @@ services:
       - BURN_PRECHECK_BREAKER_PROBE_MS=${BURN_PRECHECK_BREAKER_PROBE_MS:-30000}
       # Issue #134: GET /invoices/:id/pdf/download streams the PDF the worker stored with
       # these same settings. Optional: without them the route renders the PDF from the DB.
+      # Issue #145: expense receipts are stored and served (GET /expenses/:id/receipt)
+      # with them too; without them receipt upload/download answers 503.
       - S3_ENDPOINT=http://minio:9000
       - S3_ACCESS_KEY=${MINIO_ROOT_USER:-}
       - S3_SECRET_KEY=${MINIO_ROOT_PASSWORD:-}

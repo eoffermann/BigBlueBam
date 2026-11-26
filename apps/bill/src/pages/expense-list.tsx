@@ -1,9 +1,10 @@
 import { useState } from 'react';
-import { Plus } from 'lucide-react';
+import { Paperclip, Plus } from 'lucide-react';
 import { Fragment } from 'react';
 import { useExpenses, useApproveExpense, useRejectExpense, useReimburseExpense } from '@/hooks/use-expenses';
 import { formatDate, formatCents, statusBadgeClass, cn } from '@/lib/utils';
 import { BurnGateNotice } from '@/components/burn-gate-notice';
+import { hasUploadedReceipt, receiptDownloadHref } from '@/lib/expense-receipt';
 
 interface Props {
   onNavigate: (path: string) => void;
@@ -73,7 +74,19 @@ export function ExpenseListPage({ onNavigate }: Props) {
               expenses.map((exp: any) => (
                 <Fragment key={exp.id}>
                 <tr className="border-b border-zinc-100 dark:border-zinc-800 hover:bg-zinc-50 dark:hover:bg-zinc-800/30">
-                  <td className="px-4 py-3 font-medium">{exp.description}</td>
+                  <td className="px-4 py-3 font-medium">
+                    {exp.description}
+                    {hasUploadedReceipt(exp) && (
+                      <a
+                        href={receiptDownloadHref(exp.id)}
+                        className="ml-2 inline-flex items-center gap-1 text-xs font-normal text-green-700 hover:underline dark:text-green-400"
+                        title={exp.receipt_filename ?? 'Receipt'}
+                      >
+                        <Paperclip className="h-3 w-3" />
+                        Receipt
+                      </a>
+                    )}
+                  </td>
                   <td className="px-4 py-3 text-zinc-500">{exp.category || '—'}</td>
                   <td className="px-4 py-3 text-zinc-500">{exp.vendor || '—'}</td>
                   <td className="px-4 py-3 text-zinc-500">{formatDate(exp.expense_date)}</td>

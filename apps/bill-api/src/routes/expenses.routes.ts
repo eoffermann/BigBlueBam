@@ -225,7 +225,34 @@ export default async function expenseRoutes(fastify: FastifyInstance) {
     },
   );
 
-  // POST /expenses/:id/receipt -- Upload receipt file to MinIO
+  // GET /expenses/:id/receipt -- authorized receipt download (issue #145).
+  // Anyone who may list the org's expenses may open their receipts
+  // (bill.expense.list); the expense is looked up org-scoped, so another org's
+  // expense is a 404, and the storage key is derived from that row. Served as an
+  // attachment with nosniff so an uploaded file is never rendered in our origin.
+  fastify.get<{ Params: { id: string } }>(
+    '/expenses/:id/receipt',
+    { preHandler: [requireAuth, fastify.requireCan('bill.expense.list')] },
+    async (request, reply) => {
+      const params = z.object({ id: z.string().uuid() }).safeParse(request.params);
+      if (!params.success) {
+        return reply.status(404).send({
+          error: { code: 'NOT_FOUND', message: 'Expense not found', details: [], request_id: request.id },
+        });
+      }
+      const receipt = await receiptService.openReceipt(params.data.id, request.user!.org_id);
+      const safeName = receipt.filename.replace(/[^A-Za-z0-9._-]/g, '_') || 'receipt';
+      return reply
+        .header('Content-Type', receipt.contentType)
+        .header('Content-Length', receipt.size)
+        .header('Content-Disposition', `attachment; filename="${safeName}"`)
+        .header('Cache-Control', 'private, no-store')
+        .header('X-Content-Type-Options', 'nosniff')
+        .send(receipt.stream);
+    },
+  );
+
+  // POST /expenses/:id/receipt -- Upload a receipt file to object storage
   fastify.post<{ Params: { id: string } }>(
     '/expenses/:id/receipt',
     {

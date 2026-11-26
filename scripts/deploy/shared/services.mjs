@@ -449,6 +449,7 @@ export const APP_SERVICES = [
         'BURN_PRECHECK_BREAKER_THRESHOLD', 'BURN_PRECHECK_BREAKER_PROBE_MS',
         // Invoice PDF download (issue #134) reads the worker-stored PDF with the same
         // S3 settings the worker writes with; without them it renders from the DB.
+        // Expense receipts (issue #145) are stored and served with them too.
         'S3_ENDPOINT', 'S3_ACCESS_KEY', 'S3_SECRET_KEY', 'S3_BUCKET',
       ],
     },

@@ -1,9 +1,9 @@
 {
   "counts": {
-    "total": 1488,
+    "total": 1489,
     "mcp_tools_scanned": 885,
-    "rest_routes_scanned": 887,
-    "read_permissions": 576,
+    "rest_routes_scanned": 888,
+    "read_permissions": 577,
     "destructive_permissions": 144
   },
   "permissions": [
@@ -12601,6 +12601,23 @@
         {
           "source": "rest",
           "ref": "POST /expenses/:id/receipt",
+          "file": "expenses.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "bill.expense_receipt.get",
+      "app": "bill",
+      "resource": "expense_receipt",
+      "verb": "get",
+      "is_destructive": false,
+      "is_read": true,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "GET /expenses/:id/receipt",
           "file": "expenses.routes.ts"
         }
       ]
