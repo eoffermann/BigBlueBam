@@ -1160,6 +1160,10 @@ services:
       - BASTION_LLM_TIMEOUT_MS=${BASTION_LLM_TIMEOUT_MS:-60000}
       - BASTION_ENGINE_TIMEOUT_MS=${BASTION_ENGINE_TIMEOUT_MS:-30000}
       - BASTION_PROBE_TIMEOUT_MS=${BASTION_PROBE_TIMEOUT_MS:-8000}
+      - BASTION_PUT_TIMEOUT_MS=${BASTION_PUT_TIMEOUT_MS:-5000}
+      - BASTION_RUN_LEASE_MS=${BASTION_RUN_LEASE_MS:-300000}
+      # Public keys of replaced seal signing keys, so older seals stay verifiable (spec 3.4).
+      - BASTION_SEAL_RETIRED_PUBLIC_KEYS=${BASTION_SEAL_RETIRED_PUBLIC_KEYS:-}
     depends_on:
       migrate:
         condition: service_completed_successfully

@@ -322,6 +322,14 @@ export const ENV_HINTS = {
   BASTION_LLM_TIMEOUT_MS: { kind: 'literal', value: '60000' },
   BASTION_ENGINE_TIMEOUT_MS: { kind: 'literal', value: '30000' },
   BASTION_PROBE_TIMEOUT_MS: { kind: 'literal', value: '8000' },
+  BASTION_PUT_TIMEOUT_MS: { kind: 'literal', value: '5000' },
+  BASTION_RUN_LEASE_MS: { kind: 'literal', value: '300000' },
+  // Not a secret: public keys only. Empty until the first signing-key change.
+  BASTION_SEAL_RETIRED_PUBLIC_KEYS: {
+    kind: 'literal',
+    value: '',
+    note: 'Comma-separated 64-hex Ed25519 PUBLIC keys of replaced seal signing keys (not secret). When BASTION_SEAL_SIGNING_KEY changes, append the old public key here and never remove one, or seals signed under it stop verifying.',
+  },
   // Railway puts two proxies in front of bastion-api (the edge, then the frontend nginx).
   BASTION_TRUST_PROXY_HOPS: { kind: 'literal', value: '2' },
   BASTION_SEAL_SIGNING_KEY: {
