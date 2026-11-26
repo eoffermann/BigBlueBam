@@ -67,9 +67,9 @@ WORKDIR /app
 RUN addgroup -g 1001 -S bbam \
  && adduser -S bbam -u 1001 -G bbam
 
-COPY --from=build /app/deployed/node_modules ./node_modules
-COPY --from=build /app/apps/api/dist ./dist
-COPY --from=build /app/deployed/package.json ./
+COPY --from=build --chown=bbam:bbam /app/deployed/node_modules ./node_modules
+COPY --from=build --chown=bbam:bbam /app/apps/api/dist ./dist
+COPY --from=build --chown=bbam:bbam /app/deployed/package.json ./
 # Bundle SQL migrations so the `migrate` container (reuses this image) has them
 COPY infra/postgres/migrations ./migrations
 
@@ -78,7 +78,9 @@ ARG BUILD_DATE=unknown
 ENV GIT_COMMIT=$GIT_COMMIT
 ENV BUILD_DATE=$BUILD_DATE
 
-RUN chown -R bbam:bbam /app
+# Ownership is set by COPY --chown above; a recursive chown would copy every
+# node_modules file into a second layer (#198). Only /app itself needs it.
+RUN chown bbam:bbam /app
 
 USER bbam
 

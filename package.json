@@ -35,6 +35,7 @@
     "check:bolt-catalog": "node scripts/check-bolt-catalog.mjs",
     "check:bolt-enum": "node scripts/check-bolt-enum.mjs",
     "check:nginx-spa": "node scripts/check-nginx-spa-lists.mjs",
+    "check:dockerfile-chown": "node scripts/check-dockerfile-chown.mjs",
     "test:scripts": "node --test \"scripts/lib/*.test.mjs\" \"scripts/deploy/shared/*.nodetest.mjs\"",
     "test:deploy": "pnpm --filter @bigbluebam/api exec vitest run --config ../../scripts/deploy/shared/vitest.config.mjs",
     "check:permission-catalog": "node scripts/check-permission-catalog.mjs",

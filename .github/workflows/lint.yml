@@ -73,6 +73,11 @@ jobs:
       - name: Check nginx SPA lists
         run: pnpm check:nginx-spa
 
+      # Issue #198: a recursive chown in an app Dockerfile duplicates node_modules
+      # into a second layer and takes over an hour on slow Docker disks.
+      - name: Check Dockerfiles use COPY --chown
+        run: pnpm check:dockerfile-chown
+
       # Guards scripts/deploy/shared/env-hints.mjs against catalog vars that have
       # no hint. An unhinted OPTIONAL var is silently dropped from the Railway
       # service (the integration is just absent in prod, with no signal); an
