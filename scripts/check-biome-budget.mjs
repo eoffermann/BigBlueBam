@@ -13,9 +13,13 @@
  *                                                 # current counts (refuses to
  *                                                 # raise a count unless --allow-increase)
  *
- * When a package's count drops, the check still passes and prints the exact
- * command to lower the baseline, so the next increase is caught at the new level.
- * A package with no baseline entry fails until it is added with --update.
+ * When a package's count drops, the check FAILS until the baseline is lowered
+ * with --update (issue #150): otherwise a cleanup that is not committed to the
+ * baseline leaves headroom that later PRs can silently refill. The PR that
+ * removes warnings is the one that commits the lower number.
+ * A package with no baseline entry fails until it is added with --update, and a
+ * baseline entry that matches no discovered package (renamed, removed, or no
+ * longer linted by Biome) fails until --update drops it.
  */
 import { spawn } from 'node:child_process';
 import { existsSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
@@ -117,6 +121,9 @@ async function main() {
     else if (count > baseline[name]) increased.push(`${name}: ${baseline[name]} -> ${count} (+${count - baseline[name]})`);
     else if (count < baseline[name]) decreased.push(`${name}: ${baseline[name]} -> ${count}`);
   }
+  const stale = Object.keys(baseline)
+    .filter((name) => !(name in current))
+    .map((name) => `${name}: ${baseline[name]}`);
   const total = Object.values(current).reduce((a, b) => a + b, 0);
   const budget = Object.values(baseline).reduce((a, b) => a + b, 0);
   log(`total warnings: ${total} (baseline ${budget})`);
@@ -128,7 +135,9 @@ async function main() {
       console.error('Fix the new warnings, or rerun with --update --allow-increase if raising it is a deliberate decision.');
       process.exit(1);
     }
+    // Writing `current` (not a merge) drops stale entries for packages that no longer exist.
     writeFileSync(BASELINE_FILE, `${JSON.stringify(current, null, 2)}\n`);
+    for (const s of stale) log(`dropped stale baseline entry ${s}`);
     log(`wrote ${BASELINE_FILE}`);
     return;
   }
@@ -146,10 +155,17 @@ async function main() {
     for (const s of missing) console.error(`  ${s}`);
     console.error('Add them with: node scripts/check-biome-budget.mjs --update');
   }
+  if (stale.length) {
+    failed = true;
+    console.error('FAIL: baseline entries that match no Biome-linted package (renamed or removed?):');
+    for (const s of stale) console.error(`  ${s}`);
+    console.error('Drop them with: node scripts/check-biome-budget.mjs --update');
+  }
   if (decreased.length) {
-    log('warnings went down (thank you) in:');
-    for (const s of decreased) log(`  ${s}`);
-    log('lock in the lower counts with: node scripts/check-biome-budget.mjs --update');
+    failed = true;
+    console.error('FAIL: warnings went down (thank you) but the baseline was not lowered in:');
+    for (const s of decreased) console.error(`  ${s}`);
+    console.error('Lock in the lower counts in this same change with: node scripts/check-biome-budget.mjs --update');
   }
   if (!failed) log('PASS: no package exceeds its Biome warning budget.');
   process.exit(failed ? 1 : 0);
