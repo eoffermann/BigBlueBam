@@ -509,5 +509,8 @@ export interface EvidenceSnapshotRow {
   unprovable_reason: string | null;
   explanation: string | null;
   cited_refs: Array<{ entity_type: string; entity_id: string }>;
+  /** Plain names of the cited items (detail viewers only), e.g. "PR #42 in rescue-radio-firmware: ...". */
+  cited_labels?: string[];
+  cited_items?: Array<{ entity_type: string; entity_id: string; label: string | null }>;
   created_at: string;
 }
