@@ -73,8 +73,9 @@ describe('Bastion pending tools stay out of the registered surface until M11', (
   it('every handler goes through registerTool (agent policies apply once registered)', () => {
     // 14 milestone handlers (M3 + M4) + 9 #196 parity handlers + M5 (7 evidence + 2 feed admin;
     // withdrawal has no tool, #217) + M6 (9 gap, fix, exception and drift handlers) + M7 (6 policy
-    // handlers; attest has none) + the not-applicable suggestions read (#238).
-    expect((PENDING.match(/registerTool\(server, \{/g) ?? []).length).toBe(48);
+    // handlers; attest has none) + the not-applicable suggestions read (#238) + M8 (9 questionnaire
+    // and answer-library handlers; approve and the export have none).
+    expect((PENDING.match(/registerTool\(server, \{/g) ?? []).length).toBe(57);
     expect(PENDING).not.toMatch(/server\.tool\(/);
   });
 });
@@ -82,8 +83,14 @@ describe('Bastion pending tools stay out of the registered surface until M11', (
 describe('Bastion M3 tool handlers', () => {
   it('registers exactly the M3 roster', async () => {
     await load();
-    const { BASTION_PENDING_TOOL_NAMES, BASTION_ADMIN_TOOL_NAMES, BASTION_EVIDENCE_TOOL_NAMES, BASTION_DECISION_TOOL_NAMES, BASTION_POLICY_TOOL_NAMES } =
-      await import('../src/tools-pending/bastion.js');
+    const {
+      BASTION_PENDING_TOOL_NAMES,
+      BASTION_ADMIN_TOOL_NAMES,
+      BASTION_EVIDENCE_TOOL_NAMES,
+      BASTION_DECISION_TOOL_NAMES,
+      BASTION_POLICY_TOOL_NAMES,
+      BASTION_QUESTIONNAIRE_TOOL_NAMES,
+    } = await import('../src/tools-pending/bastion.js');
     expect(captured.map((c) => c.name).sort()).toEqual(
       [
         ...BASTION_PENDING_TOOL_NAMES,
@@ -91,6 +98,7 @@ describe('Bastion M3 tool handlers', () => {
         ...BASTION_EVIDENCE_TOOL_NAMES,
         ...BASTION_DECISION_TOOL_NAMES,
         ...BASTION_POLICY_TOOL_NAMES,
+        ...BASTION_QUESTIONNAIRE_TOOL_NAMES,
       ].sort(),
     );
   });
@@ -643,5 +651,64 @@ describe('Bastion M7 tools (policies and attestation)', () => {
   it('has no tool that acknowledges a policy: auth, session required (spec 2.8, #136)', async () => {
     await load();
     expect(PENDING).not.toMatch(/\/policies\/\$\{[^}]+\}\/attest['`]/);
+  });
+});
+
+describe('Bastion M8 tools (questionnaires and the answer library)', () => {
+  const Q = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
+  const ITEM = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd';
+  const ASSET = 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee';
+  const ASKER = 'ffffffff-ffff-4fff-8fff-ffffffffffff';
+
+  it('reads call the right routes and pass asker_user_id through', async () => {
+    const tool = await load();
+    await tool('bastion_list_questionnaires').handler({ status: 'in_review' } as never);
+    await tool('bastion_get_questionnaire').handler({ questionnaire_id: Q, needs_review: true, asker_user_id: ASKER } as never);
+    await tool('bastion_search_answer_library').handler({ q: 'mfa', include_stale: false } as never);
+    expect(calls.map((c) => `${c.method} ${c.url}`)).toEqual([
+      'GET http://bastion-api:4024/v1/questionnaires?status=in_review',
+      `GET http://bastion-api:4024/v1/questionnaires/${Q}?asker_user_id=${ASKER}`,
+      `GET http://bastion-api:4024/v1/questionnaires/${Q}/items?needs_review=true&asker_user_id=${ASKER}`,
+      'GET http://bastion-api:4024/v1/answer-library?q=mfa&include_stale=false',
+    ]);
+  });
+
+  it('writes are typed off the shared Zod', async () => {
+    const tool = await load();
+    await tool('bastion_create_questionnaire').handler({ title: 'Howell', bin_asset_id: ASSET } as never);
+    await tool('bastion_create_questionnaire').handler({ title: 'Pasted', pasted_text: 'Question\nDo you use MFA?' } as never);
+    await tool('bastion_questionnaire_autofill').handler({ questionnaire_id: Q } as never);
+    await tool('bastion_answer_questionnaire_item').handler({ item_id: ITEM, review_status: 'edited', final_answer: 'Yes.' } as never);
+    await tool('bastion_draft_answer').handler({ question: 'Do you use MFA?' } as never);
+    await tool('bastion_update_answer_library').handler({ answer_id: ITEM, stale: false } as never);
+    await tool('bastion_update_questionnaire').handler({ questionnaire_id: Q, title: 'Howell v2' } as never);
+    expect(calls.map((c) => `${c.method} ${c.url}`)).toEqual([
+      'POST http://bastion-api:4024/v1/questionnaires',
+      'POST http://bastion-api:4024/v1/questionnaires',
+      `POST http://bastion-api:4024/v1/questionnaires/${Q}/autofill`,
+      `PATCH http://bastion-api:4024/v1/questionnaire-items/${ITEM}`,
+      'POST http://bastion-api:4024/v1/answers/draft',
+      `PATCH http://bastion-api:4024/v1/answer-library/${ITEM}`,
+      `PATCH http://bastion-api:4024/v1/questionnaires/${Q}`,
+    ]);
+    expect(calls[0]!.body).toEqual({ title: 'Howell', source: { kind: 'bin_asset', bin_asset_id: ASSET } });
+    expect(calls[1]!.body).toEqual({ title: 'Pasted', source: { kind: 'pasted', text: 'Question\nDo you use MFA?', format: 'tsv' } });
+    expect(calls[2]!.body).toEqual({ redraft: false });
+    expect(calls[4]!.body).toEqual({ question: 'Do you use MFA?', answer_kind: 'yes_no_text' });
+  });
+
+  it('refuses ambiguous or invalid input before calling bastion-api', async () => {
+    const tool = await load();
+    const both = (await tool('bastion_create_questionnaire').handler({ title: 'x', bin_asset_id: ASSET, pasted_text: 'a' } as never)) as { isError?: boolean };
+    const owner = (await tool('bastion_answer_questionnaire_item').handler({ item_id: ITEM, review_status: 'needs_owner' } as never)) as { isError?: boolean };
+    expect(both.isError).toBe(true);
+    expect(owner.isError).toBe(true);
+    expect(calls).toHaveLength(0);
+  });
+
+  it('has no tool that approves or downloads a questionnaire (session required; binary)', async () => {
+    await load();
+    expect(PENDING).not.toMatch(/\/questionnaires\/\$\{[^}]+\}\/(approve|export)/);
+    expect(captured.map((c) => c.name).join(' ')).not.toMatch(/approve_questionnaire|export_questionnaire/);
   });
 });
