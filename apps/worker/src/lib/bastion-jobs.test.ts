@@ -7,6 +7,7 @@ import { bastionInternalUrl, BastionUrlMissingError } from '../jobs/bastion-shar
 import { EVALUATE_MAX_POLLS, EVALUATE_POLL_INTERVAL_MS, processBastionEvaluateRunJob } from '../jobs/bastion-evaluate-run.job.js';
 import { makeBastionEngineJob, processBastionEvaluateTickJob } from '../jobs/bastion-engines.job.js';
 import { COMPILE_MAX_POLLS, COMPILE_POLL_INTERVAL_MS, processBastionCompileJob } from '../jobs/bastion-compile.job.js';
+import { AUTOFILL_MAX_POLLS, AUTOFILL_POLL_INTERVAL_MS, processBastionQuestionnaireAutofillJob } from '../jobs/bastion-questionnaire-autofill.job.js';
 
 const SRC = join(__dirname, '..');
 const WORKER = readFileSync(join(SRC, 'worker.ts'), 'utf8');
@@ -55,11 +56,13 @@ describe('Bastion job registration rules (spec 7)', () => {
     }
   });
 
-  it('registers one scheduled job per scheduled engine (every engine except the event-driven evaluate-run and compile)', () => {
+  it('registers one scheduled job per scheduled engine (every engine except the event-driven evaluate-run, compile and questionnaire-autofill)', () => {
     const registered = [...bastionBlock.matchAll(/registerBastionSweep\(\s*BASTION_[A-Z_]+_QUEUE/g)].length;
-    expect(registered).toBe(BASTION_ENGINE_NAMES.length - 2);
+    expect(registered).toBe(BASTION_ENGINE_NAMES.length - 3);
     expect(bastionBlock).toContain("makeBastionEngineJob('attestation-nudge'");
     expect(bastionBlock).toMatch(/new Worker<BastionCompileJobData>\(\s*BASTION_COMPILE_QUEUE/);
+    expect(bastionBlock).toMatch(/new Worker<BastionQuestionnaireJobData>\(\s*BASTION_QUESTIONNAIRE_AUTOFILL_QUEUE/);
+    expect(bastionBlock).toContain('autofillQueue: bastionAutofillQueue');
   });
 
   it('no bare add: every producer add in the Bastion job files and worker block passes jobId and SCHEDULED_JOB_RETENTION', () => {
@@ -257,6 +260,60 @@ describe('bastion-compile loop (M7)', () => {
   });
 });
 
+describe('bastion-questionnaire-autofill loop (M8)', () => {
+  const ok = (data: unknown) => ({ ok: true, status: 200, data: { data } });
+  const slice = (done: boolean, extra: Record<string, unknown> = {}) => ({
+    done,
+    status: done ? 'in_review' : 'answering',
+    rows_done: 40,
+    row_count: 96,
+    high: 22,
+    medium: 11,
+    low: 7,
+    slice_running: !done,
+    waiting: null,
+    ...extra,
+  });
+  const data = { organization_id: 'o', questionnaire_id: 'q', resume_count: 0 };
+
+  it('the poll cap covers an hour (above the 16-32 minute estimate)', () => {
+    expect(AUTOFILL_POLL_INTERVAL_MS * AUTOFILL_MAX_POLLS).toBe(60 * 60_000);
+  });
+
+  it('polls every 10 s until the questionnaire leaves answering, as one claimant, logging rows and bands', async () => {
+    const info = vi.fn();
+    const logger = { info, warn: vi.fn(), error: vi.fn() } as never;
+    const post = vi.fn().mockResolvedValueOnce(ok(slice(false, { waiting: 'ai_slot' }))).mockResolvedValueOnce(ok(slice(true)));
+    const sleep = vi.fn().mockResolvedValue(undefined);
+    expect(await processBastionQuestionnaireAutofillJob(job(data), logger, { post, sleep, queue: { add: vi.fn() } })).toBe('done');
+    expect(post.mock.calls[0]?.[0]).toBe('/v1/internal/engines/questionnaire-autofill');
+    expect(new Set(post.mock.calls.map((c) => (c[1] as { claimant: string }).claimant))).toEqual(new Set(['worker-autofill:j1']));
+    expect(sleep).toHaveBeenCalledWith(10_000);
+    const lines = info.mock.calls.map((c) => String(c[1]));
+    expect(lines[0]).toMatch(/16-32 minutes/);
+    expect(lines.some((l) => /rows 40\/96 \(high 22, medium 11, low 7\) waiting for an AI slot/.test(l))).toBe(true);
+  });
+
+  it('a live 409 ends; a stale 409 waits 30 s; after the cap it hands over with the same claimant', async () => {
+    const claimed = (stale: boolean) => ({ ok: false, status: 409, data: { error: { code: 'RUN_CLAIMED', message: 'held', details: [], request_id: 'q', claimed_by: 'x', heartbeat_stale: stale } } });
+    expect(await processBastionQuestionnaireAutofillJob(job(data), silent, { post: vi.fn().mockResolvedValue(claimed(false)), sleep: async () => {}, queue: { add: vi.fn() } })).toBe('ended');
+    const sleep = vi.fn().mockResolvedValue(undefined);
+    const post = vi.fn().mockResolvedValueOnce(claimed(true)).mockResolvedValueOnce(ok(slice(true)));
+    expect(await processBastionQuestionnaireAutofillJob(job(data), silent, { post, sleep, queue: { add: vi.fn() } })).toBe('done');
+    expect(sleep).toHaveBeenCalledWith(30_000);
+    const add = vi.fn();
+    const r = await processBastionQuestionnaireAutofillJob(job({ ...data, resume_count: 1 }), silent, { post: vi.fn().mockResolvedValue(ok(slice(false))), sleep: async () => {}, queue: { add }, maxPolls: 2 });
+    expect(r).toBe('requeued');
+    expect(add.mock.calls[0]?.[1]).toEqual({ ...data, resume_count: 1, claimant: 'worker-autofill:j1' });
+    expect(add.mock.calls[0]?.[2].jobId).toMatch(/^qa-q-r1-g\d+$/);
+  });
+
+  it('a slice that drifts from the shared contract fails loudly', async () => {
+    const bad = vi.fn().mockResolvedValue(ok({ ...slice(false), rows_done: -1 }));
+    await expect(processBastionQuestionnaireAutofillJob(job(data), silent, { post: bad, sleep: async () => {}, queue: { add: vi.fn() } })).rejects.toThrow(/questionnaire-autofill slice does not match the shared contract/);
+  });
+});
+
 describe('bastion-evaluate-tick and engine jobs', () => {
   const ORG = '00000000-0000-4000-8000-000000000205';
   const R1 = '00000000-0000-4000-8000-0000000002a1';
@@ -299,6 +356,19 @@ describe('bastion-evaluate-tick and engine jobs', () => {
     // An older bastion-api without compile_runs still parses (the field defaults to []).
     const old = vi.fn().mockResolvedValue({ ok: true, status: 200, data: { data: { runs: [] } } });
     expect(await processBastionEvaluateTickJob(job({}), silent, { post: old, queue: { add }, compileQueue: { add: compileAdd } })).toBe(0);
+  });
+
+  it('M8: answering questionnaires the tick returns go to the autofill queue with a generation job id', async () => {
+    const post = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      data: { data: { runs: [], questionnaire_runs: [{ organization_id: ORG, questionnaire_id: R2, resume_count: 2, generation: 4 }] } },
+    });
+    const autofillAdd = vi.fn();
+    expect(await processBastionEvaluateTickJob(job({}), silent, { post, queue: { add: vi.fn() }, autofillQueue: { add: autofillAdd } })).toBe(0);
+    expect(autofillAdd.mock.calls[0]?.[1]).toEqual({ organization_id: ORG, questionnaire_id: R2, resume_count: 2 });
+    expect(autofillAdd.mock.calls[0]?.[2].jobId).toBe(`qa-${R2}-r2-g4`);
+    expect(autofillAdd.mock.calls[0]?.[2].removeOnComplete).toEqual({ count: 100 });
   });
 
   it('outbox-drain reports dead rows as a worker error; a failing engine throws', async () => {

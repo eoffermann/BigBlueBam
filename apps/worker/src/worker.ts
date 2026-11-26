@@ -344,12 +344,15 @@ import {
   BASTION_PROPOSAL_RECONCILE_QUEUE,
   BASTION_COMPILE_QUEUE,
   BASTION_ATTESTATION_NUDGE_QUEUE,
+  BASTION_QUESTIONNAIRE_AUTOFILL_QUEUE,
+  type BastionQuestionnaireJobData,
   type BastionCompileJobData,
   type BastionEvaluateRunJobData,
   type BastionSweepJobData,
 } from '@bigbluebam/shared';
 import { processBastionEvaluateRunJob } from './jobs/bastion-evaluate-run.job.js';
 import { processBastionCompileJob } from './jobs/bastion-compile.job.js';
+import { processBastionQuestionnaireAutofillJob } from './jobs/bastion-questionnaire-autofill.job.js';
 import { makeBastionEngineJob, processBastionEvaluateTickJob } from './jobs/bastion-engines.job.js';
 import { postBastion } from './jobs/bastion-shared.js';
 
@@ -2750,10 +2753,27 @@ bastionCompileWorker.on('failed', (job, err) => {
   void recordWorkerError({ queueName: BASTION_COMPILE_QUEUE, jobId: job?.id, jobName: job?.name, err: err as Error });
 });
 
+// M8: questionnaire autofill (event; produced by bastion-api and re-enqueued by the tick). Same
+// shape as the compile: the job only polls; bastion-api's leased permits bound the AI calls.
+const bastionAutofillQueue = makeQueue<BastionQuestionnaireJobData>(BASTION_QUESTIONNAIRE_AUTOFILL_QUEUE);
+const bastionAutofillWorker = new Worker<BastionQuestionnaireJobData>(
+  BASTION_QUESTIONNAIRE_AUTOFILL_QUEUE,
+  async (job) => {
+    await processBastionQuestionnaireAutofillJob(job, logger, { post: postBastion, queue: bastionAutofillQueue });
+  },
+  { ...connection, concurrency: 2 },
+);
+bastionAutofillWorker.on('completed', (job) => { logger.info({ jobId: job.id, queue: BASTION_QUESTIONNAIRE_AUTOFILL_QUEUE }, 'Job completed'); });
+bastionAutofillWorker.on('failed', (job, err) => {
+  logger.error({ jobId: job?.id, queue: BASTION_QUESTIONNAIRE_AUTOFILL_QUEUE, err }, 'Job failed');
+  void recordWorkerError({ queueName: BASTION_QUESTIONNAIRE_AUTOFILL_QUEUE, jobId: job?.id, jobName: job?.name, err: err as Error });
+});
+
 const bastionEngineDeps = { post: postBastion, recordError: bastionRecordError };
 registerBastionSweep(
   BASTION_EVALUATE_TICK_QUEUE,
-  (job, l) => processBastionEvaluateTickJob(job, l, { ...bastionEngineDeps, queue: bastionEvaluateRunQueue, compileQueue: bastionCompileQueue }),
+  (job, l) =>
+    processBastionEvaluateTickJob(job, l, { ...bastionEngineDeps, queue: bastionEvaluateRunQueue, compileQueue: bastionCompileQueue, autofillQueue: bastionAutofillQueue }),
   { id: 'bastion-evaluate-tick-5min', pattern: '*/5 * * * *' },
 );
 registerBastionSweep(BASTION_OUTBOX_DRAIN_QUEUE, makeBastionEngineJob('outbox-drain', bastionEngineDeps), { id: 'bastion-outbox-drain-1min', pattern: '* * * * *' });
