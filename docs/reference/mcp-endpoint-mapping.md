@@ -2230,13 +2230,13 @@ AI procurement leveling & spend-baseline monitor. 20 `bursar_*` tools (spec sect
 | `PATCH /v1/setup/profile` | `bastion_save_company_profile` | Save the ten company-profile answers | Setup wizard "Save answers" |
 | `POST /v1/setup/compliance-project` | `bastion_set_compliance_project` | Record the required Compliance project (caller must be a member of it, SuperUsers excepted; the project itself is created through Bam's `create_project`) | Setup wizard "Create a Compliance project for me", "Use an existing project" |
 | `POST /v1/evaluations` | `bastion_run_evaluation` | Evaluate now (202 + queued run; full or one control); 409 `EVALUATION_RUNNING` while one of the same scope is live | — (Readiness "Check now", M5) |
-| `GET /v1/evaluations` | `bastion_list_evaluations` | Evaluation runs, newest first, with status, partial reason and counts | — (Readiness, M5) |
+| `GET /v1/evaluations` | `bastion_list_evaluations` | Evaluation runs, newest first, with status, partial reason and counts; cursor-paginated (`next_cursor`/`has_more`) | — (Readiness, M5) |
 | `GET /v1/evaluations/:id` | `bastion_list_evaluations` | One run's status (polled; no realtime in v1) | — (Readiness, M5) |
-| `GET /v1/controls/:id/evidence` | `bastion_evidence_for` | A control's evidence snapshots with a plain explanation; counts only unless owner, admin or control owner | — (Control detail, M6) |
+| `GET /v1/controls/:id/evidence` | `bastion_evidence_for` | A control's evidence snapshots with a plain explanation; counts only unless owner, admin or control owner; cursor-paginated | — (Control detail, M6) |
 | `GET /v1/evidence/:id` | `bastion_get_evidence` | One evidence snapshot | — (Control detail, M6) |
 | `GET /v1/evidence/:id/verify` | `bastion_verify_evidence` | Re-hash entry and stored file, check the personal-data commitment, walk to the next signed seal | — (Control detail, M6) |
-| `GET /v1/ledger/seals` | `bastion_list_seals` | Signed daily seals plus every signing key (current and retired) | — (Sharing, M9) |
-| `GET /v1/ledger/restores` | `bastion_list_restores` | Lost ledger ranges from the database and from the bucket's `restores/` records | — (Settings, M9) |
+| `GET /v1/ledger/seals` | `bastion_list_seals` | Signed daily seals plus every signing key (current and retired); cursor-paginated | — (Sharing, M9) |
+| `GET /v1/ledger/restores` | `bastion_list_restores` | Lost ledger ranges from the database (cursor-paginated) and from the bucket's `restores/` records (first page) | — (Settings, M9) |
 | `POST /v1/ledger/restores/:id/acknowledge` | — _(skip: auth: session required (spec 2.8, #136); a vouching act, spec 3.4; owner only, impersonation refused, confirm)_ | Acknowledge a matched restore or resume recording under an unexplained gap | — (Settings, M9) |
 | `POST /v1/internal/engines/:name` | — _(skip: internal service-to-service; the worker's thin jobs call it with the internal secret)_ | evaluate-tick, evaluate-run, outbox-drain, ledger-seal, ledger-verify, run-reaper, evaluation-missed, weekly-readiness, retention | worker |
 | `POST /v1/internal/events` | — _(skip: internal service-to-service; bolt-api's bastion dispatch hook)_ | Durable inbox for consumed events (deduplicated per org) | bolt-api |

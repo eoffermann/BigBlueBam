@@ -251,15 +251,16 @@ export function registerBastionTools(
   registerTool(server, {
     name: 'bastion_list_evaluations',
     description:
-      'Evaluation runs, newest first (GET /evaluations, optional status filter and limit), or one run with run_id (GET /evaluations/:id): trigger (nightly, manual, agent), scope, status (queued, running, succeeded, partial with a reason such as restore_pending, failed), and the counts checked so far. Read-only.',
+      'Evaluation runs, newest first (GET /evaluations, optional status filter and limit; pass next_cursor back as cursor while has_more is true), or one run with run_id (GET /evaluations/:id): trigger (nightly, manual, agent), scope, status (queued, running, succeeded, partial with a reason such as restore_pending, failed), and the counts checked so far. Read-only.',
     input: {
       run_id: z.string().uuid().optional(),
       status: bastionEvaluationListQuerySchema.shape.status,
+      cursor: z.string().max(200).optional().describe('next_cursor from the previous page.'),
       limit: z.number().int().min(1).max(100).optional(),
     },
     returns: z.record(z.unknown()),
-    handler: async ({ run_id, status, limit }) => {
-      const r = run_id ? await client.getEvaluation(run_id) : await client.listEvaluations({ status, limit });
+    handler: async ({ run_id, status, cursor, limit }) => {
+      const r = run_id ? await client.getEvaluation(run_id) : await client.listEvaluations({ status, cursor, limit });
       return r.ok ? ok(r.data) : err(run_id ? 'reading evaluation' : 'listing evaluations', r.data);
     },
   });
@@ -268,15 +269,16 @@ export function registerBastionTools(
   registerTool(server, {
     name: 'bastion_evidence_for',
     description:
-      'The evidence recorded for one control, newest first (GET /controls/:id/evidence): each snapshot\'s outcome (pass, fail, unprovable with a reason), the check that produced it, its window, counts, its hash and ledger position, and a plain explanation. Names and cited records are shown only to owners, admins and the control\'s owner; everyone else gets counts. Optional assertion_id narrows to one check. Read-only.',
+      'The evidence recorded for one control, newest first (GET /controls/:id/evidence): each snapshot\'s outcome (pass, fail, unprovable with a reason), the check that produced it, its window, counts, its hash and ledger position, and a plain explanation. Names and cited records are shown only to owners, admins and the control\'s owner; everyone else gets counts. Optional assertion_id narrows to one check. Pass next_cursor back as cursor while has_more is true. Read-only.',
     input: {
       control_id: z.string().uuid(),
       assertion_id: z.string().uuid().optional(),
+      cursor: z.string().max(200).optional().describe('next_cursor from the previous page.'),
       limit: z.number().int().min(1).max(100).optional(),
     },
     returns: z.record(z.unknown()),
-    handler: async ({ control_id, assertion_id, limit }) => {
-      const r = await client.listControlEvidence(control_id, { assertion_id, limit });
+    handler: async ({ control_id, assertion_id, cursor, limit }) => {
+      const r = await client.listControlEvidence(control_id, { assertion_id, cursor, limit });
       return r.ok ? ok(r.data) : err('listing evidence', r.data);
     },
   });
@@ -311,11 +313,14 @@ export function registerBastionTools(
   registerTool(server, {
     name: 'bastion_list_seals',
     description:
-      'The signed daily seals of the evidence ledger (GET /ledger/seals): seal date, epoch, head position and hash, Ed25519 signature, signing key id, and when the seal object reached storage and was published; plus every signing key (current and retired) with its public key so anyone can check old seals. Read-only.',
-    input: { limit: z.number().int().min(1).max(400).optional() },
+      'The signed daily seals of the evidence ledger (GET /ledger/seals): seal date, epoch, head position and hash, Ed25519 signature, signing key id, and when the seal object reached storage and was published; plus every signing key (current and retired) with its public key so anyone can check old seals. Newest first; pass next_cursor back as cursor while has_more is true. Read-only.',
+    input: {
+      cursor: z.string().max(200).optional().describe('next_cursor from the previous page.'),
+      limit: z.number().int().min(1).max(400).optional(),
+    },
     returns: z.record(z.unknown()),
-    handler: async ({ limit }) => {
-      const r = await client.listSeals(limit);
+    handler: async ({ cursor, limit }) => {
+      const r = await client.listSeals({ cursor, limit });
       return r.ok ? ok(r.data) : err('listing seals', r.data);
     },
   });
@@ -324,11 +329,14 @@ export function registerBastionTools(
   registerTool(server, {
     name: 'bastion_list_restores',
     description:
-      'Gaps in the evidence ledger found after a database restore (GET /ledger/restores): each lost range as "History lost by restore, epoch E seq X-Y" or "Unexplained gap, epoch E seq X-Y", whether recording is paused until an owner resolves it, and the ranges recorded in storage that the database no longer holds. Read-only; resolving a gap is a signed-in owner\'s act in Bastion and has no tool.',
-    input: {},
+      'Gaps in the evidence ledger found after a database restore (GET /ledger/restores): each lost range as "History lost by restore, epoch E seq X-Y" or "Unexplained gap, epoch E seq X-Y", whether recording is paused until an owner resolves it, and the ranges recorded in storage that the database no longer holds. Read-only; resolving a gap is a signed-in owner\'s act in Bastion and has no tool. Newest first; pass next_cursor back as cursor while has_more is true (the storage-only ranges come with the first page).',
+    input: {
+      cursor: z.string().max(200).optional().describe('next_cursor from the previous page.'),
+      limit: z.number().int().min(1).max(200).optional(),
+    },
     returns: z.record(z.unknown()),
-    handler: async () => {
-      const r = await client.listRestores();
+    handler: async ({ cursor, limit }) => {
+      const r = await client.listRestores({ cursor, limit });
       return r.ok ? ok(r.data) : err('listing restores', r.data);
     },
   });

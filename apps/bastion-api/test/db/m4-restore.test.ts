@@ -285,6 +285,51 @@ describe.skipIf(!DATABASE_URL)('M4 restore detection (live database)', () => {
     expect(await maxSeq(s.org)).toBe(1);
   });
 
+  it('the four M4 lists page with next_cursor / has_more until every row is reached (#204)', async () => {
+    const s = await seedOrg(sql, 'pages', 1, 3);
+    orgs.push(s.org);
+    const c = clock();
+    const deps = makeDeps(sql, { clock: c });
+    await runToEnd(deps, s, c); // 3 snapshots for the one control
+    const [ctl] = await sql`SELECT id FROM bastion_controls WHERE organization_id = ${s.org}`;
+    for (let i = 0; i < 3; i++) {
+      await sql`INSERT INTO bastion_evaluation_runs (organization_id, trigger, scope, as_of, status, created_at)
+                VALUES (${s.org}, 'manual', 'all', now(), 'succeeded', now() - make_interval(days => ${i + 1}))`;
+      await sql`INSERT INTO bastion_ledger_seals (organization_id, seal_date, epoch, head_seq, head_hash, signature, signing_key_id)
+                VALUES (${s.org}, ${`2026-0${i + 1}-15`}::date, 1, ${i}, ${'a'.repeat(64)}, 'x', 'k')`;
+      await sql`INSERT INTO bastion_ledger_restores (organization_id, detected_at, provisional_epoch, status, resolution)
+                VALUES (${s.org}, now() - make_interval(hours => ${i}), 2, 'unmatched', 'continue_unexplained')`;
+    }
+    const v = viewer(s);
+    /** Walk every page with limit 2; return the ids seen and the page count. */
+    async function walk(fetchPage: (cursor?: string) => Promise<{ data: Array<Record<string, unknown>>; has_more: boolean; next_cursor: string | null }>, key: string) {
+      const seen: unknown[] = [];
+      let cursor: string | undefined;
+      let pages = 0;
+      for (;;) {
+        const p = await fetchPage(cursor);
+        pages += 1;
+        seen.push(...p.data.map((r) => r[key]));
+        expect(p.has_more).toBe(p.next_cursor !== null);
+        if (!p.next_cursor) break;
+        cursor = p.next_cursor;
+      }
+      return { seen, pages };
+    }
+    const runs = await walk((cursor) => evidence.listEvaluations(deps, v, { cursor, limit: 2 }) as never, 'id');
+    expect(runs.seen).toHaveLength(4);
+    expect(new Set(runs.seen).size).toBe(4);
+    expect(runs.pages).toBe(2);
+    const snaps = await walk((cursor) => evidence.listControlEvidence(deps, v, ctl!.id as string, { cursor, limit: 2 }) as never, 'id');
+    expect(new Set(snaps.seen).size).toBe(3);
+    const seals = await walk((cursor) => evidence.listSeals(deps, v, { cursor, limit: 2 }) as never, 'seal_date');
+    expect(seals.seen).toEqual(['2026-03-15', '2026-02-15', '2026-01-15']);
+    const restores = await walk((cursor) => evidence.listRestores(deps, v, { cursor, limit: 2 }) as never, 'id');
+    expect(new Set(restores.seen).size).toBe(3);
+    // A forged cursor is a plain 400-class error, never a silent first page.
+    await expect(evidence.listSeals(deps, v, { cursor: 'bm90LWEtZGF0ZQ', limit: 2 })).rejects.toMatchObject({ code: 'INVALID_CURSOR' });
+  });
+
   it('forged bucket seals (unsigned, wrong key, epoch at the integer limit) are ignored; a signed one still triggers detection', async () => {
     const s = await seedOrg(sql, 'forged-seal');
     orgs.push(s.org);

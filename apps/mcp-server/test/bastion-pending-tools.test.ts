@@ -213,6 +213,20 @@ describe('Bastion M3 tool handlers', () => {
     ]);
   });
 
+  it('M4 lists thread cursor and limit to bastion-api (#204)', async () => {
+    const tool = await load();
+    await tool('bastion_list_evaluations').handler({ status: 'partial', cursor: 'c1', limit: 5 } as never);
+    await tool('bastion_evidence_for').handler({ control_id: CTRL, cursor: 'c2', limit: 10 } as never);
+    await tool('bastion_list_seals').handler({ cursor: 'c3', limit: 30 } as never);
+    await tool('bastion_list_restores').handler({ cursor: 'c4', limit: 20 } as never);
+    expect(calls.map((c) => c.url)).toEqual([
+      'http://bastion-api:4024/v1/evaluations?status=partial&cursor=c1&limit=5',
+      `http://bastion-api:4024/v1/controls/${CTRL}/evidence?cursor=c2&limit=10`,
+      'http://bastion-api:4024/v1/ledger/seals?cursor=c3&limit=30',
+      'http://bastion-api:4024/v1/ledger/restores?cursor=c4&limit=20',
+    ]);
+  });
+
   it('M4: resolving a ledger restore has no tool (owner integrity act behind a session)', async () => {
     await load();
     expect(captured.map((c) => c.name).join(' ')).not.toMatch(/acknowledge|resolve|restore_ack/);

@@ -7,8 +7,11 @@ import type {
   BastionEvaluationListQuery,
   BastionEvidenceListQuery,
   BastionRestoreAcknowledge,
+  BastionRestoreListQuery,
   BastionRunEvaluation,
+  BastionSealListQuery,
 } from '@bigbluebam/shared';
+import { decodeDateCursor, decodeIdCursor, encodeDateCursor, encodeIdCursor, pageOf } from '../lib/cursor.js';
 import { createHash } from 'node:crypto';
 import { withStorageTimeout } from '@bigbluebam/storage';
 import { fieldsOfRow, entryHash, verifyChain, verifySeal, type LedgerRow } from '../lib/ledger-canonical.js';
@@ -67,16 +70,20 @@ export async function startEvaluation(deps: EngineDeps, viewer: Viewer, body: Ba
   return { data: { ...run, enqueued } };
 }
 
+/** GET /evaluations, newest first, keyset-paginated on (created_at, id) (issue #204). */
 export async function listEvaluations(deps: EngineDeps, viewer: Viewer, q: BastionEvaluationListQuery) {
+  const after = q.cursor ? decodeIdCursor(q.cursor) : null;
   const rows = await orgTx(deps.sql, viewer.org_id, (tx) =>
     tx.unsafe(
       `SELECT ${RUN_SELECT} FROM bastion_evaluation_runs
         WHERE organization_id = $1 AND ($2::text IS NULL OR status = $2)
-        ORDER BY created_at DESC LIMIT $3`,
-      [viewer.org_id, q.status ?? null, q.limit],
+          AND ($4::uuid IS NULL OR (created_at, id) < (
+                SELECT r.created_at, r.id FROM bastion_evaluation_runs r WHERE r.id = $4::uuid AND r.organization_id = $1))
+        ORDER BY created_at DESC, id DESC LIMIT $3`,
+      [viewer.org_id, q.status ?? null, q.limit + 1, after],
     ),
   );
-  return { data: rows, next_cursor: null };
+  return pageOf(rows, q.limit, (r) => encodeIdCursor(r.id as string));
 }
 
 export async function getEvaluation(deps: EngineDeps, viewer: Viewer, id: string) {
@@ -136,14 +143,18 @@ export async function listControlEvidence(deps: EngineDeps, viewer: Viewer, cont
   return orgTx(deps.sql, viewer.org_id, async (tx) => {
     const c = await tx`SELECT id FROM bastion_controls WHERE organization_id = ${viewer.org_id} AND id = ${controlId}`;
     if (!c[0]) throw new NotFoundError('We could not find that control.');
+    const after = q.cursor ? decodeIdCursor(q.cursor) : null;
     const rows = await tx.unsafe(
       `SELECT ${SNAPSHOT_SELECT} FROM bastion_evidence_snapshots s
         WHERE s.organization_id = $1 AND s.control_id = $2 AND ($3::uuid IS NULL OR s.assertion_id = $3)
-        ORDER BY s.created_at DESC LIMIT $4`,
-      [viewer.org_id, controlId, q.assertion_id ?? null, q.limit],
+          AND ($5::uuid IS NULL OR (s.created_at, s.id) < (
+                SELECT p.created_at, p.id FROM bastion_evidence_snapshots p WHERE p.id = $5::uuid AND p.organization_id = $1))
+        ORDER BY s.created_at DESC, s.id DESC LIMIT $4`,
+      [viewer.org_id, controlId, q.assertion_id ?? null, q.limit + 1, after],
     );
     const detail = await detailAllowed(tx, viewer, controlId);
-    return { data: rows.map((r) => present(r as Record<string, unknown>, detail)), next_cursor: null };
+    const page = pageOf(rows, q.limit, (r) => encodeIdCursor(r.id as string));
+    return { ...page, data: page.data.map((r) => present(r as Record<string, unknown>, detail)) };
   });
 }
 
@@ -291,36 +302,59 @@ export async function verifyEvidence(deps: EngineDeps, viewer: Viewer, id: strin
 
 // ── Seals and restores ───────────────────────────────────────────────────────────────────
 
-export async function listSeals(deps: EngineDeps, viewer: Viewer, limit = 90) {
+/** GET /ledger/seals, newest seal_date first, keyset-paginated on seal_date (issue #204). */
+export async function listSeals(deps: EngineDeps, viewer: Viewer, q: BastionSealListQuery = { limit: 90 }) {
+  const before = q.cursor ? decodeDateCursor(q.cursor) : null;
   const rows = await orgTx(deps.sql, viewer.org_id, (tx) => tx`
     SELECT seal_date::text AS seal_date, epoch, head_seq, head_hash, signature, signing_key_id, object_written_at, published_at
       FROM bastion_ledger_seals WHERE organization_id = ${viewer.org_id}
-     ORDER BY seal_date DESC LIMIT ${Math.min(Math.max(limit, 1), 400)}`);
+       ${before ? tx`AND seal_date < ${before}::date` : tx``}
+     ORDER BY seal_date DESC LIMIT ${q.limit + 1}`);
+  const page = pageOf(rows, q.limit, (r) => encodeDateCursor(r.seal_date as string));
   return {
-    data: rows.map((r) => ({ ...r, epoch: Number(r.epoch), head_seq: Number(r.head_seq) })),
+    ...page,
+    data: page.data.map((r) => ({ ...r, epoch: Number(r.epoch), head_seq: Number(r.head_seq) })),
     signing_keys: publishedSealKeys(),
     canonical_form: 'signature = Ed25519 over canonical JSON (sorted keys, no whitespace) of {org, seal_date, epoch, head_seq, head_hash, signing_key_id}',
   };
 }
 
-/** Database rows plus every lost range recorded in the bucket (they survive a DB rewrite). */
-export async function listRestores(deps: EngineDeps, viewer: Viewer) {
-  const rows = await orgTx(deps.sql, viewer.org_id, (tx) => tx`
-    SELECT id, detected_at, db_head_seq, bucket_seal_date::text AS bucket_seal_date, bucket_epoch, bucket_head_seq,
-           lost_from_seq, lost_to_seq, provisional_epoch, platform_restore_id, status, resolution, resolved_by, resolved_at
-      FROM bastion_ledger_restores WHERE organization_id = ${viewer.org_id} ORDER BY detected_at DESC`);
+/**
+ * Database rows (newest first, keyset-paginated on (detected_at, id), issue #204) plus every
+ * lost range recorded in the bucket that the database no longer holds (they survive a DB
+ * rewrite). `bucket_only` is computed against ALL database ids and returned on the first page.
+ */
+export async function listRestores(deps: EngineDeps, viewer: Viewer, q: BastionRestoreListQuery = { limit: 50 }) {
+  const after = q.cursor ? decodeIdCursor(q.cursor) : null;
+  const { rows, allIds } = await orgTx(deps.sql, viewer.org_id, async (tx) => ({
+    rows: await tx`
+      SELECT id, detected_at, db_head_seq, bucket_seal_date::text AS bucket_seal_date, bucket_epoch, bucket_head_seq,
+             lost_from_seq, lost_to_seq, provisional_epoch, platform_restore_id, status, resolution, resolved_by, resolved_at
+        FROM bastion_ledger_restores WHERE organization_id = ${viewer.org_id}
+         ${after
+           ? tx`AND (detected_at, id) < (SELECT r.detected_at, r.id FROM bastion_ledger_restores r
+                                          WHERE r.id = ${after}::uuid AND r.organization_id = ${viewer.org_id})`
+           : tx``}
+       ORDER BY detected_at DESC, id DESC LIMIT ${q.limit + 1}`,
+    allIds: after ? [] : await tx`SELECT id FROM bastion_ledger_restores WHERE organization_id = ${viewer.org_id}`,
+  }));
+  const page = pageOf(rows, q.limit, (r) => encodeIdCursor(r.id as string));
   let bucket: Array<Record<string, unknown>> = [];
   let bucketAvailable = true;
-  try {
-    bucket = await bucketRestoreRecords(deps, viewer.org_id);
-  } catch {
-    bucketAvailable = false;
+  if (!after) {
+    try {
+      bucket = await bucketRestoreRecords(deps, viewer.org_id);
+    } catch {
+      bucketAvailable = false;
+    }
   }
-  const known = new Set(rows.map((r) => r.id as string));
+  const known = new Set(allIds.map((r) => r.id as string));
   const label = (status: unknown, resolution: unknown) =>
     status === 'acknowledged' || resolution === 'restore_acknowledged' ? 'History lost by restore' : 'Unexplained gap';
   return {
-    data: rows.map((r) => ({
+    has_more: page.has_more,
+    next_cursor: page.next_cursor,
+    data: page.data.map((r) => ({
       ...r,
       label: label(r.status, r.resolution),
       appends_blocked: r.resolution === null,

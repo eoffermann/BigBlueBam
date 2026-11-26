@@ -4,7 +4,9 @@ import type {
   BastionControlListQuery,
   BastionEvaluationListQuery,
   BastionEvidenceListQuery,
+  BastionRestoreListQuery,
   BastionRunEvaluation,
+  BastionSealListQuery,
 } from '@bigbluebam/shared';
 import type {
   BastionAdoptFramework,
@@ -94,17 +96,19 @@ export function createBastionClient(bastionApiUrl: string, api: ApiClient, fetch
     // Evaluations, evidence, ledger (M4: rows 22-27, 29, 30)
     runEvaluation: (body: BastionRunEvaluation) => request('POST', '/evaluations', body),
     listEvaluations: (q: Partial<BastionEvaluationListQuery>) =>
-      request('GET', `/evaluations${qs({ status: q.status, limit: q.limit !== undefined ? String(q.limit) : undefined })}`),
+      request('GET', `/evaluations${qs({ status: q.status, cursor: q.cursor, limit: q.limit !== undefined ? String(q.limit) : undefined })}`),
     getEvaluation: (id: string) => request('GET', `/evaluations/${id}`),
     listControlEvidence: (controlId: string, q: Partial<BastionEvidenceListQuery>) =>
       request(
         'GET',
-        `/controls/${controlId}/evidence${qs({ assertion_id: q.assertion_id, limit: q.limit !== undefined ? String(q.limit) : undefined })}`,
+        `/controls/${controlId}/evidence${qs({ assertion_id: q.assertion_id, cursor: q.cursor, limit: q.limit !== undefined ? String(q.limit) : undefined })}`,
       ),
     getEvidence: (id: string) => request('GET', `/evidence/${id}`),
     verifyEvidence: (id: string) => request('GET', `/evidence/${id}/verify`),
-    listSeals: (limit?: number) => request('GET', `/ledger/seals${qs({ limit: limit !== undefined ? String(limit) : undefined })}`),
-    listRestores: () => request('GET', '/ledger/restores'),
+    listSeals: (q: Partial<BastionSealListQuery> = {}) =>
+      request('GET', `/ledger/seals${qs({ cursor: q.cursor, limit: q.limit !== undefined ? String(q.limit) : undefined })}`),
+    listRestores: (q: Partial<BastionRestoreListQuery> = {}) =>
+      request('GET', `/ledger/restores${qs({ cursor: q.cursor, limit: q.limit !== undefined ? String(q.limit) : undefined })}`),
 
     // ── #196 parity: admin and setup writes plus the floored room reads ─────────
     // (grouped here so milestone appends above merge cleanly)

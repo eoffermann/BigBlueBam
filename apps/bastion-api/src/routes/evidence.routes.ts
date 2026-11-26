@@ -3,7 +3,9 @@ import {
   bastionEvaluationListQuerySchema,
   bastionEvidenceListQuerySchema,
   bastionRestoreAcknowledgeSchema,
+  bastionRestoreListQuerySchema,
   bastionRunEvaluationSchema,
+  bastionSealListQuerySchema,
 } from '@bigbluebam/shared';
 import { rejectWhenImpersonating, requireAuth, requireSession } from '../plugins/auth.js';
 import { handled, idParam, notFound, validationError, viewerOf } from '../lib/http.js';
@@ -31,7 +33,11 @@ export default async function evidenceRoutes(fastify: FastifyInstance) {
   // Row 23.
   fastify.get('/evaluations', { preHandler: [requireAuth, can('bastion.control.read')] }, async (request, reply) => {
     const raw = request.query as Record<string, string | undefined>;
-    const parsed = bastionEvaluationListQuerySchema.safeParse({ status: raw.status || undefined, limit: raw.limit || undefined });
+    const parsed = bastionEvaluationListQuerySchema.safeParse({
+      status: raw.status || undefined,
+      cursor: raw.cursor || undefined,
+      limit: raw.limit || undefined,
+    });
     if (!parsed.success) return validationError(request, reply, parsed.error);
     return handled(request, reply, () => evidence.listEvaluations(deps(), viewerOf(request), parsed.data));
   });
@@ -48,7 +54,11 @@ export default async function evidenceRoutes(fastify: FastifyInstance) {
     const id = idParam(request);
     if (!id) return notFound(request, reply);
     const raw = request.query as Record<string, string | undefined>;
-    const parsed = bastionEvidenceListQuerySchema.safeParse({ assertion_id: raw.assertion_id || undefined, limit: raw.limit || undefined });
+    const parsed = bastionEvidenceListQuerySchema.safeParse({
+      assertion_id: raw.assertion_id || undefined,
+      cursor: raw.cursor || undefined,
+      limit: raw.limit || undefined,
+    });
     if (!parsed.success) return validationError(request, reply, parsed.error);
     return handled(request, reply, () => evidence.listControlEvidence(deps(), viewerOf(request), id, parsed.data));
   });
@@ -70,13 +80,17 @@ export default async function evidenceRoutes(fastify: FastifyInstance) {
   // Row 29: every seal with every signing key (current and retired).
   fastify.get('/ledger/seals', { preHandler: [requireAuth, can('bastion.evidence.read')] }, async (request, reply) => {
     const raw = request.query as Record<string, string | undefined>;
-    const limit = raw.limit ? Number(raw.limit) : 90;
-    return handled(request, reply, () => evidence.listSeals(deps(), viewerOf(request), Number.isFinite(limit) ? limit : 90));
+    const parsed = bastionSealListQuerySchema.safeParse({ cursor: raw.cursor || undefined, limit: raw.limit || undefined });
+    if (!parsed.success) return validationError(request, reply, parsed.error);
+    return handled(request, reply, () => evidence.listSeals(deps(), viewerOf(request), parsed.data));
   });
 
   // Row 30.
   fastify.get('/ledger/restores', { preHandler: [requireAuth, can('bastion.evidence.read')] }, async (request, reply) => {
-    return handled(request, reply, () => evidence.listRestores(deps(), viewerOf(request)));
+    const raw = request.query as Record<string, string | undefined>;
+    const parsed = bastionRestoreListQuerySchema.safeParse({ cursor: raw.cursor || undefined, limit: raw.limit || undefined });
+    if (!parsed.success) return validationError(request, reply, parsed.error);
+    return handled(request, reply, () => evidence.listRestores(deps(), viewerOf(request), parsed.data));
   });
 
   // Row 31: owner-only, confirm-gated, session-only, never impersonated.

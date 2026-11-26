@@ -28,6 +28,7 @@ import {
 } from '../db/schema/index.js';
 import { ConflictError, NotFoundError, ValidationFailure, one } from '../lib/errors.js';
 import { audit } from '../lib/audit.js';
+import { decodeIdCursor, encodeIdCursor } from '../lib/cursor.js';
 import { planCompile } from '../library/compile-plan.js';
 import { derivedApplicability } from '../library/setup-state.js';
 import { connectedPopulations, isUniqueViolation, loadFramework } from './shared.js';
@@ -277,19 +278,11 @@ export const COMPILE_RUNS_MAX_LIMIT = 200;
  * precision through JavaScript.
  */
 export function encodeRunCursor(row: { id: string }): string {
-  return Buffer.from(row.id, 'utf8').toString('base64url');
+  return encodeIdCursor(row.id);
 }
 
 export function decodeRunCursor(cursor: string): string {
-  try {
-    const id = Buffer.from(cursor, 'base64url').toString('utf8');
-    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) throw new Error('bad');
-    return id;
-  } catch {
-    throw new ValidationFailure('That page link is no longer valid. Start from the first page.', 'INVALID_CURSOR', [
-      { field: 'cursor', issue: 'invalid' },
-    ]);
-  }
+  return decodeIdCursor(cursor);
 }
 
 /**

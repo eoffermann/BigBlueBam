@@ -763,6 +763,8 @@ export type BastionRunEvaluation = z.infer<typeof bastionRunEvaluationSchema>;
 export const bastionEvaluationListQuerySchema = z
   .object({
     status: BastionRunStatus.optional(),
+    /** next_cursor from the previous page (issue #204). */
+    cursor: z.string().trim().min(1).max(200).optional(),
     limit: z.coerce.number().int().min(1).max(100).default(25),
   })
   .strict();
@@ -772,10 +774,30 @@ export type BastionEvaluationListQuery = z.infer<typeof bastionEvaluationListQue
 export const bastionEvidenceListQuerySchema = z
   .object({
     assertion_id: z.string().uuid().optional(),
+    /** next_cursor from the previous page (issue #204). */
+    cursor: z.string().trim().min(1).max(200).optional(),
     limit: z.coerce.number().int().min(1).max(100).default(25),
   })
   .strict();
 export type BastionEvidenceListQuery = z.infer<typeof bastionEvidenceListQuerySchema>;
+
+/** GET /ledger/seals (spec 5.1 row 29), newest seal_date first, cursor-paginated (issue #204). */
+export const bastionSealListQuerySchema = z
+  .object({
+    cursor: z.string().trim().min(1).max(200).optional(),
+    limit: z.coerce.number().int().min(1).max(400).default(90),
+  })
+  .strict();
+export type BastionSealListQuery = z.infer<typeof bastionSealListQuerySchema>;
+
+/** GET /ledger/restores (spec 5.1 row 30), newest first, cursor-paginated (issue #204). */
+export const bastionRestoreListQuerySchema = z
+  .object({
+    cursor: z.string().trim().min(1).max(200).optional(),
+    limit: z.coerce.number().int().min(1).max(200).default(50),
+  })
+  .strict();
+export type BastionRestoreListQuery = z.infer<typeof bastionRestoreListQuerySchema>;
 
 /**
  * POST /ledger/restores/:id/acknowledge (spec 3.4 points 4 and 5, row 31). `confirm` is the
