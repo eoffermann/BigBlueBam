@@ -16,7 +16,7 @@ import {
 import { SectionWrapper } from '@/components/ui/section-wrapper';
 import { FeatureCard } from '@/components/ui/feature-card';
 import { AnimatedReveal } from '@/components/ui/animated-reveal';
-import { TOTAL_MCP_TOOLS } from '@/content/catalog-stats';
+import { MCP_TOOL_COUNT } from '@/lib/facts';
 
 const features = [
   {
@@ -77,7 +77,7 @@ const features = [
   {
     icon: Bot,
     title: 'AI-Native MCP',
-    description: `AI agents operate at full parity via ${TOTAL_MCP_TOOLS} structured tools with per-agent policy gates, approval queues, and full audit trail.`,
+    description: `AI agents operate at full parity via ${MCP_TOOL_COUNT} structured tools with per-agent policy gates, approval queues, and full audit trail.`,
   },
 ];
 

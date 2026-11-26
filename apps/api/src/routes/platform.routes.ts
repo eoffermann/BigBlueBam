@@ -13,6 +13,7 @@ import { impersonationSessions } from '../db/schema/impersonation-sessions.js';
 import { resolveOrgUserRoles, resolveUserOrgRole } from '../services/role-resolver.js';
 import { seedDefaultPriorities } from '../services/priorities.service.js';
 import { requireAuth } from '../plugins/auth.js';
+import { requirePlatformSuperuser } from '../middleware/require-platform-superuser.js';
 
 const IMPERSONATION_TTL_MS = 30 * 60 * 1000; // 30 minutes
 
@@ -62,6 +63,9 @@ async function logSuperuserAction(
  * Provides cross-org management capabilities.
  */
 export default async function platformRoutes(fastify: FastifyInstance) {
+  // Every route in this file is SuperUser-only. requireCan alone does not
+  // block unless BBB_PERMISSIONS_ENFORCE=on, so enforce it here.
+  fastify.addHook('preHandler', requirePlatformSuperuser);
   // GET /v1/platform/orgs — list all organizations
   fastify.get(
     '/v1/platform/orgs',

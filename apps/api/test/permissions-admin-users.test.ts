@@ -167,7 +167,8 @@ describe('Wave F.1.b — permissions-admin user routes', () => {
         headers: { 'x-test-user': 'normal' },
       });
       expect(res.statusCode).toBe(403);
-      expect(res.json().error.code).toBe('PERMISSION_DENIED');
+      // The plugin-level SuperUser guard rejects before requireCan runs.
+      expect(res.json().error.code).toBe('FORBIDDEN');
     });
 
     it('returns 403 on PUT /users/:id/membership for non-SU', async () => {

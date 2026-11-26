@@ -54,7 +54,7 @@ const features = [
     icon: Bot,
     title: 'AI-Native Chat',
     description:
-      '69 MCP tools let agents post, reply, react, DM, and search with the same authority as a person. Examples include banter_post_message, banter_schedule_post (queued for later, honoring per-channel quiet hours), and banter_subscribe_pattern (watch a channel and react when a message matches). Gated by org policy and per-entity visibility checks.',
+      '77 MCP tools let agents post, reply, react, DM, and search with the same authority as a person. Examples include banter_post_message, banter_schedule_post (queued for later, honoring per-channel quiet hours), and banter_subscribe_pattern (watch a channel and react when a message matches). Gated by org policy and per-entity visibility checks.',
     color: 'bg-indigo-100 text-indigo-600',
   },
 ];

@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Send, Lock } from 'lucide-react';
 import { Button } from '@/components/common/button';
 import { cn, formatRelativeTime } from '@/lib/utils';
+import { api } from '@/lib/api';
 
 interface TicketMessage {
   id: string;
@@ -29,38 +30,17 @@ interface TicketDetail {
   messages: TicketMessage[];
 }
 
-// HB-52: Echo csrf_token cookie in X-CSRF-Token header for cross-app
-// admin writes from the Bam SPA into helpdesk-api (authenticated via
-// the Bam `session` cookie).
-function readCsrfToken(): string | null {
-  if (typeof document === 'undefined') return null;
-  const match = document.cookie.match(/(?:^|;\s*)csrf_token=([^;]+)/);
-  return match ? decodeURIComponent(match[1]!) : null;
-}
-
+// Ticket reads and replies go through the Bam API's session-authenticated
+// proxy (apps/api/src/routes/internal-helpdesk.routes.ts). helpdesk-api's
+// agent endpoints do not accept a browser session directly.
 async function helpdeskGet<T>(path: string): Promise<T> {
-  const res = await fetch(`/helpdesk-api${path}`, {
-    credentials: 'include',
-    headers: { 'Content-Type': 'application/json' },
-  });
-  if (!res.ok) throw new Error(`Helpdesk API error: ${res.status}`);
-  const json = await res.json();
-  return json.data ?? json;
+  const json = await api.get<{ data?: T }>(`/internal/helpdesk${path}`);
+  return (json.data ?? json) as T;
 }
 
 async function helpdeskPost<T>(path: string, body: unknown): Promise<T> {
-  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-  const csrfToken = readCsrfToken();
-  if (csrfToken) headers['X-CSRF-Token'] = csrfToken;
-  const res = await fetch(`/helpdesk-api${path}`, {
-    method: 'POST',
-    credentials: 'include',
-    headers,
-    body: JSON.stringify(body),
-  });
-  if (!res.ok) throw new Error(`Helpdesk API error: ${res.status}`);
-  const json = await res.json();
-  return json.data ?? json;
+  const json = await api.post<{ data?: T }>(`/internal/helpdesk${path}`, body);
+  return (json.data ?? json) as T;
 }
 
 interface HelpdeskPanelProps {

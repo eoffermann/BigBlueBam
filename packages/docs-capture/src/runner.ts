@@ -19,7 +19,7 @@ import type { ResolvedEnvironment } from './environment.js';
 import { ManifestWriter, resolveGitSha } from './manifest.js';
 import { type InteractionStep, type LoadedRecipe, type Recipe, VIEWPORTS } from './recipe.js';
 import { ensureContent, type SeedContext } from './seeding.js';
-import { toArray, verifyBeforeCapture } from './verify.js';
+import { firstSegment, isDemoEmail, toArray, verifyBeforeCapture } from './verify.js';
 
 const SETTLE_MS = 1200;
 
@@ -243,7 +243,9 @@ async function captureRecipe(
     // VERIFY we reached the intended view before snapping. A failure here means
     // the recipe must NOT produce a (misleading) image — fail loudly and delete
     // any stale asset from a prior run so it can't linger as a wrong capture.
-    const verdict = await verifyBeforeCapture(page, toArray(recipe.expect), toArray(recipe.expectNot));
+    const verdict = await verifyBeforeCapture(page, toArray(recipe.expect), toArray(recipe.expectNot), {
+      appSegment: recipe.allowOffApp ? undefined : firstSegment(recipe.route),
+    });
     if (!verdict.ok) {
       if (fs.existsSync(file)) fs.rmSync(file);
       throw new Error(`pre-capture verification failed — ${verdict.reason}`);
@@ -294,6 +296,39 @@ async function captureRecipe(
 }
 
 // ---------------------------------------------------------------------------
+// Workspace guard: only demo people may be visible in shipped captures
+// ---------------------------------------------------------------------------
+
+/**
+ * Fails the whole run if the capture workspace has any member whose email is
+ * not on a reserved demo domain. Member lists, pickers and DM sidebars show
+ * names without emails, so the per-page email check alone cannot catch them.
+ * Service accounts (users.kind = 'service') are not people and are allowed.
+ */
+async function assertDemoWorkspace(
+  browser: Browser,
+  env: RunOptions['env'],
+  storageState: Record<string, unknown>,
+): Promise<void> {
+  const context = await browser.newContext();
+  try {
+    await context.addCookies(((storageState.cookies as never[]) ?? []) as Parameters<typeof context.addCookies>[0]);
+    const res = await context.request.get(`${env.baseUrl}/b3/api/org/members`);
+    if (!res.ok()) throw new Error(`workspace check: GET /b3/api/org/members returned ${res.status()}`);
+    const body = (await res.json()) as { data?: { email?: string; display_name?: string; kind?: string }[] };
+    const real = (body.data ?? []).filter((m) => m.kind !== 'service' && !isDemoEmail(m.email ?? ''));
+    if (real.length > 0) {
+      const names = real.map((m) => m.display_name ?? '(no name)').join(', ');
+      throw new Error(
+        `workspace "${env.workspaceSlug}" has ${real.length} non-demo member(s): ${names}. Remove them from the capture workspace first; shipped captures must show only demo people.`,
+      );
+    }
+  } finally {
+    await context.close();
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Run a batch of recipes
 // ---------------------------------------------------------------------------
 
@@ -326,6 +361,12 @@ export async function runRecipes(recipes: LoadedRecipe[], opts: RunOptions): Pro
         authErrorByIdentity.set(id, msg);
         log(`  [auth-skip] identity "${id}" unavailable — recipes needing it will fail: ${msg}`);
       }
+    }
+
+    const anyState = authByIdentity.get('admin') ?? [...authByIdentity.values()][0];
+    if (anyState) {
+      log('[guard] checking the workspace has only demo members');
+      await assertDemoWorkspace(browser, opts.env, anyState);
     }
 
     for (const loaded of recipes) {

@@ -17,7 +17,7 @@ Blip is BigBlueBam's intake and inspection layer for runtime telemetry from your
 - **Live tail over WebSocket** with backfill, clean resume by sequence cursor, server-side filter and column projection, and backpressure sampling that never touches the durable store.
 - **Saved views** (filter + columns + sort + live-tail flag, private or org-shared) and an auto-maintained **field catalog** that drives column pickers, sort options, Bench metric declaration, and index suggestions.
 - **Watches** that emit Bolt events only on an explicit, throttled condition: match watches (per entry) and window watches (aggregate over a sliding window, with breach/recovery hysteresis).
-- **Edge PII transform** (drop, mask, hash, truncate) applied before tail and storage, plus a global string-length floor.
+- **Edge PII transform** (drop, mask, hash, truncate, pseudonymize) applied before tail and storage, plus a global string-length floor.
 - **Rate limiting and retention** per app and per key, with a 14-day default that never silently becomes unbounded.
 - **Captures and timelapse.** Attach base64 JPEG frames under `screen_captures`; Blip offloads them to Bin and keeps refs, shows a thumbnail strip, and stitches a session into an MP4 timelapse.
 - **AI agent surface** of blip_* MCP tools covering app/key/collection/rate-limit/retention/transform management, entry query and cursor tail, export, captures, timelapse, watches, and views.

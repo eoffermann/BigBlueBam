@@ -137,8 +137,43 @@ if (totalMissingReturns > 0) {
   console.error('');
 }
 
+// --- Check 3: published tool counts match the code ---
+// The README and the marketing site state the tool count. It drifted to a
+// stale 804 for months; this keeps every published number equal to the real one.
+const PUBLISHED = ['README.md', 'site/index.html', 'site/src/content/apps/introduction.md', 'site/src/lib/facts.ts'];
+const COUNT_PATTERNS = [
+  /\b(\d{3,4})(?:-tool\b| (?:MCP |AI |structured )?tools?\b)/gi,
+  /MCP%20tools-(\d+)/g,
+  /\b(\d{3,4}) across \d+ modules/g,
+  /MCP_TOOL_COUNT = (\d+)/g,
+];
+const staleCounts = [];
+for (const rel of PUBLISHED) {
+  const text = readFileSync(join(ROOT, rel), 'utf8');
+  const lines = text.split('\n');
+  for (let i = 0; i < lines.length; i++) {
+    for (const re of COUNT_PATTERNS) {
+      for (const m of lines[i].matchAll(re)) {
+        const n = Number(m[1]);
+        // Per-app counts ("123 MCP tools" for Bam) are legitimate; only a
+        // suite total (no single app is anywhere near 500) must equal the code.
+        if (n >= 500 && n !== totalRegisterTool) staleCounts.push(`${rel}:${i + 1} says ${m[1]}`);
+      }
+    }
+  }
+}
+console.log(`published counts:      ${staleCounts.length} stale (expected 0)`);
+if (staleCounts.length > 0) {
+  failed = true;
+  console.error(`FAIL: published MCP tool counts differ from the ${totalRegisterTool} registered tools:`);
+  for (const loc of staleCounts) {
+    console.error(`  ${loc}`);
+  }
+  console.error('');
+}
+
 if (!failed) {
-  console.log('PASS: All tools use registerTool() with a returns: schema.');
+  console.log('PASS: All tools use registerTool() with a returns: schema, and published counts match.');
 }
 
 process.exit(failed ? 1 : 0);

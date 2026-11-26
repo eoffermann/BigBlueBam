@@ -64,8 +64,8 @@ A tool/command "corresponds" to the endpoint(s) its handler calls. Sections are 
 | Bulwark | 29 | 17 | 12 | 0 |
 | Burn | 48 | 19 | 29 | 0 |
 | Bursar | 79 | 22 | 57 | 0 |
-| Cross-app platform | 41 | 32 | 9 | 6 |
-| **Total** | **1259** | **874** | **385** | **17** |
+| Cross-app platform | 43 | 32 | 11 | 6 |
+| **Total** | **1261** | **874** | **387** | **17** |
 
 _Counts are summed from the per-section tables (each row's REST endpoint counted once even when several MCP tools share it). After the `feat/mcp-endpoint-parity` build the "with an MCP tool" total roughly doubled (≈334 → ≈690). Of the ~247 endpoints still tool-less, the large majority are now annotated `— _(skip: …)_` with a reason — auth/OAuth/session, public-inbound (forms/booking/portal/tracking), multipart/binary upload, binary export (PDF/SVG/CSV/.ics), raw credential/API-key admin, SuperUser/permission/account admin (Bam org/admin held to a deliberately conservative scope this pass), Yjs/scene/WebSocket realtime sync, internal/service-to-service routes, and slug/name resolvers done internally — plus the deferred Helpdesk `X-Agent-Key` agent routes. Some endpoints are shared by multiple MCP tools and many are internal / webhook / public-inbound (not user-facing), so treat the totals as close approximations of the surface size, not an exact public-API inventory. The remaining intentional gaps cluster in **Bam org/admin** (SuperUser & permissions admin, integrations, credentials — UI/CLI-only) and a few per-app binary/upload/realtime tails._
 
@@ -1870,7 +1870,9 @@ External prefix for the Bam api is `/b3/api/`, so a route shown as `POST /v1/pro
 | REST endpoint | MCP tool | Description | UI call site |
 |---|---|---|---|
 | `POST /internal/helpdesk/comments` | — _(skip: internal service-to-service route)_ | Internal: post a Bam comment from a helpdesk ticket | — |
-| `GET /internal/helpdesk/queue` | — _(skip: internal service-to-service route)_ | Session-auth proxy to helpdesk ticket queue | `apps/frontend/src/pages/helpdesk-agent-queue.tsx` |
+| `GET /internal/helpdesk/queue` | — _(skip: SPA session proxy; agents use helpdesk MCP tools)_ | Session-auth proxy to helpdesk ticket queue | `apps/frontend/src/pages/helpdesk-agent-queue.tsx` |
+| `GET /internal/helpdesk/tickets/:id` | — _(skip: SPA session proxy; agents use helpdesk MCP tools)_ | Session-auth proxy to helpdesk agent ticket detail (with internal notes) | `apps/frontend/src/components/tasks/helpdesk-panel.tsx` |
+| `POST /internal/helpdesk/tickets/:id/messages` | — _(skip: SPA session proxy; agents use helpdesk MCP tools)_ | Session-auth proxy to post an agent reply or internal note | `apps/frontend/src/components/tasks/helpdesk-panel.tsx` |
 | `POST /internal/helpdesk/tasks` | — _(skip: internal service-to-service route)_ | Internal: create a Bam task from a helpdesk ticket | — |
 | `POST /internal/helpdesk/tasks/:id/move-to-terminal-phase` | — _(skip: internal service-to-service route)_ | Internal: close ticket's task into terminal phase | — |
 | `POST /internal/helpdesk/tasks/:id/reopen` | — _(skip: internal service-to-service route)_ | Internal: reopen ticket's task to first non-terminal phase | — |

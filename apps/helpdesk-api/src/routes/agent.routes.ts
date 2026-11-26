@@ -2,6 +2,8 @@ import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import { eq, desc, and, or, sql, ilike } from 'drizzle-orm';
 import argon2 from 'argon2';
+import { timingSafeEqual } from 'node:crypto';
+import { env } from '../env.js';
 import { db } from '../db/index.js';
 import { tickets } from '../db/schema/tickets.js';
 import { ticketMessages } from '../db/schema/ticket-messages.js';
@@ -60,7 +62,86 @@ declare module 'fastify' {
      * is purely informational.
      */
     agentUserId: string | null;
+    /**
+     * Org the request acts in, set only on Bam-proxied calls (internal
+     * token + X-Acting-Org-Id). Bam has already verified the acting user
+     * belongs to it. Takes precedence over every other org source.
+     */
+    agentOrgId: string | null;
   }
+}
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function timingSafeStringEqual(a: string, b: string): boolean {
+  const bufA = Buffer.from(a, 'utf8');
+  const bufB = Buffer.from(b, 'utf8');
+  if (bufA.length !== bufB.length) {
+    timingSafeEqual(bufA, bufA);
+    return false;
+  }
+  return timingSafeEqual(bufA, bufB);
+}
+
+function headerValue(request: FastifyRequest, name: string): string | undefined {
+  const raw = request.headers[name];
+  return Array.isArray(raw) ? raw[0] : raw;
+}
+
+/**
+ * Bam-proxied agent call (apps/api internal-helpdesk.routes.ts). The Bam
+ * API authenticates the browser session and org membership, then calls
+ * here with the shared INTERNAL_HELPDESK_SECRET plus the acting user and
+ * org. Returns true when the request was handled (authorized, or a reply
+ * was sent); false when no internal token is present and the caller should
+ * fall through to X-Agent-Key verification.
+ */
+async function tryInternalProxyAuth(request: FastifyRequest, reply: FastifyReply): Promise<boolean> {
+  const token = headerValue(request, 'x-internal-token');
+  if (!token) return false;
+
+  const unauthorized = (message: string) => {
+    reply.status(401).send({
+      error: { code: 'UNAUTHORIZED', message, details: [], request_id: request.id },
+    });
+    return true;
+  };
+
+  const expected = env.INTERNAL_HELPDESK_SECRET;
+  if (!expected || !timingSafeStringEqual(token, expected)) {
+    return unauthorized('Invalid internal service token');
+  }
+
+  const actingUserId = headerValue(request, 'x-acting-user-id');
+  const actingOrgId = headerValue(request, 'x-acting-org-id');
+  if (!actingUserId || !actingOrgId || !UUID_RE.test(actingUserId) || !UUID_RE.test(actingOrgId)) {
+    return unauthorized('Internal agent calls must name the acting user and org');
+  }
+
+  // Defense in depth: the acting user must exist, be active, and be a
+  // member of the acting org (or a SuperUser, who may view any org).
+  const result = await db.execute(
+    sql`SELECT u.id
+        FROM users u
+        WHERE u.id = ${actingUserId}
+          AND u.is_active = true
+          AND (
+            u.is_superuser = true
+            OR EXISTS (
+              SELECT 1 FROM organization_memberships m
+              WHERE m.user_id = u.id AND m.org_id = ${actingOrgId}
+            )
+          )
+        LIMIT 1`,
+  );
+  const row = Array.isArray(result) ? result[0] : (result as any).rows?.[0];
+  if (!row) {
+    return unauthorized('Acting user is not an active member of the acting org');
+  }
+
+  request.agentUserId = actingUserId;
+  request.agentOrgId = actingOrgId;
+  return true;
 }
 
 /**
@@ -115,6 +196,8 @@ async function resolveSessionIdentity(sessionCookie: string | undefined): Promis
  * rest matching the bbam_ API key model.
  */
 async function requireAgentAuth(request: FastifyRequest, reply: FastifyReply) {
+  if (await tryInternalProxyAuth(request, reply)) return;
+
   const token = request.headers['x-agent-key'] as string | undefined;
 
   if (!token || token.length < 9) {
@@ -241,17 +324,15 @@ async function resolveAgentOrgId(agentUserId: string | null): Promise<string | n
 }
 
 /**
- * Determine the effective org_id for an agent request. Prefers the session
- * cookie's org (if present), then falls back to the agent key user's org.
- * Returns null only if neither source yields an org.
+ * Determine the effective org_id for an agent request. Prefers the org a
+ * Bam-proxied call acts in, then the session cookie's org (if present),
+ * then the agent key user's org. Returns null only if no source yields one.
  */
-async function resolveRequestOrgId(
-  sessionCookie: string | undefined,
-  agentUserId: string | null,
-): Promise<string | null> {
-  const identity = await resolveSessionIdentity(sessionCookie);
+async function resolveRequestOrgId(request: FastifyRequest): Promise<string | null> {
+  if (request.agentOrgId) return request.agentOrgId;
+  const identity = await resolveSessionIdentity(request.cookies?.session);
   if (identity?.orgId) return identity.orgId;
-  return resolveAgentOrgId(agentUserId);
+  return resolveAgentOrgId(request.agentUserId);
 }
 
 /**
@@ -271,6 +352,7 @@ async function ticketBelongsToOrg(ticketId: string, orgId: string): Promise<bool
 
 export default async function agentRoutes(fastify: FastifyInstance) {
   fastify.decorateRequest('agentUserId', null);
+  fastify.decorateRequest('agentOrgId', null);
 
 
   // GET /tickets — list tickets visible to the caller (HB-6: org-scoped).
@@ -282,7 +364,7 @@ export default async function agentRoutes(fastify: FastifyInstance) {
   // scoped view since they cannot be attributed to an org.
   fastify.get('/tickets', { preHandler: [requireAgentAuth] }, async (request, reply) => {
     const query = request.query as { status?: string; project_id?: string };
-    const scopeOrgId = await resolveRequestOrgId(request.cookies?.session, request.agentUserId);
+    const scopeOrgId = await resolveRequestOrgId(request);
 
     if (!scopeOrgId) {
       return reply.status(403).send({
@@ -333,7 +415,7 @@ export default async function agentRoutes(fastify: FastifyInstance) {
   // static segment wins the match on Fastify's router.
   fastify.get('/tickets/by-number/:number', { preHandler: [requireAgentAuth] }, async (request, reply) => {
     const { number: rawNumber } = request.params as { number: string };
-    const scopeOrgId = await resolveRequestOrgId(request.cookies?.session, request.agentUserId);
+    const scopeOrgId = await resolveRequestOrgId(request);
 
     if (!scopeOrgId) {
       return reply.status(403).send({
@@ -402,7 +484,7 @@ export default async function agentRoutes(fastify: FastifyInstance) {
   // so the static segment wins routing.
   fastify.get('/tickets/search', { preHandler: [requireAgentAuth] }, async (request, reply) => {
     const query = request.query as { q?: string; status?: string; assignee_id?: string };
-    const scopeOrgId = await resolveRequestOrgId(request.cookies?.session, request.agentUserId);
+    const scopeOrgId = await resolveRequestOrgId(request);
 
     if (!scopeOrgId) {
       return reply.status(403).send({
@@ -474,7 +556,7 @@ export default async function agentRoutes(fastify: FastifyInstance) {
   // GET /tickets/:id — full ticket detail including internal messages (org-scoped)
   fastify.get('/tickets/:id', { preHandler: [requireAgentAuth] }, async (request, reply) => {
     const { id } = request.params as { id: string };
-    const scopeOrgId = await resolveRequestOrgId(request.cookies?.session, request.agentUserId);
+    const scopeOrgId = await resolveRequestOrgId(request);
 
     if (!scopeOrgId) {
       return reply.status(403).send({
@@ -539,7 +621,7 @@ export default async function agentRoutes(fastify: FastifyInstance) {
     const { id } = request.params as { id: string };
     const data = agentMessageSchema.parse(request.body);
 
-    const scopeOrgId = await resolveRequestOrgId(request.cookies?.session, request.agentUserId);
+    const scopeOrgId = await resolveRequestOrgId(request);
     if (!scopeOrgId) {
       return reply.status(403).send({
         error: {
@@ -594,7 +676,15 @@ export default async function agentRoutes(fastify: FastifyInstance) {
     // also require the user to belong to the target ticket's org (derived
     // from the ticket's project). This prevents a holder of the shared agent
     // key from forging messages as arbitrary/non-existent users.
-    const identity = await resolveSessionIdentity(request.cookies?.session);
+    // Bam-proxied calls carry a verified acting user; treat it exactly like
+    // a session identity so the client can never choose the author.
+    const identity: AgentIdentity | null = request.agentOrgId && request.agentUserId
+      ? {
+          userId: request.agentUserId,
+          userDisplayName: await resolveAgentDisplayName(request.agentUserId),
+          orgId: request.agentOrgId,
+        }
+      : await resolveSessionIdentity(request.cookies?.session);
 
     let authorId: string;
     let authorName: string;
@@ -769,7 +859,7 @@ export default async function agentRoutes(fastify: FastifyInstance) {
     const { id } = request.params as { id: string };
     const data = updateTicketSchema.parse(request.body);
 
-    const scopeOrgId = await resolveRequestOrgId(request.cookies?.session, request.agentUserId);
+    const scopeOrgId = await resolveRequestOrgId(request);
     if (!scopeOrgId) {
       return reply.status(403).send({
         error: {
@@ -977,7 +1067,7 @@ export default async function agentRoutes(fastify: FastifyInstance) {
   }, async (request, reply) => {
     const { id } = request.params as { id: string };
 
-    const scopeOrgId = await resolveRequestOrgId(request.cookies?.session, request.agentUserId);
+    const scopeOrgId = await resolveRequestOrgId(request);
     if (!scopeOrgId) {
       return reply.status(403).send({
         error: {
@@ -1111,7 +1201,7 @@ export default async function agentRoutes(fastify: FastifyInstance) {
     const { id } = request.params as { id: string };
     const body = z.object({ primary_ticket_id: z.string().uuid() }).parse(request.body ?? {});
 
-    const scopeOrgId = await resolveRequestOrgId(request.cookies?.session, request.agentUserId);
+    const scopeOrgId = await resolveRequestOrgId(request);
     if (!scopeOrgId) {
       return reply.status(403).send({
         error: {
@@ -1332,7 +1422,7 @@ export default async function agentRoutes(fastify: FastifyInstance) {
 
   fastify.get('/agents/queue', { preHandler: [requireAgentAuth] }, async (request, reply) => {
     const query = queueQuerySchema.parse(request.query);
-    const scopeOrgId = await resolveRequestOrgId(request.cookies?.session, request.agentUserId);
+    const scopeOrgId = await resolveRequestOrgId(request);
 
     if (!scopeOrgId) {
       return reply.status(403).send({

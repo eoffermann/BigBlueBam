@@ -4,6 +4,8 @@
 
 <h1 align="center">BigBlueBam</h1>
 
+> **Project page:** [BigBlueBam and the B-Suite](https://bigblueceiling.com/projects/bigbluebam/) on [Big Blue Ceiling](https://bigblueceiling.com/)
+
 <p align="center">
   <strong>The work suite built for human-AI teams.</strong><br/>
   Your team sets the strategy. AI agents handle the routine. Everyone works in the same place.
@@ -35,7 +37,7 @@
 
 <p align="center">
   <img src="https://img.shields.io/badge/tests-900%2B%20passing-brightgreen" alt="Tests" />
-  <img src="https://img.shields.io/badge/MCP%20tools-865-blue" alt="MCP Tools" />
+  <img src="https://img.shields.io/badge/MCP%20tools-885-blue" alt="MCP Tools" />
   <img src="https://img.shields.io/badge/apps-23-blueviolet" alt="Apps" />
   <img src="https://img.shields.io/badge/license-MIT-green" alt="License" />
 </p>
@@ -52,13 +54,13 @@ Most work platforms are built for humans talking to humans. Bolt an AI agent ont
 
 The **suite** is the shared workspace. When an AI agent creates a task, replies to a customer, updates a deal, or posts to a Banter channel, it shows up in real time, right alongside everything your team is doing. No separate dashboards. No hidden automation. Full transparency.
 
-This is made possible by **865 MCP tools** that give AI assistants (Claude, Claude Code, custom agents) full read-write access to project boards, sprints, team messaging (with scheduled posts and pattern subscriptions), helpdesk tickets, knowledge base, collaborative docs, workflow automations with runtime observability, goals and OKRs, whiteboards, CRM pipelines with dedupe, email campaigns, analytics dashboards, scheduling with mixed human-and-agent rosters, forms, invoicing, plus cross-cutting platform capabilities (cross-app search, composite subject views, entity linking, durable proposal queues, per-agent kill switches, HMAC-signed outbound webhooks). Service-account agents run behind a fail-closed policy gate with confirm-action tokens backed by Redis so destructive flows survive rolling deploys.
+This is made possible by **885 MCP tools** that give AI assistants (Claude, Claude Code, custom agents) full read-write access to project boards, sprints, team messaging (with scheduled posts and pattern subscriptions), helpdesk tickets, knowledge base, collaborative docs, workflow automations with runtime observability, goals and OKRs, whiteboards, CRM pipelines with dedupe, email campaigns, analytics dashboards, scheduling with mixed human-and-agent rosters, forms, invoicing, plus cross-cutting platform capabilities (cross-app search, composite subject views, entity linking, durable proposal queues, per-agent kill switches, HMAC-signed outbound webhooks). Service-account agents run behind a fail-closed policy gate with confirm-action tokens backed by Redis so destructive flows survive rolling deploys.
 
 ---
 
 ## The Suite at a Glance
 
-23 apps, one workspace. If you've used the tools on the right you already know most of how each app works - the twist is that all 23 live under the same auth, the same org and project permissions, and the same 865-tool MCP surface. No integration glue, no per-tool API keys, no glue-code tax: an agent that can move a card can also close a deal, publish an article, and send an invoice.
+23 apps, one workspace. If you've used the tools on the right you already know most of how each app works - the twist is that all 23 live under the same auth, the same org and project permissions, and the same 885-tool MCP surface. No integration glue, no per-tool API keys, no glue-code tax: an agent that can move a card can also close a deal, publish an article, and send an invoice.
 
 | App | What it is | Comparable to |
 |-----|------------|---------------|
@@ -341,7 +343,7 @@ Configure calendar feeds, API keys, and webhooks under Settings:
 
 ## For AI Agents
 
-This is the part most work suites bolt on as an afterthought. BigBlueBam exposes **865 MCP (Model Context Protocol) tools** that give AI assistants first-class, read-write access to every app in the suite plus cross-cutting platform capabilities - the same operations a human gets through the UI, gated by the same permissions. Connect Claude, Claude Code, or any MCP-compatible agent and let it work alongside your team.
+This is the part most work suites bolt on as an afterthought. BigBlueBam exposes **885 MCP (Model Context Protocol) tools** that give AI assistants first-class, read-write access to every app in the suite plus cross-cutting platform capabilities - the same operations a human gets through the UI, gated by the same permissions. Connect Claude, Claude Code, or any MCP-compatible agent and let it work alongside your team.
 
 ### What AI Agents Can Do
 
@@ -353,7 +355,7 @@ This is the part most work suites bolt on as an afterthought. BigBlueBam exposes
 - **Message the team via Banter** - post messages immediately or schedule for later while respecting per-channel quiet hours, manage channels, react, search conversations and call transcripts, subscribe to message patterns, and participate in voice calls as spoken participants
 - **Manage the knowledge base via Beacon** - create, publish, upsert-by-slug, search with semantic plus graph retrieval, verify content freshness, link related knowledge, manage governance policies, and save reusable queries
 - **Author collaborative documents via Brief** - create, edit, upsert-by-slug, search documents, manage version history, leave inline comments, apply templates, and graduate finished documents into Beacons
-- **Automate workflows with Bolt** - create trigger-condition-action rules, inspect executions, trace why each rule fired or skipped, browse templates, and orchestrate cross-product automations against the full 865-tool catalog
+- **Automate workflows with Bolt** - create trigger-condition-action rules, inspect executions, trace why each rule fired or skipped, browse templates, and orchestrate cross-product automations against the full 885-tool catalog
 - **Track goals and OKRs with Bearing** - create time-boxed periods, define goals with key results, link KRs to Bam tasks for automatic progress, post status updates, and generate at-risk reports
 - **Collaborate visually on Board** - create and manage whiteboard rooms, add and arrange shapes, read canvas content for AI analysis, manage participants, embed cross-product content, and run sticky-to-task pipelines
 - **Manage CRM pipeline with Bond** - create, update, upsert-by-email, merge contacts, advance deals through pipeline stages, detect likely duplicates with confidence scores, log activities, and generate pipeline reports
@@ -385,7 +387,7 @@ This is the part most work suites bolt on as an afterthought. BigBlueBam exposes
 
 ### MCP Tools Reference
 
-**865 tools** across the 23 apps plus cross-cutting agentic platform surfaces:
+**885 tools** across the 23 apps plus cross-cutting agentic platform surfaces:
 
 | Category | Count | What they cover |
 |----------|------:|-----------------|
@@ -886,7 +888,7 @@ All services are accessed through a single nginx container on port 80:
 | `/blip/api/` | Fastify `:4018` | Blip REST API |
 | `/blip/ws` | Fastify `:4018` | Blip WebSocket (live log stream) |
 | `/blip/ingest/` | Fastify `:4018` | Blip telemetry ingest (bearer-token) |
-| `/mcp/` | MCP Server `:3001` | Model Context Protocol (865 tools) |
+| `/mcp/` | MCP Server `:3001` | Model Context Protocol (885 tools) |
 
 Infrastructure services (internal, not exposed via nginx):
 
@@ -956,7 +958,7 @@ pnpm test  # 900+ tests across all packages
 ┌──────▼────┐ ┌──▼───────┐ ┌▼──────────┐ ┌──────────┐ ┌───────▼──────┐ ┌──────────┐
 │ Bam API   │ │ Banter   │ │ MCP Server│ │ Brief    │ │ Bolt API │ │ LiveKit SFU  │ │ Worker   │
 │ :4000     │ │ API :4002│ │ :3001     │ │ API :4005│ │ :4006    │ │ :7880 (voice)│ │ BullMQ   │
-│ +WebSocket│ │ +WS      │ │ 865 tools │ │ +WS      │ │          │ │ +voice-agent │ │ jobs     │
+│ +WebSocket│ │ +WS      │ │ 885 tools │ │ +WS      │ │          │ │ +voice-agent │ │ jobs     │
 └─────┬─────┘ └────┬─────┘ └─────┬─────┘ └────┬─────┘ └──────────────┘ └────┬─────┘
       │             │             │            │                  │
 ┌─────▼─────────────▼─────────────▼────────────▼───────────────────▼───┐
@@ -986,7 +988,7 @@ pnpm test  # 900+ tests across all packages
 apps/
   api/              → Bam Fastify REST API + WebSocket (project management core)
   frontend/         → Every React SPA under one container
-  mcp-server/       → MCP protocol server (865 tools, Redis-backed confirm tokens)
+  mcp-server/       → MCP protocol server (885 tools, Redis-backed confirm tokens)
   worker/           → BullMQ background jobs (emails, notifications, scheduled Banter posts, webhook dispatch + DLQ)
   helpdesk-api/     → Helpdesk Fastify API (tickets, messages, similar-tickets lookup, user upsert)
   banter-api/       → Banter Fastify API + WebSocket (channels, threads, calls, quiet hours, scheduled posts, agent subscriptions)
@@ -1037,7 +1039,7 @@ site/               → Marketing site (served at /)
 | Metric | Count |
 |--------|-------|
 | Apps | 23 (Bam, Banter, Basis, Bay, Beacon, Bearing, Bench, Bill, Bin, Blank, Blast, Blip, Blueprint, Board, Bolt, Bond, Book, Braid, Brief, Bulwark, Bureau, Burn, Helpdesk) |
-| MCP tools | 865 across 53 modules (128 Bam + 80 Banter + 69 Bond + 48 Brief + 47 Bill + 40 Board + 38 Blip + 38 Beacon + 37 Bureau + 36 Blueprint + 32 Bench + 30 Bearing + 28 Blast + 26 Bolt + 25 Book + 20 Blank + 19 Bin + 18 Burn + 16 Basis + 16 Bulwark + 14 Bay + 13 Braid + 11 Helpdesk + 36 cross-cutting platform) |
+| MCP tools | 885 across 53 modules (128 Bam + 80 Banter + 69 Bond + 48 Brief + 47 Bill + 40 Board + 38 Blip + 38 Beacon + 37 Bureau + 36 Blueprint + 32 Bench + 30 Bearing + 28 Blast + 26 Bolt + 25 Book + 20 Blank + 19 Bin + 18 Burn + 16 Basis + 16 Bulwark + 14 Bay + 13 Braid + 11 Helpdesk + 36 cross-cutting platform) |
 | Bolt event catalog | 122 registered events across app and platform sources |
 | Test cases | 900+ |
 | Migrations | 187 (tip 0225, additive + idempotent) |

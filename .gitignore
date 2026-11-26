@@ -71,9 +71,7 @@ site/public/downloads/*
 !site/public/downloads/BigBlueBam-Manual.pdf
 !site/public/downloads/BigBlueBam-Manual.docx
 
-# Autonomous cycle run logs (Windows Task Scheduler)
-.autonomous-logs/
-
-# Scratch/probe output - never commit (see issue #70)
-tmp/
+# Local scratch output and autonomous-cycle logs (never committed)
+/tmp/
+/.autonomous-logs/
 B3-FRNDO_LAUNCH_NOTES.md

@@ -93,6 +93,7 @@ import internalCanReadRoutes from './routes/internal-can-read.routes.js';
 import internalSystemErrorsRoutes from './routes/internal-system-errors.routes.js';
 import deploySettingsRoutes from './routes/deploy-settings.routes.js';
 import superuserLogsRoutes from './routes/superuser-logs.routes.js';
+import superuserBackupsRoutes from './routes/superuser-backups.routes.js';
 import { sql } from 'drizzle-orm';
 import websocketHandlerPlugin from './plugins/websocket.js';
 
@@ -316,6 +317,7 @@ await fastify.register(internalCanReadRoutes);
 await fastify.register(internalSystemErrorsRoutes, { prefix: '/internal' });
 await fastify.register(deploySettingsRoutes);
 await fastify.register(superuserLogsRoutes);
+await fastify.register(superuserBackupsRoutes);
 
 // BAM-029: TODO — Add a periodic session cleanup job to the worker service.
 // Expired sessions (sessions.expires_at < NOW()) accumulate in the database

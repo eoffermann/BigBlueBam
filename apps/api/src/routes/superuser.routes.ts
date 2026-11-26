@@ -57,6 +57,7 @@ import {
   CannotDeleteSuperuserError,
   UserNotFoundError,
 } from '../services/user-deletion.service.js';
+import { requirePlatformSuperuser } from '../middleware/require-platform-superuser.js';
 
 const ROLE_VALUES = ['owner', 'admin', 'member', 'viewer', 'guest'] as const;
 const roleSchema = z.enum(ROLE_VALUES);
@@ -91,6 +92,9 @@ function decodeCursor(raw: string): OrgCursor | null {
 }
 
 export default async function superuserRoutes(fastify: FastifyInstance) {
+  // Every route in this file is SuperUser-only. requireCan alone does not
+  // block unless BBB_PERMISSIONS_ENFORCE=on, so enforce it here.
+  fastify.addHook('preHandler', requirePlatformSuperuser);
   // ─── GET /superuser/organizations ─────────────────────────────────────────
   fastify.get<{
     Querystring: { cursor?: string; limit?: string; search?: string };

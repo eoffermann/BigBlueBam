@@ -82,15 +82,6 @@ export function HelpdeskAgentQueuePage({ onNavigate }: HelpdeskAgentQueuePagePro
         credentials: 'include',
       });
 
-      if (res.status === 404) {
-        setError(
-          'The helpdesk queue proxy endpoint (/internal/helpdesk/queue) is not yet configured on the Bam API. ' +
-          'This page requires a new route on apps/api that forwards the request to helpdesk-api with the org agent key.',
-        );
-        setTickets([]);
-        return;
-      }
-
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
         setError((body as any)?.error?.message ?? `Request failed with status ${res.status}`);

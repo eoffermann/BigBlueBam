@@ -11,6 +11,8 @@ import { processSprintCloseJob, type SprintCloseJobData } from './jobs/sprint-cl
 import { processExportJob, type ExportJobData } from './jobs/export.job.js';
 import { processBanterNotificationJob, type BanterNotificationJobData } from './jobs/banter-notification.job.js';
 import { processBanterRetentionJob, type BanterRetentionJobData } from './jobs/banter-retention.job.js';
+import { processBackupJob, type BackupJobData } from './jobs/backup-database.job.js';
+import { processRestoreJob, type RestoreJobData } from './jobs/restore-database.job.js';
 import { processBanterTranscriptionJob, type BanterTranscriptionJobData } from './jobs/banter-transcription.job.js';
 import { processHelpdeskTaskCreateJob, type HelpdeskTaskCreateJobData } from './jobs/helpdesk-task-create.job.js';
 import { processBeaconVectorSyncJob, type BeaconVectorSyncJobData } from './jobs/beacon-vector-sync.job.js';
@@ -199,6 +201,7 @@ import {
   type BlipFieldIndexJobData,
 } from '@bigbluebam/shared';
 import { processBlipIngestJob } from './jobs/blip-ingest.job.js';
+import { withRetention } from './lib/job-retention.js';
 import {
   processBlipPartitionProvisionJob,
   type BlipPartitionProvisionJobData,
@@ -576,7 +579,7 @@ banterRetentionQueue
   .upsertJobScheduler(
     'banter-retention-daily',
     { pattern: '0 1 * * *' }, // 1 AM daily
-    { name: 'daily-retention', data: {} },
+    withRetention({ name: 'daily-retention', data: {} }),
   )
   .catch((err) => logger.error({ err }, 'Failed to register banter retention scheduler'));
 
@@ -660,7 +663,7 @@ const beaconExpirySweepQueue = makeQueue('beacon-expiry-sweep');
 beaconExpirySweepQueue.upsertJobScheduler(
   'beacon-expiry-sweep-daily',
   { pattern: '0 3 * * *' }, // 3 AM daily
-  { name: 'daily-sweep', data: {} },
+  withRetention({ name: 'daily-sweep', data: {} }),
 ).catch((err) => logger.error({ err }, 'Failed to register beacon expiry sweep scheduler'));
 
 // LiveKit address-drift watchdog (hourly). Compares the public IP
@@ -699,7 +702,7 @@ const livekitIpDriftQueue = makeQueue('livekit-ip-drift');
 livekitIpDriftQueue.upsertJobScheduler(
   'livekit-ip-drift-hourly',
   { pattern: '17 * * * *' },
-  { name: 'drift-check', data: {} },
+  withRetention({ name: 'drift-check', data: {} }),
 ).catch((err) => logger.error({ err }, 'Failed to register livekit ip drift scheduler'));
 
 // TURN-TLS certificate expiry watchdog (daily). On Railway TURN is the
@@ -735,7 +738,7 @@ const turnCertExpiryQueue = makeQueue('turn-cert-expiry');
 turnCertExpiryQueue.upsertJobScheduler(
   'turn-cert-expiry-daily',
   { pattern: '23 4 * * *' }, // 04:23 UTC daily
-  { name: 'cert-check', data: {} },
+  withRetention({ name: 'cert-check', data: {} }),
 ).catch((err) => logger.error({ err }, 'Failed to register turn cert expiry scheduler'));
 
 // Schedule bearing snapshot as a daily repeatable job (midnight UTC)
@@ -743,7 +746,7 @@ const bearingSnapshotQueue = makeQueue('bearing-snapshot');
 bearingSnapshotQueue.upsertJobScheduler(
   'bearing-snapshot-daily',
   { pattern: '0 0 * * *' }, // midnight UTC
-  { name: 'daily-snapshot', data: {} },
+  withRetention({ name: 'daily-snapshot', data: {} }),
 ).catch((err) => logger.error({ err }, 'Failed to register bearing snapshot scheduler'));
 
 // Bearing snapshot worker (daily KR progress snapshots)
@@ -956,7 +959,7 @@ const boltScheduleQueue = makeQueue('bolt-schedule');
 boltScheduleQueue.upsertJobScheduler(
   'bolt-schedule-tick',
   { pattern: '* * * * *' }, // every minute
-  { name: 'tick', data: {} },
+  withRetention({ name: 'tick', data: {} }),
 ).catch((err) => logger.error({ err }, 'Failed to register bolt schedule tick scheduler'));
 
 // Blast send worker (processes campaign email delivery)
@@ -1015,7 +1018,7 @@ const bondStaleDealsQueue = makeQueue('bond-stale-deals');
 bondStaleDealsQueue.upsertJobScheduler(
   'bond-stale-deals-daily',
   { pattern: '0 2 * * *' }, // 2 AM daily
-  { name: 'daily-sweep', data: {} },
+  withRetention({ name: 'daily-sweep', data: {} }),
 ).catch((err) => logger.error({ err }, 'Failed to register bond stale-deals scheduler'));
 
 // Bam task-overdue sweep worker (low-latency live path for the task.overdue Bolt event).
@@ -1088,7 +1091,7 @@ billPdfGenerateQueue
   .upsertJobScheduler(
     'bill-pdf-generate-sweep',
     { pattern: '*/2 * * * *' },
-    { name: 'sweep', data: { sweep: true } },
+    withRetention({ name: 'sweep', data: { sweep: true } }),
   )
   .catch((err) => logger.error({ err }, 'Failed to register bill-pdf-generate sweep scheduler'));
 
@@ -1119,7 +1122,7 @@ billEmailSendQueue
   .upsertJobScheduler(
     'bill-email-send-sweep',
     { pattern: '*/2 * * * *' },
-    { name: 'sweep', data: { sweep: true } },
+    withRetention({ name: 'sweep', data: { sweep: true } }),
   )
   .catch((err) => logger.error({ err }, 'Failed to register bill-email-send sweep scheduler'));
 
@@ -1150,7 +1153,7 @@ billOverdueReminderQueue
   .upsertJobScheduler(
     'bill-overdue-reminder-daily',
     { pattern: '0 9 * * *' },
-    { name: 'daily', data: {} },
+    withRetention({ name: 'daily', data: {} }),
   )
   .catch((err) => logger.error({ err }, 'Failed to register bill-overdue-reminder scheduler'));
 
@@ -1183,7 +1186,7 @@ billRecurringGenerateQueue
   .upsertJobScheduler(
     'bill-recurring-generate-daily',
     { pattern: '0 6 * * *' }, // 6 AM UTC daily
-    { name: 'daily-sweep', data: {} },
+    withRetention({ name: 'daily-sweep', data: {} }),
   )
   .catch((err) => logger.error({ err }, 'Failed to register bill-recurring-generate scheduler'));
 
@@ -1214,7 +1217,7 @@ blankConfirmationEmailQueue
   .upsertJobScheduler(
     'blank-confirmation-email-sweep',
     { pattern: '*/2 * * * *' },
-    { name: 'sweep', data: { sweep: true } },
+    withRetention({ name: 'sweep', data: { sweep: true } }),
   )
   .catch((err) =>
     logger.error({ err }, 'Failed to register blank-confirmation-email sweep scheduler'),
@@ -1247,7 +1250,7 @@ blankFileProcessQueue
   .upsertJobScheduler(
     'blank-file-process-sweep',
     { pattern: '*/5 * * * *' },
-    { name: 'sweep', data: {} },
+    withRetention({ name: 'sweep', data: {} }),
   )
   .catch((err) => logger.error({ err }, 'Failed to register blank-file-process sweep scheduler'));
 
@@ -1301,7 +1304,7 @@ benchMvRefreshQueue
   .upsertJobScheduler(
     'bench-mv-refresh-tick',
     { pattern: '*/5 * * * *' },
-    { name: 'tick', data: {} },
+    withRetention({ name: 'tick', data: {} }),
   )
   .catch((err) => logger.error({ err }, 'Failed to register bench-mv-refresh scheduler'));
 
@@ -1332,7 +1335,7 @@ briefEmbedQueue
   .upsertJobScheduler(
     'brief-embed-tick',
     { pattern: '*/5 * * * *' },
-    { name: 'tick', data: {} },
+    withRetention({ name: 'tick', data: {} }),
   )
   .catch((err) => logger.error({ err }, 'Failed to register brief-embed scheduler'));
 
@@ -1363,7 +1366,7 @@ briefSnapshotQueue
   .upsertJobScheduler(
     'brief-snapshot-daily',
     { pattern: '0 4 * * *' }, // 4 AM daily
-    { name: 'daily-snapshot', data: {} },
+    withRetention({ name: 'daily-snapshot', data: {} }),
   )
   .catch((err) => logger.error({ err }, 'Failed to register brief-snapshot scheduler'));
 
@@ -1417,7 +1420,7 @@ briefCleanupQueue
   .upsertJobScheduler(
     'brief-cleanup-weekly',
     { pattern: '0 5 * * 0' }, // Sunday 5 AM UTC
-    { name: 'weekly-cleanup', data: {} },
+    withRetention({ name: 'weekly-cleanup', data: {} }),
   )
   .catch((err) => logger.error({ err }, 'Failed to register brief-cleanup scheduler'));
 
@@ -1448,7 +1451,7 @@ helpdeskSlaMonitorQueue
   .upsertJobScheduler(
     'helpdesk-sla-monitor-tick',
     { pattern: '*/5 * * * *' },
-    { name: 'tick', data: {} },
+    withRetention({ name: 'tick', data: {} }),
   )
   .catch((err) => logger.error({ err }, 'Failed to register helpdesk-sla-monitor scheduler'));
 
@@ -1479,7 +1482,7 @@ boardThumbnailQueue
   .upsertJobScheduler(
     'board-thumbnail-sweep-daily',
     { pattern: '0 4 * * *' }, // 4 AM daily
-    { name: 'sweep', data: { sweep: true } },
+    withRetention({ name: 'sweep', data: { sweep: true } }),
   )
   .catch((err) => logger.error({ err }, 'Failed to register board-thumbnail sweep scheduler'));
 
@@ -1510,7 +1513,7 @@ boltExecutionCleanupQueue
   .upsertJobScheduler(
     'bolt-execution-cleanup-daily',
     { pattern: '30 3 * * *' }, // 3:30 AM daily
-    { name: 'daily-cleanup', data: {} },
+    withRetention({ name: 'daily-cleanup', data: {} }),
   )
   .catch((err) => logger.error({ err }, 'Failed to register bolt-execution-cleanup scheduler'));
 
@@ -1541,7 +1544,7 @@ bondBulkScoreQueue
   .upsertJobScheduler(
     'bond-bulk-score-daily',
     { pattern: '0 5 * * *' }, // 5 AM daily
-    { name: 'daily-score', data: {} },
+    withRetention({ name: 'daily-score', data: {} }),
   )
   .catch((err) => logger.error({ err }, 'Failed to register bond-bulk-score scheduler'));
 
@@ -1595,7 +1598,7 @@ agentWebhookDlqQueue
   .upsertJobScheduler(
     'agent-webhook-dlq-tick',
     { pattern: '*/5 * * * *' }, // every 5 minutes
-    { name: 'tick', data: {} },
+    withRetention({ name: 'tick', data: {} }),
   )
   .catch((err) => logger.error({ err }, 'Failed to register agent-webhook-dlq scheduler'));
 
@@ -1702,7 +1705,7 @@ bureauPresenceReapQueue
   .upsertJobScheduler(
     'bureau-presence-reap-tick',
     { every: 15_000 },
-    { name: 'tick', data: {} },
+    withRetention({ name: 'tick', data: {} }),
   )
   .catch((err) => logger.error({ err }, 'Failed to register bureau-presence-reap scheduler'));
 
@@ -1733,7 +1736,7 @@ bureauChatExpiryQueue
   .upsertJobScheduler(
     'bureau-chat-expiry-hourly',
     { pattern: '7 * * * *' }, // hh:07 — offset from other sweeps
-    { name: 'sweep', data: {} },
+    withRetention({ name: 'sweep', data: {} }),
   )
   .catch((err) => logger.error({ err }, 'Failed to register bureau-chat-expiry scheduler'));
 
@@ -1867,7 +1870,7 @@ bureauAnalyticsRollupQueue
   .upsertJobScheduler(
     'bureau-analytics-rollup-daily',
     { pattern: '0 0 * * *' }, // midnight UTC — rolls up the day that just ended
-    { name: 'daily', data: {} },
+    withRetention({ name: 'daily', data: {} }),
   )
   .catch((err) => logger.error({ err }, 'Failed to register bureau-analytics-rollup scheduler'));
 
@@ -1900,7 +1903,7 @@ bookCalendarSyncQueue
   .upsertJobScheduler(
     'book-calendar-sync-tick',
     { pattern: '9,24,39,54 * * * *' }, // every 15 minutes, offset to :09
-    { name: 'sweep', data: {} },
+    withRetention({ name: 'sweep', data: {} }),
   )
   .catch((err) => logger.error({ err }, 'Failed to register book-calendar-sync scheduler'));
 
@@ -1934,7 +1937,7 @@ binAvScanQueue
   .upsertJobScheduler(
     'bin-av-scan-tick',
     { pattern: '* * * * *' }, // every minute — sole scan trigger, keep latency low
-    { name: 'sweep', data: {} },
+    withRetention({ name: 'sweep', data: {} }),
   )
   .catch((err) => logger.error({ err }, 'Failed to register bin-av-scan scheduler'));
 
@@ -1965,7 +1968,7 @@ binTranscodeQueue
   .upsertJobScheduler(
     'bin-transcode-tick',
     { pattern: '* * * * *' }, // every minute — proxy lands shortly after the AV scan clears
-    { name: 'sweep', data: {} },
+    withRetention({ name: 'sweep', data: {} }),
   )
   .catch((err) => logger.error({ err }, 'Failed to register bin-transcode scheduler'));
 
@@ -1998,7 +2001,7 @@ binModelProcessQueue
   .upsertJobScheduler(
     'bin-model-process-tick',
     { pattern: '* * * * *' }, // every minute — GLB proxy lands shortly after the AV scan clears
-    { name: 'sweep', data: {} },
+    withRetention({ name: 'sweep', data: {} }),
   )
   .catch((err) => logger.error({ err }, 'Failed to register bin-model-process scheduler'));
 
@@ -2057,7 +2060,7 @@ blipPartitionProvisionQueue
   .upsertJobScheduler(
     'blip-partition-provision-daily',
     { pattern: '0 3 * * *' }, // 03:00 UTC daily
-    { name: 'provision', data: {} },
+    withRetention({ name: 'provision', data: {} }),
   )
   .catch((err) => logger.error({ err }, 'Failed to register blip-partition-provision scheduler'));
 
@@ -2087,7 +2090,7 @@ blipRetentionSweepQueue
   .upsertJobScheduler(
     'blip-retention-sweep-daily',
     { pattern: '15 3 * * *' }, // 03:15 UTC daily — after partition provision
-    { name: 'sweep', data: {} },
+    withRetention({ name: 'sweep', data: {} }),
   )
   .catch((err) => logger.error({ err }, 'Failed to register blip-retention-sweep scheduler'));
 
@@ -2117,7 +2120,7 @@ blipWatchEvalQueue
   .upsertJobScheduler(
     'blip-watch-eval-tick',
     { every: 30_000 }, // every 30s per §12.1
-    { name: 'tick', data: {} },
+    withRetention({ name: 'tick', data: {} }),
   )
   .catch((err) => logger.error({ err }, 'Failed to register blip-watch-eval scheduler'));
 
@@ -2670,8 +2673,56 @@ reconcileScheduledPosts(
   logger.error({ err }, 'banter-scheduled-post: startup reconciler failed');
 });
 
+// ── Database backup / restore (Backup app, Platform scope) ──────────────
+// Nightly scheduled pg_dump plus on-demand backups the api enqueues, and the
+// destructive restore the api enqueues after a SuperUser confirmation phrase.
+const backupQueue = new Queue('backup-database', { connection: redis });
+backupQueue
+  .upsertJobScheduler(
+    'nightly-database-backup',
+    { pattern: env.BACKUP_SCHEDULE_CRON },
+    withRetention({ name: 'scheduled-backup', data: { kind: 'scheduled' } }),
+  )
+  .catch((err) => logger.error({ err }, 'Failed to register nightly database backup scheduler'));
+
+const backupWorker = new Worker<BackupJobData>(
+  'backup-database',
+  async (job: Job<BackupJobData>) => {
+    await processBackupJob(job, logger, env);
+  },
+  { ...connection, concurrency: 1 }, // never run two dumps at once
+);
+
+backupWorker.on('completed', (job) => {
+  logger.info({ jobId: job.id, queue: 'backup-database' }, 'Job completed');
+});
+
+backupWorker.on('failed', (job, err) => {
+  logger.error({ jobId: job?.id, queue: 'backup-database', err }, 'Job failed');
+  void recordWorkerError({ queueName: 'backup-database', jobId: job?.id, jobName: job?.name, err: err as Error });
+});
+
+const restoreWorker = new Worker<RestoreJobData>(
+  'restore-database',
+  async (job: Job<RestoreJobData>) => {
+    await processRestoreJob(job, logger, env);
+  },
+  { ...connection, concurrency: 1 }, // one restore at a time; it is destructive
+);
+
+restoreWorker.on('completed', (job) => {
+  logger.info({ jobId: job.id, queue: 'restore-database' }, 'Job completed');
+});
+
+restoreWorker.on('failed', (job, err) => {
+  logger.error({ jobId: job?.id, queue: 'restore-database', err }, 'Job failed');
+  void recordWorkerError({ queueName: 'restore-database', jobId: job?.id, jobName: job?.name, err: err as Error });
+});
+
 // Collect all workers for graceful shutdown
 const workers = [
+  backupWorker,
+  restoreWorker,
   emailWorker,
   notificationWorker,
   sprintCloseWorker,

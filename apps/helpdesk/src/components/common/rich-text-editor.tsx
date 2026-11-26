@@ -15,22 +15,34 @@ type FormatAction = 'bold' | 'italic' | 'link' | 'image';
 
 export function RichTextEditor({
   value,
-  onChange,
+  onChange: onChangeProp,
   placeholder = 'Write something...',
   minRows = 4,
   onImageUpload,
   className,
 }: RichTextEditorProps) {
   const [preview, setPreview] = useState(() => !!value?.trim());
-  const [hasInitialized, setHasInitialized] = useState(false);
   const [uploading, setUploading] = useState(false);
+  // Auto-switch to preview only when content arrives from outside (e.g. an
+  // async-loaded existing body). Once the value is non-empty, or the user has
+  // edited it, never flip modes again: flipping on the user's own first
+  // keystroke unmounts the textarea and locks them out of typing.
+  const initializedRef = useRef(!!value?.trim());
+
+  const onChange = useCallback(
+    (next: string) => {
+      initializedRef.current = true;
+      onChangeProp(next);
+    },
+    [onChangeProp],
+  );
 
   useEffect(() => {
-    if (!hasInitialized && value?.trim()) {
+    if (!initializedRef.current && value?.trim()) {
+      initializedRef.current = true;
       setPreview(true);
-      setHasInitialized(true);
     }
-  }, [value, hasInitialized]);
+  }, [value]);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
