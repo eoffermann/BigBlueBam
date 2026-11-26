@@ -28,7 +28,9 @@ export const FAILING_TEMPLATE_BY_PROBE: Record<BastionProbeKey, BastionFixTempla
   'logging.retention_floor': 'config_change',
   'logging.audit_trail_alive': 'config_change',
   'automation.failure_rate': 'bolt_rule',
-  'policy.attested': 'process_change',
+  // M7 (spec 3.6): the people who have not acknowledged include anyone who cannot open the
+  // article; the fix is a setting (share it with everyone in Beacon) plus a nudge for the rest.
+  'policy.attested': 'config_change',
   'policy.current': 'policy_draft',
   'platform.superuser_access': 'process_change',
   'vendors.critical_have_award': 'process_change',

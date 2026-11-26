@@ -32,6 +32,25 @@ export function decodeCsv(text: string, format: Format = 'csv'): DecodeResult {
   };
 }
 
+/**
+ * CSV/TSV as a plain grid of strings (no header interpretation), row positions preserved: a
+ * blank line stays an empty row, so row N of the grid is line N of the file. A leading byte
+ * order mark is dropped and a trailing empty line is not a row. Used where the caller decides
+ * which row is the header (questionnaire column mapping) and writes answers back by position.
+ */
+export function decodeCsvGrid(text: string, format: Format = 'csv'): string[][] {
+  const clean = text.charCodeAt(0) === 0xfeff ? text.slice(1) : text;
+  const parsed = Papa.parse<string[]>(clean, {
+    header: false,
+    skipEmptyLines: false,
+    dynamicTyping: false,
+    delimiter: format === 'tsv' ? '\t' : undefined,
+  });
+  const rows = parsed.data.map((r) => (Array.isArray(r) ? r.map((c) => (c == null ? '' : String(c))) : []));
+  while (rows.length > 0 && (rows[rows.length - 1] as string[]).every((c) => c === '')) rows.pop();
+  return rows.map((r) => (r.length === 1 && r[0] === '' ? [] : r));
+}
+
 export function encodeCsv(rows: Record<string, unknown>[], dialect: CsvDialect): string {
   return Papa.unparse(rows, {
     delimiter: dialect.delimiter,

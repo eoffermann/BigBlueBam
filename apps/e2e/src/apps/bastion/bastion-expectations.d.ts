@@ -13,7 +13,19 @@ interface BastionFrameworkExpectation {
   notApplicable: number;
 }
 
+interface BastionPolicyExpectation {
+  slug: string;
+  title: string;
+  cadenceDays: number;
+  audienceEmails: string[];
+  attestedEmails: string[];
+  required: number;
+  attested: number;
+  label: string;
+}
+
 interface BastionSeedExpectations {
+  m7: { policy: BastionPolicyExpectation };
   org: { slug: string };
   actorEmail: string;
   frameworks: BastionFrameworkExpectation[];

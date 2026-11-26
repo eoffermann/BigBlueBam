@@ -9,6 +9,20 @@ export { detectShape, type ShapeResult } from './shape.js';
 export { inferSchema, inferredToZod } from './inference.js';
 export { buildYDoc, serializeYDoc, RID } from './crdt.js';
 export { decodeYaml, encodeYaml, yamlHasAnchors, type YamlDecodeResult } from './codecs/yaml.js';
+export { decodeCsvGrid } from './codecs/csv.js';
+export {
+  columnIndexOf,
+  columnLetters,
+  decodeXlsx,
+  encodeXlsx,
+  looksLikeXlsx,
+  safeSheetName,
+  XlsxError,
+  type SheetGrid,
+  type XlsxErrorCode,
+  type XlsxReadLimits,
+  type XlsxReadResult,
+} from './codecs/xlsx.js';
 
 import { decode } from './codecs/index.js';
 import { detectShape } from './shape.js';

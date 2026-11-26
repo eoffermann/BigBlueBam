@@ -10,8 +10,10 @@
 import type { Job, Queue } from 'bullmq';
 import type { Logger } from 'pino';
 import {
+  bastionCompileJobId,
   bastionEvaluateRunJobId,
   bastionEvaluateTickResultSchema,
+  type BastionCompileJobData,
   type BastionEngineName,
   type BastionEvaluateRunJobData,
   type BastionSweepJobData,
@@ -25,11 +27,11 @@ export interface EngineJobDeps {
   recordError?: (message: string, details: Record<string, unknown>) => void;
 }
 
-/** A scheduled job that calls one engine and logs its summary. */
 /** Upper bound on resume calls in one job (about 20 s each), so a job never runs unbounded. */
 const MAX_RESUME_ROUNDS = 30;
 
-export function makeBastionEngineJob(engine: Exclude<BastionEngineName, 'evaluate-run' | 'evaluate-tick'>, deps: EngineJobDeps) {
+/** A scheduled job that calls one engine and logs its summary. */
+export function makeBastionEngineJob(engine: Exclude<BastionEngineName, 'evaluate-run' | 'evaluate-tick' | 'compile'>, deps: EngineJobDeps) {
   return async function processBastionEngineJob(job: Job<BastionSweepJobData>, logger: Logger): Promise<unknown> {
     const started = Date.now();
     logger.info({ jobId: job.id, engine }, `bastion-${engine}: starting`);
@@ -60,7 +62,7 @@ export function makeBastionEngineJob(engine: Exclude<BastionEngineName, 'evaluat
 export async function processBastionEvaluateTickJob(
   job: Job<BastionSweepJobData>,
   logger: Logger,
-  deps: EngineJobDeps & { queue: Pick<Queue<BastionEvaluateRunJobData>, 'add'> },
+  deps: EngineJobDeps & { queue: Pick<Queue<BastionEvaluateRunJobData>, 'add'>; compileQueue?: Pick<Queue<BastionCompileJobData>, 'add'> },
 ): Promise<number> {
   const started = Date.now();
   logger.info({ jobId: job.id }, 'bastion-evaluate-tick: checking for due, resumable and orphaned runs');
@@ -69,7 +71,19 @@ export async function processBastionEvaluateTickJob(
   // Parsed against the shared contract: a renamed resume_count / generation must fail here, not
   // build a job id like `<run>-rundefined` that silently breaks BullMQ dedup (issue #205).
   const raw = bodyData<unknown>(res);
-  const runs = raw === undefined ? [] : parseContract(bastionEvaluateTickResultSchema, raw, 'evaluate-tick result').runs;
+  const parsed = raw === undefined ? { runs: [], compile_runs: [] } : parseContract(bastionEvaluateTickResultSchema, raw, 'evaluate-tick result');
+  const runs = parsed.runs;
+  // M7: queued AI compile runs nobody is driving go back to bastion-compile (orphan rule).
+  if (deps.compileQueue) {
+    for (const [i, r] of parsed.compile_runs.entries()) {
+      await deps.compileQueue.add(
+        'compile',
+        { organization_id: r.organization_id, run_id: r.run_id, resume_count: r.resume_count },
+        { jobId: bastionCompileJobId(r.run_id, r.resume_count, r.generation), ...SCHEDULED_JOB_RETENTION },
+      );
+      logger.info({ run_id: r.run_id }, `bastion-evaluate-tick: re-enqueued compile run ${i + 1}/${parsed.compile_runs.length}`);
+    }
+  }
   for (const [i, r] of runs.entries()) {
     await deps.queue.add(
       'run',

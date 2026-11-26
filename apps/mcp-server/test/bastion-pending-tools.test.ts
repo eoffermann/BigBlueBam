@@ -72,8 +72,9 @@ describe('Bastion pending tools stay out of the registered surface until M11', (
 
   it('every handler goes through registerTool (agent policies apply once registered)', () => {
     // 14 milestone handlers (M3 + M4) + 9 #196 parity handlers + M5 (7 evidence + 2 feed admin;
-    // withdrawal has no tool, #217) + M6 (9 gap, fix, exception and drift handlers).
-    expect((PENDING.match(/registerTool\(server, \{/g) ?? []).length).toBe(41);
+    // withdrawal has no tool, #217) + M6 (9 gap, fix, exception and drift handlers) + M7 (6 policy
+    // handlers; attest has none).
+    expect((PENDING.match(/registerTool\(server, \{/g) ?? []).length).toBe(47);
     expect(PENDING).not.toMatch(/server\.tool\(/);
   });
 });
@@ -81,18 +82,24 @@ describe('Bastion pending tools stay out of the registered surface until M11', (
 describe('Bastion M3 tool handlers', () => {
   it('registers exactly the M3 roster', async () => {
     await load();
-    const { BASTION_PENDING_TOOL_NAMES, BASTION_ADMIN_TOOL_NAMES, BASTION_EVIDENCE_TOOL_NAMES, BASTION_DECISION_TOOL_NAMES } = await import(
-      '../src/tools-pending/bastion.js'
-    );
+    const { BASTION_PENDING_TOOL_NAMES, BASTION_ADMIN_TOOL_NAMES, BASTION_EVIDENCE_TOOL_NAMES, BASTION_DECISION_TOOL_NAMES, BASTION_POLICY_TOOL_NAMES } =
+      await import('../src/tools-pending/bastion.js');
     expect(captured.map((c) => c.name).sort()).toEqual(
-      [...BASTION_PENDING_TOOL_NAMES, ...BASTION_ADMIN_TOOL_NAMES, ...BASTION_EVIDENCE_TOOL_NAMES, ...BASTION_DECISION_TOOL_NAMES].sort(),
+      [
+        ...BASTION_PENDING_TOOL_NAMES,
+        ...BASTION_ADMIN_TOOL_NAMES,
+        ...BASTION_EVIDENCE_TOOL_NAMES,
+        ...BASTION_DECISION_TOOL_NAMES,
+        ...BASTION_POLICY_TOOL_NAMES,
+      ].sort(),
     );
   });
 
   it('has no tool for a vouching act (confirm or reject a check): auth, session required (spec 2.8, #136)', async () => {
     await load();
     const names = captured.map((c) => c.name).join(' ');
-    expect(names).not.toMatch(/confirm|reject|attest|vouch/);
+    // bastion_attestation_status and friends READ or nudge; none acknowledges a policy.
+    expect(names).not.toMatch(/confirm|reject|vouch|_attest(\s|$)|_attest_|_sign/);
   });
 
   it('bastion_list_frameworks lists adopted frameworks and templates, forwarding the bearer token', async () => {
@@ -572,5 +579,62 @@ describe('Bastion M6 tools (gaps, fixes, exceptions, drift)', () => {
     // (bastion_decide_applicability is the setup applicability decision, not a vouching route.)
     expect(names).not.toMatch(/decide_fix|decide_exception|fix_decide|exception_decide|approve/);
     expect(PENDING).not.toMatch(/fix-drafts\/\$\{[^}]+\}\/decide|exceptions\/\$\{[^}]+\}\/decide/);
+  });
+});
+
+describe('Bastion M7 tools (policies and attestation)', () => {
+  const POLICY = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+  const ENTRY = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
+  const USER = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd';
+
+  it('reads policies, who has read them, the served body and the caller\'s list on the right routes', async () => {
+    const tool = await load();
+    await tool('bastion_attestation_status').handler({} as never);
+    await tool('bastion_attestation_status').handler({ status: 'all' } as never);
+    await tool('bastion_attestation_status').handler({ policy_id: POLICY } as never);
+    await tool('bastion_get_policy_body').handler({ policy_id: POLICY } as never);
+    await tool('bastion_my_attestations').handler({} as never);
+    expect(calls.map((c) => `${c.method} ${c.url}`)).toEqual([
+      'GET http://bastion-api:4024/v1/policies',
+      'GET http://bastion-api:4024/v1/policies?status=all',
+      `GET http://bastion-api:4024/v1/policies/${POLICY}/attestations`,
+      `GET http://bastion-api:4024/v1/policies/${POLICY}/body`,
+      'GET http://bastion-api:4024/v1/me/attestations',
+    ]);
+  });
+
+  it('links, edits and nudges with shared-Zod bodies', async () => {
+    const tool = await load();
+    await tool('bastion_create_policy').handler({ beacon_entry_id: ENTRY } as never);
+    await tool('bastion_update_policy').handler({ policy_id: POLICY, status: 'retired' } as never);
+    await tool('bastion_request_attestations').handler({ policy_id: POLICY, user_ids: [USER] } as never);
+    expect(calls.map((c) => `${c.method} ${c.url}`)).toEqual([
+      'POST http://bastion-api:4024/v1/policies',
+      `PATCH http://bastion-api:4024/v1/policies/${POLICY}`,
+      `POST http://bastion-api:4024/v1/policies/${POLICY}/request-attestations`,
+    ]);
+    // Defaults applied by the shared schema: everyone, re-read yearly.
+    expect(calls[0]!.body).toEqual({ beacon_entry_id: ENTRY, audience: { kind: 'all' }, cadence_days: 365 });
+    expect(calls[1]!.body).toEqual({ status: 'retired' });
+    expect(calls[2]!.body).toEqual({ user_ids: [USER] });
+  });
+
+  it('refuses an empty policy edit before calling bastion-api', async () => {
+    const tool = await load();
+    const r = (await tool('bastion_update_policy').handler({ policy_id: POLICY } as never)) as { isError?: boolean };
+    expect(r.isError).toBe(true);
+    expect(calls).toHaveLength(0);
+  });
+
+  it('compile passes use_ai through, and the default call keeps the M3 body', async () => {
+    const tool = await load();
+    await tool('bastion_compile_framework').handler({ framework_id: FW } as never);
+    await tool('bastion_compile_framework').handler({ framework_id: FW, use_ai: false } as never);
+    expect(calls.map((c) => c.body)).toEqual([{}, { use_ai: false }]);
+  });
+
+  it('has no tool that acknowledges a policy: auth, session required (spec 2.8, #136)', async () => {
+    await load();
+    expect(PENDING).not.toMatch(/\/policies\/\$\{[^}]+\}\/attest['`]/);
   });
 });

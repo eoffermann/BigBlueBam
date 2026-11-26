@@ -1,9 +1,12 @@
 import { Queue } from 'bullmq';
 import IORedis from 'ioredis';
 import {
+  BASTION_COMPILE_QUEUE,
   BASTION_EVALUATE_RUN_QUEUE,
   BASTION_EVIDENCE_INGEST_QUEUE,
+  bastionCompileJobId,
   bastionEvaluateRunJobId,
+  type BastionCompileJobData,
   type BastionEvaluateRunJobData,
   type BastionSweepJobData,
 } from '@bigbluebam/shared';
@@ -77,7 +80,35 @@ export async function enqueueEvidenceIngest(orgId: string, manualEvidenceId: str
   }
 }
 
+let compileQueue: Queue<BastionCompileJobData> | null = null;
+
+function getCompileQueue(): Queue<BastionCompileJobData> {
+  if (!compileQueue) {
+    if (!connection) connection = new IORedis(env.REDIS_URL, { maxRetriesPerRequest: null });
+    compileQueue = new Queue<BastionCompileJobData>(BASTION_COMPILE_QUEUE, { connection });
+  }
+  return compileQueue;
+}
+
+/**
+ * Ask the worker to drive a queued AI compile run (M7, spec 7). Best effort: the tick re-enqueues
+ * a queued run nobody picked up within two minutes, so a dropped add only delays it.
+ */
+export async function enqueueCompileRun(data: BastionCompileJobData): Promise<boolean> {
+  try {
+    await getCompileQueue().add('compile', data, {
+      jobId: bastionCompileJobId(data.run_id, data.resume_count),
+      ...EVALUATE_RUN_JOB_RETENTION,
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export async function closeBastionQueues(): Promise<void> {
+  await compileQueue?.close().catch(() => {});
+  compileQueue = null;
   await ingestQueue?.close().catch(() => {});
   ingestQueue = null;
   await queue?.close().catch(() => {});

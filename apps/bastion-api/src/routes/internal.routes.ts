@@ -3,6 +3,7 @@ import {
   BastionEngineName,
   type BastionRunClaimedError,
   bastionConsumesEvent,
+  bastionCompileEngineSchema,
   bastionEvaluateRunEngineSchema,
   bastionInternalEventSchema,
   bastionSweepEngineSchema,
@@ -22,6 +23,9 @@ import { evidenceDeps } from '../services/evidence-runtime.js';
 import { env } from '../env.js';
 import { gapRank } from '../engine/gaps.js';
 import { proposalReconcile } from '../services/decisions.service.js';
+import { compileSlice } from '../services/compile-ai.service.js';
+import { compileAiDeps } from '../services/compile-runtime.js';
+import { attestationNudge } from '../services/policies.service.js';
 
 /**
  * Service-to-service routes (spec 5.1 rows 105-106), behind the shared internal secret and
@@ -71,6 +75,31 @@ export default async function internalRoutes(fastify: FastifyInstance) {
       }
     }
 
+    if (name === 'compile') {
+      // M7: async-start LLM slice of one compile run (spec 7.3). Same 404 / 409 contract as evaluate-run.
+      const parsed = bastionCompileEngineSchema.safeParse(request.body ?? {});
+      if (!parsed.success) return validationError(request, reply, parsed.error);
+      try {
+        return { data: await compileSlice(compileAiDeps(fastify.log, fastify.redis), parsed.data) };
+      } catch (err) {
+        if (err instanceof RunNotFoundError) return send(request, reply, 404, 'NOT_FOUND', 'We could not find that compile run.');
+        if (err instanceof RunLeaseHeldError) {
+          const body: BastionRunClaimedError = {
+            error: {
+              code: 'RUN_CLAIMED',
+              message: 'This compile run is being driven by another worker.',
+              details: [],
+              request_id: request.id,
+              claimed_by: err.claimedBy,
+              heartbeat_stale: err.heartbeatStale,
+            },
+          };
+          return reply.status(409).send(body);
+        }
+        throw err;
+      }
+    }
+
     const parsed = bastionSweepEngineSchema.safeParse(request.body ?? {});
     if (!parsed.success) return validationError(request, reply, parsed.error);
     const opts = parsed.data;
@@ -98,6 +127,8 @@ export default async function internalRoutes(fastify: FastifyInstance) {
         return { data: await gapRank(d, opts) };
       case 'proposal-reconcile':
         return { data: await proposalReconcile(d, opts) };
+      case 'attestation-nudge':
+        return { data: await attestationNudge(d, opts) };
       case 'ledger-seal':
         return { data: await ledgerSeal(d, opts) };
       case 'ledger-verify':

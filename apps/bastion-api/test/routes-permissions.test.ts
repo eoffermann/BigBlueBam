@@ -54,6 +54,8 @@ const INTEGRITY: Record<string, string> = {
   // M6: both decide routes (spec 2.8): humans decide in Bastion.
   'POST /fix-drafts/:id/decide': "can('bastion.fix.decide')",
   'POST /exceptions/:id/decide': "can('bastion.exception.approve')",
+  // M7: "I have read and understood this" (spec 2.8, 3.6): only the person, never an agent.
+  'POST /policies/:id/attest': "can('bastion.attestation.sign')",
 };
 
 // Routes that must NOT require a session: everything an agent may do through an API key
@@ -82,6 +84,15 @@ const AGENT_REACHABLE = [
   'POST /exceptions',
   'GET /drift',
   'POST /drift/:id/acknowledge',
+  // M7
+  'GET /policies',
+  'POST /policies',
+  'PATCH /policies/:id',
+  'GET /policies/:id/body',
+  'GET /policies/:id/attestations',
+  'GET /me/attestations',
+  'POST /policies/:id/request-attestations',
+  'POST /frameworks/:id/compile',
 ];
 
 describe('bastion-api route gates', () => {

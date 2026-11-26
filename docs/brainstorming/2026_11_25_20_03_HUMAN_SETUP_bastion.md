@@ -22,4 +22,13 @@ This file lists only actions a person has to take. Everything else in the Bastio
 
 ## External credentials
 
-None so far. (Updated as later milestones reach any code path that needs a third-party key, such as a live LLM provider for compile tailoring and questionnaire autofill.)
+### 3. The local system AI provider names a retired model (found at M7, 2026-11-26)
+
+- [x] **Done locally by the cycle on 2026-11-26 (#240):** the local dev DB row was switched to `glm-5.3-flash:cloud` with the SQL below, and a probe through `POST /internal/llm/chat` with no model override returned HTTP 200. What remains for a person: the same change on any other environment that still names `deepseek-v4-flash` (Railway), and confirming the account owner is content with that model choice.
+- **What:** the only `llm_providers` row on the local stack ("Ollama DSv4Flash", system scope, `openai_compatible`, endpoint `https://ollama.com/`) names model `deepseek-v4-flash`. The host answers every call with HTTP 410: "deepseek-v4-flash:0731 was retired on September 25, 2026. Try glm-5.3-flash:cloud." So every satellite that calls the internal LLM proxy with this provider (Bastion's compile tailoring, Bursar, Bulwark, Burn, ...) gets a 502 today.
+- **Why it matters for Bastion:** the AI-tailored compile still finishes (a failed AI call gives that control the library suggestions, recorded on the run as a fallback), but it tailors nothing. The M7 compiler corpus was recorded through the same proxy with the proxy's per-call `model` override set to `glm-5.3-flash:cloud`, and the live corpus gate passed with that override.
+- **Why the cycle did not do it:** the provider row is a system-wide SuperUser setting shared by every app; changing it is an operator decision, and the key belongs to the account owner.
+- **How:** as a SuperUser, open `/b3/superuser` (AI providers), edit "Ollama DSv4Flash" and set the model to `glm-5.3-flash:cloud` (or any model the account can use), then "Test". Or in SQL: `UPDATE llm_providers SET model_id = 'glm-5.3-flash:cloud', updated_at = now() WHERE id = '73fd227c-363f-48b3-843e-a885f7583c9b';`
+- **Verify:** `docker compose logs --tail=50 api | grep "upstream OpenAI-compatible error"` shows no new 410 lines after a Bastion compile; the compile run's `drop_reasons.fallback_keys` list is short instead of every control.
+
+(Updated as later milestones reach any other code path that needs a third-party key, such as questionnaire autofill at M8.)

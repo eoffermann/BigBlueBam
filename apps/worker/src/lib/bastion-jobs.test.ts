@@ -6,6 +6,7 @@ import { BASTION_ENGINE_NAMES } from '@bigbluebam/shared';
 import { bastionInternalUrl, BastionUrlMissingError } from '../jobs/bastion-shared.js';
 import { EVALUATE_MAX_POLLS, EVALUATE_POLL_INTERVAL_MS, processBastionEvaluateRunJob } from '../jobs/bastion-evaluate-run.job.js';
 import { makeBastionEngineJob, processBastionEvaluateTickJob } from '../jobs/bastion-engines.job.js';
+import { COMPILE_MAX_POLLS, COMPILE_POLL_INTERVAL_MS, processBastionCompileJob } from '../jobs/bastion-compile.job.js';
 
 const SRC = join(__dirname, '..');
 const WORKER = readFileSync(join(SRC, 'worker.ts'), 'utf8');
@@ -54,9 +55,11 @@ describe('Bastion job registration rules (spec 7)', () => {
     }
   });
 
-  it('registers one scheduled job per scheduled engine (every engine except evaluate-run)', () => {
+  it('registers one scheduled job per scheduled engine (every engine except the event-driven evaluate-run and compile)', () => {
     const registered = [...bastionBlock.matchAll(/registerBastionSweep\(\s*BASTION_[A-Z_]+_QUEUE/g)].length;
-    expect(registered).toBe(BASTION_ENGINE_NAMES.length - 1);
+    expect(registered).toBe(BASTION_ENGINE_NAMES.length - 2);
+    expect(bastionBlock).toContain("makeBastionEngineJob('attestation-nudge'");
+    expect(bastionBlock).toMatch(/new Worker<BastionCompileJobData>\(\s*BASTION_COMPILE_QUEUE/);
   });
 
   it('no bare add: every producer add in the Bastion job files and worker block passes jobId and SCHEDULED_JOB_RETENTION', () => {
@@ -200,6 +203,60 @@ describe('bastion-evaluate-run loop', () => {
   });
 });
 
+describe('bastion-compile loop (M7)', () => {
+  const ok = (data: unknown) => ({ ok: true, status: 200, data: { data } });
+  const slice = (done: boolean, extra: Record<string, unknown> = {}) => ({
+    done,
+    status: done ? 'succeeded' : 'running',
+    controls_done: 3,
+    controls_total: 46,
+    assertions_proposed: 5,
+    assertions_dropped: 1,
+    llm_calls_used: 3,
+    fallback_controls: 0,
+    slice_running: !done,
+    waiting: null,
+    ...extra,
+  });
+
+  it('the poll cap covers 4 hours (above the 1-2 hour compile estimate)', () => {
+    expect(COMPILE_POLL_INTERVAL_MS * COMPILE_MAX_POLLS).toBe(4 * 60 * 60_000);
+  });
+
+  it('polls every 15 s until the run is done, as one claimant', async () => {
+    const post = vi.fn().mockResolvedValueOnce(ok(slice(false))).mockResolvedValueOnce(ok(slice(false, { waiting: 'ai_slot' }))).mockResolvedValueOnce(ok(slice(true)));
+    const sleep = vi.fn().mockResolvedValue(undefined);
+    const r = await processBastionCompileJob(job({ organization_id: 'o', run_id: 'r', resume_count: 0 }), silent, { post, sleep, queue: { add: vi.fn() } });
+    expect(r).toBe('done');
+    expect(post).toHaveBeenCalledTimes(3);
+    expect(new Set(post.mock.calls.map((c) => (c[1] as { claimant: string }).claimant))).toEqual(new Set(['worker-compile:j1']));
+    expect(sleep).toHaveBeenCalledWith(15_000);
+  });
+
+  it('a live 409 ends; 404 ends; after the cap it hands over with the same claimant', async () => {
+    const live = { ok: false, status: 409, data: { error: { code: 'RUN_CLAIMED', message: 'held', details: [], request_id: 'q', claimed_by: 'x', heartbeat_stale: false } } };
+    expect(await processBastionCompileJob(job({ organization_id: 'o', run_id: 'r', resume_count: 0 }), silent, { post: vi.fn().mockResolvedValue(live), sleep: async () => {}, queue: { add: vi.fn() } })).toBe('ended');
+    expect(await processBastionCompileJob(job({ organization_id: 'o', run_id: 'r', resume_count: 0 }), silent, { post: vi.fn().mockResolvedValue({ ok: false, status: 404 }), sleep: async () => {}, queue: { add: vi.fn() } })).toBe('ended');
+    const add = vi.fn();
+    const r = await processBastionCompileJob(job({ organization_id: 'o', run_id: 'r', resume_count: 2 }), silent, {
+      post: vi.fn().mockResolvedValue(ok(slice(false))),
+      sleep: async () => {},
+      queue: { add },
+      maxPolls: 2,
+    });
+    expect(r).toBe('requeued');
+    expect(add.mock.calls[0]?.[1]).toEqual({ organization_id: 'o', run_id: 'r', resume_count: 2, claimant: 'worker-compile:j1' });
+    expect(add.mock.calls[0]?.[2].jobId).toMatch(/^compile-r-r2-g\d+$/);
+  });
+
+  it('a slice that drifts from the shared contract fails loudly', async () => {
+    const bad = vi.fn().mockResolvedValue(ok({ ...slice(false), waiting: 'tea' }));
+    await expect(processBastionCompileJob(job({ organization_id: 'o', run_id: 'r', resume_count: 0 }), silent, { post: bad, sleep: async () => {}, queue: { add: vi.fn() } })).rejects.toThrow(
+      /compile slice does not match the shared contract/,
+    );
+  });
+});
+
 describe('bastion-evaluate-tick and engine jobs', () => {
   const ORG = '00000000-0000-4000-8000-000000000205';
   const R1 = '00000000-0000-4000-8000-0000000002a1';
@@ -226,6 +283,22 @@ describe('bastion-evaluate-tick and engine jobs', () => {
     expect(await processBastionEvaluateTickJob(job({}), silent, { post, queue: { add } })).toBe(2);
     expect(add.mock.calls.map((c) => c[2].jobId)).toEqual([`${R1}-r0`, `${R2}-r1-g7`]);
     expect(post).toHaveBeenCalledWith('/v1/internal/engines/evaluate-tick', {});
+  });
+
+  it('M7: queued compile runs the tick returns go to the compile queue with a generation job id', async () => {
+    const post = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      data: { data: { runs: [], compile_runs: [{ organization_id: ORG, run_id: R1, resume_count: 1, generation: 9 }] } },
+    });
+    const add = vi.fn();
+    const compileAdd = vi.fn();
+    expect(await processBastionEvaluateTickJob(job({}), silent, { post, queue: { add }, compileQueue: { add: compileAdd } })).toBe(0);
+    expect(compileAdd.mock.calls[0]?.[2].jobId).toBe(`compile-${R1}-r1-g9`);
+    expect(compileAdd.mock.calls[0]?.[2].removeOnComplete).toEqual({ count: 100 });
+    // An older bastion-api without compile_runs still parses (the field defaults to []).
+    const old = vi.fn().mockResolvedValue({ ok: true, status: 200, data: { data: { runs: [] } } });
+    expect(await processBastionEvaluateTickJob(job({}), silent, { post: old, queue: { add }, compileQueue: { add: compileAdd } })).toBe(0);
   });
 
   it('outbox-drain reports dead rows as a worker error; a failing engine throws', async () => {

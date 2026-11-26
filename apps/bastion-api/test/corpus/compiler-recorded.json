@@ -1,0 +1,203 @@
+{
+  "meta": {
+    "recorded_at": "2026-11-26T15:19:54.558Z",
+    "prompt_version": 1,
+    "model": "glm-5.3-flash:cloud",
+    "provider_type": "openai_compatible",
+    "note": "Recorded live through apps/api POST /internal/llm/chat with the compile prompt; replayed by compiler-corpus.test.ts. Em and en dashes in the recorded text were replaced with commas (house style), as normalizeAiText does at run time."
+  },
+  "responses": {
+    "access.least_privilege": {
+      "content": "",
+      "finish_reason": "length"
+    },
+    "access.offboarding": {
+      "content": "",
+      "finish_reason": "length"
+    },
+    "access.provisioning": {
+      "content": "",
+      "finish_reason": "length"
+    },
+    "access.remote_work": {
+      "content": "",
+      "finish_reason": "length"
+    },
+    "access.reviews": {
+      "content": "",
+      "finish_reason": "length"
+    },
+    "agents.oversight": {
+      "content": "{\"checks\":[{\"probe_key\":\"agents.policy_coverage\",\"params\":{},\"predicate\":{},\"plain_statement\":\"Every AI agent has a written list of what it may do, and no agent can use every tool.\"},{\"probe_key\":\"agents.human_approval\",\"params\":{\"window_days\":30},\"predicate\":{\"max_expired_undecided\":0},\"plain_statement\":\"People decide on what agents propose, and no proposal is left to expire without a decision.\"}],\"manual\":[{\"title\":\"AI agent register and sign-off\",\"description\":\"A named person keeps a list of every AI agent in use, confirms each has a written allowed-actions list that a person approved, and states there are no unregistered agents in use.\",\"kind\":\"attestation_statement\",\"cadence_days\":90,\"plain_statement\":\"Once a quarter, someone confirms the list of AI agents is complete and each one's rules were signed off by a person.\"}],\"not_applicable\":[]}",
+      "finish_reason": "stop"
+    },
+    "assets.device_encryption": {
+      "content": "{\n  \"checks\": [],\n  \"manual\": [\n    {\n      \"title\": \"Laptop encryption report\",\n      \"description\": \"Export and upload a status report from each company laptop showing disk encryption is on (FileVault on Macs, BitLocker on Windows), including the laptop name and date.\",\n      \"kind\": \"file\",\n      \"cadence_days\": 365,\n      \"plain_statement\": \"Once a year, upload a report from each laptop proving its disk is encrypted.\"\n    },\n    {\n      \"title\": \"Annual encryption confirmation\",\n      \"description\": \"The owner states, dated and signed, that every company laptop in use has full-disk encryption enabled and that laptops taken off-site are encrypted before leaving the office.\",\n      \"kind\": \"attestation_statement\",\n      \"cadence_days\": 365,\n      \"plain_statement\": \"Once a year, the owner signs a short statement that all work laptops are encrypted.\"\n    }\n  ],\n  \"not_applicable\": []\n}",
+      "finish_reason": "stop"
+    },
+    "assets.endpoint_protection": {
+      "content": "{\"checks\":[],\"manual\":[{\"title\":\"Malware protection report\",\"description\":\"Upload an export or screenshot from the endpoint protection software covering every company laptop, showing real-time protection is switched on and the protection updates are current. Include any laptops you have marked as lost or retired.\",\"kind\":\"file\",\"cadence_days\":30,\"plain_statement\":\"Upload a report that shows every company laptop has working, up-to-date malware protection.\"},{\"title\":\"Endpoint protection coverage attestation\",\"description\":\"A responsible person states how many company laptops are in use, that each one runs the approved malware protection that cannot be switched off by users, and how protection updates are applied, and confirms nothing was knowingly left unprotected during the period.\",\"kind\":\"attestation_statement\",\"cadence_days\":90,\"plain_statement\":\"Someone in charge confirms, every three months, that all company laptops run malware protection that stays on and updates itself.\"}],\"not_applicable\":[]}",
+      "finish_reason": "stop"
+    },
+    "assets.inventory": {
+      "content": "{\"checks\":[{\"probe_key\":\"access.departed_still_holding\",\"params\":{},\"predicate\":{},\"plain_statement\":\"People who have left the company no longer have working sign-ins or keys.\"},{\"probe_key\":\"access.dormant_accounts\",\"params\":{\"dormant_days\":30},\"predicate\":{},\"plain_statement\":\"Sign-ins that nobody has used for a month are flagged so",
+      "finish_reason": "length"
+    },
+    "assets.media_disposal": {
+      "content": "{\"checks\":[{\"probe_key\":\"policy.current\",\"params\":{},\"predicate\":{},\"plain_statement\":\"The written rules for wiping and disposing of old devices are active, visible to the team, and recently reviewed.\"},{\"probe_key\":\"policy.attested\",\"params\":{},\"predicate\":{},\"plain_statement\":\"Everyone on the team has read and signed off on the current device-disposal rules.\"}],\"manual\":[{\"title\":\"Disposal statement\",\"description\":\"Annual signed statement from the owner listing each laptop, phone, drive or other equipment disposed of during the period and confirming it was wiped or destroyed before leaving company control; state 'no disposals' if none occurred.\",\"kind\":\"attestation_statement\",\"cadence_days\":365,\"plain_statement\":\"Once a year, sign a statement confirming every old device or drive you got rid of was wiped or destroyed first, or that you disposed of none.\"},{\"title\":\"Disposal receipts\",\"description\":\"Receipts or certificates of destruction from the recycler or wiping service for each item",
+      "finish_reason": "length"
+    },
+    "auth.login_monitoring": {
+      "content": "{\"checks\":[{\"probe_key\":\"auth.failed_login_spikes\",\"params\":{\"window_days\":30,\"spike_threshold\":10},\"predicate\":{},\"plain_statement\":\"The system flags any account that fails to sign in many times in a single hour so it can be looked into.\"}],\"manual\":[{\"title\":\"Sign-in failure review notes\",\"description\":\"A person records that they reviewed the failed sign-in alerts for the period, confirms each burst was investigated, and notes what was found or fixed.\",\"kind\":\"attestation_statement\",\"cadence_days\":30,\"plain_statement\":\"Every month, a person confirms they checked the sign-in failure alerts and followed up on anything unusual.\"}],\"not_applicable\":[]}",
+      "finish_reason": "stop"
+    },
+    "auth.mfa": {
+      "content": "{\"checks\":[\n  {\"probe_key\":\"auth.failed_login_spikes\",\"params\":{\"window_days\":30,\"spike_threshold\":10},\"predicate\":{},\"plain_statement\":\"Alert if one account keeps failing to sign in many times, which can signal someone trying to break in even with two-step sign-in in place.\"}\n],\n \"manual\":[\n  {\"title\":\"Two-step sign-in report\",\"description\":\"A named person states which important systems (for example email, the cloud hosting platform and GitHub organisation) have two-step sign-in switched on, confirms it is required for every user, and lists any accounts deliberately left without it and why.\",\"kind\":\"attestation_statement\",\"cadence_days\":365,\"plain_statement\":\"Once a year, someone must confirm in writing that two-step sign-in is turned on for the important systems and explain any accounts left without it.\"}\n ],\n \"not_applicable\":[\n  {\"ref_code\":\"A.8.5\",\"reason\":\"This requirement applies, but nothing in the connected tool set can read two-step sign-in settings directly, so full evidence must come from the manual report rather than an automated check.\"},\n  {\"ref_code\":\"A.5.17\",\"reason\":\"This requirement applies, but the connected tools do not expose password or sign-in secret settings, so the manual report is the only suitable evidence here.\"}\n]}",
+      "finish_reason": "stop"
+    },
+    "automation.reliability": {
+      "content": "",
+      "finish_reason": "length"
+    },
+    "bcp.continuity": {
+      "content": "{\"checks\":[{\"probe_key\":\"ops.backup_fresh\",\"params\":{},\"predicate\":{},\"plain_statement\":\"A backup of the important data has finished recently and an off-site copy is up to date.\"},{\"probe_key\":\"ops.restore_tested\",\"params\":{\"window_days\":365},\"predicate\":{},\"plain_statement\":\"Within the last year someone successfully restored data from a backup, proving the backups actually work.\"},{\"probe_key\":\"vendors.critical_have_award\",\"params\":{},\"predicate\":{},\"plain_statement\":\"Every supplier the business depends on, such as hosting and card payments, has a signed contract on file.\"}],\"manual\":[{\"title\":\"Business continuity plan\",\"description\":\"Upload the current continuity plan covering the key systems (cloud hosting, booking site, card processing), how each would be rebuilt after a failure, and who does what during a disruption.\",\"kind\":\"file\",\"cadence_days\":365,\"plain_statement\":\"Upload the written plan for keeping the business going when something breaks.\"},{\"title\":\"Continuity exercise record\",\"description\":\"Once a year, walk through the continuity plan with the team (a tabletop exercise is enough) and record what was tested, what worked, and what needs fixing.\",\"kind\":\"attestation_statement\",\"cadence_days\":365,\"plain_statement\":\"Once a year, practice the plan and write down what worked and what didn't.\"},{\"title\":\"Spare capacity statement\",\"description\":\"Confirm the key services (cloud hosting, booking site, payment processor) have enough headroom or a documented upgrade path, and note any single points of failure and their fallbacks.\",\"kind\":\"attestation_statement\",\"cadence_days\":365,\"plain_statement\":\"Confirm the important services have spare room to grow or a plan to add more when needed.\"}],\"not_applicable\":[]}",
+      "finish_reason": "stop"
+    },
+    "change.peer_review": {
+      "content": "{\"checks\":[{\"probe_key\":\"change.merge_reviewed\",\"params\":{\"window_days\":30,\"expected_population\":[\"gilligan-travel/rescue-radio-firmware\",\"gilligan-travel/coral-reef-booking\",\"(withheld)\"]},\"predicate\":{},\"plain_statement\":\"Over the last 30 days, every merge in our GitHub repositories was approved by someone other than the author; the list of repositories is confirmed by a person.\"}],\"manual\":[{\"title\":\"Changes made outside GitHub\",\"description\":\"A person confirms that changes made outside GitHub, such as hosting platform settings and edits to the booking site and automation apps, were also checked and approved by a second person.\",\"kind\":\"attestation_statement\",\"cadence_days\":90,\"plain_statement\":\"Every 90 days someone confirms that changes made outside GitHub, like hosting or booking-site settings, were reviewed by a second person.\"}],\"not_applicable\":[]}",
+      "finish_reason": "stop"
+    },
+    "change.traceability": {
+      "content": "{\"checks\":[{\"probe_key\":\"change.merge_traceable\",\"params\":{\"window_days\":30,\"expected_population\":[\"gilligan-travel/rescue-radio-firmware\",\"gilligan-travel/coral-reef-booking\"]},\"predicate\":{\"min_ratio\":0.95},\"plain_statement\":\"At least 95% of code changes merged in the last 30 days point to the task that asked for them.\"}],\"manual\":[{\"title\":\"Change planning statement\",\"description\":\"A named person states where planned work is recorded (for example GitHub issues or a project board) and confirms that every merged change in practice comes from a recorded task, with any exceptions explained.\",\"kind\":\"attestation_statement\",\"cadence_days\":90,\"plain_statement\":\"Every three months, someone confirms in writing that each code change links back to a recorded task and says where those tasks are kept.\"}],\"not_applicable\":[]}",
+      "finish_reason": "stop"
+    },
+    "communication.external": {
+      "content": "{\"checks\":[],\"manual\":[{\"title\":\"Published security contact\",\"description\":\"Confirm the company publishes a security reporting address (e.g., a monitored security@ mailbox or web form) on its website and customer-facing materials, and that it actually receives messages.\",\"kind\":\"attestation_statement\",\"cadence_days\":365,\"plain_statement\":\"Confirm outsiders can easily find and us a security contact address, and that it works.\"},{\"title\":\"Security contact page proof\",\"description\":\"Upload a screenshot or copy of the public page or document showing how customers, partners and authorities report security issues to us.\",\"kind\":\"file\",\"cadence_days\":365,\"plain_statement\":\"Upload a screenshot or copy of the public page where security problems can be reported.\"},{\"title\":\"Authority contact note\",\"description\":\"State which authorities (e.g., the data protection regulator and payment card fraud contacts) would need to be notified in a security incident and confirm their current contact details are on file.\",\"kind\":\"attestation_statement\",\"cadence_days\":365,\"plain_statement\":\"Confirm we know which authorities to tell about a serious security problem and have their current contact details.\"},{\"title\":\"Expert group contacts\",\"description\":\"State which security expert groups, mailing lists or advisory feeds (e.g., national CERT or an industry security group) the company belongs to or follows, and that these contacts are still active.\",\"kind\":\"attestation_statement\",\"cadence_days\":365,\"plain_statement\":\"Confirm we stay in touch with outside security expert groups who warn us about new threats.\"}],\"not_applicable\":[]}",
+      "finish_reason": "stop"
+    },
+    "compliance.independent_review": {
+      "content": "",
+      "finish_reason": "length"
+    },
+    "compliance.legal_requirements": {
+      "content": "",
+      "finish_reason": "length"
+    },
+    "config.baseline": {
+      "content": "",
+      "finish_reason": "length"
+    },
+    "data.classification": {
+      "content": "{\"checks\":[{\"probe_key\":\"policy.current\",\"params\":{\"policy_id\":\"data.classification\"},\"predicate\":{},\"plain_statement\":\"The written rules for sorting and labelling information by sensitivity exist, are visible to everyone, and were reviewed recently.\"},{\"probe_key\":\"policy.attested\",\"params\":{\"policy_id\":\"data.classification\"},\"predicate\":{},\"plain_statement\":\"Everyone in the company has read and acknowledged the current information-labelling rules.\"}],\"manual\":[{\"title\":\"Data classification guide\",\"description\":\"A short document listing the company's sensitivity levels (e.g. public, internal, customer confidential) and which label to put on each type of document, message or system, including where card and customer personal data must be kept.\",\"kind\":\"file\",\"cadence_days\":365,\"plain_statement\":\"A simple guide that says which information is most sensitive and how each type should be labelled.\"},{\"title\":\"Labelling conformance statement\",\"description\":\"An owner attests that documents, emails and files containing customer personal data or card-related material are marked with the correct sensitivity label.\",\"kind\":\"attestation_statement\",\"cadence_days\":365,\"plain_statement\":\"A signed statement that sensitive files and messages actually carry the right label.\"},{\"title\":\"Masking evidence for card and personal data\",\"description\":\"Evidence that full card numbers and customer personal data are masked in screens, exports and any test copies (for example a screenshot or export showing partially hidden card numbers).\",\"kind\":\"file\",\"cadence_days\":365,\"plain_statement\":\"Proof that card numbers and personal details are shown with parts hidden, not in full.\"},{\"title\":\"Leak prevention review\",\"description\":\"A statement covering how the most sensitive information is prevented from leaking: restrictions on sharing outside the company, disabled downloads/exports where possible, and no sensitive data in public code repositories or support chats.\",\"kind\":\"attestation_statement\",\"cadence_days\":365,\"plain_statement\":\"A signed statement showing how the company stops sensitive information from being shared accidentally.\"}],\"not_applicable\":[]}",
+      "finish_reason": "stop"
+    },
+    "data.encryption": {
+      "content": "",
+      "finish_reason": "length"
+    },
+    "data.privacy": {
+      "content": "",
+      "finish_reason": "length"
+    },
+    "dev.secure_development": {
+      "content": "",
+      "finish_reason": "length"
+    },
+    "governance.leadership_oversight": {
+      "content": "",
+      "finish_reason": "length"
+    },
+    "governance.org_structure": {
+      "content": "",
+      "finish_reason": "length"
+    },
+    "governance.security_program": {
+      "content": "",
+      "finish_reason": "length"
+    },
+    "hr.disciplinary": {
+      "content": "{\"checks\":[{\"probe_key\":\"policy.current\",\"params\":{},\"predicate\":{},\"plain_statement\":\"The disciplinary policy exists, is visible to staff and has been reviewed recently.\"},{\"probe_key\":\"policy.attested\",\"params\":{},\"predicate\":{},\"plain_statement\":\"Every employee has confirmed they have read the current disciplinary policy.\"}],\"manual\":[{\"title\":\"Disciplinary process statement\",\"description\":\"Upload the written disciplinary procedure covering what happens when a security rule is broken, including how investigations are handled fairly and consistently.\",\"kind\":\"file\",\"cadence_days\":365,\"plain_statement\":\"A written step-by-step process for handling rule-breaking fairly is on file.\"},{\"title\":\"Annual disciplinary fairness attestation\",\"description\":\"An owner or HR lead states that any staff informed of consequences for breaking rules were handled according to the documented process, with nothing done informally or unfairly.\",\"kind\":\"attestation_statement\",\"cadence_days\":365,\"plain_statement\":\"Once a year, a responsible person confirms any rule-breaking cases were handled the documented way.\"}],\"not_applicable\":[]}",
+      "finish_reason": "stop"
+    },
+    "hr.screening": {
+      "content": "{\"checks\":[],\"manual\":[{\"title\":\"Background check record for each new joiner\",\"description\":\"For every new employee, upload the background check report or the screening provider's completion confirmation, showing which checks were run and that they match the role and local law.\",\"kind\":\"file\",\"cadence_days\":365,\"plain_statement\":\"When someone new joins, upload their background check report to show the check was done before they started.\"},{\"title\":\"Screening completeness statement\",\"description\":\"The owner states in writing that every person hired since the last review had a background check before their start date, that the checks used are lawful",
+      "finish_reason": "length"
+    },
+    "hr.terms_and_nda": {
+      "content": "",
+      "finish_reason": "length"
+    },
+    "hr.training": {
+      "content": "",
+      "finish_reason": "length"
+    },
+    "incident.response": {
+      "content": "",
+      "finish_reason": "length"
+    },
+    "keys.rotation": {
+      "content": "{\"checks\":[{\"probe_key\":\"keys.max_age\",\"params\":{\"max_age_days\":365},\"predicate\":{},\"plain_statement\":\"Every API key has been replaced within the last year.\"},{\"probe_key\":\"keys.unused_active\",\"params\":{\"unused_days\":90},\"predicate\":{},\"plain_statement\":\"API keys that have not been used for three months have been switched off.\"}],\"manual\":[{\"title\":\"External key rotation attestation\",\"description\":\"A person states, twice a year, that API keys held with services the monitoring suite cannot see (such as the card payment gateway and the cloud hosting platform) have been replaced and any key no longer used has been deleted.\",\"kind\":\"attestation_statement\",\"cadence_days\":180,\"plain_statement\":\"Twice a year someone confirms that keys for outside services like the payment gateway have been renewed and unused ones switched off.\"}],\"not_applicable\":[]}",
+      "finish_reason": "stop"
+    },
+    "logging.audit_trail": {
+      "content": "",
+      "finish_reason": "length"
+    },
+    "logging.retention": {
+      "content": "{\"checks\":[{\"probe_key\":\"logging.retention_floor\",\"params\":{\"floor_days\":90,\"expected_population\":[\"0b1c2d3e-0000-4000-8000-00000000b001\",\"0b1c2d3e-0000-4000-8000-00000000b002\"]},\"predicate\":{\"floor_days\":90},\"plain_statement\":\"Every booking app keeps its logs for at least 90 days so problems can be investigated later.\"}],\"manual\":[{\"title\":\"Hosting provider log retention confirmed\",\"description\":\"The suite can only see the Blip apps, so a person confirms (with a screenshot of the setting or a short written statement) that the cloud hosting platform and any application logs it holds are configured to retain logs for at least 90 days.\",\"kind\":\"attestation_statement\",\"cadence_days\":365,\"plain_statement\":\"Once a year, confirm that our hosting provider keeps its logs for at least 90 days.\"}],\"not_applicable\":[]}",
+      "finish_reason": "stop"
+    },
+    "network.security": {
+      "content": "",
+      "finish_reason": "length"
+    },
+    "ops.backups": {
+      "content": "",
+      "finish_reason": "length"
+    },
+    "ops.monitoring": {
+      "content": "",
+      "finish_reason": "length"
+    },
+    "ops.restore_testing": {
+      "content": "{\"checks\":[{\"probe_key\":\"ops.restore_tested\",\"params\":{\"window_days\":365},\"predicate\":{},\"plain_statement\":\"At least once a year, a backup is actually restored to prove the backups work.\"}],\"manual\":[{\"title\":\"Restore test record\",\"description\":\"Upload the notes, log, or screenshot from the most recent restore test showing which backup was restored and that it succeeded.\",\"kind\":\"file\",\"cadence_days\":365,\"plain_statement\":\"Keep a record of each yearly test that proves a backup was really restored.\"}],\"not_applicable\":[]}",
+      "finish_reason": "stop"
+    },
+    "physical.premises": {
+      "content": "{\"checks\":[],\"manual\":[{\"title\":\"Premises security statement\",\"description\":\"A written statement describing how the office and any rooms holding equipment are secured: who holds keys or entry controls, whether locks, alarms or CCTV are present, and how after-hours access works.\",\"kind\":\"attestation_statement\",\"cadence_days\":365,\"plain_statement\":\"Once a year, confirm in writing that your office and equipment rooms are locked and protected.\"},{\"title\":\"Landlord or building security arrangements\",\"description\":\"Lease terms, building rules, or a letter from the landlord showing what building security is provided for the premises staff use, such as entry control, alarms or CCTV.\",\"kind\":\"file\",\"cadence_days\":365,\"plain_statement\":\"Once a year, upload the landlord or building document that shows how the building is kept secure.\"},{\"title\":\"Fire and flood protection check record\",\"description\":\"Evidence that smoke alarms, extinguishers and any leak protection near equipment were inspected, and that equipment is not placed where water could reach it.\",\"kind\":\"file\",\"cadence_days\":365,\"plain_statement\":\"Once a year, upload proof that fire and water protection around your equipment was checked.\"},{\"title\":\"Power, cabling and equipment maintenance record\",\"description\":\"A short record of power protection such as surge bars or UPS units for network equipment, tidy and protected cabling, and any maintenance done on laptops and other gear during the year.\",\"kind\":\"file\",\"cadence_days\":365,\"plain_statement\":\"Once a year, keep a record of power protection, tidy cabling and any maintenance done on your equipment.\"}],\"not_applicable\":[]}",
+      "finish_reason": "stop"
+    },
+    "physical.workspace": {
+      "content": "",
+      "finish_reason": "length"
+    },
+    "platform.superuser_oversight": {
+      "content": "```json\n{\"checks\":[{\"probe_key\":\"platform.superuser_access\",\"params\":{},\"predicate\":{},\"plain_statement\":\"Counts how many actions the hosting company's own staff took inside our systems, so someone can spot anything unusual.\"},{\"probe_key\":\"access.privileged_roster\",\"params\":{\"max_privileged\":3},\"predicate\":{},\"plain_statement\":\"Confirms only a small, expected number of people hold powerful administrator rights in our systems.\"}],\"manual\":[{\"title\":\"Review of hosting platform staff activity\",\"description\":\"A person reviews the hosting platform's record of what its staff did inside the organization, confirms each action was expected support work, and confirms only the provider staff who genuinely need access still have it.\",\"kind\":\"attestation_statement\",\"cadence_days\":90,\"plain_statement\":\"Every three months, someone looks over what the hosting company's staff did in our systems and confirms it all made sense.\"}],\"not_applicable\":[]}\n```",
+      "finish_reason": "stop"
+    },
+    "policy.security_policy": {
+      "content": "{\"checks\":[{\"probe_key\":\"policy.current\",\"params\":{},\"predicate\":{},\"plain_statement\":\"The written security policy is active, visible to everyone, and has been reviewed recently.\"},{\"probe_key\":\"policy.attested\",\"params\":{},\"predicate\":{},\"plain_statement\":\"Everyone the policy applies to has read and acknowledged the current version of the security policy.\"}],\"manual\":[{\"title\":\"Security policy reflects real day-to-day practice\",\"description\":\"A responsible person states that the current written security policy actually covers the company's main risks, such as laptops, customer personal data in the booking software, card payments, and the hosted systems, and that it was reviewed after any big change.\",\"kind\":\"attestation_statement\",\"cadence_days\":365,\"plain_statement\":\"Once a year, confirm in writing that the policy on paper matches how the company really works.\"}],\"not_applicable\":[]}",
+      "finish_reason": "stop"
+    },
+    "projects.security": {
+      "content": "",
+      "finish_reason": "length"
+    },
+    "risk.assessment": {
+      "content": "{\"checks\":[],\"manual\":[{\"title\":\"Annual risk register\",\"description\":\"Upload the current risk register showing what could go wrong (including issues with customer data, card payments, and the software you build), how likely and harmful each risk is, and what the company decided to do about each one.\",\"kind\":\"file\",\"cadence_days\":365,\"plain_statement\":\"Upload the yearly list of risks, each rated for likelihood and impact, with the chosen response.\"},{\"title\":\"Fraud risk section\",\"description\":\"Provide a written statement confirming the assessment covered fraud risks, such as misuse of card payments, theft of customer data, fake invoices or expense claims, and how each is deterred or detected.\",\"kind\":\"attestation_statement\",\"cadence_days\":365,\"plain_statement\":\"Confirm that fraud was considered in the risk assessment and state what the company does to prevent or catch it.\"},{\"title\":\"Significant-change risk review\",\"description\":\"Provide a statement listing any big changes since the last annual assessment (new products or services, changes to hosting or payment handling, key staff joining or leaving) with the date the risk register was updated because of them, or confirm that no such changes occurred.\",\"kind\":\"attestation_statement\",\"cadence_days\":180,\"plain_statement\":\"Twice a year, confirm whether anything big changed and whether the risk list was updated as a result.\"}],\"not_applicable\":[]}",
+      "finish_reason": "stop"
+    },
+    "threat.intelligence": {
+      "content": "{\"checks\":[],\n \"manual\":[\n  {\"title\":\"Monthly threat news review note\",\n   \"description\":\"The person assigned to watch for new threats (e.g., the owner) reviews trusted sources each month, national CERT/CISA or NCSC advisories, GitHub Security Advisories for the languages and frameworks used in our repositories, the cloud hosting provider's security bulletins, and payment processor alerts, and records anything relevant to our booking site, radio bridge, and firmware, plus any action taken (or 'nothing relevant this month').\",\n   \"kind\":\"",
+      "finish_reason": "length"
+    },
+    "vendors.management": {
+      "content": "",
+      "finish_reason": "length"
+    },
+    "vuln.management": {
+      "content": "",
+      "finish_reason": "length"
+    }
+  }
+}

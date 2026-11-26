@@ -174,6 +174,75 @@ export interface CompileRun {
   status: string;
   assertions_proposed: number;
   assertions_dropped: number;
+  /** M7: progress of an AI-tailored compile the worker drives. */
+  controls_done?: number;
+  controls_total?: number;
+  used_fallback?: boolean;
+}
+
+/* ------------------------------ M7: policies ------------------------------ */
+
+export type PolicyAudience = { kind: 'all' } | { kind: 'users'; user_ids: string[] };
+
+/** One linked Beacon article (shapePolicy in apps/bastion-api/src/services/policies.service.ts). */
+export interface PolicyRow {
+  id: string;
+  beacon_entry_id: string;
+  title: string;
+  audience: PolicyAudience;
+  cadence_days: number;
+  owner_user_id: string | null;
+  owner_name: string | null;
+  status: 'active' | 'retired';
+  beacon_status: string | null;
+  visibility: string | null;
+  shared_with_everyone: boolean;
+  sharing_problem: string | null;
+  current_version: number | null;
+  expires_at: string | null;
+  days_to_expiry: number | null;
+  last_verified_at: string | null;
+  required_people: number;
+  attested_count: number;
+  not_attested_count: number;
+  attestation_label: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PolicyAttestations {
+  policy: PolicyRow;
+  attested: Array<{ user_id: string; name: string; attested_at: string }>;
+  not_attested: Array<{ user_id: string; name: string; can_open: boolean }>;
+  cannot_open_count: number;
+  cannot_open_label: string | null;
+}
+
+export interface PolicyBody {
+  policy_id: string;
+  beacon_entry_id: string;
+  title: string;
+  beacon_version: number;
+  body_markdown: string;
+  body_sha256: string;
+  saved_at: string;
+  expires_at: string | null;
+  cadence_days: number;
+  in_audience: boolean;
+  attested_at: string | null;
+  due: boolean;
+}
+
+export interface MyAttestationRow {
+  policy_id: string;
+  title: string;
+  current_version: number | null;
+  shared_with_everyone: boolean;
+  due: boolean;
+  state_words: string;
+  last_attested_version: number | null;
+  last_attested_at: string | null;
+  next_due_at: string | null;
 }
 
 export interface FrameworkView {

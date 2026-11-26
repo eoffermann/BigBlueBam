@@ -118,6 +118,16 @@ function FrameworksStep({ setup, perms }: { setup: SetupState; perms: SetupPermi
                 {run?.status === 'succeeded' && (
                   <p className="text-sm text-green-700 dark:text-green-400 mt-1">Checks are set up and waiting for your review.</p>
                 )}
+                {(run?.status === 'queued' || run?.status === 'running') && (
+                  <p className="text-sm text-primary-700 dark:text-primary-400 mt-1" data-testid="compile-progress">
+                    {run.status === 'queued' || !run.controls_total
+                      ? "Bastion's AI is about to tailor the checks. This can take a while; you can leave this page."
+                      : `Bastion's AI is tailoring the checks: ${run.controls_done ?? 0} of ${run.controls_total} controls.`}
+                  </p>
+                )}
+                {run?.status === 'partial' && (
+                  <p className="text-sm text-amber-700 mt-1">Setting up checks stopped before it finished. Start it again to pick up where it left off.</p>
+                )}
               </div>
               {!f ? (
                 perms.frameworkWrite && (
@@ -127,9 +137,26 @@ function FrameworksStep({ setup, perms }: { setup: SetupState; perms: SetupPermi
                 )
               ) : (
                 perms.compile && (
-                  <button type="button" className={run?.status === 'succeeded' ? secondary : primary} disabled={compile.isPending} onClick={() => compile.mutate(f.id)}>
-                    {run?.status === 'succeeded' ? 'Look for new checks' : 'Set up checks'}
-                  </button>
+                  <div className="flex flex-col items-end gap-1 shrink-0">
+                    <button
+                      type="button"
+                      className={run?.status === 'succeeded' ? secondary : primary}
+                      disabled={compile.isPending || run?.status === 'queued' || run?.status === 'running'}
+                      onClick={() => compile.mutate(f.id)}
+                    >
+                      {run?.status === 'succeeded' ? 'Look for new checks' : 'Set up checks'}
+                    </button>
+                    {run?.status !== 'queued' && run?.status !== 'running' && (
+                      <button
+                        type="button"
+                        className="text-xs text-zinc-600 dark:text-zinc-400 hover:underline disabled:opacity-50"
+                        disabled={compile.isPending}
+                        onClick={() => compile.mutate({ frameworkId: f.id, useAi: false })}
+                      >
+                        Use the library suggestions only
+                      </button>
+                    )}
+                  </div>
                 )
               )}
             </li>

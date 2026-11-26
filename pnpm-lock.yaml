@@ -578,6 +578,9 @@ importers:
       '@bigbluebam/storage':
         specifier: workspace:*
         version: link:../../packages/storage
+      '@bigbluebam/structured-data':
+        specifier: workspace:*
+        version: link:../../packages/structured-data
       '@fastify/cookie':
         specifier: ^11.0.0
         version: 11.0.2
@@ -5012,6 +5015,9 @@ importers:
 
   packages/structured-data:
     dependencies:
+      fflate:
+        specifier: 0.8.3
+        version: 0.8.3
       papaparse:
         specifier: ^5.5.3
         version: 5.5.3

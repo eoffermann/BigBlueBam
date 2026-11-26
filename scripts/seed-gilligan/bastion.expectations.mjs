@@ -161,6 +161,35 @@ export const BASTION_SEED_EXPECTATIONS = {
     },
   },
 
+  // M7 rows (spec 10.2): the security policy in Gilligan's Beacon, read by 5 of the 7 castaways.
+  // Gilligan and Ginger have not read it yet (story 12 at M10: Gilligan attests, coverage rises).
+  m7: {
+    policy: {
+      slug: 'island-information-security-policy',
+      title: 'Island Information Security Policy',
+      cadenceDays: 365,
+      audienceEmails: [
+        'skipper@gilligantravel.example',
+        'professor@gilligantravel.example',
+        'gilligan@gilligantravel.example',
+        'maryann@gilligantravel.example',
+        'ginger@gilligantravel.example',
+        'howell@gilligantravel.example',
+        'lovey@gilligantravel.example',
+      ],
+      attestedEmails: [
+        'skipper@gilligantravel.example',
+        'professor@gilligantravel.example',
+        'maryann@gilligantravel.example',
+        'howell@gilligantravel.example',
+        'lovey@gilligantravel.example',
+      ],
+      required: 7,
+      attested: 5,
+      label: '5 of 7 have read the current version',
+    },
+  },
+
   companyProfile: {
     company_size: '1-10',
     work_style: 'office',

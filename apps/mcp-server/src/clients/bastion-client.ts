@@ -38,6 +38,13 @@ import type {
   BastionGapListQuery,
   BastionProposeFix,
 } from '@bigbluebam/shared';
+import type {
+  BastionCompileFramework,
+  BastionPolicyCreate,
+  BastionPolicyListQuery,
+  BastionPolicyUpdate,
+  BastionRequestAttestations,
+} from '@bigbluebam/shared';
 import type { ApiClient } from '../middleware/api-client.js';
 
 /**
@@ -225,6 +232,18 @@ export function createBastionClient(bastionApiUrl: string, api: ApiClient, fetch
         })}`,
       ),
     acknowledgeDrift: (id: string, body: BastionDriftAcknowledge) => request('POST', `/drift/${id}/acknowledge`, body),
+
+    // ── M7: policies and attestation (spec 5.1 rows 64-71) ─────────────────────
+    // Row 70 (attest) has no client method: session required (spec 2.8, #136).
+    listPolicies: (q: Partial<BastionPolicyListQuery> = {}) => request('GET', `/policies${qs({ status: q.status })}`),
+    createPolicy: (body: BastionPolicyCreate) => request('POST', '/policies', body),
+    updatePolicy: (id: string, body: BastionPolicyUpdate) => request('PATCH', `/policies/${id}`, body),
+    getPolicyBody: (id: string) => request('GET', `/policies/${id}/body`),
+    listPolicyAttestations: (id: string) => request('GET', `/policies/${id}/attestations`),
+    myAttestations: () => request('GET', '/me/attestations'),
+    requestAttestations: (id: string, body: BastionRequestAttestations) => request('POST', `/policies/${id}/request-attestations`, body),
+    // Row 9 with the M7 option: use_ai false forces the library's suggestions.
+    compileFrameworkWith: (id: string, body: BastionCompileFramework) => request('POST', `/frameworks/${id}/compile`, body),
   };
 }
 

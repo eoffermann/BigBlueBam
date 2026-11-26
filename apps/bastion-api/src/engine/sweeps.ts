@@ -9,6 +9,7 @@ import { type EngineDeps, localClock, orgTx, sqlstateOf, utcDate } from './conte
 import { enqueueBastionEvent, enqueueOutbox } from './outbox.js';
 import { checkLedgerIdentity, sealObjectKey, type SealIdentity, StorageUnavailableError, writeRestoreObject } from './restore.js';
 import { loadReadinessNumbers } from './numbers.js';
+import { orphanedCompileRuns, reapCompileRuns } from '../services/compile-ai.service.js';
 
 interface OrgRow {
   organization_id: string;
@@ -94,8 +95,14 @@ export async function evaluateTick(deps: EngineDeps, opts: { organization_id?: s
     if (out.some((o) => o.run_id === r.id)) continue;
     out.push({ organization_id: r.organization_id as string, run_id: r.id as string, resume_count: Number(r.resume_count), generation, why: 'orphan_requeue' });
   }
-  deps.log.info({ enqueue: out.length }, `bastion-evaluate-tick: ${out.length} runs to drive`);
-  const result: BastionEvaluateTickResult = { runs: out };
+  // M7: queued AI compile runs nobody picked up (a dropped enqueue, or a run released by a deploy)
+  // go back to the bastion-compile queue under a generation-stamped job id (spec 7 orphan rule).
+  const compileRuns = (await orphanedCompileRuns(deps, new Date(now.getTime() - ORPHAN_REQUEUE_AFTER_MS), opts.organization_id)).map((r) => ({
+    ...r,
+    generation,
+  }));
+  deps.log.info({ enqueue: out.length, compile: compileRuns.length }, `bastion-evaluate-tick: ${out.length} runs and ${compileRuns.length} compile runs to drive`);
+  const result: BastionEvaluateTickResult = { runs: out, compile_runs: compileRuns };
   return result;
 }
 
@@ -131,14 +138,18 @@ export async function runReaper(deps: EngineDeps, opts: { organization_id?: stri
        AND (heartbeat_at IS NULL OR heartbeat_at < ${cutoff})
        ${opts.organization_id ? deps.sql`AND organization_id = ${opts.organization_id}` : deps.sql``}
     RETURNING id`;
+  // M7: worker-driven AI compile runs follow the evaluation rule (released, then parked).
+  const compiles = await reapCompileRuns(deps, cutoff, opts.organization_id);
   deps.log.info(
-    { released: released.length, parked: parked.length, inline_compiles_failed: inlineFailed.length },
-    `bastion-run-reaper: released ${released.length}, parked ${parked.length}, failed ${inlineFailed.length} stale inline compile runs`,
+    { released: released.length, parked: parked.length, inline_compiles_failed: inlineFailed.length, compiles },
+    `bastion-run-reaper: released ${released.length}, parked ${parked.length}, failed ${inlineFailed.length} stale inline compile runs; compile runs released ${compiles.released}, parked ${compiles.parked}`,
   );
   return {
     released: released.map((r) => ({ run_id: r.id as string, organization_id: r.organization_id as string, resume_count: Number(r.resume_count) })),
     parked: parked.length,
     inline_compiles_failed: inlineFailed.length,
+    compile_runs_released: compiles.released,
+    compile_runs_parked: compiles.parked,
   };
 }
 
