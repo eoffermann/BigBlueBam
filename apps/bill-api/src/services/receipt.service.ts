@@ -3,7 +3,8 @@
  *
  * Issue #145: receipts are stored through @bigbluebam/storage with the
  * configured S3_* bucket and credentials (lib/receipt-storage.ts) under
- * bill/receipts/<expense-id>.<ext>, and served only by the authorized
+ * bill/receipts/<expense-id> (issue #157; earlier receipts at
+ * bill/receipts/<expense-id><ext> are still read), and served only by the authorized
  * GET /v1/expenses/:id/receipt route. The expense row's receipt_url is that
  * route's path, never a /files/... URL.
  */
@@ -15,6 +16,7 @@ import { billExpenses } from '../db/schema/index.js';
 import {
   RECEIPT_TYPES,
   getReceiptDriver,
+  legacyReceiptKey,
   receiptDownloadPath,
   receiptKey,
 } from '../lib/receipt-storage.js';
@@ -97,31 +99,42 @@ export async function uploadReceipt(
   }
   const buffer = Buffer.concat(chunks);
 
-  // 4. Store it in the configured bucket. A replacement receipt with a different
-  //    extension would otherwise leave the old object behind; remove it.
-  const key = receiptKey(expenseId, ext);
-  await driver.put(key, buffer, { contentType, size: buffer.length });
-  for (const otherExt of Object.keys(RECEIPT_TYPES)) {
-    if (otherExt === ext) continue;
-    const other = receiptKey(expenseId, otherExt);
-    if (await driver.stat(other).catch(() => null)) {
-      await driver.delete(other).catch(() => undefined);
-    }
-  }
-
-  // 5. Point the expense at the authorized download route
+  // 4. Store it and point the expense at it, serialized per expense (issue #157).
+  //    The object key has no extension, so a replacement is one overwrite of the
+  //    same key and nothing is deleted on the way. The expense row is locked
+  //    (SELECT ... FOR UPDATE) across the put and the UPDATE, so two overlapping
+  //    uploads run one after the other and the row always describes the bytes
+  //    that were written last.
   const receiptUrl = receiptDownloadPath(expenseId);
-  await db
-    .update(billExpenses)
-    .set({
-      receipt_url: receiptUrl,
-      receipt_filename: file.filename,
-      receipt_mime_type: contentType,
-      receipt_size_bytes: buffer.length,
-      receipt_uploaded_at: new Date(),
-      updated_at: new Date(),
-    })
-    .where(eq(billExpenses.id, expenseId));
+  await db.transaction(async (tx) => {
+    const [locked] = await tx
+      .select({ id: billExpenses.id })
+      .from(billExpenses)
+      .where(and(eq(billExpenses.id, expenseId), eq(billExpenses.organization_id, orgId)))
+      .for('update')
+      .limit(1);
+    if (!locked) throw notFound('Expense not found');
+
+    await driver.put(receiptKey(expenseId), buffer, { contentType, size: buffer.length });
+
+    await tx
+      .update(billExpenses)
+      .set({
+        receipt_url: receiptUrl,
+        receipt_filename: file.filename,
+        receipt_mime_type: contentType,
+        receipt_size_bytes: buffer.length,
+        receipt_uploaded_at: new Date(),
+        updated_at: new Date(),
+      })
+      .where(eq(billExpenses.id, expenseId));
+  });
+
+  // 5. Only after the row names the extensionless key: drop any pre-#157
+  //    `<id><ext>` object, which nothing references any more. Best effort.
+  for (const legacyExt of Object.keys(RECEIPT_TYPES)) {
+    await driver.delete(legacyReceiptKey(expenseId, legacyExt)).catch(() => undefined);
+  }
 
   return {
     receipt_url: receiptUrl,
@@ -161,15 +174,26 @@ export async function openReceipt(
   }
 
   const ext = path.extname(expense.receipt_filename).toLowerCase();
-  const contentType = RECEIPT_TYPES[ext];
-  if (!contentType) throw billError(404, 'RECEIPT_NOT_FOUND', 'This expense has no uploaded receipt');
+  const allowed = new Set(Object.values(RECEIPT_TYPES));
 
   const driver = requireDriver();
-  let obj: { stream: NodeJS.ReadableStream; size: number };
+  let obj: { stream: NodeJS.ReadableStream; size: number; contentType: string };
   try {
-    obj = await driver.getStream(receiptKey(expense.id, ext));
+    obj = await driver.getStream(receiptKey(expense.id));
   } catch {
-    throw billError(404, 'RECEIPT_NOT_FOUND', 'The receipt file is missing from storage');
+    // Pre-#157 receipts live at `<id><ext>`, derived from the row's filename.
+    if (!RECEIPT_TYPES[ext]) throw billError(404, 'RECEIPT_NOT_FOUND', 'This expense has no uploaded receipt');
+    try {
+      obj = await driver.getStream(legacyReceiptKey(expense.id, ext));
+    } catch {
+      throw billError(404, 'RECEIPT_NOT_FOUND', 'The receipt file is missing from storage');
+    }
   }
+  // Serve the type stored with the bytes when it is one we accept, so the
+  // Content-Type always matches what was written; else fall back to the row.
+  const contentType = allowed.has(obj.contentType)
+    ? obj.contentType
+    : (expense.receipt_mime_type && allowed.has(expense.receipt_mime_type) ? expense.receipt_mime_type : RECEIPT_TYPES[ext]);
+  if (!contentType) throw billError(404, 'RECEIPT_NOT_FOUND', 'This expense has no uploaded receipt');
   return { stream: obj.stream, contentType, size: obj.size, filename: expense.receipt_filename };
 }

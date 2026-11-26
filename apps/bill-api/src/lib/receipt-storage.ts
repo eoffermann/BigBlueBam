@@ -8,7 +8,8 @@
  * same bucket and credentials the worker and the invoice PDF download use, and
  * are served only by the authorized GET /v1/expenses/:id/receipt route.
  *
- * Keys are pinned to the expense: `bill/receipts/<expense-id><ext>`. The route
+ * Keys are pinned to the expense: `bill/receipts/<expense-id>` (before #157,
+ * `bill/receipts/<expense-id><ext>`, still read as a fallback). The route
  * derives the key from the expense row it has already authorized, so no
  * client-supplied value ever selects which object is read.
  */
@@ -33,7 +34,18 @@ export const RECEIPT_TYPES: Record<string, string> = {
   '.heif': 'image/heif',
 };
 
-export function receiptKey(expenseId: string, ext: string): string {
+/**
+ * The one object key of an expense's receipt (issue #157). No extension: the
+ * content type travels with the object and the row, so replacing a receipt is a
+ * single overwrite of this key with nothing to clean up, and two overlapping
+ * uploads can no longer delete each other's files.
+ */
+export function receiptKey(expenseId: string): string {
+  return `${RECEIPT_PREFIX}/${expenseId}`;
+}
+
+/** Pre-#157 key shape (`<expense-id><ext>`), still read as a fallback for old receipts. */
+export function legacyReceiptKey(expenseId: string, ext: string): string {
   return `${RECEIPT_PREFIX}/${expenseId}${ext}`;
 }
 

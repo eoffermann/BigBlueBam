@@ -33,13 +33,35 @@ vi.mock('drizzle-orm', async (importOriginal) => {
   };
 });
 
-vi.mock('../src/db/index.js', () => ({
-  connection: { end: vi.fn() },
-  db: {
+// Issue #157: db.transaction + SELECT ... FOR UPDATE. The fake emulates the row
+// lock: a `.for('update')` select waits until no other transaction holds a lock
+// on the matching row, and the lock is held until that transaction ends.
+const rowLocks = new Map<string, Promise<void>>();
+const forUpdateCalls: string[] = [];
+function fakeDb(txLocks?: Array<() => void>) {
+  const limitRows = (c: Cond) => [...rows.values()].filter((r) => matches(r, c)).slice(0, 1);
+  return {
     select: () => ({
       from: () => ({
         where: (c: Cond) => ({
-          limit: async () => [...rows.values()].filter((r) => matches(r, c)).slice(0, 1),
+          limit: async () => limitRows(c),
+          for: (mode: string) => ({
+            limit: async () => {
+              const found = limitRows(c);
+              const id = found[0]?.id as string | undefined;
+              if (id && txLocks) {
+                forUpdateCalls.push(mode);
+                while (rowLocks.has(id)) await rowLocks.get(id);
+                let unlock!: () => void;
+                rowLocks.set(id, new Promise<void>((r) => (unlock = r)));
+                txLocks.push(() => {
+                  rowLocks.delete(id);
+                  unlock();
+                });
+              }
+              return limitRows(c);
+            },
+          }),
         }),
       }),
     }),
@@ -50,6 +72,21 @@ vi.mock('../src/db/index.js', () => ({
         },
       }),
     }),
+  };
+}
+
+vi.mock('../src/db/index.js', () => ({
+  connection: { end: vi.fn() },
+  db: {
+    ...fakeDb(),
+    transaction: async <T>(fn: (tx: unknown) => Promise<T>) => {
+      const locks: Array<() => void> = [];
+      try {
+        return await fn(fakeDb(locks));
+      } finally {
+        for (const release of locks) release();
+      }
+    },
   },
 }));
 
@@ -84,6 +121,8 @@ const memDriver = {
   capabilities: {},
   healthCheck: async () => ({ ok: true, latencyMs: 0 }),
   put: vi.fn(async (key: string, body: Buffer, opts?: { contentType?: string }) => {
+    // A real S3 put takes time; yield so overlapping uploads interleave (#157).
+    await new Promise((r) => setTimeout(r, 5));
     objects.set(key, { body, contentType: opts?.contentType ?? 'application/octet-stream' });
     return { key, size: body.length, integrity: 'etag' };
   }),
@@ -145,6 +184,7 @@ const download = (id: string) =>
 beforeEach(async () => {
   vi.clearAllMocks();
   canCalls.length = 0;
+  forUpdateCalls.length = 0;
   currentOrg = ORG_A;
   objects.clear();
   rows.clear();
@@ -168,7 +208,7 @@ describe('expense receipts (issue #145)', () => {
     const up = await upload(EXPENSE_A, 'lunch receipt.png', PNG);
     expect(up.statusCode).toBe(200);
     expect(up.json().data.receipt_url).toBe(`/bill/api/v1/expenses/${EXPENSE_A}/receipt`);
-    expect([...objects.keys()]).toEqual([`bill/receipts/${EXPENSE_A}.png`]);
+    expect([...objects.keys()]).toEqual([`bill/receipts/${EXPENSE_A}`]);
     expect(rows.get(EXPENSE_A)!.receipt_url).toBe(`/bill/api/v1/expenses/${EXPENSE_A}/receipt`);
 
     const down = await download(EXPENSE_A);
@@ -218,12 +258,51 @@ describe('expense receipts (issue #145)', () => {
     expect(objects.size).toBe(0);
   });
 
-  it('a replacement with another extension removes the old object', async () => {
+  it('a replacement with another extension overwrites the one key; nothing is left behind', async () => {
     await upload(EXPENSE_A, 'r.png', PNG);
     await upload(EXPENSE_A, 'r.pdf', Buffer.from('%PDF-1.7'), 'application/pdf');
-    expect([...objects.keys()]).toEqual([`bill/receipts/${EXPENSE_A}.pdf`]);
+    expect([...objects.keys()]).toEqual([`bill/receipts/${EXPENSE_A}`]);
     const down = await download(EXPENSE_A);
     expect(down.headers['content-type']).toBe('application/pdf');
+    expect(down.rawPayload.toString()).toBe('%PDF-1.7');
+  });
+
+  it('two overlapping uploads with different extensions leave the receipt the row names (issue #157)', async () => {
+    const PDF = Buffer.from('%PDF-1.7 second');
+    const [a, b] = await Promise.all([
+      upload(EXPENSE_A, 'scan.png', PNG),
+      upload(EXPENSE_A, 'scan.pdf', PDF, 'application/pdf'),
+    ]);
+    expect([a.statusCode, b.statusCode]).toEqual([200, 200]);
+    // The upload took the row lock (SELECT ... FOR UPDATE) for both requests.
+    expect(forUpdateCalls).toEqual(['update', 'update']);
+
+    // Invariant, checked where it is consumed: the download serves bytes and a type
+    // that match the filename the row now names.
+    const named = rows.get(EXPENSE_A)!.receipt_filename as string;
+    const down = await download(EXPENSE_A);
+    expect(down.statusCode).toBe(200);
+    if (named === 'scan.pdf') {
+      expect(down.headers['content-type']).toBe('application/pdf');
+      expect(down.rawPayload.equals(PDF)).toBe(true);
+    } else {
+      expect(named).toBe('scan.png');
+      expect(down.headers['content-type']).toBe('image/png');
+      expect(down.rawPayload.equals(PNG)).toBe(true);
+    }
+    expect(memDriver.delete).not.toHaveBeenCalledWith(`bill/receipts/${EXPENSE_A}`);
+  });
+
+  it('a pre-#157 receipt stored as <id><ext> still downloads, and is removed once replaced', async () => {
+    objects.set(`bill/receipts/${EXPENSE_A}.png`, { body: PNG, contentType: 'image/png' });
+    Object.assign(rows.get(EXPENSE_A)!, { receipt_filename: 'old.png', receipt_uploaded_at: new Date() });
+    const legacy = await download(EXPENSE_A);
+    expect(legacy.statusCode).toBe(200);
+    expect(legacy.rawPayload.equals(PNG)).toBe(true);
+
+    await upload(EXPENSE_A, 'new.pdf', Buffer.from('%PDF-1.7'), 'application/pdf');
+    expect([...objects.keys()]).toEqual([`bill/receipts/${EXPENSE_A}`]);
+    expect((await download(EXPENSE_A)).headers['content-type']).toBe('application/pdf');
   });
 
   it('503 STORAGE_NOT_CONFIGURED when no storage is configured (no default credentials)', async () => {
