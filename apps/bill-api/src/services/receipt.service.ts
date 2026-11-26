@@ -12,7 +12,7 @@
 import { eq, and } from 'drizzle-orm';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
-import { withStorageTimeout } from '@bigbluebam/storage';
+import { StorageNotConfiguredError, withStorageTimeout } from '@bigbluebam/storage';
 import { db } from '../db/index.js';
 import { billExpenses } from '../db/schema/index.js';
 import {
@@ -52,16 +52,13 @@ function billError(statusCode: number, code: string, msg: string): Error {
 
 const badRequest = (msg: string) => billError(400, 'BAD_REQUEST', msg);
 const notFound = (msg: string) => billError(404, 'NOT_FOUND', msg);
-const storageNotConfigured = () =>
-  billError(
-    503,
-    'STORAGE_NOT_CONFIGURED',
-    'Receipt storage is not configured on this server (S3_ENDPOINT, S3_ACCESS_KEY and S3_SECRET_KEY are required)',
-  );
-
 function requireDriver() {
   const driver = getReceiptDriver();
-  if (!driver) throw storageNotConfigured();
+  if (!driver) {
+    throw new StorageNotConfiguredError(
+      'Receipt storage is not configured on this server (S3_ENDPOINT, S3_ACCESS_KEY and S3_SECRET_KEY are required)',
+    );
+  }
   return driver;
 }
 

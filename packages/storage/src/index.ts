@@ -8,7 +8,17 @@ export * from './secrets.js';
 export * from './keys.js';
 export * from './errors.js';
 export { S3Driver, type S3DriverOptions } from './s3-driver.js';
-export { createDriver, createBootstrapDriver, type ProviderRow } from './factory.js';
+export {
+  createDriver,
+  createBootstrapDriver,
+  isStorageConfigured,
+  createEnvBootstrapDriver,
+  getEnvBootstrapDriver,
+  requireEnvBootstrapDriver,
+  __setEnvBootstrapDriverForTests,
+  type ProviderRow,
+  type StorageEnv,
+} from './factory.js';
 
 /** Build a canonical object key. Mirrors the legacy upload.service helper so the
  *  attachment substrate can repoint at the package without changing key shapes. */

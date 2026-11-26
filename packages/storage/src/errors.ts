@@ -1,6 +1,24 @@
 // Shared storage error vocabulary, so every service maps storage failures to the
 // same HTTP status and code instead of inventing its own (issues #164, #169).
 
+/** Storage is required but not configured on this server. Maps to 503 STORAGE_NOT_CONFIGURED. */
+export class StorageNotConfiguredError extends Error {
+  readonly statusCode = 503;
+  readonly code = 'STORAGE_NOT_CONFIGURED';
+  constructor(
+    message = 'File storage is not configured on this server (S3_ENDPOINT, S3_ACCESS_KEY and S3_SECRET_KEY are required)',
+  ) {
+    super(message);
+    this.name = 'StorageNotConfiguredError';
+  }
+}
+
+/** Whether a storage error means the object does not exist (as opposed to storage trouble). */
+export function isStorageNotFoundError(err: unknown): boolean {
+  const code = (err as { code?: string } | null)?.code;
+  return code === 'NoSuchKey' || code === 'NotFound' || code === 'NoSuchObject';
+}
+
 /** A storage call did not finish within its time budget. Maps to 504 STORAGE_TIMEOUT. */
 export class StorageTimeoutError extends Error {
   readonly statusCode = 504;

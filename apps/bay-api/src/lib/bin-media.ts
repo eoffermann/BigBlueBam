@@ -9,25 +9,16 @@
 //
 // Only clean/skipped assets are ever served (mirrors Bin's §9.3 gate).
 
-import { createBootstrapDriver, type StorageDriver } from '@bigbluebam/storage';
+import { requireEnvBootstrapDriver, type StorageDriver } from '@bigbluebam/storage';
 import { sql } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import { env } from '../env.js';
 
 export type ServeVariant = 'original' | 'proxy' | 'poster';
 
-let driver: StorageDriver | null = null;
+/** The shared, memoized env-driven driver (issue #164). */
 function getDriver(): StorageDriver {
-  if (!driver) {
-    driver = createBootstrapDriver({
-      S3_ENDPOINT: env.S3_ENDPOINT,
-      S3_REGION: env.S3_REGION,
-      S3_BUCKET: env.S3_BUCKET,
-      S3_ACCESS_KEY: env.S3_ACCESS_KEY,
-      S3_SECRET_KEY: env.S3_SECRET_KEY,
-    });
-  }
-  return driver;
+  return requireEnvBootstrapDriver(env);
 }
 
 interface BinAssetMediaRow {

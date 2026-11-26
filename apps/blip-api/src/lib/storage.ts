@@ -8,22 +8,13 @@
  *   <orgId>/blip/<tracked_app_id>/<YYYY-MM>/<seq>/<index>.jpg
  *   <orgId>/blip/<tracked_app_id>/<YYYY-MM>/<seq>/<index>.thumb.jpg
  */
-import { createBootstrapDriver, type StorageDriver } from '@bigbluebam/storage';
+import { requireEnvBootstrapDriver, type StorageDriver } from '@bigbluebam/storage';
 import { env } from '../env.js';
 
-let driver: StorageDriver | null = null;
-
+/** The shared, memoized env-driven driver (issue #164). Throws
+ *  StorageNotConfiguredError (503) if storage is not configured. */
 export function getDriver(): StorageDriver {
-  if (!driver) {
-    driver = createBootstrapDriver({
-      S3_ENDPOINT: env.S3_ENDPOINT,
-      S3_REGION: env.S3_REGION,
-      S3_BUCKET: env.S3_BUCKET,
-      S3_ACCESS_KEY: env.S3_ACCESS_KEY,
-      S3_SECRET_KEY: env.S3_SECRET_KEY,
-    });
-  }
-  return driver;
+  return requireEnvBootstrapDriver(env);
 }
 
 export function monthSegment(d: Date): string {

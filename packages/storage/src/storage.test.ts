@@ -1,10 +1,77 @@
 import { describe, it, expect } from 'vitest';
 import { parseProviderConfig, s3ConfigSchema, rcloneConfigSchema } from './config.js';
 import { encryptSecret, decryptSecret, fingerprint, displayHint } from './secrets.js';
-import { createDriver, createBootstrapDriver } from './factory.js';
+import {
+  createDriver,
+  createBootstrapDriver,
+  createEnvBootstrapDriver,
+  getEnvBootstrapDriver,
+  isStorageConfigured,
+  requireEnvBootstrapDriver,
+  __setEnvBootstrapDriverForTests,
+} from './factory.js';
 import { buildStorageKey, billInvoicePdfKey } from './index.js';
 import { S3Driver } from './s3-driver.js';
-import { StorageTimeoutError, withStorageTimeout } from './errors.js';
+import {
+  StorageNotConfiguredError,
+  StorageTimeoutError,
+  isStorageNotFoundError,
+  withStorageTimeout,
+} from './errors.js';
+
+describe('env-driven bootstrap driver (issue #164)', () => {
+  const full = () => ({
+    S3_ENDPOINT: 'http://minio:9000',
+    S3_ACCESS_KEY: 'ak',
+    S3_SECRET_KEY: 'sk',
+    S3_REGION: 'us-east-1',
+    S3_BUCKET: 'bigbluebam-uploads',
+  });
+
+  it('one configured rule: endpoint, both credentials and a bucket', () => {
+    expect(isStorageConfigured(full())).toBe(true);
+    for (const k of ['S3_ENDPOINT', 'S3_ACCESS_KEY', 'S3_SECRET_KEY', 'S3_BUCKET'] as const) {
+      expect(isStorageConfigured({ ...full(), [k]: '' }), k).toBe(false);
+      expect(createEnvBootstrapDriver({ ...full(), [k]: undefined as unknown as string }), k).toBeNull();
+    }
+  });
+
+  it('memoizes per env object, and require throws a 503 STORAGE_NOT_CONFIGURED', () => {
+    const env = full();
+    const d = getEnvBootstrapDriver(env);
+    expect(d).toBeInstanceOf(S3Driver);
+    expect(getEnvBootstrapDriver(env)).toBe(d);
+    expect(getEnvBootstrapDriver(full())).not.toBe(d);
+    const missing = { ...full(), S3_SECRET_KEY: undefined };
+    expect(getEnvBootstrapDriver(missing)).toBeNull();
+    const err = (() => {
+      try {
+        requireEnvBootstrapDriver(missing);
+      } catch (e) {
+        return e;
+      }
+    })();
+    expect(err).toBeInstanceOf(StorageNotConfiguredError);
+    expect(err).toMatchObject({ statusCode: 503, code: 'STORAGE_NOT_CONFIGURED' });
+  });
+
+  it('the test hook pins and unpins a driver for one env', () => {
+    const env = full();
+    const fake = { kind: 'local' } as unknown as ReturnType<typeof getEnvBootstrapDriver>;
+    __setEnvBootstrapDriverForTests(env, fake);
+    expect(getEnvBootstrapDriver(env)).toBe(fake);
+    __setEnvBootstrapDriverForTests(env, null);
+    expect(getEnvBootstrapDriver(env)).toBeNull();
+    __setEnvBootstrapDriverForTests(env, undefined);
+    expect(getEnvBootstrapDriver(env)).toBeInstanceOf(S3Driver);
+  });
+
+  it('isStorageNotFoundError recognizes the S3 not-found codes only', () => {
+    for (const code of ['NoSuchKey', 'NotFound', 'NoSuchObject']) expect(isStorageNotFoundError({ code })).toBe(true);
+    expect(isStorageNotFoundError({ code: 'AccessDenied' })).toBe(false);
+    expect(isStorageNotFoundError(null)).toBe(false);
+  });
+});
 
 describe('withStorageTimeout (issue #169)', () => {
   it('passes a result through, and rejects a stalled call with a 504 STORAGE_TIMEOUT', async () => {

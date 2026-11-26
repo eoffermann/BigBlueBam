@@ -26,7 +26,13 @@ import type { Job } from 'bullmq';
 import type { Logger } from 'pino';
 import { sql } from 'drizzle-orm';
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
-import { billInvoicePdfKey, createBootstrapDriver, type StorageDriver } from '@bigbluebam/storage';
+import {
+  __setEnvBootstrapDriverForTests,
+  billInvoicePdfKey,
+  getEnvBootstrapDriver,
+  type StorageDriver,
+} from '@bigbluebam/storage';
+import type { Env } from '../env.js';
 import { getDb } from '../utils/db.js';
 import { publishBoltEvent } from '../utils/bolt-events.js';
 
@@ -385,42 +391,31 @@ async function renderInvoicePdf(
 
 // Issue #148: writes go through @bigbluebam/storage's bootstrap driver (which
 // creates the bucket on first put), the same substrate bill-api reads with.
-let cachedDriver: StorageDriver | null | undefined;
-
-function getStorageDriver(): StorageDriver | null {
-  if (cachedDriver !== undefined) return cachedDriver;
-  const endpoint = process.env.S3_ENDPOINT;
-  const accessKey = process.env.S3_ACCESS_KEY;
-  const secretKey = process.env.S3_SECRET_KEY;
-  if (!endpoint || !accessKey || !secretKey) {
-    cachedDriver = null;
-    return cachedDriver;
-  }
-  try {
-    cachedDriver = createBootstrapDriver({
-      S3_ENDPOINT: endpoint,
-      S3_REGION: process.env.S3_REGION ?? 'us-east-1',
-      S3_BUCKET: process.env.S3_BUCKET ?? 'bigbluebam-uploads',
-      S3_ACCESS_KEY: accessKey,
-      S3_SECRET_KEY: secretKey,
-    });
-  } catch {
-    cachedDriver = null;
-  }
-  return cachedDriver;
-}
+// Issue #164: the driver comes from the shared env-driven helper over the
+// worker's validated env (apps/worker/src/env.ts), so the "configured" rule, the
+// bucket and the region are the same facts bill-api uses, not inline fallbacks.
+const getStorageDriver = (env: Env): StorageDriver | null => getEnvBootstrapDriver(env);
 
 /** Test hook: inject a driver (null = not configured), or undefined to re-read env. */
-export function __setBillPdfStorageDriverForTests(d: StorageDriver | null | undefined): void {
-  cachedDriver = d;
+export function __setBillPdfStorageDriverForTests(env: Env, d: StorageDriver | null | undefined): void {
+  __setEnvBootstrapDriverForTests(env, d);
 }
 
 async function uploadPdfToMinio(
   storageKey: string,
   pdfBytes: Uint8Array,
   logger: Logger,
+  env: Env,
 ): Promise<{ uploaded: boolean; reason?: string }> {
-  const driver = getStorageDriver();
+  let driver: StorageDriver | null;
+  try {
+    driver = getStorageDriver(env);
+  } catch (err) {
+    // A malformed S3_ENDPOINT: report it like any other upload failure.
+    const message = err instanceof Error ? err.message : String(err);
+    logger.error({ storageKey, err: message }, 'bill-pdf-generate: object storage misconfigured');
+    return { uploaded: false, reason: message };
+  }
   if (!driver) {
     logger.warn('bill-pdf-generate: object storage not configured; skipping upload');
     return { uploaded: false, reason: 'storage not configured' };
@@ -499,6 +494,7 @@ async function claimWorkerJob(id: string): Promise<boolean> {
 async function processWorkerJobRow(
   workerJobId: string,
   logger: Logger,
+  env: Env,
 ): Promise<{ processed: boolean; failed: boolean }> {
   const db = getDb();
   const claimed = await claimWorkerJob(workerJobId);
@@ -537,7 +533,7 @@ async function processWorkerJobRow(
     const pdfBytes = await renderInvoicePdf(invoice, lines);
     const storageKey = billInvoicePdfKey(invoice.id);
 
-    const uploadResult = await uploadPdfToMinio(storageKey, pdfBytes, logger);
+    const uploadResult = await uploadPdfToMinio(storageKey, pdfBytes, logger, env);
     if (!uploadResult.uploaded) {
       logger.warn(
         { invoiceId: invoice.id, storageKey, reason: uploadResult.reason },
@@ -596,7 +592,7 @@ async function processWorkerJobRow(
   }
 }
 
-async function sweepPendingJobs(limit: number, logger: Logger): Promise<void> {
+async function sweepPendingJobs(limit: number, logger: Logger, env: Env): Promise<void> {
   const db = getDb();
   const rowsRaw = await db.execute(sql`
     SELECT id FROM bill_worker_jobs
@@ -616,7 +612,7 @@ async function sweepPendingJobs(limit: number, logger: Logger): Promise<void> {
   let processed = 0;
   let failed = 0;
   for (const row of rows) {
-    const result = await processWorkerJobRow(row.id, logger);
+    const result = await processWorkerJobRow(row.id, logger, env);
     if (result.processed) processed += 1;
     if (result.failed) failed += 1;
   }
@@ -629,16 +625,17 @@ async function sweepPendingJobs(limit: number, logger: Logger): Promise<void> {
 export async function processBillPdfGenerateJob(
   job: Job<BillPdfGenerateJobData>,
   logger: Logger,
+  env: Env,
 ): Promise<void> {
   const data = job.data ?? {};
 
   if (data.workerJobId) {
     logger.info({ jobId: job.id, workerJobId: data.workerJobId }, 'bill-pdf-generate: direct job');
-    await processWorkerJobRow(data.workerJobId, logger);
+    await processWorkerJobRow(data.workerJobId, logger, env);
     return;
   }
 
   const limit = data.limit ?? 25;
   logger.info({ jobId: job.id, limit }, 'bill-pdf-generate: sweep tick');
-  await sweepPendingJobs(limit, logger);
+  await sweepPendingJobs(limit, logger, env);
 }

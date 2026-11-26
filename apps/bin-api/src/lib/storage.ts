@@ -9,24 +9,13 @@
 // Object keys are namespaced under the `bin/` scope via buildStorageKey so Bin
 // objects never collide with Bam/Blank attachments in the shared bucket.
 
-import { createBootstrapDriver, buildStorageKey, type StorageDriver } from '@bigbluebam/storage';
+import { buildStorageKey, requireEnvBootstrapDriver, type StorageDriver } from '@bigbluebam/storage';
 import { env } from '../env.js';
 
-let driver: StorageDriver | null = null;
-
-/** The active (bootstrap) media driver. Memoized — construction is cheap but
- *  there is no reason to rebuild it per request. */
+/** The active (bootstrap) media driver: the shared, memoized env-driven helper
+ *  (issue #164). Throws StorageNotConfiguredError (503) if storage is not configured. */
 export function getMediaDriver(): StorageDriver {
-  if (!driver) {
-    driver = createBootstrapDriver({
-      S3_ENDPOINT: env.S3_ENDPOINT,
-      S3_REGION: env.S3_REGION,
-      S3_BUCKET: env.S3_BUCKET,
-      S3_ACCESS_KEY: env.S3_ACCESS_KEY,
-      S3_SECRET_KEY: env.S3_SECRET_KEY,
-    });
-  }
-  return driver;
+  return requireEnvBootstrapDriver(env);
 }
 
 /** Read a stored object fully into a Buffer (structured-editor reads/commits).

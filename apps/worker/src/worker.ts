@@ -1068,7 +1068,7 @@ bamTaskOverdueSweepQueue.upsertJobScheduler(
 const billPdfGenerateWorker = new Worker<BillPdfGenerateJobData>(
   'bill-pdf-generate',
   async (job: Job<BillPdfGenerateJobData>) => {
-    await processBillPdfGenerateJob(job, logger);
+    await processBillPdfGenerateJob(job, logger, env);
   },
   { ...connection, concurrency: env.WORKER_CONCURRENCY },
 );
