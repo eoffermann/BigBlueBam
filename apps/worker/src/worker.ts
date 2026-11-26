@@ -779,7 +779,7 @@ bearingSnapshotWorker.on('failed', (job, err) => {
 // retention DROP (ACCESS EXCLUSIVE) never overlaps a snapshot write (spec 6).
 const basisPartitionProvisionQueue = makeQueue('basis-partition-provision');
 basisPartitionProvisionQueue
-  .upsertJobScheduler('basis-partition-provision-daily', { pattern: '45 2 * * *' }, { name: 'provision', data: {} })
+  .upsertJobScheduler('basis-partition-provision-daily', { pattern: '45 2 * * *' }, withRetention({ name: 'provision', data: {} }))
   .catch((err) => logger.error({ err }, 'Failed to register basis-partition-provision scheduler'));
 new Worker<BasisPartitionProvisionJobData>(
   'basis-partition-provision',
@@ -789,10 +789,10 @@ new Worker<BasisPartitionProvisionJobData>(
 
 const basisSnapshotQueue = makeQueue('basis-metric-snapshot');
 basisSnapshotQueue
-  .upsertJobScheduler('basis-metric-snapshot-hourly', { pattern: '0 * * * *' }, { name: 'snapshot-hour', data: { grain: 'hour' } })
+  .upsertJobScheduler('basis-metric-snapshot-hourly', { pattern: '0 * * * *' }, withRetention({ name: 'snapshot-hour', data: { grain: 'hour' } }))
   .catch((err) => logger.error({ err }, 'Failed to register basis-metric-snapshot hourly scheduler'));
 basisSnapshotQueue
-  .upsertJobScheduler('basis-metric-snapshot-daily', { pattern: '5 1 * * *' }, { name: 'snapshot-day', data: { grain: 'day' } })
+  .upsertJobScheduler('basis-metric-snapshot-daily', { pattern: '5 1 * * *' }, withRetention({ name: 'snapshot-day', data: { grain: 'day' } }))
   .catch((err) => logger.error({ err }, 'Failed to register basis-metric-snapshot daily scheduler'));
 new Worker<BasisMetricSnapshotJobData>(
   'basis-metric-snapshot',
@@ -802,7 +802,7 @@ new Worker<BasisMetricSnapshotJobData>(
 
 const basisExplainQueue = makeQueue('basis-explain');
 basisExplainQueue
-  .upsertJobScheduler('basis-explain-narrative', { pattern: '*/10 * * * *' }, { name: 'narrate', data: {} })
+  .upsertJobScheduler('basis-explain-narrative', { pattern: '*/10 * * * *' }, withRetention({ name: 'narrate', data: {} }))
   .catch((err) => logger.error({ err }, 'Failed to register basis-explain scheduler'));
 new Worker<BasisExplainJobData>(
   'basis-explain',
@@ -812,7 +812,7 @@ new Worker<BasisExplainJobData>(
 
 const basisMovementScanQueue = makeQueue('basis-movement-scan');
 basisMovementScanQueue
-  .upsertJobScheduler('basis-movement-scan-daily', { pattern: '30 4 * * *' }, { name: 'scan', data: { grain: 'day' } })
+  .upsertJobScheduler('basis-movement-scan-daily', { pattern: '30 4 * * *' }, withRetention({ name: 'scan', data: { grain: 'day' } }))
   .catch((err) => logger.error({ err }, 'Failed to register basis-movement-scan scheduler'));
 new Worker<BasisMovementScanJobData>(
   'basis-movement-scan',
@@ -822,7 +822,7 @@ new Worker<BasisMovementScanJobData>(
 
 const basisRetentionSweepQueue = makeQueue('basis-retention-sweep');
 basisRetentionSweepQueue
-  .upsertJobScheduler('basis-retention-sweep-daily', { pattern: '15 3 * * *' }, { name: 'sweep', data: {} })
+  .upsertJobScheduler('basis-retention-sweep-daily', { pattern: '15 3 * * *' }, withRetention({ name: 'sweep', data: {} }))
   .catch((err) => logger.error({ err }, 'Failed to register basis-retention-sweep scheduler'));
 new Worker<BasisRetentionSweepJobData>(
   'basis-retention-sweep',
@@ -1055,8 +1055,8 @@ bamTaskOverdueSweepWorker.on('failed', (job, err) => {
 const bamTaskOverdueSweepQueue = makeQueue('bam-task-overdue-sweep');
 bamTaskOverdueSweepQueue.upsertJobScheduler(
   'bam-task-overdue-sweep-30m',
-  { pattern: '7,37 * * * *' }, // every 30 minutes at :07 and :37
-  { name: 'sweep', data: {} },
+  { pattern: '7,37 * * * *' }, withRetention(// every 30 minutes at :07 and :37
+  { name: 'sweep', data: {} }),
 ).catch((err) => logger.error({ err }, 'Failed to register bam task-overdue sweep scheduler'));
 
 // ---------------------------------------------------------------------------
@@ -2287,7 +2287,7 @@ braidRescanWorker.on('failed', (job, err) => {
 });
 const braidRescanQueue = makeQueue('braid-rescan');
 braidRescanQueue
-  .upsertJobScheduler('braid-rescan-daily', { pattern: '20 3 * * *' }, { name: 'rescan', data: {} })
+  .upsertJobScheduler('braid-rescan-daily', { pattern: '20 3 * * *' }, withRetention({ name: 'rescan', data: {} }))
   .catch((err) => logger.error({ err }, 'Failed to register braid-rescan scheduler'));
 
 const braidProposalReconcileWorker = new Worker<BraidProposalReconcileJobData>(
@@ -2306,7 +2306,7 @@ braidProposalReconcileWorker.on('failed', (job, err) => {
 });
 const braidProposalReconcileQueue = makeQueue('braid-proposal-reconcile');
 braidProposalReconcileQueue
-  .upsertJobScheduler('braid-proposal-reconcile-10min', { pattern: '*/10 * * * *' }, { name: 'reconcile', data: {} })
+  .upsertJobScheduler('braid-proposal-reconcile-10min', { pattern: '*/10 * * * *' }, withRetention({ name: 'reconcile', data: {} }))
   .catch((err) => logger.error({ err }, 'Failed to register braid-proposal-reconcile scheduler'));
 
 const braidCandidateRetentionWorker = new Worker<BraidCandidateRetentionJobData>(
@@ -2325,7 +2325,7 @@ braidCandidateRetentionWorker.on('failed', (job, err) => {
 });
 const braidCandidateRetentionQueue = makeQueue('braid-candidate-retention');
 braidCandidateRetentionQueue
-  .upsertJobScheduler('braid-candidate-retention-daily', { pattern: '50 3 * * *' }, { name: 'sweep', data: {} })
+  .upsertJobScheduler('braid-candidate-retention-daily', { pattern: '50 3 * * *' }, withRetention({ name: 'sweep', data: {} }))
   .catch((err) => logger.error({ err }, 'Failed to register braid-candidate-retention scheduler'));
 
 // ─── Bulwark (contract-obligation monitor) engine ──────────────────────────
@@ -2384,7 +2384,7 @@ bulwarkRadarWorker.on('failed', (job, err) => {
 });
 const bulwarkRadarQueue = makeQueue<BulwarkSweepJobData>(BULWARK_RADAR_SWEEP_QUEUE);
 bulwarkRadarQueue
-  .upsertJobScheduler('bulwark-radar-sweep-15min', { pattern: '*/15 * * * *' }, { name: 'sweep', data: {} })
+  .upsertJobScheduler('bulwark-radar-sweep-15min', { pattern: '*/15 * * * *' }, withRetention({ name: 'sweep', data: {} }))
   .catch((err) => logger.error({ err }, 'Failed to register bulwark-radar-sweep scheduler'));
 
 // State-reconcile: every 30 min.
@@ -2404,7 +2404,7 @@ bulwarkStateReconcileWorker.on('failed', (job, err) => {
 });
 const bulwarkStateReconcileQueue = makeQueue<BulwarkSweepJobData>(BULWARK_STATE_RECONCILE_QUEUE);
 bulwarkStateReconcileQueue
-  .upsertJobScheduler('bulwark-state-reconcile-30min', { pattern: '*/30 * * * *' }, { name: 'reconcile', data: {} })
+  .upsertJobScheduler('bulwark-state-reconcile-30min', { pattern: '*/30 * * * *' }, withRetention({ name: 'reconcile', data: {} }))
   .catch((err) => logger.error({ err }, 'Failed to register bulwark-state-reconcile scheduler'));
 
 // Gate-reconcile: every 20 min (bulwark-api also rebuilds at boot).
@@ -2424,7 +2424,7 @@ bulwarkGateReconcileWorker.on('failed', (job, err) => {
 });
 const bulwarkGateReconcileQueue = makeQueue<BulwarkSweepJobData>(BULWARK_GATE_RECONCILE_QUEUE);
 bulwarkGateReconcileQueue
-  .upsertJobScheduler('bulwark-gate-reconcile-20min', { pattern: '*/20 * * * *' }, { name: 'reconcile', data: {} })
+  .upsertJobScheduler('bulwark-gate-reconcile-20min', { pattern: '*/20 * * * *' }, withRetention({ name: 'reconcile', data: {} }))
   .catch((err) => logger.error({ err }, 'Failed to register bulwark-gate-reconcile scheduler'));
 
 // Proposal-reconcile: every 10 min.
@@ -2444,7 +2444,7 @@ bulwarkProposalReconcileWorker.on('failed', (job, err) => {
 });
 const bulwarkProposalReconcileQueue = makeQueue<BulwarkSweepJobData>(BULWARK_PROPOSAL_RECONCILE_QUEUE);
 bulwarkProposalReconcileQueue
-  .upsertJobScheduler('bulwark-proposal-reconcile-10min', { pattern: '*/10 * * * *' }, { name: 'reconcile', data: {} })
+  .upsertJobScheduler('bulwark-proposal-reconcile-10min', { pattern: '*/10 * * * *' }, withRetention({ name: 'reconcile', data: {} }))
   .catch((err) => logger.error({ err }, 'Failed to register bulwark-proposal-reconcile scheduler'));
 
 // Retention: daily 04:50 (offset from braid-candidate-retention @ 03:50).
@@ -2464,7 +2464,7 @@ bulwarkRetentionWorker.on('failed', (job, err) => {
 });
 const bulwarkRetentionQueue = makeQueue<BulwarkSweepJobData>(BULWARK_RETENTION_QUEUE);
 bulwarkRetentionQueue
-  .upsertJobScheduler('bulwark-retention-daily', { pattern: '50 4 * * *' }, { name: 'sweep', data: {} })
+  .upsertJobScheduler('bulwark-retention-daily', { pattern: '50 4 * * *' }, withRetention({ name: 'sweep', data: {} }))
   .catch((err) => logger.error({ err }, 'Failed to register bulwark-retention scheduler'));
 
 // ─── Burn (contract-consumption monitor) engine ────────────────────────────
@@ -2500,7 +2500,7 @@ function registerBurnSweep(
     const q = makeQueue<BurnSweepJobData>(queue);
     // Each fired scheduled job carries attempts + exponential backoff, so a transient failure
     // is retried within the tick rather than waiting a whole cron interval to run again.
-    q.upsertJobScheduler(schedule.id, { pattern: schedule.pattern }, { name: 'run', data: {}, opts: BURN_JOB_OPTS })
+    q.upsertJobScheduler(schedule.id, { pattern: schedule.pattern }, withRetention({ name: 'run', data: {}, opts: BURN_JOB_OPTS }))
       .catch((err) => logger.error({ err }, `Failed to register ${queue} scheduler`));
   }
 }
@@ -2537,7 +2537,7 @@ burnAttributeWorker.on('failed', (job, err) => {
 });
 const burnAttributeQueue = makeQueue<BurnSweepJobData>(BURN_ATTRIBUTE_BATCH_QUEUE);
 burnAttributeQueue
-  .upsertJobScheduler('burn-attribute-batch-2min', { pattern: '*/2 * * * *' }, { name: 'drain', data: {}, opts: BURN_JOB_OPTS })
+  .upsertJobScheduler('burn-attribute-batch-2min', { pattern: '*/2 * * * *' }, withRetention({ name: 'drain', data: {}, opts: BURN_JOB_OPTS }))
   .catch((err) => logger.error({ err }, 'Failed to register burn-attribute-batch scheduler'));
 
 // The SQL-only sweeps + reconcile + reaper (thin callers; locks live in burn-api).
@@ -2621,7 +2621,7 @@ function registerBursarSweep(
     void recordWorkerError({ queueName: queue, jobId: job?.id, jobName: job?.name, err: err as Error });
   });
   const q = makeQueue<BursarSweepJobData>(queue);
-  q.upsertJobScheduler(schedule.id, { pattern: schedule.pattern }, { name: 'run', data: {}, opts: BURSAR_JOB_OPTS })
+  q.upsertJobScheduler(schedule.id, { pattern: schedule.pattern }, withRetention({ name: 'run', data: {}, opts: BURSAR_JOB_OPTS }))
     .catch((err) => logger.error({ err }, `Failed to register ${queue} scheduler`));
 }
 
