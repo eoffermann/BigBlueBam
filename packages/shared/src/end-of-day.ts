@@ -34,9 +34,16 @@ export function startOfDayInTz(date: string, timeZone: string): Date {
   if (!m) throw new Error(`Not a calendar date: ${date}`);
   const guess = Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
   // Two passes: the offset at the guess can differ from the offset at the answer near a change.
-  let t = guess - tzOffsetMs(new Date(guess), timeZone);
-  t = guess - tzOffsetMs(new Date(t), timeZone);
-  return new Date(t);
+  const t1 = guess - tzOffsetMs(new Date(guess), timeZone);
+  const t2 = guess - tzOffsetMs(new Date(t1), timeZone);
+  // Where a DST change happens AT midnight (America/Havana, America/Santiago, Asia/Beirut,
+  // Africa/Cairo), local midnight does not exist on spring-forward days and the second pass lands
+  // an hour early, still on the previous date (#221). The day starts at the earliest candidate
+  // that actually reads back as `date`; on a skipped midnight that is the transition instant.
+  for (const t of [t1, t2].sort((a, b) => a - b)) {
+    if (localDateInTz(new Date(t), timeZone) === date) return new Date(t);
+  }
+  return new Date(t2);
 }
 
 /**
