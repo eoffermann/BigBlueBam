@@ -15,17 +15,20 @@ Each milestone lands as small commits, is pushed, and is followed by the post-co
 
 ## Milestones
 
-- [ ] **M0 - Platform prerequisites (fix the fact, not the place)**
-  - [ ] #124 one shared `BOLT_SOURCES` list in `@bigbluebam/shared`; ingest zod enum, `TRIGGER_SOURCES`, `TriggerSourceV1`, pgEnum derived from it; migration `0260` adds the explicit missing values (incl. `bursar`, `bastion`); `check-bolt-catalog.mjs` fails on a source missing from the list; `db-drift.yml` step asserts the live enum equals `BOLT_SOURCES`
-  - [ ] #125 `publishBoltEvent` AbortSignal timeout, unit test
-  - [ ] #123 `GET /files/*` restricted to `avatars/`, private caching elsewhere, negative test
-  - [ ] #126 `syncNew` scoped reconcile (`propagate: true`, never overwrite, diff, `skipDeploys`, dry-run)
-  - [ ] #127 (and duplicate #130) index.html no-cache rule covers every SPA in all nginx configs, with a drift check
-  - [ ] #128 migration `0261`: `agent_proposals` decider columns, `owning_app`, `require_human_decider`; `platform_backups` mirror columns; decide route records decider, enforces human-only, 409 `DECIDE_IN_APP`; Drizzle and MCP output updated
-  - [ ] `gen-railway-configs.mjs` handles `set $var host:port;` and the resolver line; unit test
-  - [ ] Stable-secret class in `generateSecrets()`
-  - [ ] Gate: Bursar and Bastion events ingest 2xx; enum check green; `/files/<non-avatar>` 404; dry-run shows only `propagate` additions; app-owned decide 409s; generator test green; `pnpm db:check` and `pnpm lint:migrations` green
-- [ ] **Follow-up from the post-commit review: #129** (app counts hand-coded in README and introduction.md; add an app-count check keyed to the generated catalog; build the docs.tsx app lists from the catalog)
+- [x] **M0 - Platform prerequisites (fix the fact, not the place)**
+  - [x] #124 one shared `BOLT_SOURCES` list in `@bigbluebam/shared`; ingest zod enum, `TRIGGER_SOURCES`, `TriggerSourceV1`, pgEnum derived from it; migration `0260` adds the explicit missing values (incl. `bursar`, `bastion`); `check-bolt-catalog.mjs` fails on a source missing from the list; `db-drift.yml` step asserts the live enum equals `BOLT_SOURCES`
+  - [x] #125 `publishBoltEvent` AbortSignal timeout, unit test
+  - [x] #123 `GET /files/*` restricted to `avatars/`, private caching elsewhere, negative test
+  - [x] #126 `syncNew` scoped reconcile (`propagate: true`, never overwrite, diff, `skipDeploys`, dry-run)
+  - [x] #127 (and duplicate #130) index.html no-cache rule covers every SPA in all nginx configs, with a drift check
+  - [x] #128 migration `0261`: `agent_proposals` decider columns, `owning_app`, `require_human_decider`; `platform_backups` mirror columns; decide route records decider, enforces human-only, 409 `DECIDE_IN_APP`; Drizzle and MCP output updated
+  - [x] `gen-railway-configs.mjs` handles `set $var host:port;` and the resolver line; unit test
+  - [x] Stable-secret class in `generateSecrets()`
+  - [x] Gate: Bursar and Bastion events ingest 2xx; enum check green; `/files/<non-avatar>` 404; dry-run shows only `propagate` additions; app-owned decide 409s; generator test green; `pnpm db:check` and `pnpm lint:migrations` green
+- [ ] **Follow-ups from the post-commit review (before M1)**
+  - [ ] #129 app counts hand-coded in README and introduction.md; add an app-count check keyed to the generated catalog; build the docs.tsx app lists from the catalog
+  - [ ] #131 migrate runner: self-transacting migrations (0078, 0156-0159) break per-file atomicity; fix in the runner and add a `lint:migrations` rule (files themselves are immutable)
+  - [ ] #132 Biome warnings (~4,400) with no ratchet; add a per-package warning budget that fails CI on increase, then apply safe `--fix` reductions
 - [ ] **M1 - Scaffold and infrastructure (direct URL only, no Launchpad)**
   - [ ] `apps/bastion-api` from the bursar-api skeleton; Dockerfile copies and builds `packages/storage` and `packages/permissions`; service-health, logging, permissions plugin, auth with `rejectWhenImpersonating`, `BASTION_TRUST_PROXY_HOPS`
   - [ ] Own bucket (`BASTION_S3_BUCKET`) with boot put/stat/delete check and a plain error
@@ -99,8 +102,11 @@ Each milestone lands as small commits, is pushed, and is followed by the post-co
 - **MCP parity.** The spec keeps `bastion-tools.ts` out of the tree until M11 so the tool-count and docs-catalog CI gates stay green (round-3 best-practices-3). To honor the build rule that a route and its tool land together, every milestone from M2 on writes the handler for each route it adds in `apps/mcp-server/src/tools-pending/bastion.ts`, with tests, in the same commit as the route. M11 only moves and registers the file.
 - **Permission chain at M2, not M10.** The plan review showed the M5-M7 seed rows and Playwright stories need the Professor and Gilligan to act through bastion-api, which is impossible before the permission actions exist. The full spec 5.5 action set is registered at M2; the spec 4.6 probe check runs there.
 - **Visibility at M6, not M10.** The M8 and M9 gates depend on `can_access` supporting Bastion entity types.
+- **`/files/*` scope (M0, #123).** Restricting to `avatars/` only would have broken four live features (Bam attachments and Bureau underlays under `uploads/`, Banter `banter/uploads/`, Helpdesk `helpdesk/`, Bill `bill/receipts/`). Those prefixes stay allowlisted with `Cache-Control: private, no-store`; every org-prefixed key (Bin, Bay, Blip, Bastion) returns 404. Moving the four legacy prefixes to app-owned authorized routes is tracked as follow-up work.
 - **Plan review.** An adversarial review of this plan against the spec and the build skill (15 findings: 2 blockers, 12 majors, 1 minor) was folded in on 2026-11-26; this version of the file reflects it.
 
 ## Progress log
+
+- 2026-11-26: **M0 done** (3d376ee6..8c7670a6): BOLT_SOURCES single list + 0260 + enum CI check; publishBoltEvent timeout; `/files/*` allowlist (adapted: four legacy prefixes still served with private no-store, everything else 404, see decision below); 0261 decider columns + decide route; Railway generator; no-cache for every SPA + `check:nginx-spa`; scoped `syncNew` propagation; stable secrets. Live ingest and the Railway dry run were proven by tests only (bolt-api not yet running; no Railway token). Found and filed: #133 (Bolt SPA source list), #134 (Bill PDF 404), #135 (deploy tests not in CI); queued with #129, #131, #132.
 
 - 2026-11-26: spec converged; build started. Post-commit review of the cycle's earlier code commits: security clean; best-practices filed #129 (queued after M0); stability filed #130 (duplicate of #127, closed, folded into M0); CI watchdog pending.
