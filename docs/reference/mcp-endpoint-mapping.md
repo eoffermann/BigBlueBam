@@ -291,7 +291,7 @@ Notes:
 | `GET /tasks/:id/attachments` | — _(skip: covered by cross-app `attachment_list`)_ | List a task's attachments | `apps/frontend/src/components/tasks/task-detail-drawer.tsx` |
 | `DELETE /attachments/:id` | — _(skip: binary/attachment lifecycle)_ | Delete an attachment | `apps/frontend/src/components/tasks/task-detail-drawer.tsx` |
 | `POST /upload` | — _(skip: multipart binary upload)_ | Multipart upload to MinIO | `apps/frontend/src/components/common/image-upload.tsx` |
-| `GET /files/*` | — _(skip: binary download proxy)_ | Proxy file download from MinIO | `apps/frontend/src/components/common/image-upload.tsx` |
+| `GET /files/*` | — _(skip: binary download proxy)_ | Proxy file download from MinIO. Allowlisted prefixes only (#123): `avatars/` (public cache) plus legacy capability prefixes `uploads/`, `banter/uploads/`, `helpdesk/`, `bill/receipts/` (`Cache-Control: private, no-store`); any other key, including org-prefixed objects, returns 404 | `apps/frontend/src/components/common/image-upload.tsx` |
 | `GET /version` | — _(skip: build/version probe, not agent surface)_ | Public version info | `apps/frontend/src/hooks/use-version.ts` |
 | `POST /version/check` | — _(skip: SuperUser break-glass)_ | Force version check (SuperUser) | — |
 
@@ -1104,7 +1104,7 @@ All routes are registered under the `/v1` prefix, so external paths are `/brief/
 | `GET /events/:source` | `bolt_events` | Events for a specific source | `apps/bolt/src/hooks/use-event-catalog.ts` |
 | `GET /events/:event_id/trace` | `bolt_event_trace` | Full evaluation trail for an event | — |
 | `GET /events/recent` | `bolt_recent_events` | Recent matched ingest events | — |
-| `POST /events/ingest` | — _(skip: internal/service-secret ingest)_ | Internal event ingestion (service-secret) | — |
+| `POST /events/ingest` | — _(skip: internal/service-secret ingest)_ | Internal event ingestion (service-secret); `source` must be a member of `BOLT_SOURCES` (packages/shared/src/bolt-sources.ts) | — |
 | `GET /executions` | `bolt_list_executions` | Org-wide execution list | `apps/bolt/src/hooks/use-executions.ts` |
 | `GET /executions/:id` | `bolt_execution_detail` | Execution detail with steps | `apps/bolt/src/hooks/use-executions.ts` |
 | `POST /executions/:id/retry` | `bolt_retry_execution` | Retry a failed execution | `apps/bolt/src/hooks/use-executions.ts` |

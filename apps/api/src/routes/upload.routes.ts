@@ -23,6 +23,42 @@ const ALLOWED_MIME_EXACT = [
 // BAM-006: SVG can contain embedded scripts — always block it.
 const BLOCKED_MIME_TYPES = ['image/svg+xml'];
 
+/**
+ * Issue #123: GET /files/* used to stream ANY key in the shared bucket to any signed-in
+ * user, including org-prefixed objects that Bin, Bay, Blip and others write through
+ * @bigbluebam/storage, with `Cache-Control: public`. It now serves an explicit allowlist.
+ *
+ * - FILES_PUBLIC_PREFIXES: the prefix this route exists for. Avatars are shown to
+ *   other users and are safe to cache publicly.
+ * - FILES_LEGACY_PRIVATE_PREFIXES: keys that existing features still hand out as
+ *   `/files/<key>` URLs today. Every one ends in a random UUID (or a record UUID) chosen
+ *   at write time, so the URL works as a capability; they are served with
+ *   `Cache-Control: private, no-store` and must move to their app's own authorized
+ *   download route (tracked as follow-up work, see the #123 commit):
+ *     uploads/          apps/api POST /upload (Bam attachments, Bureau floor underlays)
+ *     banter/uploads/   banter-api POST /v1/files/upload (message attachments)
+ *     helpdesk/         helpdesk-api uploads (ticket attachments)
+ *     bill/receipts/    bill-api expense receipts
+ * Do not add a prefix here for new work; serve new objects from the owning app.
+ */
+export const FILES_PUBLIC_PREFIXES = ['avatars/'] as const;
+export const FILES_LEGACY_PRIVATE_PREFIXES = [
+  'uploads/',
+  'banter/uploads/',
+  'helpdesk/',
+  'bill/receipts/',
+] as const;
+
+/** Returns how a /files/ key may be served, or null when it must 404. */
+export function classifyFilesKey(key: string): 'public' | 'private' | null {
+  if (!key || key.startsWith('/') || key.includes('\\')) return null;
+  // Reject any dot segment so a prefix match cannot be walked out of.
+  if (key.split('/').some((seg) => seg === '..' || seg === '.' || seg === '')) return null;
+  if (FILES_PUBLIC_PREFIXES.some((p) => key.startsWith(p))) return 'public';
+  if (FILES_LEGACY_PRIVATE_PREFIXES.some((p) => key.startsWith(p))) return 'private';
+  return null;
+}
+
 function isAllowedMimeType(mimeType: string): boolean {
   if (BLOCKED_MIME_TYPES.includes(mimeType)) return false;
   if (ALLOWED_MIME_PREFIXES.some((prefix) => mimeType.startsWith(prefix))) return true;
@@ -184,12 +220,30 @@ export default async function uploadRoutes(fastify: FastifyInstance) {
     },
   );
 
-  // GET /files/*  — proxy file downloads from MinIO (BAM-005: require auth)
+  // GET /files/*  - proxy file downloads from MinIO (BAM-005: require auth).
+  // Only keys under FILES_PUBLIC_PREFIXES / FILES_LEGACY_PRIVATE_PREFIXES are served
+  // (issue #123); everything else is 404.
   fastify.get(
     '/files/*',
     { preHandler: [requireAuth, shadowOnly('bam.file.list')] },
     async (request, reply) => {
       const key = (request.params as Record<string, string>)['*'];
+      const access = key ? classifyFilesKey(key) : null;
+
+      if (key && !access) {
+        // Issue #123: anything outside the allowlisted prefixes (org-prefixed objects
+        // written through @bigbluebam/storage by Bin, Bay, Blip and others) belongs to
+        // its owning app's authorized download route. 404, not 403: do not confirm the
+        // object exists.
+        return reply.status(404).send({
+          error: {
+            code: 'NOT_FOUND',
+            message: 'File not found',
+            details: [],
+            request_id: request.id,
+          },
+        });
+      }
 
       if (!key) {
         return reply.status(400).send({
@@ -206,7 +260,10 @@ export default async function uploadRoutes(fastify: FastifyInstance) {
         const { stream, contentType, size } = await getFileStream(env.S3_BUCKET, key);
         reply.header('Content-Type', contentType);
         reply.header('Content-Length', size);
-        reply.header('Cache-Control', 'public, max-age=86400');
+        reply.header(
+          'Cache-Control',
+          access === 'public' ? 'public, max-age=86400' : 'private, no-store',
+        );
         return reply.send(stream);
       } catch {
         return reply.status(404).send({
