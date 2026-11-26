@@ -61,6 +61,12 @@ vi.mock('../src/services/scheduled-post.service.js', () => ({
   ScheduledPostError: class extends Error {},
 }));
 
+// Issue #156: attachment keys are claimed against upload grants before the insert.
+const { claimAttachmentKeys } = vi.hoisted(() => ({ claimAttachmentKeys: vi.fn() }));
+vi.mock('../src/lib/upload-grants.js', () => ({
+  claimAttachmentKeys: (...a: unknown[]) => claimAttachmentKeys(...a),
+}));
+
 import messageRoutes from '../src/routes/message.routes.js';
 
 const ORG = '11111111-1111-1111-1111-111111111111';
@@ -231,6 +237,26 @@ describe('malformed :id is rejected with 400 (not a 500 from Postgres 22P02)', (
       expect(res.statusCode).toBeGreaterThanOrEqual(400);
       expect(res.body).toContain('attachment key must come from POST /v1/files/upload');
     }
+    expect(mockDb.insert).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it('POST refuses a well-formed key the poster was not issued (issue #156 re-attach)', async () => {
+    const app = await buildApp();
+    const key = 'banter/uploads/4f1c-board-minutes.pdf';
+    claimAttachmentKeys.mockResolvedValueOnce({ ok: false, rejected: [key] });
+    selWhereLimit([{ id: CH, org_id: ORG, quiet_hours_policy: null }]); // channel lookup
+    const res = await app.inject({
+      method: 'POST',
+      url: `/v1/channels/${CH}/messages`,
+      headers: auth,
+      payload: { content: 'look', attachments: [{ key, filename: 'x.pdf', content_type: 'application/pdf', size_bytes: 1 }] },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error.code).toBe('ATTACHMENT_NOT_ALLOWED');
+    expect(res.json().error.details[0].key).toBe(key);
+    expect(claimAttachmentKeys).toHaveBeenCalledWith({ keys: [key], orgId: ORG, userId: USER, channelId: CH });
+    // Nothing is written: no message, no attachment row.
     expect(mockDb.insert).not.toHaveBeenCalled();
     await app.close();
   });

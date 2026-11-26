@@ -58,6 +58,14 @@ vi.mock('../src/plugins/auth.js', () => ({
   requireScope: () => async () => undefined,
 }));
 
+// Issue #156: the channel a key was ORIGINALLY attached in (oldest row).
+let originalChannel: string | null = CH;
+const recordUploadGrant = vi.fn();
+vi.mock('../src/lib/upload-grants.js', () => ({
+  originalChannelForKey: async () => originalChannel,
+  recordUploadGrant: (...a: unknown[]) => recordUploadGrant(...a),
+}));
+
 // The real channel read rule is covered elsewhere; here it is a switch.
 let channelReadable = true;
 vi.mock('../src/middleware/channel-auth.js', () => ({
@@ -115,6 +123,7 @@ const get = (channel: string, att: string) =>
 beforeEach(async () => {
   vi.clearAllMocks();
   channelReadable = true;
+  originalChannel = CH;
   joined = [attachment()];
   statObject.mockResolvedValue({ size: BYTES.length });
   getObject.mockImplementation(async () => Readable.from([BYTES]));
@@ -172,6 +181,15 @@ describe('GET /v1/channels/:id/attachments/:attachmentId (issue #142)', () => {
   it('401 without a session', async () => {
     const res = await app.inject({ method: 'GET', url: `/v1/channels/${CH}/attachments/${ATT}` });
     expect(res.statusCode).toBe(401);
+  });
+
+  it('404s a key re-attached outside the channel it was originally posted in (issue #156)', async () => {
+    // The attacker's row sits on a live message in a channel they can read (CH),
+    // but the key was first attached in a private channel they were removed from.
+    originalChannel = OTHER_CH;
+    const res = await get(CH, ATT);
+    expect(res.statusCode).toBe(404);
+    expect(getObject).not.toHaveBeenCalled();
   });
 });
 

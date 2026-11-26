@@ -43,6 +43,7 @@ import {
 // Banter Feed fan-in (docs/plans/banter-feed-design-document.md §10)
 import { enqueueFeedFanin } from '../services/feed-queue.js';
 import { BANTER_UPLOAD_PREFIX, attachmentDownloadUrl } from '../lib/attachment-download.js';
+import { claimAttachmentKeys } from '../lib/upload-grants.js';
 import { RELATIONSHIP_FLAGS, type FeedDirectRecipient } from '@bigbluebam/shared';
 
 // Attachment descriptors handed back by POST /v1/files/upload. There is no
@@ -540,19 +541,52 @@ export default async function messageRoutes(fastify: FastifyInstance) {
         }
       }
 
-      const [message] = await db
-        .insert(banterMessages)
-        .values({
-          channel_id: id,
-          author_id: user.id,
-          thread_parent_id: body.thread_parent_id ?? null,
-          content: sanitizedContent,
-          content_plain: contentPlain,
-          content_format: body.content_format,
-          metadata: body.metadata ?? {},
-          edit_permission: body.edit_permission ?? 'own',
-        })
-        .returning();
+      // Issue #156: each attachment key must be the poster's own unposted upload
+      // (its grant is consumed here), or already originally attached in THIS
+      // channel. Anything else is a key the poster saw somewhere and may not
+      // re-share; refuse before anything is written.
+      let claim: Extract<Awaited<ReturnType<typeof claimAttachmentKeys>>, { ok: true }> | null = null;
+      if (body.attachments && body.attachments.length > 0) {
+        const result = await claimAttachmentKeys({
+          keys: body.attachments.map((a) => a.key),
+          orgId: user.org_id,
+          userId: user.id,
+          channelId: id,
+        });
+        if (!result.ok) {
+          return reply.status(400).send({
+            error: {
+              code: 'ATTACHMENT_NOT_ALLOWED',
+              message:
+                'One or more attachments were not uploaded by you for this message. Upload the file again and attach the new upload.',
+              details: result.rejected.map((key) => ({ field: 'attachments', issue: 'not_your_upload', key })),
+              request_id: request.id,
+            },
+          });
+        }
+        claim = result;
+      }
+
+      let message: typeof banterMessages.$inferSelect | undefined;
+      try {
+        [message] = await db
+          .insert(banterMessages)
+          .values({
+            channel_id: id,
+            author_id: user.id,
+            thread_parent_id: body.thread_parent_id ?? null,
+            content: sanitizedContent,
+            content_plain: contentPlain,
+            content_format: body.content_format,
+            metadata: body.metadata ?? {},
+            edit_permission: body.edit_permission ?? 'own',
+          })
+          .returning();
+      } catch (err) {
+        // No message was created: give the consumed upload grants back.
+        await claim?.release().catch(() => {});
+        throw err;
+      }
 
       // Persist any uploaded attachments now that we have the message id.
       // Each descriptor came from POST /v1/files/upload (storage key +
@@ -566,11 +600,13 @@ export default async function messageRoutes(fastify: FastifyInstance) {
         url: string;
       }> = [];
       if (message && body.attachments && body.attachments.length > 0) {
+        const messageId = message.id;
+        const attachments = body.attachments;
         const inserted = await db
           .insert(banterMessageAttachments)
           .values(
-            body.attachments.map((a) => ({
-              message_id: message.id,
+            attachments.map((a) => ({
+              message_id: messageId,
               uploader_id: user.id,
               filename: a.filename,
               content_type: a.content_type,
@@ -579,7 +615,12 @@ export default async function messageRoutes(fastify: FastifyInstance) {
               thumbnail_key: a.thumbnail_key ?? null,
             })),
           )
-          .returning();
+          .returning()
+          .catch(async (err: unknown) => {
+            // The attachments were not recorded: give the upload grants back.
+            await claim?.release().catch(() => {});
+            throw err;
+          });
 
         await db
           .update(banterMessages)

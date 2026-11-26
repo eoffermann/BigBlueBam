@@ -14,6 +14,7 @@ export { banterChannels } from './channels.js';
 export { banterMessages } from './messages.js';
 export { banterChannelMemberships } from './channel-memberships.js';
 export { banterMessageAttachments } from './message-attachments.js';
+export { banterUploadGrants } from './upload-grants.js';
 export { banterMessageReactions } from './message-reactions.js';
 export { banterPins } from './pins.js';
 export { banterBookmarks } from './bookmarks.js';

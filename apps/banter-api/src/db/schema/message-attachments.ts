@@ -33,5 +33,9 @@ export const banterMessageAttachments = pgTable(
     metadata: jsonb('metadata').notNull().default({}),
     created_at: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   },
-  (table) => [index('banter_message_attachments_message_idx').on(table.message_id)],
+  (table) => [
+    index('banter_message_attachments_message_idx').on(table.message_id),
+    // Migration 0269 (issue #156): upload-grant legacy lookup + original-channel check.
+    index('banter_message_attachments_storage_key_idx').on(table.storage_key),
+  ],
 );

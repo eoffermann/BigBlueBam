@@ -11,6 +11,7 @@ import { getBanterSettingsCached } from '../services/settings-cache.js';
 import { db } from '../db/index.js';
 import { banterMessageAttachments, banterMessages } from '../db/schema/index.js';
 import { dispositionFor, isServableAttachmentKey } from '../lib/attachment-download.js';
+import { originalChannelForKey, recordUploadGrant } from '../lib/upload-grants.js';
 
 const DEFAULT_MAX_FILE_SIZE_MB = 25;
 // Absolute cap: the multipart plugin needs a static ceiling. Org-specific
@@ -130,6 +131,9 @@ export default async function fileRoutes(fastify: FastifyInstance) {
         'Content-Type': contentType,
       });
 
+      // Issue #156: only this user, in this org, may attach this key to a message.
+      await recordUploadGrant(key, request.user!.org_id, request.user!.id);
+
       // Issue #142: no /files/ URL any more. The object is only reachable after it
       // is attached to a message, through the channel-authorized download route
       // (each attachment in a message response carries that `url`).
@@ -184,6 +188,12 @@ export default async function fileRoutes(fastify: FastifyInstance) {
 
       const orgId = request.user?.org_id ?? '';
       if (!row || row.is_stub || !isServableAttachmentKey(row.storage_key, orgId)) {
+        return notFound();
+      }
+      // Issue #156: serve a key only from the channel it was ORIGINALLY attached in.
+      // A row that re-attached someone else's key elsewhere (possible before upload
+      // grants existed) must not unlock the file for that other channel's readers.
+      if ((await originalChannelForKey(row.storage_key)) !== params.data.id) {
         return notFound();
       }
 
@@ -255,6 +265,9 @@ export default async function fileRoutes(fastify: FastifyInstance) {
 
       const expiresIn = 3600; // 1 hour
       const uploadUrl = await client.presignedPutObject(env.S3_BUCKET, key, expiresIn);
+
+      // Issue #156: only this user, in this org, may attach this key to a message.
+      await recordUploadGrant(key, request.user!.org_id, request.user!.id);
 
       return reply.status(201).send({
         data: {
