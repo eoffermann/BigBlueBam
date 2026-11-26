@@ -60,6 +60,13 @@ jobs:
       - name: Script unit tests (node:test)
         run: pnpm test:scripts
 
+      # Issue #135: the older scripts/deploy/shared vitest suite (deploy catalog, env
+      # hints, Railway orchestration, TLS) ran in no workflow. scripts/ is outside the
+      # workspace, so it borrows the api package's vitest binary; tls.test.mjs shells out
+      # to openssl, which ubuntu-latest ships.
+      - name: Deploy script unit tests (vitest)
+        run: pnpm test:deploy
+
       # Issue #127: the index.html no-cache and assets-cache regexes in every nginx
       # config must list exactly the SPAs that config serves (and every Launchpad app).
       - name: Check nginx SPA lists
