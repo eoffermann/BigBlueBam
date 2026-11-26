@@ -23,6 +23,9 @@ import redisPlugin from './plugins/redis.js';
 import authPlugin from './plugins/auth.js';
 import permissionsPlugin from './plugins/permissions.js';
 import rlsPlugin from './plugins/rls.js';
+import frameworkRoutes from './routes/frameworks.routes.js';
+import controlRoutes from './routes/controls.routes.js';
+import setupRoutes from './routes/setup.routes.js';
 
 const bootStarted = Date.now();
 const elapsed = () => `${((Date.now() - bootStarted) / 1000).toFixed(1)}s`;
@@ -99,9 +102,16 @@ await fastify.register(healthCheckPlugin, {
   },
 });
 
-// Bastion REST surface, mounted under /v1. M1 ships no domain routes; each later milestone
-// registers its route files here, each with its own requireCan gates.
-await fastify.register(async (_v1) => {}, { prefix: '/v1' });
+// Bastion REST surface, mounted under /v1. Each milestone registers its route files here, each
+// with its own requireCan gates. M3: library, frameworks, controls, assertions, setup.
+await fastify.register(
+  async (v1) => {
+    await v1.register(frameworkRoutes);
+    await v1.register(controlRoutes);
+    await v1.register(setupRoutes);
+  },
+  { prefix: '/v1' },
+);
 
 // Graceful shutdown. compose gives 75 s (stop_grace_period) so a later in-flight LLM call can
 // finish (spec 7.3); Railway uses RAILWAY_DEPLOYMENT_DRAINING_SECONDS=75.
