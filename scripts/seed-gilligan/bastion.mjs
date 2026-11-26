@@ -38,6 +38,11 @@
  *     questionnaire with the guessed columns and autofilled; the laptop-encryption row is "Needs an
  *     expert" ("We cannot currently prove this") and the Radio Relay row is "Check this" naming the
  *     accepted exception. Nothing is approved: approving is a person's act (story 7).
+ * M9 rows (spec 10.2):
+ *   - the auditor room "Lagoon & Reef CPAs, Type I readiness" on ISO 27001, created in Skipper's
+ *     own session (opening a room is a disclosure act), then opened by the auditor from outside
+ *     (the overview and one control: two access-log rows);
+ *   - one ISO 27001 audit packet with the Statement of Applicability, built by the worker.
  * Uploading and accepting are vouching acts too, so the Professor, Mary Ann and Skipper each sign
  * in for theirs.
  *
@@ -1046,8 +1051,119 @@ async function verifyM8(q) {
   if (problems.length) throw new Error(`seeded M8 rows do not match BASTION_SEED_EXPECTATIONS: ${problems.join('; ')}`);
 }
 
+// ── M9: the auditor room for Lagoon & Reef CPAs and one ISO audit packet ─────────────────
+
+function isoDaysAgo(days) {
+  return new Date(Date.now() - days * 86_400_000).toISOString().slice(0, 10);
+}
+
+/** What the auditor does from outside: open the room and look at one control (two log rows). */
+async function visitRoom(token, controlId) {
+  const headers = { 'x-bastion-room-token': token, 'user-agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 14_0) Safari/605.1.15' };
+  const overview = await fetch(`${BASTION}/public/room`, { headers });
+  if (!overview.ok) throw new Error(`the auditor could not open the room (${overview.status})`);
+  const control = await fetch(`${BASTION}/public/room/controls/${controlId}`, { headers });
+  if (!control.ok) throw new Error(`the auditor could not open a control (${control.status})`);
+}
+
+async function seedAuditorRoom() {
+  const m = EXP.m9.room;
+  log('M9: the auditor room for Lagoon & Reef CPAs...');
+  const list = await bastion('GET', '/auditor-rooms');
+  if (list.status === 404) {
+    log('  WARNING: this bastion-api predates M9 (no /auditor-rooms); rebuild bastion-api to seed the room');
+    return null;
+  }
+  const rooms = must(list, 'list auditor rooms').data;
+  const live = rooms.filter((r) => r.label === m.label && r.state === 'active');
+  // Idempotent: a live room already visited twice is the seeded one.
+  const done = live.find((r) => r.access_count >= m.accessLogRows);
+  if (done) {
+    log(`  reusing "${m.label}" (${done.access_count} views)`);
+    return done;
+  }
+  // A live room nobody visited can't be visited now (its link was shown once and is gone): close it.
+  for (const r of live) {
+    must(await bastion('POST', `/auditor-rooms/${r.id}/revoke`, { confirm: true }, { session: true }), `revoke unvisited room ${r.id}`);
+  }
+  const frameworks = must(await bastion('GET', '/frameworks'), 'list frameworks').data;
+  const iso = frameworks.find((f) => f.template_key === m.framework);
+  if (!iso) throw new Error(`no ${m.framework} framework adopted; the M3 part should have adopted it`);
+  // Creating a room discloses evidence: a person's act, in Skipper's own session (spec 2.8).
+  const created = must(
+    await bastion(
+      'POST',
+      '/auditor-rooms',
+      {
+        label: m.label,
+        framework_id: iso.id,
+        period_start: isoDaysAgo(m.periodDays),
+        period_end: isoDaysAgo(0),
+        expires_in_days: m.expiresInDays,
+        restricted_evidence_ids: [],
+        confirm: true,
+      },
+      { session: true },
+    ),
+    'create the auditor room',
+  ).data;
+  const preview = must(await bastion('GET', `/auditor-rooms/${created.id}/preview`), 'preview the room').data;
+  const firstControl = preview.controls[0];
+  if (!firstControl) throw new Error('the auditor room has no controls to show');
+  await visitRoom(created.token, firstControl.id);
+  log(`  created "${m.label}" and the auditor opened it and "${firstControl.title}"`);
+  return created;
+}
+
+async function seedIsoPacket() {
+  const m = EXP.m9.packet;
+  log('M9: one ISO 27001 audit packet...');
+  const list = await bastion('GET', '/exports');
+  if (list.status === 404) {
+    log('  WARNING: this bastion-api predates M9 (no /exports); rebuild bastion-api to seed the packet');
+    return null;
+  }
+  const frameworks = must(await bastion('GET', '/frameworks'), 'list frameworks').data;
+  const iso = frameworks.find((f) => f.template_key === m.framework);
+  const existing = must(list, 'list packets').data.find((p) => p.framework_id === iso.id && p.status === 'succeeded');
+  if (existing) {
+    log('  reusing the ISO packet already built');
+    return existing;
+  }
+  const started = must(
+    await bastion('POST', '/exports', { framework_id: iso.id, period_start: isoDaysAgo(m.periodDays), period_end: isoDaysAgo(0), include_restricted: false }),
+    'start the ISO packet',
+  ).data;
+  // The worker builds it; wait up to two minutes with a progress line every 10 s.
+  for (let i = 0; i < 24; i++) {
+    await new Promise((r) => setTimeout(r, 5000));
+    const p = must(await bastion('GET', '/exports'), 'list packets').data.find((x) => x.id === started.id);
+    if (i % 2 === 1) log(`  packet: ${p?.status} ${p?.stage_words ?? ''}`);
+    if (p?.status === 'succeeded') return p;
+    if (p?.status === 'failed') throw new Error(`the ISO packet failed: ${p.error}`);
+  }
+  log('  WARNING: no worker built the packet within two minutes (the worker image may predate M9); it stays queued');
+  return { ...started, status: 'queued' };
+}
+
+async function verifyM9(room, pkt) {
+  if (!room || !pkt) return;
+  const problems = [];
+  const rows = await withDb((sql) => sql`
+    SELECT r.label, r.revoked_at, (SELECT count(*)::int FROM bastion_auditor_access_log l WHERE l.room_id = r.id) AS views
+      FROM bastion_auditor_rooms r JOIN organizations o ON o.id = r.organization_id
+     WHERE o.slug = ${EXP.org.slug} AND r.label = ${EXP.m9.room.label} AND r.revoked_at IS NULL`);
+  if (!rows.some((r) => r.views >= EXP.m9.room.accessLogRows)) problems.push(`no live "${EXP.m9.room.label}" room with ${EXP.m9.room.accessLogRows} access-log rows`);
+  if (pkt.status === 'succeeded') {
+    const p = (await withDb((sql) => sql`SELECT object_key, size_bytes FROM bastion_export_packets WHERE id = ${pkt.id}`))[0];
+    if (!p?.object_key || !(Number(p.size_bytes) > 0)) problems.push('the ISO packet has no stored zip');
+  }
+  log(`M9: room views ${rows.map((r) => r.views).join(', ')}; packet ${pkt.status}`);
+  if (problems.length) throw new Error(`seeded M9 rows do not match BASTION_SEED_EXPECTATIONS: ${problems.join('; ')}`);
+}
+
 async function main() {
-  log('Bastion seed (M3, M5, M6, M7 and M8) starting...');
+  log('Bastion seed (M3, M5, M6, M7, M8 and M9) starting...');
   await login();
   const ids = {};
   ids.soc2 = await adoptAndCompile('soc2');
@@ -1086,6 +1202,8 @@ async function main() {
   await verifyM7();
   // M8: Howell's questionnaire, autofilled from what Bastion can prove (an AI answer per question).
   await verifyM8(await seedQuestionnaire(orgId));
+  // M9: the auditor room (opened twice by the auditor) and one ISO packet with the SoA.
+  await verifyM9(await seedAuditorRoom(), await seedIsoPacket());
   log('Bastion seed done');
 }
 

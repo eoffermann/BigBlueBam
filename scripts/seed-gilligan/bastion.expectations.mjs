@@ -216,6 +216,24 @@ export const BASTION_SEED_EXPECTATIONS = {
     },
   },
 
+  // M9 rows (spec 10.2): the auditor room for Lagoon & Reef CPAs on ISO 27001 with two
+  // access-log rows (the auditor opened the room and looked at one control), and one ISO packet
+  // with the Statement of Applicability. Stories 8-10 create and revoke their own rooms.
+  m9: {
+    room: {
+      label: 'Lagoon & Reef CPAs, Type I readiness',
+      framework: 'iso27001',
+      expiresInDays: 30,
+      periodDays: 90,
+      accessLogRows: 2,
+    },
+    packet: {
+      framework: 'iso27001',
+      periodDays: 90,
+      files: ['manifest.json', 'controls.csv', 'statement_of_applicability.csv', 'summary.pdf'],
+    },
+  },
+
   companyProfile: {
     company_size: '1-10',
     work_style: 'office',
