@@ -436,6 +436,42 @@ export const ENV_HINTS = {
   MIGRATIONS_DIR: { kind: 'literal', value: '/app/migrations' },
 };
 
+// ── Propagation to services that already exist (issue #126) ─────────
+//
+// Railway `syncNew` only provisions services that do not exist yet, so a variable a new
+// app adds to an EXISTING service's catalog entry (e.g. <APP>_API_INTERNAL_URL on worker,
+// bolt-api, mcp-server) never reached Railway: the consumer then fell back to a compose
+// hostname that does not exist there. A hint marked `propagate: true` is ADDED to every
+// existing service whose catalog entry lists it and which does not already have it. A
+// present value is never overwritten (that is reconcile()'s job, and only on request).
+//
+// Only `computed` and `literal` hints may propagate: their value is a pure function of the
+// catalog, safe to print in a CI plan and identical on every service. Secrets never do.
+//
+// Every computed `*_API_INTERNAL_URL` / `*_API_URL` hint propagates by default (that is
+// the class #126 found missing). Any other computed/literal hint opts in by declaring
+// `propagate: true` on its entry (e.g. Bastion's BASTION_S3_BUCKET in spec 9.4).
+export const PROPAGATABLE_KINDS = new Set(['computed', 'literal']);
+const DEFAULT_PROPAGATE_NAME_RE = /_API_(INTERNAL_)?URL$/;
+for (const [name, hint] of Object.entries(ENV_HINTS)) {
+  if (hint.propagate === undefined && hint.kind === 'computed' && DEFAULT_PROPAGATE_NAME_RE.test(name)) {
+    hint.propagate = true;
+  }
+  if (hint.propagate && !PROPAGATABLE_KINDS.has(hint.kind)) {
+    throw new Error(
+      `env-hints: ${name} is kind '${hint.kind}' but marked propagate: true. Only computed ` +
+        `and literal hints may propagate to existing services (secrets must never be printed ` +
+        `in a CI plan or copied between services this way).`,
+    );
+  }
+}
+
+/** True if syncNew should add this variable to existing services that lack it. */
+export function isPropagated(varName) {
+  const hint = ENV_HINTS[varName];
+  return Boolean(hint && hint.propagate === true && PROPAGATABLE_KINDS.has(hint.kind));
+}
+
 /**
  * Look up a hint, returning a stub for unknown variables.
  */

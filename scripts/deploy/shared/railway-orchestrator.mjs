@@ -22,7 +22,7 @@ import {
   getSelfHostedInfra,
   JOB_SERVICES,
 } from './services.mjs';
-import { hintFor } from './env-hints.mjs';
+import { hintFor, isPropagated } from './env-hints.mjs';
 
 // ─── Plan assembly ────────────────────────────────────────────────────
 //
@@ -221,6 +221,33 @@ export function diffAuthoritativeVariables(desired, live) {
     }
   }
   return { changed, missing };
+}
+
+/**
+ * The variables syncNew may ADD to an already-live service (issue #126): every
+ * catalog-listed var whose hint is marked `propagate` (see env-hints.mjs). Pure.
+ */
+export function buildPropagatedVariables(service) {
+  const out = {};
+  for (const name of [...(service?.env?.required ?? []), ...(service?.env?.optional ?? [])]) {
+    if (isPropagated(name)) out[name] = String(hintFor(name).value);
+  }
+  const sorted = {};
+  for (const k of Object.keys(out).sort()) sorted[k] = out[k];
+  return sorted;
+}
+
+/**
+ * Plan the additive variable pass: the desired propagated vars that are ABSENT live.
+ * A key that exists live is never touched, whatever its value (including empty), so
+ * an operator's deliberate setting always wins. Pure.
+ */
+export function planPropagation(desired, live) {
+  const add = {};
+  for (const [k, v] of Object.entries(desired)) {
+    if (!Object.prototype.hasOwnProperty.call(live ?? {}, k)) add[k] = v;
+  }
+  return add;
 }
 
 // ─── Orchestrator ─────────────────────────────────────────────────────
@@ -620,9 +647,11 @@ export class RailwayOrchestrator {
   // service that does NOT yet exist on Railway (a brand-new app like blip-api),
   // wire it exactly the way run() would, and trigger its first deploy — then
   // redeploy the public ingress (frontend) so its nginx routes + SPA bundle
-  // pick up the new app. Existing services are left alone (Railway's GitHub
-  // integration already redeploys those on push); use reconcile() separately
-  // to self-heal drifted deploy-owned variables on the existing set.
+  // pick up the new app. Existing services only receive ADDITIONS of variables
+  // whose hint is marked `propagate` and which they lack (issue #126: a new
+  // app's <APP>_API_INTERNAL_URL on worker/bolt-api/mcp-server); nothing present
+  // is ever overwritten. Use reconcile() separately to self-heal drifted
+  // deploy-owned variables on the existing set.
   //
   // This is what closes the "added two new apps → now do manual Railway steps"
   // gap: it is a pure function of the catalog + Railway's live state, so it
@@ -698,9 +727,49 @@ export class RailwayOrchestrator {
       provisioned.push(svc.name);
     }
 
+    // ── Additive variable pass for services that already exist (issue #126).
+    // Only hints marked `propagate` (env-hints.mjs), only keys absent live, never an
+    // overwrite. Every planned addition is printed (dry run or not); writes use
+    // skipDeploys and each changed service then gets exactly one redeploy below.
+    const propagated = {};
+    for (const svc of plan) {
+      if (!liveByName.has(svc.name)) continue; // new services got the full set above
+      const desired = buildPropagatedVariables(svc);
+      if (Object.keys(desired).length === 0) continue;
+      const serviceId = liveByName.get(svc.name);
+      const live = await this.client.getServiceVariables({
+        projectId: this.projectId,
+        environmentId: this.defaultEnvironmentId,
+        serviceId,
+      });
+      const add = planPropagation(desired, live);
+      const keys = Object.keys(add);
+      if (keys.length === 0) continue;
+      propagated[svc.name] = add;
+      for (const k of keys) {
+        this._emit({
+          phase: 'sync-vars',
+          service: svc.name,
+          message: `${dryRun ? 'would add' : 'adding'} ${svc.name}: ${k}=${add[k]}`,
+          ok: true,
+        });
+      }
+      if (!dryRun) {
+        await this.client.upsertVariables({
+          projectId: this.projectId,
+          environmentId: this.defaultEnvironmentId,
+          serviceId,
+          variables: add,
+          skipDeploys: true,
+        });
+      }
+    }
+
     // Decide the redeploy set. Newly-created services always deploy. The
     // ingress (and any alwaysRedeploy targets) redeploy per the rules above.
+    // A service that received propagated variables redeploys once (Set dedups).
     const toDeploy = new Set(provisioned);
+    for (const name of Object.keys(propagated)) toDeploy.add(name);
     if (provisioned.length > 0) for (const n of redeployOnNew) toDeploy.add(n);
     for (const n of alwaysRedeploy) toDeploy.add(n);
 
@@ -735,6 +804,7 @@ export class RailwayOrchestrator {
       provisioned,
       deployed,
       missing: missing.map((s) => s.name),
+      propagated,
     };
     this._emit({
       phase: 'sync-done',

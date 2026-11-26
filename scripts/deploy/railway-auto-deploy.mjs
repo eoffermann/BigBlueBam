@@ -299,6 +299,15 @@ async function main() {
       : `Dry run: would create ${summary.provisioned.length} service(s), trigger ${summary.deployed.length} deploy(s).`,
   );
   if (summary.provisioned.length) log(`  services: ${summary.provisioned.join(', ')}`);
+  const propagatedServices = Object.keys(summary.propagated ?? {});
+  if (propagatedServices.length) {
+    log(`  variables ${apply ? 'added' : 'to add'} to existing services (propagate hints, never overwrites):`);
+    for (const svc of propagatedServices) {
+      for (const [k, v] of Object.entries(summary.propagated[svc])) log(`    ${svc}: + ${k}=${v}`);
+    }
+  } else {
+    log('  no propagated variables missing on existing services');
+  }
   if (summary.deployed.length) log(`  deploys:  ${summary.deployed.join(', ')}`);
   if (!apply && (summary.provisioned.length || summary.deployed.length)) {
     log('Re-run with --apply to execute.');
