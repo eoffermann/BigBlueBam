@@ -24,7 +24,10 @@ runs:
           pnpm@*) ;;
           *) echo "::error::package.json packageManager must pin pnpm (found '$pm')"; exit 1 ;;
         esac
-        corepack enable
+        # Only the pnpm shim (#207): a bare `corepack enable` also installs a yarn shim that
+        # shadows the runner's yarn 1.x, and the second setup-node call's `yarn --version`
+        # then prints the "configured to use pnpm" warning in every job.
+        corepack enable pnpm
         corepack prepare "$pm" --activate
         echo "pnpm $(pnpm --version) active (pinned $pm)"
         [ "pnpm@$(pnpm --version)" = "$pm" ] || { echo "::error::active pnpm does not match $pm"; exit 1; }
