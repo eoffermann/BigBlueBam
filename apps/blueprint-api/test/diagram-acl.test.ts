@@ -348,6 +348,36 @@ describe('Bam project membership gates project diagrams and from-bam (#181)', ()
   });
 });
 
+describe('a star is not a read grant (#180)', () => {
+  const starred = async (u: string) =>
+    ((await call(u, 'GET', '/v1/diagrams?starred=true&include_archived=true')).json().data as Array<{ id: string }>).map(
+      (d) => d.id,
+    );
+
+  it('a removed collaborator no longer sees the private diagram in their starred list', async () => {
+    state.tables.set(schema.blueprintStars, [
+      { diagram_id: PRIVATE, user_id: EDITOR },
+      { diagram_id: SHARED, user_id: EDITOR },
+    ]);
+    expect(await starred(EDITOR)).toEqual(expect.arrayContaining([PRIVATE, SHARED]));
+    state.tables.set(
+      schema.blueprintCollaborators,
+      state.tables.get(schema.blueprintCollaborators)!.filter((r) => r.user_id !== EDITOR),
+    );
+    const after = await starred(EDITOR);
+    expect(after).not.toContain(PRIVATE);
+    expect(after).toContain(SHARED);
+  });
+
+  it('a pre-#167 star on a private or non-member project diagram does not list it', async () => {
+    state.tables.set(schema.blueprintStars, [
+      { diagram_id: PRIVATE, user_id: MEMBER },
+      { diagram_id: PROJ_DIAG, user_id: MEMBER },
+    ]);
+    expect(await starred(MEMBER)).toEqual([]);
+  });
+});
+
 describe('comment edits are author-or-owner', () => {
   it("a member cannot rewrite another user's comment on a shared diagram", async () => {
     const res = await call(MEMBER, 'PATCH', `/v1/diagrams/${SHARED}/comments/${C_SHARED}`, { body: 'rewritten' });

@@ -43,7 +43,7 @@ export async function listDiagrams(orgId: string, actor: DiagramActor, filter: L
   if (filter.diagram_type) {
     whereParts.push(eq(blueprintDiagrams.diagram_type, filter.diagram_type));
   }
-  const rows = await db
+  let rows = await db
     .select()
     .from(blueprintDiagrams)
     .where(and(...whereParts))
@@ -56,7 +56,9 @@ export async function listDiagrams(orgId: string, actor: DiagramActor, filter: L
       .from(blueprintStars)
       .where(eq(blueprintStars.user_id, filter.starred_by));
     const starred = new Set(stars.map((s) => s.diagram_id));
-    return rows.filter((r) => starred.has(r.id));
+    // Narrow to starred, then fall through to the visibility filter (#180): a
+    // star outlives the access that allowed it, so it is never a read grant.
+    rows = rows.filter((r) => starred.has(r.id));
   }
 
   // Drop diagrams the caller cannot see, by the same rule as assertCanRead:
