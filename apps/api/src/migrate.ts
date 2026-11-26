@@ -13,8 +13,10 @@
 //
 // Migration files are expected to be idempotent (IF NOT EXISTS, ADD COLUMN
 // IF NOT EXISTS, etc.) so that re-running against a DB in an unknown state
-// is safe. Each file is applied inside a single transaction; any error
-// aborts that file and halts the runner.
+// is safe. Each file is applied inside a single transaction together with
+// its schema_migrations row; any error aborts that file and halts the
+// runner. Top-level BEGIN/COMMIT in a file is ignored at execution time
+// (issue #131), and the migration linter rejects it in new files.
 //
 // Intended to run as a one-shot container (docker-compose `migrate` service)
 // that must complete successfully before api/helpdesk-api/banter-api/worker
@@ -25,6 +27,7 @@ import { createHash } from 'node:crypto';
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import postgres from 'postgres';
+import { stripTopLevelTransactionControl } from './lib/migration-sql.js';
 
 const MIGRATIONS_DIR = process.env.MIGRATIONS_DIR ?? resolve(process.cwd(), 'migrations');
 
@@ -110,13 +113,23 @@ async function getApplied(sql: postgres.Sql): Promise<Map<string, AppliedRow>> {
 }
 
 async function applyMigration(sql: postgres.Sql, migration: MigrationFile): Promise<void> {
+  // Issue #131: a file with its own top-level BEGIN/COMMIT would end this
+  // transaction early and leave the schema_migrations INSERT in autocommit.
+  // Execute it without those statements so the body and its bookkeeping row
+  // commit atomically. The checksum is still taken from the file on disk.
+  const { sql: body, removed } = stripTopLevelTransactionControl(migration.sql);
+  if (removed > 0) {
+    console.log(
+      `[migrate] ${migration.filename}: ignoring ${removed} top-level BEGIN/COMMIT statement(s); the runner's transaction covers the file`,
+    );
+  }
   await sql.begin(async (tx) => {
     // postgres.TransactionSql is callable as a tagged template at runtime
     // but its TS surface in the pinned version doesn't expose the call
     // signature cleanly; cast to any for the tagged-template uses.
     // biome-ignore lint/suspicious/noExplicitAny: see comment
     const txTag = tx as any;
-    await tx.unsafe(migration.sql);
+    await tx.unsafe(body);
     await txTag`
       INSERT INTO schema_migrations (id, checksum)
       VALUES (${migration.id}, ${migration.checksum})

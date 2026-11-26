@@ -20,6 +20,10 @@
 //                                    within the same file, OR wrapped in a DO $$ block
 //                                    (DO $$ appears within 5 lines above)
 //        - CREATE TYPE ... AS ENUM → warn (no IF NOT EXISTS syntax exists)
+//   4. no-transaction-control: no top-level BEGIN / START TRANSACTION /
+//      COMMIT / END / ROLLBACK (issue #131). The runner wraps every file and
+//      its schema_migrations row in one transaction already. Statements inside
+//      $$ function or DO bodies are not top level and are fine.
 //
 // Inline escape: append `-- noqa: <rule-name>` on the offending line to
 // silence a single rule. Use sparingly and only with justification.
@@ -41,6 +45,7 @@
 import { readdirSync, readFileSync, existsSync } from 'node:fs';
 import { join, resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { findTopLevelTransactionControl } from './lib/sql-top-level.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const MIGRATIONS_DIR = resolve(__dirname, '..', 'infra', 'postgres', 'migrations');
@@ -107,6 +112,30 @@ const OFF_FILE_SUPPRESSIONS = {
   },
   '0132_entity_links.sql': {
     13: ['create-enum-guarded'],
+  },
+  // Self-transacting migrations that predate the no-transaction-control rule
+  // (issue #131). Applied everywhere, bodies frozen. The migrate runner strips
+  // their top-level BEGIN/COMMIT at execution time so the file and its
+  // schema_migrations row commit atomically; new migrations must not do this.
+  '0078_reconcile_bam_bearing_drift.sql': {
+    14: ['no-transaction-control'],
+    50: ['no-transaction-control'],
+  },
+  '0156_permissions_remediate_builtin_defaults.sql': {
+    27: ['no-transaction-control'],
+    252: ['no-transaction-control'],
+  },
+  '0157_permissions_tighten_member_defaults.sql': {
+    23: ['no-transaction-control'],
+    105: ['no-transaction-control'],
+  },
+  '0158_permissions_viewer_self_care.sql': {
+    30: ['no-transaction-control'],
+    103: ['no-transaction-control'],
+  },
+  '0159_permissions_drop_legacy_role_columns.sql': {
+    13: ['no-transaction-control'],
+    23: ['no-transaction-control'],
   },
 };
 
@@ -276,6 +305,17 @@ function checkFile(filename, content) {
         warnings.push({ line: i + 1, rule: 'create-enum-guarded', msg: 'CREATE TYPE ... AS ENUM has no IF NOT EXISTS; wrap in DO $$ ... EXCEPTION WHEN duplicate_object THEN NULL; END $$;' });
       }
     }
+  }
+
+  // Rule: no top-level transaction control (issue #131). The runner already
+  // wraps each file and its schema_migrations INSERT in one transaction; a
+  // file-level COMMIT ends that early and leaves the bookkeeping row outside it.
+  for (const { line, statement } of findTopLevelTransactionControl(content)) {
+    check(
+      line - 1,
+      'no-transaction-control',
+      `top-level ${statement} is not allowed; the migrate runner wraps each file in its own transaction`,
+    );
   }
 
   return { violations, warnings };
