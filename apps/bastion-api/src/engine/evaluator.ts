@@ -29,6 +29,7 @@ import { decideManual } from './manual.js';
 import { driftTaskStatus, enqueueDriftTask, enqueueTaskComment, localDate, REASON_PHRASE, remediationSettings } from './remediation.js';
 import { checkLedgerIdentity, type SealIdentity, StorageUnavailableError } from './restore.js';
 import { aggregateStored, coverageKindOf, infraDecision, isWorsening } from './status.js';
+import { markAnswersStaleForControl } from './answer-library.js';
 
 export class RunNotFoundError extends Error {
   constructor() {
@@ -513,6 +514,8 @@ export async function aggregateControl(deps: EngineDeps, tx: Tx, run: RunRow, co
              status_changed_at = CASE WHEN ${d.status_changed} THEN ${asOf}::timestamptz ELSE status_changed_at END,
              coverage_kind = ${coverage}
        WHERE organization_id = ${run.organization_id} AND id = ${controlId}`;
+    // Spec 2.7 step 8: approved answers citing this control go stale when its STORED status changes.
+    if (d.status_changed) await markAnswersStaleForControl(tx, run.organization_id, controlId, from, d.status);
     return;
   }
 
@@ -525,6 +528,9 @@ export async function aggregateControl(deps: EngineDeps, tx: Tx, run: RunRow, co
                                     THEN ${asOf}::timestamptz ELSE status_changed_at END,
            coverage_kind = ${coverage}
      WHERE organization_id = ${run.organization_id} AND id = ${controlId}`;
+  // Spec 2.7 step 8: approved answers citing this control go stale when its STORED status changes
+  // (never on evaluation_stale, which is computed at read time).
+  if (from !== to) await markAnswersStaleForControl(tx, run.organization_id, controlId, from, to);
 
   if (isWorsening(from, to)) {
     const remediation = await remediationSettings(tx, run.organization_id);

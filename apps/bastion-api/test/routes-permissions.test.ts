@@ -56,6 +56,8 @@ const INTEGRITY: Record<string, string> = {
   'POST /exceptions/:id/decide': "can('bastion.exception.approve')",
   // M7: "I have read and understood this" (spec 2.8, 3.6): only the person, never an agent.
   'POST /policies/:id/attest': "can('bastion.attestation.sign')",
+  // M8: Approve is the questionnaire's release gate (spec 2.7 step 7, 2.8): a person vouches.
+  'POST /questionnaires/:id/approve': "can('bastion.questionnaire.approve')",
 };
 
 // Routes that must NOT require a session: everything an agent may do through an API key
@@ -93,6 +95,18 @@ const AGENT_REACHABLE = [
   'GET /me/attestations',
   'POST /policies/:id/request-attestations',
   'POST /frameworks/:id/compile',
+  // M8
+  'GET /questionnaires',
+  'POST /questionnaires',
+  'GET /questionnaires/:id',
+  'PATCH /questionnaires/:id',
+  'POST /questionnaires/:id/autofill',
+  'GET /questionnaires/:id/items',
+  'PATCH /questionnaire-items/:id',
+  'GET /questionnaires/:id/export',
+  'POST /answers/draft',
+  'GET /answer-library',
+  'PATCH /answer-library/:id',
 ];
 
 describe('bastion-api route gates', () => {

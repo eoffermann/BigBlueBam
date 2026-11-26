@@ -35,6 +35,8 @@ import coverageRoutes from './routes/coverage.routes.js';
 import decisionRoutes from './routes/decisions.routes.js';
 import policyRoutes from './routes/policies.routes.js';
 import { drainCompileSlices, markCompileShuttingDown } from './services/compile-ai.service.js';
+import questionnaireRoutes from './routes/questionnaires.routes.js';
+import { drainAutofillSlices, markAutofillShuttingDown } from './services/questionnaire-autofill.service.js';
 import { engineDeps } from './engine/runtime.js';
 import { checkLedgerIdentity } from './engine/restore.js';
 import { closeBastionQueues } from './lib/queue.js';
@@ -132,6 +134,8 @@ await fastify.register(
     await v1.register(decisionRoutes);
     // M7: policies and attestation (attest is session-only).
     await v1.register(policyRoutes);
+    // M8: questionnaires and the answer library (approve is session-only).
+    await v1.register(questionnaireRoutes);
     await v1.register(internalRoutes);
   },
   { prefix: '/v1' },
@@ -153,9 +157,14 @@ for (const signal of signals) {
       // M7 (spec 7.3): LLM compile slices stop starting calls now; each lets its current call
       // finish (at most BASTION_LLM_TIMEOUT_MS) and releases its run (queued, resume_count + 1).
       markCompileShuttingDown();
+      markAutofillShuttingDown();
       await fastify.close();
-      const draining = await drainCompileSlices(env.BASTION_LLM_TIMEOUT_MS + 5_000);
+      const [draining, drafting] = await Promise.all([
+        drainCompileSlices(env.BASTION_LLM_TIMEOUT_MS + 5_000),
+        drainAutofillSlices(env.BASTION_LLM_TIMEOUT_MS + 5_000),
+      ]);
       if (draining > 0) fastify.log.info(`released ${draining} AI compile slice(s) for the worker to resume`);
+      if (drafting > 0) fastify.log.info(`released ${drafting} questionnaire autofill slice(s) for the worker to resume`);
       await closeBastionQueues();
       for (const c of allConnections()) await c.end();
     } finally {

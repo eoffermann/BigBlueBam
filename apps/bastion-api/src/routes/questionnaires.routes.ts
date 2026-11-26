@@ -1,0 +1,147 @@
+import type { FastifyInstance } from 'fastify';
+import {
+  bastionAnswerLibraryQuerySchema,
+  bastionAnswerLibraryUpdateSchema,
+  bastionDraftAnswerSchema,
+  bastionQuestionnaireApproveSchema,
+  bastionQuestionnaireAutofillSchema,
+  bastionQuestionnaireCreateSchema,
+  bastionQuestionnaireExportQuerySchema,
+  bastionQuestionnaireItemListQuerySchema,
+  bastionQuestionnaireItemReviewSchema,
+  bastionQuestionnaireListQuerySchema,
+  bastionQuestionnaireUpdateSchema,
+} from '@bigbluebam/shared';
+import { rejectWhenImpersonating, requireAuth, requireSession } from '../plugins/auth.js';
+import { downloadHeaders } from '../lib/download.js';
+import { handled, idParam, notFound, validationError, viewerOf } from '../lib/http.js';
+import { autofillDeps, questionnaireDeps } from '../services/questionnaire-runtime.js';
+import { draftOneAnswer } from '../services/questionnaire-autofill.service.js';
+import * as questionnaires from '../services/questionnaires.service.js';
+
+// Spec 5.1 rows 72-83 (M8): security-questionnaire autofill and the answer library (spec 2.7).
+// Approve is a vouching route (spec 2.8, #136): session-only, never impersonated, a human; it has
+// no MCP tool. The export is a byte response (no tool). Everything else an agent may do through
+// an API key, under the same permissions (decision #196).
+export default async function questionnaireRoutes(fastify: FastifyInstance) {
+  const can = (p: string) => fastify.requireCan(p);
+  const deps = () => questionnaireDeps(fastify.log, fastify.redis);
+  const query = (request: { query: unknown }) => {
+    const raw = (request.query ?? {}) as Record<string, string | undefined>;
+    return Object.fromEntries(Object.entries(raw).filter(([, v]) => v !== undefined && v !== ''));
+  };
+
+  // Row 72.
+  fastify.get('/questionnaires', { preHandler: [requireAuth, can('bastion.questionnaire.read')] }, async (request, reply) => {
+    const parsed = bastionQuestionnaireListQuerySchema.safeParse(query(request));
+    if (!parsed.success) return validationError(request, reply, parsed.error);
+    return handled(request, reply, () => questionnaires.listQuestionnaires(deps(), viewerOf(request), parsed.data));
+  });
+
+  // Row 73: from a Bin file (xlsx or csv) or pasted rows. The body is JSON (the file is already in Bin).
+  fastify.post('/questionnaires', { preHandler: [requireAuth, can('bastion.questionnaire.write')], bodyLimit: 1024 * 1024 }, async (request, reply) => {
+    const parsed = bastionQuestionnaireCreateSchema.safeParse(request.body ?? {});
+    if (!parsed.success) return validationError(request, reply, parsed.error);
+    return handled(request, reply, async () => {
+      const out = await questionnaires.createQuestionnaire(deps(), viewerOf(request), parsed.data);
+      reply.status(201);
+      return out;
+    });
+  });
+
+  // Row 74.
+  fastify.get('/questionnaires/:id', { preHandler: [requireAuth, can('bastion.questionnaire.read')] }, async (request, reply) => {
+    const id = idParam(request);
+    if (!id) return notFound(request, reply);
+    return handled(request, reply, () => questionnaires.getQuestionnaire(deps(), viewerOf(request), id));
+  });
+
+  // Row 75.
+  fastify.patch('/questionnaires/:id', { preHandler: [requireAuth, can('bastion.questionnaire.write')] }, async (request, reply) => {
+    const id = idParam(request);
+    if (!id) return notFound(request, reply);
+    const parsed = bastionQuestionnaireUpdateSchema.safeParse(request.body ?? {});
+    if (!parsed.success) return validationError(request, reply, parsed.error);
+    return handled(request, reply, () => questionnaires.updateQuestionnaire(deps(), viewerOf(request), id, parsed.data));
+  });
+
+  // Row 76 (202): the worker drafts every row (spec 7.3 time estimates on the page).
+  fastify.post('/questionnaires/:id/autofill', { preHandler: [requireAuth, can('bastion.questionnaire.write')] }, async (request, reply) => {
+    const id = idParam(request);
+    if (!id) return notFound(request, reply);
+    const parsed = bastionQuestionnaireAutofillSchema.safeParse(request.body ?? {});
+    if (!parsed.success) return validationError(request, reply, parsed.error);
+    return handled(request, reply, async () => {
+      const out = await questionnaires.startAutofill(deps(), viewerOf(request), id, parsed.data);
+      reply.status(202);
+      return out;
+    });
+  });
+
+  // Row 77.
+  fastify.get('/questionnaires/:id/items', { preHandler: [requireAuth, can('bastion.questionnaire.read')] }, async (request, reply) => {
+    const id = idParam(request);
+    if (!id) return notFound(request, reply);
+    const parsed = bastionQuestionnaireItemListQuerySchema.safeParse(query(request));
+    if (!parsed.success) return validationError(request, reply, parsed.error);
+    return handled(request, reply, () => questionnaires.listItems(deps(), viewerOf(request), id, parsed.data));
+  });
+
+  // Row 78.
+  fastify.patch('/questionnaire-items/:id', { preHandler: [requireAuth, can('bastion.questionnaire.write')] }, async (request, reply) => {
+    const id = idParam(request);
+    if (!id) return notFound(request, reply);
+    const parsed = bastionQuestionnaireItemReviewSchema.safeParse(request.body ?? {});
+    if (!parsed.success) return validationError(request, reply, parsed.error);
+    return handled(request, reply, () => questionnaires.reviewItem(deps(), viewerOf(request), id, parsed.data));
+  });
+
+  // Row 79: Approve. Vouching: session, not impersonated, a human (assertHumanDecider in the service).
+  fastify.post(
+    '/questionnaires/:id/approve',
+    { preHandler: [requireAuth, requireSession, rejectWhenImpersonating, can('bastion.questionnaire.approve')] },
+    async (request, reply) => {
+      const id = idParam(request);
+      if (!id) return notFound(request, reply);
+      const parsed = bastionQuestionnaireApproveSchema.safeParse(request.body ?? {});
+      if (!parsed.success) return validationError(request, reply, parsed.error);
+      return handled(request, reply, () => questionnaires.approveQuestionnaire(deps(), viewerOf(request), id));
+    },
+  );
+
+  // Row 80: the answered questionnaire in its own layout (byte response; formula-neutralized).
+  fastify.get('/questionnaires/:id/export', { preHandler: [requireAuth, can('bastion.questionnaire.export')] }, async (request, reply) => {
+    const id = idParam(request);
+    if (!id) return notFound(request, reply);
+    const parsed = bastionQuestionnaireExportQuerySchema.safeParse(query(request));
+    if (!parsed.success) return validationError(request, reply, parsed.error);
+    return handled(request, reply, async () => {
+      const out = await questionnaires.exportQuestionnaire(deps(), viewerOf(request), id, parsed.data.format);
+      reply.headers(downloadHeaders({ contentType: out.contentType, filename: out.filename, size: out.body.length }));
+      return reply.send(out.body);
+    });
+  });
+
+  // Row 81: draft one answer now (nothing saved).
+  fastify.post('/answers/draft', { preHandler: [requireAuth, can('bastion.questionnaire.write')] }, async (request, reply) => {
+    const parsed = bastionDraftAnswerSchema.safeParse(request.body ?? {});
+    if (!parsed.success) return validationError(request, reply, parsed.error);
+    return handled(request, reply, () => draftOneAnswer(autofillDeps(fastify.log, fastify.redis), viewerOf(request), parsed.data));
+  });
+
+  // Row 82.
+  fastify.get('/answer-library', { preHandler: [requireAuth, can('bastion.answer_library.read')] }, async (request, reply) => {
+    const parsed = bastionAnswerLibraryQuerySchema.safeParse(query(request));
+    if (!parsed.success) return validationError(request, reply, parsed.error);
+    return handled(request, reply, () => questionnaires.listAnswerLibrary(deps(), viewerOf(request), parsed.data));
+  });
+
+  // Row 83.
+  fastify.patch('/answer-library/:id', { preHandler: [requireAuth, can('bastion.answer_library.write')] }, async (request, reply) => {
+    const id = idParam(request);
+    if (!id) return notFound(request, reply);
+    const parsed = bastionAnswerLibraryUpdateSchema.safeParse(request.body ?? {});
+    if (!parsed.success) return validationError(request, reply, parsed.error);
+    return handled(request, reply, () => questionnaires.updateAnswerLibrary(deps(), viewerOf(request), id, parsed.data));
+  });
+}
