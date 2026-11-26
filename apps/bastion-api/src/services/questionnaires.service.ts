@@ -338,7 +338,7 @@ export async function startAutofill(d: QuestionnaireDeps, viewer: Viewer, id: st
     await tx`
       UPDATE bastion_questionnaires
          SET status = 'answering', claimed_by = NULL, heartbeat_at = NULL, resume_count = 0,
-             ai_failure_streak = 0, last_ai_failure = NULL,
+             ai_failure_streak = 0, last_ai_failure = NULL, autofill_generation = autofill_generation + 1,
              column_map = jsonb_set(column_map, '{autofill_requested_by}', to_jsonb(${viewer.id}::text))
        WHERE organization_id = ${viewer.org_id} AND id = ${id}`;
     await auditRaw(tx, viewer, 'questionnaire.autofill_start', { type: 'questionnaire', id }, { redraft: body.redraft, kind: await viewerKind(tx, viewer) });

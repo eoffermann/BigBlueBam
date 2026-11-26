@@ -438,6 +438,25 @@ describe.skipIf(!DATABASE_URL)('M8 questionnaires (live database)', () => {
     expect(again.filter((r) => r.band_reasons.some((x) => x.code === 'budget_exhausted')).length).toBeGreaterThanOrEqual(4);
   });
 
+  it('each autofill run emits its own questionnaire.drafted, even with the same counts (#267)', async () => {
+    const s = await setUp('redraft-event');
+    await provider(s.org, s.owner);
+    const owner = viewer(s.org, s.owner);
+    const d = qdeps(s.engine);
+    const q = (await createQuestionnaire(d, owner, { title: 'Redraft event', source: { kind: 'pasted', text: PASTED, format: 'tsv' } })).data as unknown as { id: string };
+    const drafted = async () =>
+      (await sql`SELECT idempotency_key FROM bastion_outbox WHERE organization_id = ${s.org} AND payload->>'event_type' = 'questionnaire.drafted' ORDER BY id`).map((r) => String(r.idempotency_key));
+    await startAutofill(d, owner, q.id, { redraft: false });
+    await autofillSlice(adeps(s.engine), { organization_id: s.org, questionnaire_id: q.id, claimant: 'w1' });
+    expect(await drafted()).toHaveLength(1);
+    // Same model, same rows, same counts, no releases: the redraft is a new run and a new event.
+    await startAutofill(d, owner, q.id, { redraft: true });
+    await autofillSlice(adeps(s.engine), { organization_id: s.org, questionnaire_id: q.id, claimant: 'w1' });
+    const keys = await drafted();
+    expect(keys).toHaveLength(2);
+    expect(new Set(keys).size).toBe(2);
+  });
+
   it('SIGTERM releases; the reaper releases stale claims and parks after three; the tick finds orphans', async () => {
     const s = await setUp('reaper');
     await provider(s.org, s.owner);

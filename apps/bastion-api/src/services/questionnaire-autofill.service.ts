@@ -391,6 +391,8 @@ interface QRow {
   owner_user_id: string | null;
   created_by: string | null;
   asker: string | null;
+  /** Up by one on every start (#267): the drafted event's idempotency key is per run. */
+  autofill_generation: number;
   /** AI calls charged to this questionnaire across every run (#261); never reset by a redraft. */
   llm_calls_used: number;
   /** Consecutive transient AI failures (#260). */
@@ -417,7 +419,7 @@ export async function drainAutofillSlices(timeoutMs: number): Promise<number> {
 const SELECT_Q = (tx: Tx, orgId: string, id: string) => tx`
   SELECT id, organization_id, title, status, claimed_by, heartbeat_at, row_count, rows_done, high_count, medium_count, low_count,
          resume_count, owner_user_id, created_by, column_map->>'autofill_requested_by' AS asker,
-         llm_calls_used, ai_failure_streak
+         llm_calls_used, ai_failure_streak, autofill_generation
     FROM bastion_questionnaires WHERE organization_id = ${orgId} AND id = ${id}`;
 
 async function readQ(d: AutofillDeps, orgId: string, id: string): Promise<QRow | null> {
@@ -735,12 +737,18 @@ async function finish(d: AutofillDeps, q: QRow, claimant: string): Promise<void>
       INSERT INTO bastion_audit_log (organization_id, actor_id, actor_kind, impersonator_id, action, subject_type, subject_id, details)
       VALUES (${orgId}, ${actor}, ${actorKind}, NULL, 'questionnaire.autofill', 'questionnaire', ${q.id},
               ${tx.json({ rows: counts.total, high: counts.high, medium: counts.medium, low: counts.low } as never)})`;
-    await enqueueBastionEvent(
+    // One event per autofill run (#267): a retry of this run's finish() dedupes, a redraft (a new
+    // generation) does not, whatever its counts. resume_count was reset by every start, so it
+    // repeated across runs and the second run's event was silently dropped.
+    const fresh = await enqueueBastionEvent(
       'questionnaire.drafted',
       { questionnaire_id: q.id, title: q.title, rows: counts.total, high: counts.high, medium: counts.medium, low: counts.low },
       tx,
-      { orgId, idempotencyKey: `questionnaire.drafted:${q.id}:${q.resume_count}:${counts.total}:${counts.low}`, actorId: actor ?? undefined, actorType: actorKind === 'human' ? 'user' : 'agent' },
+      { orgId, idempotencyKey: `questionnaire.drafted:${q.id}:g${Number(q.autofill_generation)}`, actorId: actor ?? undefined, actorType: actorKind === 'human' ? 'user' : 'agent' },
     );
+    if (!fresh) {
+      d.engine.log.warn({ questionnaire_id: q.id, generation: q.autofill_generation }, 'bastion-autofill: questionnaire.drafted was already queued for this run; not sent again');
+    }
     return counts;
   });
   d.engine.log.info({ questionnaire_id: q.id }, `bastion-autofill: questionnaire '${q.title}' drafted; ${n.total} rows (high ${n.high}, medium ${n.medium}, low ${n.low})`);
