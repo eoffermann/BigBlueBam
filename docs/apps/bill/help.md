@@ -208,7 +208,13 @@ To mark an approved expense reimbursed:
 2. Click **Mark reimbursed** in its Actions cell. This is an admin or owner action.
 3. The status changes to `reimbursed`, the terminal step of the expense lifecycle (`pending` to `approved` to `reimbursed`). Only approved expenses can be marked reimbursed.
 
-Editing an expense, deleting one, and attaching a receipt are supported by the API but have no button in the current UI. To attach a receipt or edit an expense, use the API (`POST /bill/api/v1/expenses/:id/receipt`, `PATCH /bill/api/v1/expenses/:id`) or the matching MCP tools.
+To attach a receipt:
+
+1. On the **New Expense** form, pick a file under **Receipt (optional)** before you click **Submit Expense**; or, on the Expenses list, click **Attach receipt** under the expense's description.
+2. Choose a photo (JPG, PNG, GIF, WebP, HEIC) or a PDF of up to 10 MB.
+3. A **Receipt** link appears next to the description. To swap the file, click **Replace receipt** on that row.
+
+Editing an expense and deleting one are supported by the API but have no button in the current UI. To edit an expense, use the API (`PATCH /bill/api/v1/expenses/:id`) or the matching MCP tools.
 
 ![Expense list](screenshots/light/05-expenses.png)
 
@@ -411,7 +417,7 @@ Like every BigBlueBam app, Bill carries the persistent Bureau presence dock, so 
 
 **Result:** The expense moves to `approved` (or `rejected`), and an approved expense can be moved on to `reimbursed`. Approved expenses count against project profit in the Project Profitability report and can no longer be edited.
 
-**Related:** Receipt upload and expense edits are available through the API and the `bill_update_expense` tool. An agent can log expenses with `bill_create_expense`, list them with `bill_list_expenses`, and decide them with `bill_approve_expense` / `bill_reject_expense`. Marking reimbursed is a UI and REST action with no dedicated MCP tool.
+**Related:** Attach a receipt from the New Expense form or with **Attach receipt** on the Expenses list. Expense edits are available through the API and the `bill_update_expense` tool. An agent can log expenses with `bill_create_expense`, list them with `bill_list_expenses`, and decide them with `bill_approve_expense` / `bill_reject_expense`. Marking reimbursed is a UI and REST action with no dedicated MCP tool.
 
 ### Story: Send an invoice for approval before billing
 

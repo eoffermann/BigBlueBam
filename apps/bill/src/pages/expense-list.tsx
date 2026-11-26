@@ -5,6 +5,7 @@ import { useExpenses, useApproveExpense, useRejectExpense, useReimburseExpense }
 import { formatDate, formatCents, statusBadgeClass, cn } from '@/lib/utils';
 import { BurnGateNotice } from '@/components/burn-gate-notice';
 import { hasUploadedReceipt, receiptDownloadHref } from '@/lib/expense-receipt';
+import { ReceiptUploadButton } from '@/components/receipt-upload';
 
 interface Props {
   onNavigate: (path: string) => void;
@@ -86,6 +87,9 @@ export function ExpenseListPage({ onNavigate }: Props) {
                         Receipt
                       </a>
                     )}
+                    <div className="mt-1">
+                      <ReceiptUploadButton expenseId={exp.id} hasReceipt={hasUploadedReceipt(exp)} />
+                    </div>
                   </td>
                   <td className="px-4 py-3 text-zinc-500">{exp.category || '—'}</td>
                   <td className="px-4 py-3 text-zinc-500">{exp.vendor || '—'}</td>

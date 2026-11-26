@@ -52,7 +52,10 @@ class ApiClient {
       headers['X-Org-Id'] = orgId;
     }
 
-    if (body) {
+    // Multipart uploads (receipts, issue #155) pass a FormData body; the browser
+    // sets the multipart Content-Type with its boundary, so we must not.
+    const isForm = typeof FormData !== 'undefined' && body instanceof FormData;
+    if (body && !isForm) {
       headers['Content-Type'] = 'application/json';
     }
 
@@ -62,7 +65,7 @@ class ApiClient {
       method,
       headers,
       credentials: 'include',
-      body: body ? JSON.stringify(body) : undefined,
+      body: body ? (isForm ? (body as FormData) : JSON.stringify(body)) : undefined,
     });
 
     if (!response.ok) {

@@ -1592,7 +1592,7 @@ or `/helpdesk/agents`) segment in-code.
 | `POST /bill/api/v1/expenses/:id/approve` | `bill_approve_expense` | Approve an expense | `apps/bill/src/pages/expense-list.tsx` |
 | `POST /bill/api/v1/expenses/:id/reject` | `bill_reject_expense` | Reject an expense | `apps/bill/src/pages/expense-list.tsx` |
 | `POST /bill/api/v1/expenses/:id/reimburse` | — _(skip: deferred — UI-only terminal state transition, approved→reimbursed)_ | Mark an approved expense reimbursed | `apps/bill/src/pages/expense-list.tsx` |
-| `POST /bill/api/v1/expenses/:id/receipt` | — _(skip: multipart receipt upload)_ | Upload a receipt file to the configured S3 bucket via `@bigbluebam/storage` (#145); sets `receipt_url` to the download route below; 503 `STORAGE_NOT_CONFIGURED` without S3 settings | — |
+| `POST /bill/api/v1/expenses/:id/receipt` | — _(skip: multipart/binary upload)_ | Upload a receipt file to the configured S3 bucket via `@bigbluebam/storage` (#145); sets `receipt_url` to the download route below; 503 `STORAGE_NOT_CONFIGURED` without S3 settings | `apps/bill/src/components/receipt-upload.tsx` (Expenses list "Attach receipt" / "Replace receipt"), `apps/bill/src/pages/expense-new.tsx` ("Receipt (optional)", #155) |
 | `GET /bill/api/v1/expenses/:id/receipt` | — _(skip: multipart/binary download)_ | Download the expense's uploaded receipt as an attachment (#145); requires `bill.expense.list`, org-scoped, key pinned to the expense | `apps/bill/src/pages/expense-list.tsx` |
 | `GET /bill/api/v1/invoices` | `bill_list_invoices` | List invoices (filters) | `apps/bill/src/hooks/use-invoices.ts` |
 | `POST /bill/api/v1/invoices` | `bill_create_invoice` | Create a draft invoice | `apps/bill/src/hooks/use-invoices.ts` |

@@ -222,7 +222,7 @@
     {
       "anchor": "expenses",
       "title": "Expenses",
-      "text": "The Expenses list at /bill/expenses is titled Expenses with the subtitle \"Track project expenses and receipts.\" Columns are Description, Category, Vendor, Date, Amount, Status, and Actions. A row of status pills filters the list: All (empty), pending, approved, rejected, and reimbursed. The reimbursed pill shows expenses you have paid back to the submitter. To log an expense: 1. Open Expenses and click New Expense to go to /bill/expenses/new (titled New Expense). 2. Fill in Description, Amount (cents), and Date. 3. Choose a Category (Software, Travel, Hardware, Contractor, Office, Meals, or Other) and optionally a Vendor. 4. Tick Billable to client if the cost should be invoiceable. 5. Click Submit Expense. The expense is created as pending. To approve or reject an expense: 1. On the Expenses list, find a pending row. 2. Click Approve or Reject in its Actions cell. Approving and rejecting require an admin or owner role. 3. The status changes to approved or rejected. Only pending expenses can be approved or rejected; once approved, an expense is locked from edits. To mark an approved expense reimbursed: 1. On the Expenses list, find an approved row. 2. Click Mark reimbursed in its Actions cell. This is an admin or owner action. 3. The status changes to reimbursed, the terminal step of the expense lifecycle (pending to approved to reimbursed). Only approved expenses can be marked reimbursed. Editing an expense, deleting one, and attaching a receipt are supported by the API but have no button in the current UI. To attach a receipt or edit an expense, use the API (POST /bill/api/v1/expenses/:id/receipt, PATCH /bill/api/v1/expenses/:id) or the matching MCP tools."
+      "text": "The Expenses list at /bill/expenses is titled Expenses with the subtitle \"Track project expenses and receipts.\" Columns are Description, Category, Vendor, Date, Amount, Status, and Actions. A row of status pills filters the list: All (empty), pending, approved, rejected, and reimbursed. The reimbursed pill shows expenses you have paid back to the submitter. To log an expense: 1. Open Expenses and click New Expense to go to /bill/expenses/new (titled New Expense). 2. Fill in Description, Amount (cents), and Date. 3. Choose a Category (Software, Travel, Hardware, Contractor, Office, Meals, or Other) and optionally a Vendor. 4. Tick Billable to client if the cost should be invoiceable. 5. Click Submit Expense. The expense is created as pending. To approve or reject an expense: 1. On the Expenses list, find a pending row. 2. Click Approve or Reject in its Actions cell. Approving and rejecting require an admin or owner role. 3. The status changes to approved or rejected. Only pending expenses can be approved or rejected; once approved, an expense is locked from edits. To mark an approved expense reimbursed: 1. On the Expenses list, find an approved row. 2. Click Mark reimbursed in its Actions cell. This is an admin or owner action. 3. The status changes to reimbursed, the terminal step of the expense lifecycle (pending to approved to reimbursed). Only approved expenses can be marked reimbursed. To attach a receipt: 1. On the New Expense form, pick a file under Receipt (optional) before you click Submit Expense; or, on the Expenses list, click Attach receipt under the expense's description. 2. Choose a photo (JPG, PNG, GIF, WebP, HEIC) or a PDF of up to 10 MB. 3. A Receipt link appears next to the description. To swap the file, click Replace receipt on that row. Editing an expense and deleting one are supported by the API but have no button in the current UI. To edit an expense, use the API (PATCH /bill/api/v1/expenses/:id) or the matching MCP tools."
     },
     {
       "anchor": "rates",
@@ -287,7 +287,7 @@
     {
       "anchor": "story-capture-approve-and-reimburse-an-expense",
       "title": "Story: Capture, approve, and reimburse an expense",
-      "text": "Who: A team member logging a project cost, and an admin or owner reviewing it. Goal: Record an expense and move it through approval and reimbursement. Before you start: You have permission to create expenses; the reviewer has the admin or owner role needed to approve and reimburse. Steps 1. Click Expenses in the sidebar, then New Expense. 2. Fill in Description, Amount (cents), and Date. 3. Choose a Category and optionally a Vendor. 4. Tick Billable to client if it should be invoiceable, then click Submit Expense. The expense is pending. 5. The reviewer opens the Expenses list, finds the pending row, and clicks Approve (or Reject). 6. After paying the submitter back, the reviewer clicks Mark reimbursed on the approved row. Result: The expense moves to approved (or rejected), and an approved expense can be moved on to reimbursed. Approved expenses count against project profit in the Project Profitability report and can no longer be edited. Related: Receipt upload and expense edits are available through the API and the billupdateexpense tool. An agent can log expenses with billcreateexpense, list them with billlistexpenses, and decide them with billapproveexpense / billrejectexpense. Marking reimbursed is a UI and REST action with no dedicated MCP tool."
+      "text": "Who: A team member logging a project cost, and an admin or owner reviewing it. Goal: Record an expense and move it through approval and reimbursement. Before you start: You have permission to create expenses; the reviewer has the admin or owner role needed to approve and reimburse. Steps 1. Click Expenses in the sidebar, then New Expense. 2. Fill in Description, Amount (cents), and Date. 3. Choose a Category and optionally a Vendor. 4. Tick Billable to client if it should be invoiceable, then click Submit Expense. The expense is pending. 5. The reviewer opens the Expenses list, finds the pending row, and clicks Approve (or Reject). 6. After paying the submitter back, the reviewer clicks Mark reimbursed on the approved row. Result: The expense moves to approved (or rejected), and an approved expense can be moved on to reimbursed. Approved expenses count against project profit in the Project Profitability report and can no longer be edited. Related: Attach a receipt from the New Expense form or with Attach receipt on the Expenses list. Expense edits are available through the API and the billupdateexpense tool. An agent can log expenses with billcreateexpense, list them with billlistexpenses, and decide them with billapproveexpense / billrejectexpense. Marking reimbursed is a UI and REST action with no dedicated MCP tool."
     },
     {
       "anchor": "story-send-an-invoice-for-approval-before-billing",
@@ -332,6 +332,7 @@
     "Amount (cents)": "invoice-detail",
     "Approve": "overview",
     "Approver": "invoice-list",
+    "Attach receipt": "expenses",
     "Auto-finalize": "recurring-billing",
     "Auto-finalize generated invoices": "recurring-billing",
     "Bam": "related",
@@ -419,12 +420,15 @@
     "Rates": "where-to-find-it",
     "Re-send": "invoice-detail",
     "Re-send / Send": "overview",
+    "Receipt": "expenses",
+    "Receipt (optional)": "expenses",
     "Recent activity": "dashboard",
     "Record Payment": "invoice-detail",
     "Recurring": "where-to-find-it",
     "Recurring schedule": "key-concepts",
     "Recurring schedules:": "working-with-ai-agents",
     "Reject": "overview",
+    "Replace receipt": "expenses",
     "Reporting:": "working-with-ai-agents",
     "Reports": "where-to-find-it",
     "Request approval": "invoice-list",

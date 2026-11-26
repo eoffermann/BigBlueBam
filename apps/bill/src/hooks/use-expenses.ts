@@ -49,6 +49,25 @@ export function useRejectExpense() {
   });
 }
 
+/**
+ * Upload (or replace) an expense's receipt via POST /v1/expenses/:id/receipt
+ * (multipart, issue #155). The API stores it through @bigbluebam/storage.
+ */
+export function useUploadReceipt() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, file }: { id: string; file: File }) => {
+      const form = new FormData();
+      form.append('file', file, file.name);
+      return api.post<{ data: { receipt_url: string; receipt_filename: string; receipt_size_bytes: number } }>(
+        `/v1/expenses/${encodeURIComponent(id)}/receipt`,
+        form,
+      );
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['expenses'] }),
+  });
+}
+
 export function useReimburseExpense() {
   const qc = useQueryClient();
   return useMutation({

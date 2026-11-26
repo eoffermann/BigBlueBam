@@ -1,6 +1,8 @@
 import { useState } from 'react';
-import { useCreateExpense } from '@/hooks/use-expenses';
+import { useCreateExpense, useUploadReceipt } from '@/hooks/use-expenses';
 import { BurnGateNotice } from '@/components/burn-gate-notice';
+import { RECEIPT_ACCEPT, receiptFileProblem } from '@/components/receipt-upload';
+import { ApiError } from '@/lib/api';
 
 interface Props {
   onNavigate: (path: string) => void;
@@ -14,10 +16,20 @@ export function ExpenseNewPage({ onNavigate }: Props) {
   const [vendor, setVendor] = useState('');
   const [expenseDate, setExpenseDate] = useState(new Date().toISOString().split('T')[0]!);
   const [billable, setBillable] = useState(false);
+  const uploadReceipt = useUploadReceipt();
+  const [receipt, setReceipt] = useState<File | null>(null);
+  const [receiptError, setReceiptError] = useState<string | null>(null);
+
+  const onReceiptPicked = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0] ?? null;
+    const problem = file ? receiptFileProblem(file) : null;
+    setReceiptError(problem);
+    setReceipt(problem ? null : file);
+  };
 
   const handleSubmit = async () => {
     if (!description || amount <= 0) return;
-    await createExpense.mutateAsync({
+    const created = await createExpense.mutateAsync({
       description,
       amount,
       category: category || undefined,
@@ -25,6 +37,21 @@ export function ExpenseNewPage({ onNavigate }: Props) {
       expense_date: expenseDate,
       billable,
     });
+    // Issue #155: the receipt is uploaded to the expense just created. If that
+    // upload fails the expense still exists; stay on the form and say so, so the
+    // user can attach it from the expense list instead.
+    if (receipt && created?.data?.id) {
+      try {
+        await uploadReceipt.mutateAsync({ id: created.data.id, file: receipt });
+      } catch (err) {
+        setReceiptError(
+          `The expense was saved, but the receipt was not: ${
+            err instanceof ApiError ? err.message : 'upload failed'
+          }. Attach it from the Expenses list.`,
+        );
+        return;
+      }
+    }
     onNavigate('/expenses');
   };
 
@@ -96,6 +123,25 @@ export function ExpenseNewPage({ onNavigate }: Props) {
           </div>
         </div>
 
+        <div className="space-y-2">
+          <label htmlFor="expense-receipt" className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+            Receipt (optional)
+          </label>
+          <input
+            id="expense-receipt"
+            type="file"
+            accept={RECEIPT_ACCEPT}
+            onChange={onReceiptPicked}
+            className="block w-full text-sm text-zinc-600 dark:text-zinc-400"
+          />
+          <p className="text-xs text-zinc-500">A photo or PDF, up to 10 MB.</p>
+          {receiptError && (
+            <p role="alert" className="text-xs text-red-600">
+              {receiptError}
+            </p>
+          )}
+        </div>
+
         <label className="flex items-center gap-2">
           <input type="checkbox" checked={billable} onChange={(e) => setBillable(e.target.checked)} />
           <span className="text-sm text-zinc-700 dark:text-zinc-300">Billable to client</span>
@@ -113,7 +159,7 @@ export function ExpenseNewPage({ onNavigate }: Props) {
       <div className="flex items-center gap-3">
         <button
           onClick={handleSubmit}
-          disabled={createExpense.isPending}
+          disabled={createExpense.isPending || uploadReceipt.isPending}
           className="rounded-lg bg-green-600 text-white px-6 py-2 text-sm font-medium hover:bg-green-700 disabled:opacity-50"
         >
           Submit Expense
