@@ -11,6 +11,8 @@ const { mockDb, state } = vi.hoisted(() => {
     rowsByTable: new Map<unknown, unknown[]>(),
     updates: [] as Array<{ table: unknown; values: Record<string, unknown> }>,
     inserts: [] as Array<{ table: unknown; values: Record<string, unknown> }>,
+    /** When set, an insert into this table rejects (a transient Postgres failure). */
+    failInsertInto: null as unknown,
   };
   function chain(table?: unknown) {
     const c: Record<string, unknown> = {};
@@ -36,6 +38,14 @@ const { mockDb, state } = vi.hoisted(() => {
     })),
     insert: vi.fn((table: unknown) => ({
       values: (values: Record<string, unknown>) => {
+        if (state.failInsertInto !== null && table === state.failInsertInto) {
+          const failed = Promise.reject(new Error('connection terminated unexpectedly'));
+          failed.catch(() => {});
+          return {
+            onConflictDoNothing: () => Object.assign(failed, { returning: () => failed }),
+            returning: () => failed,
+          };
+        }
         state.inserts.push({ table, values });
         const done = Promise.resolve([]);
         return {
@@ -48,8 +58,15 @@ const { mockDb, state } = vi.hoisted(() => {
   return { mockDb, state };
 });
 
+const { enqueueMock } = vi.hoisted(() => ({ enqueueMock: vi.fn(async () => {}) }));
+
 vi.mock('../src/db/index.js', () => ({ db: mockDb, connection: { end: vi.fn() } }));
 vi.mock('../src/services/activity.service.js', () => ({ logActivity: vi.fn(async () => {}) }));
+vi.mock('../src/env.js', () => ({ env: { INTERNAL_SERVICE_SECRET: 'i'.repeat(40), REDIS_URL: 'redis://localhost:6379' } }));
+vi.mock('../src/services/github-delivery-queue.js', async (importOriginal) => {
+  const real = await importOriginal<typeof import('../src/services/github-delivery-queue.js')>();
+  return { ...real, enqueueGithubDeliveryRetry: enqueueMock };
+});
 
 import githubWebhookRoutes from '../src/routes/github-webhook.routes.js';
 import { githubIntegrations, githubPrEvents } from '../src/db/schema/github-integrations.js';
@@ -105,6 +122,9 @@ describe('POST /webhooks/github (Bastion change evidence)', () => {
     ]);
     state.updates = [];
     state.inserts = [];
+    state.failInsertInto = null;
+    enqueueMock.mockReset();
+    enqueueMock.mockImplementation(async () => {});
     app = Fastify();
     await app.register(githubWebhookRoutes);
     await app.ready();
@@ -232,6 +252,153 @@ describe('POST /webhooks/github (Bastion change evidence)', () => {
       pull_request: { number: 7, title: 'x', user: { login: 'ginger' } },
     });
     expect(res.statusCode).toBe(200);
+    expect(state.inserts).toHaveLength(0);
+  });
+});
+
+// Issue #186: GitHub never redelivers a failed delivery on its own, so a transient DB failure
+// must not turn into a 5xx that silently drops a merge from github_pr_events.
+describe('POST /webhooks/github durability (#186)', () => {
+  let app: FastifyInstance;
+  const INTERNAL = 'i'.repeat(40);
+  const mergedPr = {
+    action: 'closed',
+    repository,
+    pull_request: {
+      number: 43,
+      title: 'Patch the hull',
+      body: null,
+      html_url: 'https://github.com/skipper/rescue-radio-firmware/pull/43',
+      merged: true,
+      merged_at: '2026-11-21T10:00:00Z',
+      user: { login: 'gilligan' },
+      base: { ref: 'main' },
+    },
+  };
+
+  beforeEach(async () => {
+    state.rowsByTable = new Map<unknown, unknown[]>([
+      [githubIntegrations, [integrationRow]],
+      [projects, [{ org_id: ORG }]],
+      [tasks, []],
+    ]);
+    state.updates = [];
+    state.inserts = [];
+    state.failInsertInto = null;
+    enqueueMock.mockReset();
+    enqueueMock.mockImplementation(async () => {});
+    app = Fastify();
+    await app.register(githubWebhookRoutes);
+    await app.ready();
+  });
+
+  it('spools a verified delivery and answers 202 when the inline insert fails', async () => {
+    state.failInsertInto = githubPrEvents;
+    const res = await deliver(app, 'pull_request', mergedPr, 'delivery-43');
+    expect(res.statusCode).toBe(202);
+    expect(res.json().data).toEqual({ processed: 0, queued: true });
+    expect(enqueueMock).toHaveBeenCalledTimes(1);
+    const [data, jobId] = enqueueMock.mock.calls[0] as unknown as [Record<string, unknown>, string];
+    expect(data).toMatchObject({
+      integration_id: INTEGRATION,
+      event: 'pull_request',
+      delivery_id: 'delivery-43',
+      payload: mergedPr,
+    });
+    expect(typeof data.received_at).toBe('string');
+    expect(jobId).toBe(`gh-delivery:${INTEGRATION}:delivery-43`);
+  });
+
+  it('still fails the delivery (5xx) when the spool is also unavailable', async () => {
+    state.failInsertInto = githubPrEvents;
+    enqueueMock.mockImplementation(async () => {
+      throw new Error('redis down');
+    });
+    const res = await deliver(app, 'pull_request', mergedPr, 'delivery-44');
+    expect(res.statusCode).toBe(500);
+  });
+
+  it('does not spool when the inline attempt succeeds', async () => {
+    const res = await deliver(app, 'pull_request', mergedPr, 'delivery-45');
+    expect(res.statusCode).toBe(200);
+    expect(enqueueMock).not.toHaveBeenCalled();
+  });
+
+  it('the internal replay route refuses a missing or wrong secret', async () => {
+    for (const headers of [{}, { 'x-internal-secret': 'nope' }]) {
+      const res = await app.inject({
+        method: 'POST',
+        url: '/internal/github/deliveries/process',
+        headers,
+        payload: {
+          integration_id: INTEGRATION,
+          event: 'pull_request',
+          delivery_id: 'delivery-43',
+          payload: mergedPr,
+          received_at: '2026-11-21T10:00:01Z',
+        },
+      });
+      expect(res.statusCode).toBe(401);
+    }
+    expect(state.inserts).toHaveLength(0);
+  });
+
+  it('the internal replay route applies the spooled delivery with its original receipt time', async () => {
+    // No merged_at / updated_at: occurred_at falls back to the receipt time, which must be the
+    // original arrival, not the (possibly hours later) replay time.
+    const { merged_at: _omit, ...prNoTimes } = mergedPr.pull_request;
+    const res = await app.inject({
+      method: 'POST',
+      url: '/internal/github/deliveries/process',
+      headers: { 'x-internal-secret': INTERNAL },
+      payload: {
+        integration_id: INTEGRATION,
+        event: 'pull_request',
+        delivery_id: 'delivery-43',
+        payload: { ...mergedPr, pull_request: prNoTimes },
+        received_at: '2026-11-21T10:00:01Z',
+      },
+    });
+    expect(res.statusCode).toBe(200);
+    const recorded = state.inserts.filter((i) => i.table === githubPrEvents);
+    expect(recorded).toHaveLength(1);
+    expect(recorded[0]!.values).toMatchObject({ delivery_id: 'delivery-43', pr_number: 43, merged: true });
+    expect((recorded[0]!.values.occurred_at as Date).toISOString()).toBe('2026-11-21T10:00:01.000Z');
+  });
+
+  it('the internal replay route answers 500 (so BullMQ retries) while the DB is still failing', async () => {
+    state.failInsertInto = githubPrEvents;
+    const res = await app.inject({
+      method: 'POST',
+      url: '/internal/github/deliveries/process',
+      headers: { 'x-internal-secret': INTERNAL },
+      payload: {
+        integration_id: INTEGRATION,
+        event: 'pull_request',
+        delivery_id: 'delivery-43',
+        payload: mergedPr,
+        received_at: '2026-11-21T10:00:01Z',
+      },
+    });
+    expect(res.statusCode).toBe(500);
+  });
+
+  it('the internal replay route drops a delivery for a disabled integration without retrying', async () => {
+    state.rowsByTable.set(githubIntegrations, [{ ...integrationRow, enabled: false }]);
+    const res = await app.inject({
+      method: 'POST',
+      url: '/internal/github/deliveries/process',
+      headers: { 'x-internal-secret': INTERNAL },
+      payload: {
+        integration_id: INTEGRATION,
+        event: 'pull_request',
+        delivery_id: 'delivery-43',
+        payload: mergedPr,
+        received_at: '2026-11-21T10:00:01Z',
+      },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().data.skipped).toBe('disabled');
     expect(state.inserts).toHaveLength(0);
   });
 });

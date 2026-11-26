@@ -4,6 +4,24 @@
  * drift between the two sides.
  */
 
+/**
+ * GitHub webhook delivery spool (issue #186). GitHub never redelivers a failed delivery on
+ * its own, so when POST /webhooks/github cannot apply a VERIFIED delivery inline it enqueues
+ * it here (jobId derived from the integration + X-GitHub-Delivery) and answers 202. The
+ * worker POSTs the job back to the api's POST /internal/github/deliveries/process with
+ * exponential backoff until it lands.
+ */
+export const GITHUB_DELIVERY_RETRY_QUEUE = 'github-delivery-retry';
+export interface GithubDeliveryRetryJobData {
+  integration_id: string;
+  event: 'push' | 'pull_request' | 'pull_request_review';
+  delivery_id: string | null;
+  /** The parsed, signature-verified webhook body. */
+  payload: unknown;
+  /** ISO time the webhook first arrived (the occurred_at fallback when GitHub sends no time). */
+  received_at: string;
+}
+
 /** Task-link external title-fetch (bam-csv-import plan §4.3 item 3). */
 export const TASK_LINK_TITLE_FETCH_QUEUE = 'task-link-title-fetch';
 

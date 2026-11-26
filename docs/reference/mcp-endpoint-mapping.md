@@ -40,7 +40,7 @@ A tool/command "corresponds" to the endpoint(s) its handler calls. Sections are 
 | Surface | REST endpoints | …with an MCP tool | …without a tool | MCP-only tools (no endpoint) |
 |---|--:|--:|--:|--:|
 | Bam — Work management | 93 | 86 | 7 | 2 |
-| Bam — Org, auth, admin & integrations | 156 | 37 | 119 | 0 |
+| Bam — Org, auth, admin & integrations | 157 | 37 | 120 | 0 |
 | Banter | 114 | 75 | 39 | 0 |
 | Beacon | 40 | 38 | 2 | 0 |
 | Brief | 54 | 48 | 6 | 0 |
@@ -66,7 +66,7 @@ A tool/command "corresponds" to the endpoint(s) its handler calls. Sections are 
 | Bursar | 79 | 22 | 57 | 0 |
 | Bastion | 1 | 0 | 1 | 0 |
 | Cross-app platform | 43 | 32 | 11 | 6 |
-| **Total** | **1265** | **874** | **391** | **17** |
+| **Total** | **1266** | **874** | **392** | **17** |
 
 _Counts are summed from the per-section tables (each row's REST endpoint counted once even when several MCP tools share it). After the `feat/mcp-endpoint-parity` build the "with an MCP tool" total roughly doubled (≈334 → ≈690). Of the ~247 endpoints still tool-less, the large majority are now annotated `— _(skip: …)_` with a reason — auth/OAuth/session, public-inbound (forms/booking/portal/tracking), multipart/binary upload, binary export (PDF/SVG/CSV/.ics), raw credential/API-key admin, SuperUser/permission/account admin (Bam org/admin held to a deliberately conservative scope this pass), Yjs/scene/WebSocket realtime sync, internal/service-to-service routes, and slug/name resolvers done internally — plus the deferred Helpdesk `X-Agent-Key` agent routes. Some endpoints are shared by multiple MCP tools and many are internal / webhook / public-inbound (not user-facing), so treat the totals as close approximations of the surface size, not an exact public-API inventory. The remaining intentional gaps cluster in **Bam org/admin** (SuperUser & permissions admin, integrations, credentials — UI/CLI-only) and a few per-app binary/upload/realtime tails._
 
@@ -577,7 +577,8 @@ Covers `permissions-admin.routes.ts` and `permissions-divergences.routes.ts`.
 | `PUT /projects/:id/github-integration` | — _(skip: GitHub integration config — UI-only)_ | Upsert GitHub integration (reveals secret) | `apps/frontend/src/pages/settings.tsx` |
 | `DELETE /projects/:id/github-integration` | — _(skip: GitHub integration config — UI-only)_ | Disconnect GitHub integration | `apps/frontend/src/pages/settings.tsx` |
 | `GET /tasks/:id/github-refs` | — _(skip: GitHub integration config — UI-only)_ | List linked commits/PRs for a task | `apps/frontend/src/pages/*task*` |
-| `POST /webhooks/github` | — _(skip: inbound webhook — public-inbound)_ | Public webhook ingest (HMAC-verified). `ping` stores `hook.events` in `github_integrations.subscribed_events` (NULL = unknown); every `pull_request` and `pull_request_review` delivery is appended to `github_pr_events` whatever its task mention (migration 0273, read by Bastion's `change.*` probes) | external (GitHub) |
+| `POST /webhooks/github` | — _(skip: inbound webhook — public-inbound)_ | Public webhook ingest (HMAC-verified). `ping` stores `hook.events` in `github_integrations.subscribed_events` (NULL = unknown); every `pull_request` and `pull_request_review` delivery is appended to `github_pr_events` whatever its task mention (migration 0273, read by Bastion's `change.*` probes). A verified delivery that cannot be applied inline is spooled to the `github-delivery-retry` queue and answered 202 (issue #186) | external (GitHub) |
+| `POST /internal/github/deliveries/process` | — _(skip: internal service-to-service route)_ | Replays a spooled, already-verified GitHub delivery (pr_events append + task linking); `INTERNAL_SERVICE_SECRET`-gated, called by the worker's `github-delivery-retry` job; 5xx makes BullMQ retry | — |
 
 
 ## Bam — Integrations: Slack

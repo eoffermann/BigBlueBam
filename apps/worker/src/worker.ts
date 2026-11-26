@@ -131,6 +131,9 @@ import {
   processTaskLinkTitleFetchJob,
   type TaskLinkTitleFetchJobData,
 } from './jobs/task-link-title-fetch.job.js';
+// Issue #186: replay of GitHub webhook deliveries the api could not apply inline.
+import { processGithubDeliveryRetryJob } from './jobs/github-delivery-retry.job.js';
+import { GITHUB_DELIVERY_RETRY_QUEUE, type GithubDeliveryRetryJobData } from '@bigbluebam/shared';
 // §13 Bureau presence reaper — sweep sessions whose Redis TTL has lapsed,
 // emit room_leave + presence_delta, close the durable session row.
 import {
@@ -1674,6 +1677,29 @@ taskLinkTitleFetchWorker.on('failed', (job, err) => {
   });
 });
 
+// Issue #186: GitHub delivery spool. Enqueue-driven only; the api spools a verified webhook
+// delivery here when it could not apply it inline, and this replays it through the api's
+// internal route with the producer's exponential backoff.
+const githubDeliveryRetryWorker = new Worker<GithubDeliveryRetryJobData>(
+  GITHUB_DELIVERY_RETRY_QUEUE,
+  async (job: Job<GithubDeliveryRetryJobData>) => {
+    await processGithubDeliveryRetryJob(job, env, logger);
+  },
+  { ...connection, concurrency: env.WORKER_CONCURRENCY },
+);
+githubDeliveryRetryWorker.on('completed', (job) => {
+  logger.info({ jobId: job.id, queue: GITHUB_DELIVERY_RETRY_QUEUE }, 'Job completed');
+});
+githubDeliveryRetryWorker.on('failed', (job, err) => {
+  logger.error({ jobId: job?.id, queue: GITHUB_DELIVERY_RETRY_QUEUE, err }, 'Job failed');
+  void recordWorkerError({
+    queueName: GITHUB_DELIVERY_RETRY_QUEUE,
+    jobId: job?.id,
+    jobName: job?.name,
+    err: err as Error,
+  });
+});
+
 // §13 Bureau presence reaper — every 15s, sweep `bureau:sess:*` for keys
 // whose TTL has lapsed and close the durable session row + broadcast
 // room_leave / presence_delta. Concurrency 1: one reaper, one Redis SCAN.
@@ -2766,6 +2792,7 @@ const workers = [
   slackImportWorker,
   // Phase 0 task Links title fetch
   taskLinkTitleFetchWorker,
+  githubDeliveryRetryWorker,
   // §13 Bureau presence reaper
   bureauPresenceReapWorker,
   // §10 Bureau summon fan-out
@@ -2848,6 +2875,7 @@ logger.info(
       'slack-import',
       // Phase 0 task Links title fetch
       'task-link-title-fetch',
+      GITHUB_DELIVERY_RETRY_QUEUE,
       // §13 Bureau presence reaper
       'bureau-presence-reap',
       // §10 Bureau summon fan-out
