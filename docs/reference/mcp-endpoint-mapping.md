@@ -64,8 +64,9 @@ A tool/command "corresponds" to the endpoint(s) its handler calls. Sections are 
 | Bulwark | 29 | 17 | 12 | 0 |
 | Burn | 48 | 19 | 29 | 0 |
 | Bursar | 79 | 22 | 57 | 0 |
+| Bastion | 1 | 0 | 1 | 0 |
 | Cross-app platform | 43 | 32 | 11 | 6 |
-| **Total** | **1264** | **874** | **390** | **17** |
+| **Total** | **1265** | **874** | **391** | **17** |
 
 _Counts are summed from the per-section tables (each row's REST endpoint counted once even when several MCP tools share it). After the `feat/mcp-endpoint-parity` build the "with an MCP tool" total roughly doubled (≈334 → ≈690). Of the ~247 endpoints still tool-less, the large majority are now annotated `— _(skip: …)_` with a reason — auth/OAuth/session, public-inbound (forms/booking/portal/tracking), multipart/binary upload, binary export (PDF/SVG/CSV/.ics), raw credential/API-key admin, SuperUser/permission/account admin (Bam org/admin held to a deliberately conservative scope this pass), Yjs/scene/WebSocket realtime sync, internal/service-to-service routes, and slug/name resolvers done internally — plus the deferred Helpdesk `X-Agent-Key` agent routes. Some endpoints are shared by multiple MCP tools and many are internal / webhook / public-inbound (not user-facing), so treat the totals as close approximations of the surface size, not an exact public-API inventory. The remaining intentional gaps cluster in **Bam org/admin** (SuperUser & permissions admin, integrations, credentials — UI/CLI-only) and a few per-app binary/upload/realtime tails._
 
@@ -2191,3 +2192,15 @@ AI procurement leveling & spend-baseline monitor. 20 `bursar_*` tools (spec sect
 | `GET /health`, `GET /health/ready`, `GET /metrics` | — _(skip: probe)_ | Health / readiness / metrics | — |
 
 `bursar_upsert_scope_node` backs two rows (`POST /v1/requests/:id/scope/nodes` and `PATCH /v1/scope-nodes/:id`); `bursar_resolve_vendor` backs two rows (`GET /v1/vendors/:id/aliases` and `GET /v1/vendors/alias-review`). Section counts: 79 REST endpoint rows covering every bursar-api route plus the WS transport and the combined health/metrics row, 22 rows with a `bursar_*` tool, the remainder skip-annotated — 20 `bursar_*` tools total. No MCP-only tools.
+
+## Bastion (app)
+
+- **Service:** `apps/bastion-api` · external `/bastion/api/` · MCP module(s): none yet (handlers accumulate in `apps/mcp-server/src/tools-pending/bastion.ts` from M2 and register as `bastion-tools.ts` at M11) · added on the `suite-brainstorm` branch.
+
+> **⚠ No MCP tools in this section — intentional.** Milestone M1 of `docs/brainstorming/2026_11_25_20_03_APP_DESIGN_bastion.md` ships only the service skeleton, reachable by direct URL with no Launchpad tile; it has no domain routes yet. Each later milestone adds its routes here together with their tool or skip reason. `/bastion/api/v1/internal/*` is denied at nginx (404) and will only ever be service-to-service.
+
+| REST endpoint | MCP tool | Description | UI call site |
+| --- | --- | --- | --- |
+| `GET /health`, `GET /health/ready`, `GET /metrics` | — _(skip: probe)_ | Health / readiness (Postgres and Redis only) / metrics | — |
+
+Section counts: 1 REST endpoint row (the combined health/metrics row), 0 with a tool. No MCP-only tools.
