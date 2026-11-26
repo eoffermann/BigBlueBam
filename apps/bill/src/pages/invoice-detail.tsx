@@ -4,12 +4,11 @@ import { useInvoice, useFinalizeInvoice, useSendInvoice, useVoidInvoice, useDupl
 import { useBamUsers, useRequestApproval } from '@/hooks/use-approvals';
 import { formatDate, formatCents, statusBadgeClass, cn } from '@/lib/utils';
 import { PresenceChipStrip } from '@bigbluebam/ui/presence-chip-strip';
+import { hasInvoicePdf, invoicePdfDownloadHref, invoicePdfPreviewSrc } from '@/lib/invoice-pdf';
 
-function pdfHref(pdfUrl: string | null | undefined): string | null {
-  if (!pdfUrl) return null;
-  if (pdfUrl.startsWith('http://') || pdfUrl.startsWith('https://')) return pdfUrl;
-  if (pdfUrl.startsWith('/')) return pdfUrl;
-  return `/files/bigbluebam-uploads/${pdfUrl}`;
+// Issue #134: PDFs come from authorized bill-api routes, never /files/.
+function pdfHref(invoiceId: string, pdfUrl: string | null | undefined): string | null {
+  return hasInvoicePdf(pdfUrl) ? invoicePdfDownloadHref(invoiceId) : null;
 }
 
 interface Props {
@@ -76,7 +75,8 @@ export function InvoiceDetailPage({ invoiceId, onNavigate }: Props) {
     }
   };
 
-  const pdf = pdfHref(invoice.pdf_url);
+  const pdf = pdfHref(invoice.id, invoice.pdf_url);
+  const pdfPreview = hasInvoicePdf(invoice.pdf_url) ? invoicePdfPreviewSrc(invoice.id) : null;
 
   return (
     <div className="p-6 max-w-5xl mx-auto space-y-6">
@@ -387,7 +387,7 @@ export function InvoiceDetailPage({ invoiceId, onNavigate }: Props) {
       </div>
 
       {/* Inline PDF preview */}
-      {pdf && (
+      {pdfPreview && (
         <div className="space-y-3">
           <h2 className="text-lg font-semibold flex items-center gap-2">
             <FileDown className="h-4 w-4 text-zinc-400" />
@@ -396,7 +396,7 @@ export function InvoiceDetailPage({ invoiceId, onNavigate }: Props) {
           <div className="border border-zinc-200 dark:border-zinc-700 rounded-xl overflow-hidden bg-zinc-50 dark:bg-zinc-900">
             <iframe
               title={`Invoice ${invoice.invoice_number} PDF`}
-              src={pdf}
+              src={pdfPreview}
               className="w-full h-[720px] border-0"
             />
           </div>

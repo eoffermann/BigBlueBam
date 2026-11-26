@@ -447,6 +447,9 @@ export const APP_SERVICES = [
         // in production with no signal anywhere.
         'BURN_API_INTERNAL_URL', 'BURN_PRECHECK_TIMEOUT_MS',
         'BURN_PRECHECK_BREAKER_THRESHOLD', 'BURN_PRECHECK_BREAKER_PROBE_MS',
+        // Invoice PDF download (issue #134) reads the worker-stored PDF with the same
+        // S3 settings the worker writes with; without them it renders from the DB.
+        'S3_ENDPOINT', 'S3_ACCESS_KEY', 'S3_SECRET_KEY', 'S3_BUCKET',
       ],
     },
   },

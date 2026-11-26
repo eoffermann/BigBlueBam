@@ -4,6 +4,7 @@ import { useInvoices, useFinalizeInvoice } from '@/hooks/use-invoices';
 import { useOverdue } from '@/hooks/use-reports';
 import { useRequestApproval, useBamUsers } from '@/hooks/use-approvals';
 import { formatDate, formatCents, statusBadgeClass, cn } from '@/lib/utils';
+import { hasInvoicePdf, invoicePdfDownloadHref } from '@/lib/invoice-pdf';
 
 // Read an initial status filter from the URL (e.g. the dashboard Overdue tile
 // deep-links to /bill/invoices?status=overdue).
@@ -16,14 +17,9 @@ function initialStatusFilter(): string {
   }
 }
 
-function pdfHref(pdfUrl: string | null | undefined): string | null {
-  if (!pdfUrl) return null;
-  // Backend stores either a relative MinIO key or a full URL. Translate
-  // bare keys into the nginx-proxied /files/... path so the browser can
-  // fetch them with the user's session cookies.
-  if (pdfUrl.startsWith('http://') || pdfUrl.startsWith('https://')) return pdfUrl;
-  if (pdfUrl.startsWith('/')) return pdfUrl;
-  return `/files/bigbluebam-uploads/${pdfUrl}`;
+// Issue #134: download through the authorized bill-api route, never /files/.
+function pdfHref(invoiceId: string, pdfUrl: string | null | undefined): string | null {
+  return hasInvoicePdf(pdfUrl) ? invoicePdfDownloadHref(invoiceId) : null;
 }
 
 interface Props {
@@ -158,7 +154,7 @@ export function InvoiceListPage({ onNavigate }: Props) {
               </tr>
             ) : (
               invoices.map((inv: any) => {
-                const pdf = pdfHref(inv.pdf_url);
+                const pdf = pdfHref(inv.id, inv.pdf_url);
                 return (
                   <tr
                     key={inv.id}

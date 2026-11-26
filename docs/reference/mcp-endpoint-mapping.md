@@ -53,7 +53,7 @@ A tool/command "corresponds" to the endpoint(s) its handler calls. Sections are 
 | Blueprint | 38 | 35 | 3 | 1 |
 | Book | 33 | 25 | 8 | 0 |
 | Blank | 24 | 18 | 6 | 1 |
-| Bill | 52 | 47 | 5 | 0 |
+| Bill | 53 | 47 | 6 | 0 |
 | Bureau | 42 | 37 | 5 | 0 |
 | Bin | 32 | 19 | 13 | 0 |
 | Bay | 20 | 14 | 6 | 0 |
@@ -65,7 +65,7 @@ A tool/command "corresponds" to the endpoint(s) its handler calls. Sections are 
 | Burn | 48 | 19 | 29 | 0 |
 | Bursar | 79 | 22 | 57 | 0 |
 | Cross-app platform | 43 | 32 | 11 | 6 |
-| **Total** | **1261** | **874** | **387** | **17** |
+| **Total** | **1262** | **874** | **388** | **17** |
 
 _Counts are summed from the per-section tables (each row's REST endpoint counted once even when several MCP tools share it). After the `feat/mcp-endpoint-parity` build the "with an MCP tool" total roughly doubled (≈334 → ≈690). Of the ~247 endpoints still tool-less, the large majority are now annotated `— _(skip: …)_` with a reason — auth/OAuth/session, public-inbound (forms/booking/portal/tracking), multipart/binary upload, binary export (PDF/SVG/CSV/.ics), raw credential/API-key admin, SuperUser/permission/account admin (Bam org/admin held to a deliberately conservative scope this pass), Yjs/scene/WebSocket realtime sync, internal/service-to-service routes, and slug/name resolvers done internally — plus the deferred Helpdesk `X-Agent-Key` agent routes. Some endpoints are shared by multiple MCP tools and many are internal / webhook / public-inbound (not user-facing), so treat the totals as close approximations of the surface size, not an exact public-API inventory. The remaining intentional gaps cluster in **Bam org/admin** (SuperUser & permissions admin, integrations, credentials — UI/CLI-only) and a few per-app binary/upload/realtime tails._
 
@@ -1604,7 +1604,8 @@ or `/helpdesk/agents`) segment in-code.
 | `PATCH /bill/api/v1/invoices/:id/line-items/:itemId` | `bill_update_line_item` | Update a line item | `apps/bill/src/pages/invoice-edit.tsx` |
 | `DELETE /bill/api/v1/invoices/:id/line-items/:itemId` | `bill_delete_line_item` | Delete a line item | `apps/bill/src/pages/invoice-edit.tsx` |
 | `POST /bill/api/v1/invoices/:id/payments` | `bill_record_payment` | Record a payment | `apps/bill/src/pages/invoice-detail.tsx` |
-| `GET /bill/api/v1/invoices/:id/pdf` | — _(skip: binary PDF export)_ | Generate/return invoice PDF | `apps/bill/src/pages/invoice-detail.tsx` |
+| `GET /bill/api/v1/invoices/:id/pdf` | — _(skip: binary PDF export)_ | Generate/return invoice PDF inline (preview iframe) | `apps/bill/src/pages/invoice-detail.tsx` |
+| `GET /bill/api/v1/invoices/:id/pdf/download` | — _(skip: multipart/binary download)_ | Download the invoice PDF as an attachment (stored copy, else rendered); requires `bill.invoice.get` | `apps/bill/src/pages/invoice-detail.tsx`, `apps/bill/src/pages/invoice-list.tsx` |
 | `POST /bill/api/v1/invoices/:id/send` | `bill_send_invoice` | Mark sent, queue email | `apps/bill/src/pages/invoice-detail.tsx` |
 | `POST /bill/api/v1/invoices/:id/void` | `bill_void_invoice` | Void an invoice | `apps/bill/src/pages/invoice-detail.tsx` |
 | `POST /bill/api/v1/invoices/from-deal` | `bill_create_invoice_from_deal` | Draft invoice from a Bond deal | — |

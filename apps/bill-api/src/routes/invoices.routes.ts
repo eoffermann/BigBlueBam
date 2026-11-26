@@ -5,6 +5,7 @@ import * as invoiceService from '../services/invoice.service.js';
 import * as lineItemService from '../services/line-item.service.js';
 import * as pdfService from '../services/pdf.service.js';
 import * as workerJobService from '../services/worker-job.service.js';
+import { openStoredInvoicePdf } from '../lib/invoice-pdf-storage.js';
 import { publishBoltEvent } from '../lib/bolt-events.js';
 import {
   buildInvoiceUrl,
@@ -393,10 +394,11 @@ export default async function invoiceRoutes(fastify: FastifyInstance) {
     },
   );
 
-  // GET /invoices/:id/pdf — generate and return invoice PDF
+  // GET /invoices/:id/pdf — generate and return invoice PDF (inline; the SPA's
+  // preview iframe). Downloads use /invoices/:id/pdf/download below.
   fastify.get<{ Params: { id: string } }>(
     '/invoices/:id/pdf',
-    { preHandler: [requireAuth] },
+    { preHandler: [requireAuth, fastify.requireCan('bill.invoice.get')] },
     async (request, reply) => {
       const pdfBytes = await pdfService.generateInvoicePdf(
         request.params.id,
@@ -412,6 +414,42 @@ export default async function invoiceRoutes(fastify: FastifyInstance) {
         .header('Content-Disposition', `inline; filename="${filename}"`)
         .header('Content-Length', pdfBytes.length)
         .send(Buffer.from(pdfBytes));
+    },
+  );
+
+  // GET /invoices/:id/pdf/download — authorized download of the invoice PDF
+  // (issue #134). The SPA links here instead of building a /files/... URL.
+  // Permission-checked (bill.invoice.get) and org-scoped through getInvoice,
+  // which 404s for an invoice in another org. Streams the copy the worker
+  // stored in object storage; when there is none (draft, storage not
+  // configured, upload skipped) it renders the PDF from the database instead,
+  // so the link always yields the document.
+  fastify.get<{ Params: { id: string } }>(
+    '/invoices/:id/pdf/download',
+    { preHandler: [requireAuth, fastify.requireCan('bill.invoice.get')] },
+    async (request, reply) => {
+      const params = z.object({ id: z.string().uuid() }).safeParse(request.params);
+      if (!params.success) {
+        return reply.status(404).send({
+          error: { code: 'NOT_FOUND', message: 'Invoice not found', details: [], request_id: request.id },
+        });
+      }
+      const orgId = request.user!.org_id;
+      const invoice = await invoiceService.getInvoice(params.data.id, orgId);
+      const base = invoice.invoice_number === 'DRAFT' ? 'DRAFT' : invoice.invoice_number;
+      const filename = `${String(base).replace(/[^A-Za-z0-9._-]/g, '_') || 'invoice'}.pdf`;
+
+      reply
+        .header('Content-Type', 'application/pdf')
+        .header('Content-Disposition', `attachment; filename="${filename}"`)
+        .header('Cache-Control', 'private, no-store')
+        .header('X-Content-Type-Options', 'nosniff');
+
+      const stored = await openStoredInvoicePdf(invoice.id, invoice.pdf_url);
+      if (stored) return reply.send(stored);
+
+      const pdfBytes = await pdfService.generateInvoicePdf(invoice.id, orgId);
+      return reply.header('Content-Length', pdfBytes.length).send(Buffer.from(pdfBytes));
     },
   );
 

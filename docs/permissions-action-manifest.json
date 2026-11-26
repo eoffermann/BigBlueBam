@@ -1,9 +1,9 @@
 {
   "counts": {
-    "total": 1487,
+    "total": 1488,
     "mcp_tools_scanned": 885,
-    "rest_routes_scanned": 886,
-    "read_permissions": 575,
+    "rest_routes_scanned": 887,
+    "read_permissions": 576,
     "destructive_permissions": 144
   },
   "permissions": [
@@ -12921,6 +12921,23 @@
           "source": "rest",
           "ref": "POST /invoices/:id/payments",
           "file": "payments.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "bill.invoice_pdf_download.get",
+      "app": "bill",
+      "resource": "invoice_pdf_download",
+      "verb": "get",
+      "is_destructive": false,
+      "is_read": true,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "GET /invoices/:id/pdf/download",
+          "file": "invoices.routes.ts"
         }
       ]
     },
