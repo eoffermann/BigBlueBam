@@ -634,7 +634,7 @@ function NotApplicableSuggestions({ framework, canDecide }: { framework: Framewo
   return (
     <div className="space-y-2 rounded-lg border border-amber-200 dark:border-amber-900 p-3" data-testid="na-suggestions">
       <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
-        {framework.name}: the compiler thinks {rows.length === 1 ? 'this requirement' : 'these requirements'} may not apply to you
+        {framework.name}: Bastion's AI suggests {rows.length === 1 ? 'this requirement' : 'these requirements'} may not apply to you
       </p>
       <p className="text-xs text-zinc-500">Nothing changes until someone decides. Until then, the usual checks stay in place.</p>
       {!canDecide && <AskAnAdmin>An admin of your organization decides which requirements apply.</AskAnAdmin>}
