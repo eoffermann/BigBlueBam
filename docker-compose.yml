@@ -456,6 +456,11 @@ services:
       LOG_LEVEL: ${LOG_LEVEL:-info}
       BBB_API_INTERNAL_URL: http://api:4000
       INTERNAL_HELPDESK_SECRET: ${INTERNAL_HELPDESK_SECRET:?INTERNAL_HELPDESK_SECRET is required}
+      # #248: helpdesk-api publishes ticket.* events to bolt-api through the shared
+      # publishBoltEvent, which sends X-Internal-Secret from this variable. Without it
+      # every helpdesk event was refused with 401 and Bolt rules on helpdesk events
+      # never fired. scripts/lib/internal-secret-wiring.test.mjs keeps this wired.
+      INTERNAL_SERVICE_SECRET: ${INTERNAL_SERVICE_SECRET:-}
       # BAM-RL-E2E: opt-in flag to multiply the global rate limit ceiling for
       # parallel e2e runs. Leave unset on real production deployments.
       BBB_E2E_PERMISSIVE_RATE_LIMIT: ${BBB_E2E_PERMISSIVE_RATE_LIMIT:-}

@@ -12,8 +12,10 @@
  * Env lookup falls back across several keys so the single module works in
  * every service: BOLT_API_INTERNAL_URL is the canonical name, but the older
  * BOLT_API_URL is accepted for compatibility. INTERNAL_SERVICE_SECRET is
- * required for auth; empty string is allowed and sent as-is (ingest returns
- * 401 which is then swallowed by the outer try/catch).
+ * required for auth; empty string is allowed and sent as-is, and the 401 that
+ * ingest returns is logged as a warning naming the variable (#248). Every
+ * service that calls this must be given the variable in docker-compose.yml and
+ * in scripts/deploy/shared/services.mjs (scripts/lib/internal-secret-wiring.test.mjs).
  */
 
 export type BoltActorType = 'user' | 'agent' | 'system';
@@ -72,6 +74,20 @@ export async function publishBoltEvent(
         source,
         org_id: orgId,
         timeout_ms: outcome.timeoutMs,
+      }),
+    );
+  } else if (outcome.status === 401) {
+    // #248: a 401 here is a deployment fault, not a transient one: this service was not given
+    // INTERNAL_SERVICE_SECRET (or was given a different one), so every event it publishes is
+    // dropped. Say so, instead of swallowing it like a network blip.
+    console.warn(
+      JSON.stringify({
+        level: 'warn',
+        msg: 'publishBoltEvent refused by bolt-api (401); check INTERNAL_SERVICE_SECRET on this service; event dropped',
+        event_type: eventType,
+        source,
+        org_id: orgId,
+        internal_service_secret_set: resolveInternalSecret().length > 0,
       }),
     );
   }
