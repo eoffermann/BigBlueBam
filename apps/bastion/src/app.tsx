@@ -4,13 +4,19 @@ import { openHelpCenter } from '@bigbluebam/ui/help-center';
 import { useAuthStore } from '@/stores/auth.store';
 import { BastionLayout, type ActiveRoute } from '@/components/layout/bastion-layout';
 import { HomePage } from '@/pages/home';
+import { SetupPage } from '@/pages/setup';
+import { ControlsPage } from '@/pages/controls';
 
 // Grows one variant per page as later milestones land (spec 6.1).
-type Route = { page: 'home' };
+type Route = { page: 'home' } | { page: 'setup' } | { page: 'controls' };
 
 const BASE_PATH = '/bastion';
 
-function parseRoute(_path: string): Route {
+export function parseRoute(path: string): Route {
+  const rest = path.startsWith(BASE_PATH) ? path.slice(BASE_PATH.length) : path;
+  const clean = rest.replace(/\/+$/, '');
+  if (clean === '/setup') return { page: 'setup' };
+  if (clean === '/controls') return { page: 'controls' };
   return { page: 'home' };
 }
 
@@ -99,6 +105,10 @@ export function App() {
     switch (route.page) {
       case 'home':
         return <HomePage />;
+      case 'setup':
+        return <SetupPage />;
+      case 'controls':
+        return <ControlsPage onNavigate={navigate} />;
       default:
         return null;
     }

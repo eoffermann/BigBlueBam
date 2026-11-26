@@ -1,4 +1,4 @@
-import { Castle, Gauge } from 'lucide-react';
+import { Castle, Gauge, ListChecks, Settings2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/stores/auth.store';
 import { SidebarPlatformFooter } from '@bigbluebam/ui/sidebar-footer';
@@ -9,13 +9,17 @@ interface BastionSidebarProps {
   activeRoute: ActiveRoute;
 }
 
-// M1 ships only the home page. Later milestones add their pages here (spec 6.1).
+// Each milestone adds its pages here (spec 6.1).
 const nav: Array<{
   label: string;
   icon: typeof Gauge;
   path: string;
   pages: ActiveRoute['page'][];
-}> = [{ label: 'Readiness', icon: Gauge, path: '/', pages: ['home'] }];
+}> = [
+  { label: 'Readiness', icon: Gauge, path: '/', pages: ['home'] },
+  { label: 'Controls', icon: ListChecks, path: '/controls', pages: ['controls'] },
+  { label: 'Setup', icon: Settings2, path: '/setup', pages: ['setup'] },
+];
 
 export function BastionSidebar({ onNavigate, activeRoute }: BastionSidebarProps) {
   const user = useAuthStore((s) => s.user);
