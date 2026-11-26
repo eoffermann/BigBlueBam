@@ -134,6 +134,7 @@ async function buildApp(): Promise<FastifyInstance> {
   app.decorateRequest('user', null);
   app.decorateRequest('impersonator', null);
   app.decorateRequest('isImpersonating', false);
+  app.decorateRequest('sessionId', null);
   app.addHook('preHandler', async (request) => {
     if (request.headers['x-test-impersonated'] === '1') {
       (request as any).isImpersonating = true;
@@ -144,6 +145,14 @@ async function buildApp(): Promise<FastifyInstance> {
     else if (header === 'admin') (request as any).user = ADMIN_USER;
     else if (header === 'agent') (request as any).user = AGENT_USER;
     else if (header === 'other') (request as any).user = OTHER_HUMAN;
+    // Issue #136: cookie-session auth by default (sessionId set, no key scope);
+    // `x-test-auth: api_key` (and every service account) authenticates by bbam_ key.
+    const user = (request as any).user;
+    if (user) {
+      const viaKey = request.headers['x-test-auth'] === 'api_key' || user.kind === 'service';
+      (request as any).user = { ...user, api_key_scope: viaKey ? 'read_write' : null };
+      (request as any).sessionId = viaKey ? null : 'test-session-id';
+    }
   });
   await app.register(proposalRoutes);
   return app;
@@ -611,6 +620,52 @@ describe('proposals routes', () => {
         payload: { decision: 'approve' },
       });
       expect(res.statusCode).toBe(200);
+    });
+
+    it('rejects a human-owned API key with SESSION_REQUIRED when require_human_decider is set (issue #136)', async () => {
+      mockSelectFromWhereLimit([{ ...existingPending(), require_human_decider: true }]);
+      const res = await app.inject({
+        method: 'POST',
+        url: `/v1/proposals/${PROPOSAL_ID}/decide`,
+        headers: { 'x-test-user': 'human', 'x-test-auth': 'api_key' },
+        payload: { decision: 'approve' },
+      });
+      expect(res.statusCode).toBe(403);
+      expect(res.json().error.code).toBe('SESSION_REQUIRED');
+      expect(mockDb.update).not.toHaveBeenCalled();
+      expect(publishBoltEventSpy).not.toHaveBeenCalled();
+    });
+
+    it('records decided_auth_method=session for a signed-in decider (issue #136)', async () => {
+      mockSelectFromWhereLimit([{ ...existingPending(), require_human_decider: true }]);
+      const set = mockUpdateReturning([
+        { ...existingPending(), status: 'approved', decided_auth_method: 'session' },
+      ]);
+      const res = await app.inject({
+        method: 'POST',
+        url: `/v1/proposals/${PROPOSAL_ID}/decide`,
+        headers: { 'x-test-user': 'human' },
+        payload: { decision: 'approve' },
+      });
+      expect(res.statusCode).toBe(200);
+      expect(set).toHaveBeenCalledWith(expect.objectContaining({ decided_auth_method: 'session' }));
+      const last = publishBoltEventSpy.mock.calls.at(-1)!;
+      expect((last[2] as any).proposal.decided_auth_method).toBe('session');
+    });
+
+    it('records decided_auth_method=api_key when a key decides an ordinary proposal (issue #136)', async () => {
+      mockSelectFromWhereLimit([existingPending()]);
+      const set = mockUpdateReturning([{ ...existingPending(), status: 'approved' }]);
+      const res = await app.inject({
+        method: 'POST',
+        url: `/v1/proposals/${PROPOSAL_ID}/decide`,
+        headers: { 'x-test-user': 'human', 'x-test-auth': 'api_key' },
+        payload: { decision: 'approve' },
+      });
+      expect(res.statusCode).toBe(200);
+      expect(set).toHaveBeenCalledWith(
+        expect.objectContaining({ decided_by_kind: 'human', decided_auth_method: 'api_key' }),
+      );
     });
 
     it('returns 409 when a concurrent decider won the guarded update', async () => {

@@ -25816,13 +25816,13 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
         "type": "boolean",
         "required": false,
         "nullable": false,
-        "description": "When true, only a human signed in as themselves (not an agent, service account, or impersonated session) can decide."
+        "description": "When true, only a human signed in to the app as themselves can decide (not an agent, a service account, an impersonated session, or any API-key/MCP caller)."
       }
     ]
   },
   {
     "mcp_tool": "proposal_decide",
-    "description": "Decide a pending or revising proposal. Only the designated approver (or an org admin) may decide. The decider, their kind (human/agent/service) and any impersonating SuperUser are recorded. Returns 409 PROPOSAL_ALREADY_DECIDED if it was already decided, 409 DECIDE_IN_APP if the proposal belongs to an app (owning_app) and must be decided there, 410 if it expired, 403 if the caller is not authorized, and 403 HUMAN_DECIDER_REQUIRED when the proposal requires a human decider and the caller is an agent, a service account, or an impersonated session.",
+    "description": "Decide a pending or revising proposal. Only the designated approver (or an org admin) may decide. The decider, their kind (human/agent/service) and any impersonating SuperUser are recorded. Returns 409 PROPOSAL_ALREADY_DECIDED if it was already decided, 409 DECIDE_IN_APP if the proposal belongs to an app (owning_app) and must be decided there, 410 if it expired, 403 if the caller is not authorized, 403 HUMAN_DECIDER_REQUIRED when the proposal requires a human decider and the caller is an agent, a service account, or an impersonated session, and 403 SESSION_REQUIRED when it requires a human decider and the call is API-key authenticated (which every MCP call is): those proposals can only be decided by a person signed in to the app. The decider's auth method (session or api_key) is recorded.",
     "source": "proposal",
     "parameters": [
       {

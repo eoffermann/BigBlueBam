@@ -51,6 +51,9 @@ export const agentProposals = pgTable(
     decided_impersonator_id: uuid('decided_impersonator_id').references(() => users.id, {
       onDelete: 'set null',
     }),
+    // Issue #136 (migration 0263): how the decider authenticated, 'session' (cookie
+    // login) or 'api_key' (bbam_ / bbam_svc_ bearer key). Null for older rows.
+    decided_auth_method: text('decided_auth_method'),
     // When set, only the named app may close the proposal; the generic decide route
     // answers 409 DECIDE_IN_APP.
     owning_app: text('owning_app'),

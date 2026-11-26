@@ -2499,6 +2499,7 @@ const wave1bEvents: EventDefinition[] = [
       { name: 'proposal.decided_by', type: 'uuid', description: 'User who actually made the decision (issue #128)' },
       { name: 'proposal.decided_by_kind', type: 'enum', description: 'users.kind of the decider at decision time', enum: ['human', 'agent', 'service'] },
       { name: 'proposal.decided_impersonator_id', type: 'uuid?', description: 'SuperUser behind an impersonated session, null otherwise' },
+      { name: 'proposal.decided_auth_method', type: 'string?', description: "How the decider authenticated: 'session' (signed-in person) or 'api_key'" },
       { name: 'org', type: 'object', description: 'Full org context (id/name/slug)' },
     ],
   },

@@ -341,6 +341,23 @@ export default async function proposalRoutes(fastify: FastifyInstance) {
         });
       }
 
+      // Issue #136: a human-owned bbam_ API key is not a person at the keyboard; an
+      // MCP agent configured with that key would otherwise pass the gate above. A
+      // human-decider proposal therefore also requires an interactive cookie session.
+      const authMethod: 'session' | 'api_key' =
+        request.sessionId && user.api_key_scope === null ? 'session' : 'api_key';
+      if (existing.require_human_decider && authMethod !== 'session') {
+        return reply.status(403).send({
+          error: {
+            code: 'SESSION_REQUIRED',
+            message:
+              'This proposal must be decided by a person signed in to the app; API-key (and therefore MCP or agent) callers cannot decide it',
+            details: [{ field: 'auth_method', issue: 'api_key' }],
+            request_id: request.id,
+          },
+        });
+      }
+
       // Lazy expiry: if the proposal is past its expires_at, transition it to
       // 'expired' and surface 410 so the caller knows it's unactionable. This
       // saves the client from racing the background sweep.
@@ -400,6 +417,7 @@ export default async function proposalRoutes(fastify: FastifyInstance) {
           decided_by: user.id,
           decided_by_kind: user.kind,
           decided_impersonator_id: impersonatorId,
+          decided_auth_method: authMethod,
           updated_at: now,
         })
         // Guard the transition so two concurrent deciders cannot both win.
@@ -437,6 +455,7 @@ export default async function proposalRoutes(fastify: FastifyInstance) {
             decided_by: updated.decided_by,
             decided_by_kind: updated.decided_by_kind,
             decided_impersonator_id: updated.decided_impersonator_id,
+            decided_auth_method: updated.decided_auth_method,
           },
           org: { id: user.active_org_id },
         },
