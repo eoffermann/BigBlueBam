@@ -295,5 +295,35 @@ describe('bastion-export-packet', () => {
   });
 });
 
+// Packet smoke on REAL object storage with differing buckets (M9 gate): the shared uploads
+// bucket (S3_BUCKET) and Bastion's bucket (BASTION_S3_BUCKET) are two buckets on one MinIO; the
+// zip must land in Bastion's and never in the shared one. Runs only with BASTION_MINIO_TEST_ENDPOINT.
+const MINIO = process.env.BASTION_MINIO_TEST_ENDPOINT;
+describe.skipIf(!MINIO)('bastion-export-packet on real MinIO with differing buckets', () => {
+  it('writes the packet to BASTION_S3_BUCKET, never S3_BUCKET', async () => {
+    const { createBootstrapDriver } = await import('@bigbluebam/storage');
+    const stamp = Date.now();
+    const creds = { S3_ENDPOINT: MINIO!, S3_REGION: 'us-east-1', S3_ACCESS_KEY: process.env.BASTION_MINIO_TEST_ACCESS_KEY ?? 'm9test', S3_SECRET_KEY: process.env.BASTION_MINIO_TEST_SECRET_KEY ?? 'm9testsecret123' };
+    const env = { ...creds, S3_BUCKET: `m9-uploads-${stamp}`, BASTION_S3_BUCKET: `m9-bastion-${stamp}` };
+    const uploads = createBootstrapDriver({ ...creds, S3_BUCKET: env.S3_BUCKET });
+    await uploads.put('sentinel.txt', Buffer.from('shared bucket'));
+    const storage = createBastionPacketStorage(env);
+    const c = contents();
+    await storage.put(c.evidence[0]!.object_key!, evidenceDoc, { contentType: 'application/json' });
+    await storage.put(c.files[0]!.object_key!, Buffer.from('%PDF-1.4 report'), { contentType: 'application/pdf' });
+    const calls: Array<Record<string, unknown>> = [];
+    expect(await processBastionExportPacketJob(job({ organization_id: ORG, packet_id: PACKET }), silent, { post: fakeApi(c, calls) as never, storage, progressEveryMs: 0 })).toBe('succeeded');
+    const st = await storage.stat(c.packet.object_key);
+    expect(st?.size).toBeGreaterThan(0);
+    expect(await uploads.stat(c.packet.object_key)).toBeNull();
+    const got = await storage.getStream(c.packet.object_key);
+    const chunks: Buffer[] = [];
+    for await (const ch of got.stream as AsyncIterable<Buffer>) chunks.push(Buffer.from(ch));
+    const zip = await JSZip.loadAsync(Buffer.concat(chunks));
+    expect(Object.keys(zip.files)).toEqual(expect.arrayContaining(['manifest.json', 'statement_of_applicability.csv', 'summary.pdf', c.evidence[0]!.path]));
+    expect(calls.find((x) => x.action === 'finish')).toMatchObject({ size_bytes: st!.size });
+  });
+});
+
 // Keep the PassThrough import used (stream typing for the in-memory driver).
 void PassThrough;
