@@ -145,7 +145,7 @@ export default async function fileRoutes(fastify: FastifyInstance) {
     },
   );
 
-  // GET /v1/channels/:id/attachments/:attachmentId — authorized attachment
+  // GET /v1/channels/:id/attachments/:attachmentId: authorized attachment
   // download (issue #142). requireChannelMember applies the message list's read
   // rule (org match, archived hidden, public readable by the org, private only
   // for members, 404 otherwise), so removing someone from a channel revokes
