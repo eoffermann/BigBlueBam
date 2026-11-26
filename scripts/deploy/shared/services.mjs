@@ -51,6 +51,8 @@ export const APP_SERVICES = [
         // shared @bigbluebam/smtp-resolver key). The DB system_settings.smtp_from
         // (set in the UI) takes precedence over it.
         'SMTP_HOST', 'SMTP_PORT', 'SMTP_USER', 'SMTP_PASS', 'EMAIL_FROM',
+        // The stop grace that sizes the internal LLM proxy's shutdown drain (#294).
+        'RAILWAY_DEPLOYMENT_DRAINING_SECONDS',
       ],
     },
   },

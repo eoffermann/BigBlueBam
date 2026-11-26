@@ -20,7 +20,12 @@
 // subpath, never re-exported from src/index.ts, like visibility-client.ts.
 
 import { LLM_CLIENT_GRACE_MS, LLM_UPSTREAM_TIMEOUT_CODE, llmCallDeadlineMs } from './llm-deadline.js';
-import type { InternalLlmChatRequest, InternalLlmChatResponse, InternalLlmMessage } from './schemas/internal-llm.js';
+import {
+  LLM_PROXY_SHUTTING_DOWN_CODE,
+  type InternalLlmChatRequest,
+  type InternalLlmChatResponse,
+  type InternalLlmMessage,
+} from './schemas/internal-llm.js';
 
 export type { InternalLlmChatRequest, InternalLlmChatResponse, InternalLlmMessage };
 
@@ -129,6 +134,11 @@ export async function callInternalLlm(opts: InternalLlmCallOptions): Promise<Int
     if (!res.ok) {
       const err = (await res.json().catch(() => null)) as { error?: { code?: string } } | null;
       const code = typeof err?.error?.code === 'string' ? err.error.code : null;
+      // An api instance going down stopped the call (#294): retry like a 429, another answers.
+      if (res.status === 503 && code === LLM_PROXY_SHUTTING_DOWN_CODE) {
+        const ra = Number(res.headers.get('retry-after') ?? '5');
+        throw new LlmThrottledError(Number.isFinite(ra) && ra > 0 ? ra : 5);
+      }
       if (res.status === 504 || code === LLM_UPSTREAM_TIMEOUT_CODE) throw new LlmTimeoutError(deadlineMs, res.status);
       throw new LlmError(`internal LLM proxy returned ${res.status}`, res.status, code);
     }

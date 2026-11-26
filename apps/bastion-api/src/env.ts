@@ -1,6 +1,12 @@
-import { LLM_CALL_TIMEOUT_DEFAULT_MS, LLM_CALL_TIMEOUT_MAX_MS, LLM_CALL_TIMEOUT_MIN_MS, LLM_HOLD_MARGIN_MS } from '@bigbluebam/shared';
+import {
+  LLM_CALL_TIMEOUT_DEFAULT_MS,
+  LLM_CALL_TIMEOUT_MAX_MS,
+  LLM_CALL_TIMEOUT_MIN_MS,
+  LLM_HOLD_MARGIN_MS,
+  envBool,
+} from '@bigbluebam/shared';
 import { z } from 'zod';
-import { envBool } from '@bigbluebam/shared';
+import { bastionStopGraceProblem } from './boot/stop-grace.js';
 import { checkStableSecrets, formatStableSecretRefusal } from './boot/stable-secrets.js';
 import { COMPILE_MAX_TOKENS_DEFAULT } from './library/compile-budget.js';
 
@@ -84,6 +90,11 @@ const envSchema = z.object({
   BASTION_PROBE_TIMEOUT_MS: z.coerce.number().int().positive().default(8000),
   BASTION_PUT_TIMEOUT_MS: z.coerce.number().int().positive().default(5000),
   BASTION_RUN_LEASE_MS: z.coerce.number().int().positive().default(300000),
+  // The platform's stop grace (#284): compose passes the same value as stop_grace_period
+  // (BASTION_STOP_GRACE_SECONDS, default 75); Railway reads RAILWAY_DEPLOYMENT_DRAINING_SECONDS.
+  // The shutdown drain is derived from BASTION_LLM_TIMEOUT_MS and must fit inside it (below).
+  STOP_GRACE_SECONDS: z.string().optional(),
+  RAILWAY_DEPLOYMENT_DRAINING_SECONDS: z.string().optional(),
 
   // NOTE: BBB_PERMISSIONS_ENFORCE is deliberately ABSENT. Bastion's per-action enforcement is a
   // hardcoded boot invariant (see boot/assert-permissions-enforce.ts), not an env setting.
@@ -100,6 +111,10 @@ const envSchema = z.object({
       message: `must be at least ${LLM_HOLD_MARGIN_MS} ms below BASTION_RUN_LEASE_MS (${e.BASTION_RUN_LEASE_MS})`,
     });
   }
+  // The shutdown drain must fit the platform's stop grace (#284), or a stop kills an AI call
+  // mid-flight: the paid-for answer is lost and the run waits out its lease.
+  const problem = bastionStopGraceProblem(e);
+  if (problem) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['BASTION_LLM_TIMEOUT_MS'], message: problem });
 });
 
 export type Env = z.infer<typeof envSchema>;

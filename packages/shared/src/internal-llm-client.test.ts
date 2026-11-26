@@ -59,6 +59,10 @@ describe('callInternalLlm (#283)', () => {
     expect(e).toBeInstanceOf(LlmError);
     expect(e).not.toBeInstanceOf(LlmTimeoutError);
     expect(e.code).toBe('UPSTREAM_ERROR');
+    // An api instance stopping the call at shutdown (#294) is retried like a 429.
+    const sd = await callInternalLlm({ ...base, fetchImpl: reply(503, { error: { code: 'SHUTTING_DOWN' } }, { 'retry-after': '5' }) }).catch((x) => x);
+    expect(sd).toBeInstanceOf(LlmThrottledError);
+    expect(sd.retryAfterSeconds).toBe(5);
   });
 
   it('aborts on its own side only after the deadline plus the shared grace', async () => {

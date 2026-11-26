@@ -96,8 +96,12 @@ services:
         condition: service_healthy
       migrate:
         condition: service_completed_successfully
+    # The api proxies internal LLM calls of up to 180 s (#294): a stop lets them finish. The same
+    # value reaches the process as STOP_GRACE_SECONDS, which sizes its drain (shared stop-grace.ts).
+    stop_grace_period: ${API_STOP_GRACE_SECONDS:-190}s
     environment:
       NODE_ENV: production
+      STOP_GRACE_SECONDS: ${API_STOP_GRACE_SECONDS:-190}
       DATABASE_URL: postgresql://${POSTGRES_USER:?}:${POSTGRES_PASSWORD:?}@postgres:5432/bigbluebam
       REDIS_URL: redis://:${REDIS_PASSWORD:?REDIS_PASSWORD is required}@redis:6379
       S3_ENDPOINT: http://minio:9000
@@ -1172,6 +1176,7 @@ services:
       - BASTION_ROOM_IP_SALT=${BASTION_ROOM_IP_SALT:-}
       - BASTION_FEED_KEY_PEPPER=${BASTION_FEED_KEY_PEPPER:-}
       - BASTION_LLM_TIMEOUT_MS=${BASTION_LLM_TIMEOUT_MS:-60000}
+      - STOP_GRACE_SECONDS=${BASTION_STOP_GRACE_SECONDS:-75}
       - BASTION_LLM_MAX_TOKENS=${BASTION_LLM_MAX_TOKENS:-8192}
       - BASTION_ENGINE_TIMEOUT_MS=${BASTION_ENGINE_TIMEOUT_MS:-30000}
       - BASTION_PROBE_TIMEOUT_MS=${BASTION_PROBE_TIMEOUT_MS:-8000}
@@ -1188,8 +1193,10 @@ services:
         condition: service_healthy
       minio:
         condition: service_started
-    # SIGTERM drain long enough to finish an in-flight LLM call (spec 7.3).
-    stop_grace_period: 75s
+    # SIGTERM drain long enough to finish an in-flight LLM call (spec 7.3, #284). The same value
+    # reaches the process as STOP_GRACE_SECONDS; bastion-api refuses to boot when
+    # BASTION_LLM_TIMEOUT_MS needs more (raise BASTION_STOP_GRACE_SECONDS with it).
+    stop_grace_period: ${BASTION_STOP_GRACE_SECONDS:-75}s
     healthcheck:
       # /health, NOT /readyz (there is no /readyz anywhere in this platform).
       test: ["CMD", "curl", "-sf", "http://localhost:4024/health"]

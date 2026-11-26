@@ -317,9 +317,21 @@ export const ENV_HINTS = {
   // prompted value win over this literal everywhere the hint is resolved, and keeps
   // reconcile from resetting it. MinIO installs keep the literal.
   BASTION_S3_BUCKET: { kind: 'literal', value: 'bigbluebam-bastion', propagate: true, operatorChosen: true },
-  // bastion-api SIGTERM drain, so an in-flight LLM call can finish (spec 7.3).
-  RAILWAY_DEPLOYMENT_DRAINING_SECONDS: { kind: 'literal', value: '75' },
-  BASTION_LLM_TIMEOUT_MS: { kind: 'literal', value: '60000' },
+  // SIGTERM drain, so an in-flight LLM call can finish (spec 7.3, #284, #294). The service reads
+  // this same variable at boot (shared stop-grace.ts): bastion-api refuses to start when its
+  // BASTION_LLM_TIMEOUT_MS needs more, and the api warns.
+  RAILWAY_DEPLOYMENT_DRAINING_SECONDS: {
+    kind: 'literal',
+    value: '75',
+    note: 'Seconds between stop signal and kill. bastion-api needs BASTION_LLM_TIMEOUT_MS/1000 + 10 (75 covers the default 60000) and refuses to start otherwise. On api, 190 lets the longest (180 s) proxied AI call finish; at 75, a call still running at a deploy is stopped and its caller retries it.',
+  },
+  // One AI call's deadline, at most 180000 (#257). Raising it past 65000 also needs
+  // RAILWAY_DEPLOYMENT_DRAINING_SECONDS raised on bastion-api (see that hint).
+  BASTION_LLM_TIMEOUT_MS: {
+    kind: 'literal',
+    value: '60000',
+    note: 'One AI call deadline in ms, at most 180000. Above 65000, raise RAILWAY_DEPLOYMENT_DRAINING_SECONDS on bastion-api to this/1000 + 10 or the service refuses to start.',
+  },
   // The compile call's output budget (#237); reasoning models need room to think before answering.
   BASTION_LLM_MAX_TOKENS: { kind: 'literal', value: '8192' },
   BASTION_ENGINE_TIMEOUT_MS: { kind: 'literal', value: '30000' },

@@ -24,6 +24,12 @@ export const internalLlmChatRequestSchema = z.object({
 });
 export type InternalLlmChatRequest = z.infer<typeof internalLlmChatRequestSchema>;
 
+/**
+ * The proxy's 503 code for a call it stopped because the api is shutting down (#294). The caller
+ * retries after Retry-After (another api instance answers), like a 429.
+ */
+export const LLM_PROXY_SHUTTING_DOWN_CODE = 'SHUTTING_DOWN';
+
 /** The proxy's success body: `{ data: InternalLlmChatResponse }`. */
 export interface InternalLlmChatResponse {
   content: string;
