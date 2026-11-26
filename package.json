@@ -39,6 +39,8 @@
     "test:deploy": "pnpm --filter @bigbluebam/api exec vitest run --config ../../scripts/deploy/shared/vitest.config.mjs",
     "check:permission-catalog": "node scripts/check-permission-catalog.mjs",
     "check:biome-budget": "node scripts/check-biome-budget.mjs",
+    "check:mcp-tool-schemas": "node scripts/extract-mcp-tool-schemas.mjs --check",
+    "mcp-tool-schemas:generate": "node scripts/extract-mcp-tool-schemas.mjs --write",
     "check:env-hints": "node scripts/check-env-hints.mjs",
     "check:app-completeness": "node scripts/check-app-completeness.mjs",
     "permissions:codegen": "node scripts/generate-permission-manifest.mjs && node scripts/build-permission-codegen.mjs",

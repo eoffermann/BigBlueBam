@@ -106,6 +106,11 @@ jobs:
       - name: Check docs catalog drift
         run: pnpm docs:catalog:check
 
+      # Issue #147: the Bolt action editor's typed MCP parameter picker reads this committed
+      # generated file; it silently drifted to 273 of 885 tools before this check existed.
+      - name: Check MCP tool schema drift
+        run: pnpm check:mcp-tool-schemas
+
       - name: Check docs manual drift
         run: pnpm docs:manual:check
 
