@@ -871,6 +871,12 @@ export type BastionEvaluateRunEngine = z.infer<typeof bastionEvaluateRunEngineSc
 export const bastionSweepEngineSchema = z
   .object({
     organization_id: z.string().uuid().optional(),
+    /**
+     * Which scheduled pass this call belongs to (the worker's job id, the same across that job's
+     * retries). gap-rank ties its resume cursor to it, so a cursor left by another pass is never
+     * resumed and no org is skipped for the day (#256). Engines without a cursor ignore it.
+     */
+    pass_id: z.string().min(1).max(200).optional(),
   })
   .strict();
 export type BastionSweepEngine = z.infer<typeof bastionSweepEngineSchema>;

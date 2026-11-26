@@ -20,10 +20,15 @@ export interface EngineLog {
   error(obj: object, msg?: string): void;
 }
 
-/** Small key/value store for cursors (ledger-verify). Redis in production. */
+/** Small key/value store for cursors (ledger-verify, gap-rank). Redis in production. */
 export interface CursorStore {
   get(key: string): Promise<string | null>;
   set(key: string, value: string): Promise<void>;
+  /**
+   * Set `next` only while the stored value is still `expected` (null = absent); true when set.
+   * Atomic (a Lua script in Redis), so a stale call can never move a cursor another call owns (#256).
+   */
+  compareAndSet(key: string, expected: string | null, next: string): Promise<boolean>;
 }
 
 export interface EngineDeps {

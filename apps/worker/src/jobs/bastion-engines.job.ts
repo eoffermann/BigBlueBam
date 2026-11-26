@@ -37,7 +37,10 @@ export function makeBastionEngineJob(engine: Exclude<BastionEngineName, 'evaluat
   return async function processBastionEngineJob(job: Job<BastionSweepJobData>, logger: Logger): Promise<unknown> {
     const started = Date.now();
     logger.info({ jobId: job.id, engine }, `bastion-${engine}: starting`);
-    const body = job.data?.organization_id ? { organization_id: job.data.organization_id } : {};
+    // pass_id ties a budgeted engine's resume cursor to THIS job (its retries keep the same id), so
+    // a cursor left by an earlier, unfinished pass is never resumed (#256).
+    const passId = job.id ? String(job.id).slice(0, 200) : undefined;
+    const body = { ...(job.data?.organization_id ? { organization_id: job.data.organization_id } : {}), ...(passId ? { pass_id: passId } : {}) };
     let res = await deps.post(`/v1/internal/engines/${engine}`, body);
     if (!res.ok) throw new Error(`bastion-${engine}: engine returned ${res.status}`);
     let summary = bodyData<Record<string, unknown>>(res);
