@@ -114,3 +114,18 @@ test('an operator-set bucket name on the worker is never overwritten', async () 
   assert.ok(!('BASTION_S3_BUCKET' in summary.propagated.worker));
   assert.ok('BASTION_API_INTERNAL_URL' in summary.propagated.worker);
 });
+
+test('issue #171: a bucket chosen at the storage prompt is what syncNew propagates', async () => {
+  const events = [];
+  const summary = await new RailwayOrchestrator(fakeClient(preBastionVars()), {
+    projectName: 'p',
+    githubRepo: 'o/r',
+    branch: 'stable',
+    userIntegrations: { BASTION_S3_BUCKET: 'acme-uploads-bastion' },
+    onProgress: (ev) => events.push(ev),
+  }).syncNew({ dryRun: true, projectId: 'proj', environmentId: 'env' });
+  assert.equal(summary.propagated.worker.BASTION_S3_BUCKET, 'acme-uploads-bastion');
+  const lines = events.filter((e) => e.phase === 'sync-vars').map((e) => e.message);
+  assert.ok(lines.includes('would add worker: BASTION_S3_BUCKET=acme-uploads-bastion'), lines.join('\n'));
+  assert.ok(!lines.some((l) => l.includes('BASTION_S3_BUCKET=bigbluebam-bastion')));
+});

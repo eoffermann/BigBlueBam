@@ -107,10 +107,24 @@ export function generateSecrets({ live = {}, saved = {}, stableNames } = {}) {
   };
 }
 
+/** Bastion's bucket on MinIO, where bucket names are local to the install (spec 9.1). */
+export const DEFAULT_BASTION_BUCKET = 'bigbluebam-bastion';
+
 /**
- * Prompt user for file storage choice.
+ * The suggested Bastion evidence bucket for an AWS S3 / R2 install (spec 9.1, issue #171):
+ * bucket names are global there, so a literal `bigbluebam-bastion` is almost certainly
+ * taken, and scoped IAM keys often cannot create one. Derived from the uploads bucket.
  */
-export async function promptStorageChoice() {
+export function suggestedBastionBucket(uploadsBucket) {
+  const base = String(uploadsBucket ?? '').trim();
+  return base ? `${base}-bastion` : DEFAULT_BASTION_BUCKET;
+}
+
+/**
+ * Prompt user for file storage choice. `io` is a test seam for the prompt functions.
+ */
+export async function promptStorageChoice(io = { ask, askPassword, select }) {
+  const { ask, askPassword, select } = io;
   const choice = await select('How should BigBlueBam store uploaded files?', [
     { label: 'Built-in storage (MinIO)', value: 'minio', description: 'Simplest -- included in the install' },
     { label: 'Amazon S3', value: 's3', description: "You'll need an AWS account and S3 bucket" },
@@ -127,6 +141,10 @@ export async function promptStorageChoice() {
     config.S3_SECRET_KEY = await askPassword('Secret access key:');
     config.S3_BUCKET = await ask('Bucket name:', 'bigbluebam-uploads');
     config.S3_REGION = await ask('Region:', 'us-east-1');
+    config.BASTION_S3_BUCKET = await ask(
+      'Bastion evidence bucket name (must be globally unique on S3):',
+      suggestedBastionBucket(config.S3_BUCKET),
+    );
   } else if (choice === 'r2') {
     console.log(`\n${bold('Cloudflare R2 Configuration')}\n`);
     config.S3_ENDPOINT = await ask('R2 endpoint URL:');
@@ -134,7 +152,13 @@ export async function promptStorageChoice() {
     config.S3_SECRET_KEY = await askPassword('Secret access key:');
     config.S3_BUCKET = await ask('Bucket name:', 'bigbluebam-uploads');
     config.S3_REGION = await ask('Region:', 'auto');
+    config.BASTION_S3_BUCKET = await ask(
+      'Bastion evidence bucket name:',
+      suggestedBastionBucket(config.S3_BUCKET),
+    );
   }
+  // MinIO and "skip" keep the DEFAULT_BASTION_BUCKET literal (env-hints and
+  // docker-compose.yml default), so nothing is set here for them.
 
   return config;
 }
@@ -335,6 +359,9 @@ export function buildEnvConfig(choices) {
     env.S3_SECRET_KEY = storage.S3_SECRET_KEY;
     env.S3_BUCKET = storage.S3_BUCKET;
     env.S3_REGION = storage.S3_REGION;
+    // Issue #171: the prompted Bastion bucket. docker-compose writes it into .env;
+    // Railway resolves it over the env-hints literal (operatorChosen).
+    env.BASTION_S3_BUCKET = storage.BASTION_S3_BUCKET || suggestedBastionBucket(storage.S3_BUCKET);
   }
 
   // Vector DB

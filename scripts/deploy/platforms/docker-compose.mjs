@@ -311,6 +311,9 @@ function writeEnvFile(envConfig) {
     '# --- Storage ---': [
       'MINIO_ROOT_USER', 'MINIO_ROOT_PASSWORD',
       'S3_ENDPOINT', 'S3_ACCESS_KEY', 'S3_SECRET_KEY', 'S3_BUCKET', 'S3_REGION', 'S3_FORCE_PATH_STYLE',
+      // Issue #171: the prompted Bastion bucket (AWS S3 / R2). Absent on MinIO, where
+      // docker-compose.yml's ${BASTION_S3_BUCKET:-bigbluebam-bastion} default applies.
+      'BASTION_S3_BUCKET',
     ],
     '# --- Vector DB ---': ['QDRANT_URL', 'QDRANT_API_KEY'],
     '# --- LiveKit ---': ['LIVEKIT_URL', 'LIVEKIT_API_KEY', 'LIVEKIT_API_SECRET'],

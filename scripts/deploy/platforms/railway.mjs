@@ -304,6 +304,9 @@ function extractUserIntegrationsFromEnvConfig(envConfig = {}) {
     'SMTP_PASS',
     'SMTP_FROM',
     'EMAIL_FROM',
+    // Issue #171: operator-chosen at the storage prompt on AWS S3 / R2. Resolved over
+    // its env-hints default by resolvedHintValue (operatorChosen hint).
+    'BASTION_S3_BUCKET',
   ];
   const out = {};
   for (const k of keys) {

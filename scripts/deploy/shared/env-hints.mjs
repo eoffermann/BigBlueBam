@@ -312,7 +312,11 @@ export const ENV_HINTS = {
   // existing services through syncNew (issue #126), as does the bucket name.
   BASTION_API_INTERNAL_URL: { kind: 'computed', value: internal('bastion-api'), propagate: true },
   BASTION_API_URL: { kind: 'computed', value: `${internal('bastion-api')}/v1`, propagate: true },
-  BASTION_S3_BUCKET: { kind: 'literal', value: 'bigbluebam-bastion', propagate: true },
+  // Issue #171: on AWS S3 / R2 the deploy prompt asks for this name (default
+  // `<S3_BUCKET>-bastion`, since bucket names are global); `operatorChosen` makes the
+  // prompted value win over this literal everywhere the hint is resolved, and keeps
+  // reconcile from resetting it. MinIO installs keep the literal.
+  BASTION_S3_BUCKET: { kind: 'literal', value: 'bigbluebam-bastion', propagate: true, operatorChosen: true },
   // bastion-api SIGTERM drain, so an in-flight LLM call can finish (spec 7.3).
   RAILWAY_DEPLOYMENT_DRAINING_SECONDS: { kind: 'literal', value: '75' },
   BASTION_LLM_TIMEOUT_MS: { kind: 'literal', value: '60000' },
@@ -529,6 +533,24 @@ export function hintFor(varName) {
   return ENV_HINTS[varName] ?? { kind: 'unknown', value: '<see app docs>', note: '' };
 }
 
+/**
+ * The value a computed/literal hint resolves to for this install. For a hint marked
+ * `operatorChosen` (the operator picked it at the deploy prompt, e.g. BASTION_S3_BUCKET
+ * on AWS S3 / R2, issue #171) a non-empty chosen value wins over the hint's default;
+ * otherwise the hint value. The single place that rule lives, used by first provision,
+ * the propagate pass and the reconcile exclusion.
+ */
+export function resolvedHintValue(varName, operatorValues = {}) {
+  const hint = hintFor(varName);
+  const chosen = hint.operatorChosen ? operatorValues?.[varName] : undefined;
+  return chosen !== undefined && chosen !== null && chosen !== '' ? String(chosen) : hint.value;
+}
+
+/** True when the operator may choose this variable's value at the deploy prompt. */
+export function isOperatorChosen(varName) {
+  return hintFor(varName).operatorChosen === true;
+}
+
 // ── Variable ownership ───────────────────────────────────────────────
 //
 // "Authoritative" (deploy-owned) variables have a value that is a pure
@@ -554,5 +576,8 @@ export function isAuthoritativeKind(kind) {
  * reconcile) or 'context' (operator may own it, merge-preserve).
  */
 export function ownershipOf(varName) {
+  // An operator-chosen value (issue #171) is the operator's, not a pure function of
+  // the catalog, so reconcile must not reset it to the hint's default.
+  if (isOperatorChosen(varName)) return 'context';
   return isAuthoritativeKind(hintFor(varName).kind) ? 'deploy' : 'context';
 }

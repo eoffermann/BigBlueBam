@@ -22,7 +22,7 @@ import {
   getSelfHostedInfra,
   JOB_SERVICES,
 } from './services.mjs';
-import { hintFor, isPropagated } from './env-hints.mjs';
+import { hintFor, isOperatorChosen, isPropagated, resolvedHintValue } from './env-hints.mjs';
 
 // ─── Plan assembly ────────────────────────────────────────────────────
 //
@@ -82,8 +82,9 @@ export function buildServiceVariables(service, context) {
       case 'literal':
         // These are all literal strings in the hint — Railway itself
         // resolves plugin/reference syntax at runtime (${{Postgres...}}),
-        // and computed/literal values are already concrete.
-        return hint.value;
+        // and computed/literal values are already concrete. An
+        // operator-chosen value (BASTION_S3_BUCKET, issue #171) wins.
+        return resolvedHintValue(name, userIntegrations);
 
       case 'secret': {
         // Generated locally and passed in via context. If the caller
@@ -196,6 +197,9 @@ export function buildAuthoritativeVariables(service) {
     // RESOLVES — comparing the template against the resolved live value would
     // be a guaranteed false positive, and they don't silently go stale the way
     // a hardcoded URL does. So we leave them to first-provision only.
+    // An operator-chosen value (issue #171) is not a function of the catalog: the
+    // operator picked it at the deploy prompt, so reconcile must not reset it.
+    if (isOperatorChosen(name)) continue;
     if (hint.kind === 'computed' || hint.kind === 'literal') out[name] = hint.value;
   }
   // Stable key order for deterministic diffs / upsert payloads.
@@ -227,10 +231,10 @@ export function diffAuthoritativeVariables(desired, live) {
  * The variables syncNew may ADD to an already-live service (issue #126): every
  * catalog-listed var whose hint is marked `propagate` (see env-hints.mjs). Pure.
  */
-export function buildPropagatedVariables(service) {
+export function buildPropagatedVariables(service, operatorValues = {}) {
   const out = {};
   for (const name of [...(service?.env?.required ?? []), ...(service?.env?.optional ?? [])]) {
-    if (isPropagated(name)) out[name] = String(hintFor(name).value);
+    if (isPropagated(name)) out[name] = String(resolvedHintValue(name, operatorValues));
   }
   const sorted = {};
   for (const k of Object.keys(out).sort()) sorted[k] = out[k];
@@ -762,7 +766,7 @@ export class RailwayOrchestrator {
     try {
       for (const svc of plan) {
         if (!liveByName.has(svc.name)) continue; // new services got the full set above
-        const desired = buildPropagatedVariables(svc);
+        const desired = buildPropagatedVariables(svc, this.userIntegrations);
         if (Object.keys(desired).length === 0) continue;
         const serviceId = liveByName.get(svc.name);
         const live = await this.client.getServiceVariables({
