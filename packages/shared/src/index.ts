@@ -26,6 +26,8 @@ export * from './end-of-day.js';
 export * from './bam-phase-rules.js';
 // Canonical JSON (keys sorted at every depth) for cache keys and fingerprints (#275). Pure.
 export * from './stable-json.js';
+// The internal LLM proxy's call deadline, its cap and the hold windows derived from it (#257). Pure.
+export * from './llm-deadline.js';
 // NOTE: bulwark-arm-key.ts is intentionally NOT re-exported here. It imports node:crypto and is
 // server-only; re-exporting it from this browser-facing barrel drags node:crypto into every SPA
 // bundle and breaks the rollup production build. Server code (bulwark-api, apps/worker) imports it

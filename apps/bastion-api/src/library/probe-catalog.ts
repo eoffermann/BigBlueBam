@@ -197,7 +197,9 @@ export const PROBE_CATALOG: readonly ProbeCatalogEntry[] = [
   },
   {
     key: 'policy.attested',
-    version: 1,
+    // v2 (migration 0288, #244): reports the Beacon article's state; nobody is due on an article
+    // that is missing, retired or expired.
+    version: 2,
     title: 'Policy read and acknowledged',
     description: 'Checks that everyone required has acknowledged the current version of a policy.',
     population_kind: null,

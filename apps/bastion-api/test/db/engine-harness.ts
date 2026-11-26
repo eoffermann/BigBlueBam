@@ -106,7 +106,15 @@ export function makeDeps(
     probeTimeoutMs: 8000,
     putTimeoutMs: 2000,
     leaseMs: opts.leaseMs ?? 300_000,
-    cursors: { get: async (k) => cursors.get(k) ?? null, set: async (k, v) => void cursors.set(k, v) },
+    cursors: {
+      get: async (k) => cursors.get(k) ?? null,
+      set: async (k, v) => void cursors.set(k, v),
+      compareAndSet: async (k, expected, next) => {
+        if ((cursors.get(k) ?? null) !== expected) return false;
+        cursors.set(k, next);
+        return true;
+      },
+    },
     sealCache: opts.sealCache ?? new Map(),
   };
 }

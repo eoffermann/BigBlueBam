@@ -17,7 +17,7 @@ import {
   type BastionGapKind,
 } from '@bigbluebam/shared';
 import { failingTemplate, TEMPLATE_BY_GAP_KIND } from '../library/fix-templates.js';
-import { type EngineDeps, orgTx, type Tx } from './context.js';
+import { type EngineDeps, orgTx, type Tx, utcDate } from './context.js';
 import { type CitedRef, effectiveStatus, type ExceptionRow } from './status.js';
 
 const DAY_MS = 86_400_000;
@@ -358,12 +358,45 @@ const GAP_RANK_CURSOR = 'bastion:gap-rank:all';
  * until GAP_RANK_BUDGET_MS; an org another pass is ranking right now is skipped (that pass is
  * already doing it). `complete: false` means call again to continue (the worker does).
  */
-export async function gapRank(deps: EngineDeps, opts: { organization_id?: string; budgetMs?: number } = {}) {
+/** The resume cursor of one daily pass (#256): which pass it belongs to, and the last org it reached. */
+export interface GapRankCursor {
+  pass: string;
+  after: string;
+}
+
+/** Parse a stored cursor; anything unreadable (including the pre-#256 bare org id) reads as none. */
+export function parseGapRankCursor(raw: string | null): GapRankCursor | null {
+  if (!raw) return null;
+  try {
+    const v = JSON.parse(raw) as Partial<GapRankCursor>;
+    return typeof v.pass === 'string' && typeof v.after === 'string' ? { pass: v.pass, after: v.after } : null;
+  } catch {
+    return null;
+  }
+}
+
+export async function gapRank(deps: EngineDeps, opts: { organization_id?: string; budgetMs?: number; pass_id?: string } = {}) {
   const started = Date.now();
   const budgetMs = opts.budgetMs ?? GAP_RANK_BUDGET_MS;
   const only = opts.organization_id;
   const single = !!only;
-  const after = single ? '' : ((await deps.cursors.get(GAP_RANK_CURSOR)) ?? '');
+  // The cursor belongs to ONE pass (#256): the worker's job id (the same across that job's retries),
+  // else the UTC day. A cursor left by another pass (yesterday's unfinished one, a stale call) is
+  // ignored and this pass starts at the first org, so no org is skipped for the day.
+  const pass = opts.pass_id ?? `day:${utcDate(deps.now())}`;
+  const storedRaw = single ? null : await deps.cursors.get(GAP_RANK_CURSOR);
+  const stored = parseGapRankCursor(storedRaw);
+  let after = '';
+  if (!single && stored && stored.pass === pass) after = stored.after;
+  else if (!single && storedRaw && (!stored || stored.after !== '')) {
+    deps.log.warn(
+      { pass, leftover: storedRaw },
+      'bastion-gap-rank: a cursor from another pass was left mid-list; this pass starts from the first org instead',
+    );
+  }
+  // The value this call last wrote (or read): every move is a compare-and-set against it, so a
+  // call that lost the cursor to another call of the same pass stops instead of moving it back.
+  let mine: string | null = storedRaw;
   const orgs = (
     await deps.sql`SELECT organization_id FROM bastion_org_settings
                     ${only ? deps.sql`WHERE organization_id = ${only}` : after ? deps.sql`WHERE organization_id > ${after}::uuid` : deps.sql``}
@@ -373,7 +406,26 @@ export async function gapRank(deps: EngineDeps, opts: { organization_id?: string
     { orgs: orgs.length, resumed_after: after || null },
     `bastion-gap-rank: ranking gaps for ${orgs.length} org(s)${after ? ` (resuming after ${after})` : ''}`,
   );
-  const totals = { orgs: orgs.length, ranked: 0, skipped_busy: 0, open: 0, inserted: 0, reopened: 0, resolved: 0, failed: 0, complete: true, elapsed_ms: 0 };
+  const totals = {
+    orgs: orgs.length,
+    ranked: 0,
+    skipped_busy: 0,
+    open: 0,
+    inserted: 0,
+    reopened: 0,
+    resolved: 0,
+    failed: 0,
+    complete: true,
+    /** True when another call of this pass moved the cursor first; this call stopped (#256). */
+    superseded: false,
+    elapsed_ms: 0,
+  };
+  const moveCursor = async (nextAfter: string): Promise<boolean> => {
+    const next = JSON.stringify({ pass, after: nextAfter } satisfies GapRankCursor);
+    if (!(await deps.cursors.compareAndSet(GAP_RANK_CURSOR, mine, next))) return false;
+    mine = next;
+    return true;
+  };
   for (const [i, orgId] of orgs.entries()) {
     // At least one org per call, so a pass always makes progress.
     if (!single && i > 0 && Date.now() - started >= budgetMs) {
@@ -402,9 +454,22 @@ export async function gapRank(deps: EngineDeps, opts: { organization_id?: string
       totals.failed += 1;
       deps.log.error({ organization_id: orgId, err: (err as Error).message }, 'bastion-gap-rank: ranking failed for this org; the next run retries');
     }
-    if (!single) await deps.cursors.set(GAP_RANK_CURSOR, orgId);
+    if (!single && !(await moveCursor(orgId))) {
+      // Another call of this pass (a worker retry while this one ran past its timeout) owns the
+      // cursor now: stop here rather than overwrite it with an older position.
+      totals.complete = false;
+      totals.superseded = true;
+      deps.log.warn({ organization_id: orgId, pass }, 'bastion-gap-rank: another call of this pass moved the cursor; this call stops');
+      break;
+    }
   }
-  if (!single && totals.complete) await deps.cursors.set(GAP_RANK_CURSOR, '');
+  if (!single && totals.complete) {
+    // The pass reached the end: an empty position for this pass (a later call of it starts over).
+    if (!(await moveCursor(''))) {
+      totals.complete = false;
+      totals.superseded = true;
+    }
+  }
   totals.elapsed_ms = Date.now() - started;
   deps.log.info(totals, totals.complete ? 'bastion-gap-rank: complete' : 'bastion-gap-rank: paused (budget); call again to continue');
   return totals;

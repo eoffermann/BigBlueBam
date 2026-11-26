@@ -294,10 +294,17 @@ describe.skipIf(!DATABASE_URL)('M7 AI-tailored compile on the worker (live datab
   }
 
   function lockStore(): SliceLock {
-    const held = new Set<string>();
+    const held = new Map<string, string>();
     return {
-      acquire: async (id) => (held.has(id) ? false : (held.add(id), true)),
-      release: async (id) => void held.delete(id),
+      acquire: async (id) => {
+        if (held.has(id)) return null;
+        const token = `t-${id}-${Math.random()}`;
+        held.set(id, token);
+        return token;
+      },
+      release: async (id, token) => {
+        if (held.get(id) === token) held.delete(id);
+      },
     };
   }
   const openPermits: LlmPermits = { tryAdmit: async () => ({ admitted: true, failOpen: false, release: async () => {} }) };

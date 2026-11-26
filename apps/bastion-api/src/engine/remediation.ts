@@ -83,10 +83,12 @@ export function complianceProjectProblem(health: ComplianceProjectHealth): strin
 /**
  * Re-drive the Bam deliveries that died because the Compliance project could not take them, once
  * it can (#229): the dead task upserts and comments go back to pending, addressed to the current
- * project, and their drift rows go back from project_unavailable to pending. A no-op unless the
- * project is healthy. Returns the number of outbox rows re-driven.
+ * project. A drift row goes back from project_unavailable to pending ONLY when a delivery is
+ * behind it (#258): the upsert re-driven here, or, when retention already pruned the dead upsert
+ * (dead rows go after 90 days), a fresh upsert filed now through enqueueDriftTask. A no-op unless
+ * the project is healthy. Returns the number of outbox rows re-driven or filed.
  */
-export async function redriveProjectDeliveries(tx: Tx, orgId: string): Promise<number> {
+export async function redriveProjectDeliveries(tx: Tx, orgId: string, now: Date = new Date()): Promise<number> {
   const s = await remediationSettings(tx, orgId);
   if ((await complianceProjectHealth(tx, orgId, s.compliance_project_id)) !== 'ok') return 0;
   const rows = await tx`
@@ -97,10 +99,33 @@ export async function redriveProjectDeliveries(tx: Tx, orgId: string): Promise<n
      WHERE organization_id = ${orgId} AND status = 'dead'
        AND kind IN ('bam_task_upsert', 'bam_task_comment')
        AND last_error LIKE ANY (${PROJECT_UNAVAILABLE_CODES.map((c) => `%${c}%`)}::text[])
-    RETURNING id`;
-  await tx`UPDATE bastion_drift_events SET task_status = 'pending'
-            WHERE organization_id = ${orgId} AND task_status = 'project_unavailable'`;
-  return rows.length;
+    RETURNING id, kind, payload->>'drift_id' AS drift_id`;
+  const redriven = rows.filter((r) => r.kind === 'bam_task_upsert' && r.drift_id).map((r) => String(r.drift_id));
+  if (redriven.length > 0) {
+    await tx`UPDATE bastion_drift_events SET task_status = 'pending'
+              WHERE organization_id = ${orgId} AND task_status = 'project_unavailable' AND id = ANY(${redriven}::uuid[])`;
+  }
+  // The rest have no delivery left to re-drive (pruned): file the task again, then mark pending.
+  const stranded = await tx`
+    SELECT d.id, d.control_id FROM bastion_drift_events d
+     WHERE d.organization_id = ${orgId} AND d.task_status = 'project_unavailable'
+       AND NOT EXISTS (SELECT 1 FROM bastion_outbox o
+                        WHERE o.organization_id = d.organization_id AND o.kind = 'bam_task_upsert'
+                          AND o.status = 'pending' AND o.payload->>'drift_id' = d.id::text)`;
+  let filed = 0;
+  for (const d of stranded) {
+    const ok = await enqueueDriftTask(tx, orgId, s, {
+      control_id: String(d.control_id),
+      drift_id: String(d.id),
+      now,
+      reopen_comment: `Filed again on ${localDate(now, s.timezone)}, after the Compliance project could take tasks again.`,
+      idempotency_base: `drift:${String(d.id)}:refile`,
+    });
+    if (!ok) continue; // left project_unavailable (still visible), never pending with nothing behind it
+    await tx`UPDATE bastion_drift_events SET task_status = 'pending' WHERE organization_id = ${orgId} AND id = ${String(d.id)} AND task_status = 'project_unavailable'`;
+    filed += 1;
+  }
+  return rows.length + filed;
 }
 
 /**
@@ -120,7 +145,7 @@ export async function redriveRecoveredProjects(deps: EngineDeps, opts: { organiz
   let total = 0;
   for (const o of orgs) {
     const orgId = String(o.organization_id);
-    const n = await orgTx(deps.sql, orgId, (tx) => redriveProjectDeliveries(tx, orgId));
+    const n = await orgTx(deps.sql, orgId, (tx) => redriveProjectDeliveries(tx, orgId, deps.now()));
     if (n > 0) deps.log.info({ organization_id: orgId, redriven: n }, 'bastion-outbox: the Compliance project can take tasks again; re-driving its waiting deliveries');
     total += n;
   }
