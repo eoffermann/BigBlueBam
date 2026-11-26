@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { BASTION_PROBE_KEYS, bastionEvaluateRunJobId, type BastionProbeResult } from '@bigbluebam/shared';
 import {
   ENGINE_TIMEOUT_MS,
@@ -17,7 +17,14 @@ import {
   worstCaseProbeSliceMs,
 } from '../src/engine/budgets.js';
 import { replicaLagMs } from '../src/engine/read-scope.js';
-import { nextBackoffMs, OUTBOX_MAX_ATTEMPTS, OUTBOX_MAX_DELAY_MS, enqueueBastionEvent } from '../src/engine/outbox.js';
+import {
+  defaultDeliverer,
+  enqueueBastionEvent,
+  isPermanentHttpFailure,
+  nextBackoffMs,
+  OUTBOX_MAX_ATTEMPTS,
+  OUTBOX_MAX_DELAY_MS,
+} from '../src/engine/outbox.js';
 import { localClock } from '../src/engine/context.js';
 import { nightlyDue } from '../src/engine/sweeps.js';
 import { decide, probeDefinition, PROBES, probeWindow } from '../src/probes/definitions.js';
@@ -78,6 +85,39 @@ describe('outbox backoff (spec 7)', () => {
     expect(nextBackoffMs(2)).toBe(60_000);
     expect(nextBackoffMs(OUTBOX_MAX_ATTEMPTS - 1)).toBe(OUTBOX_MAX_DELAY_MS);
     expect(nextBackoffMs(OUTBOX_MAX_ATTEMPTS)).toBeNull();
+  });
+
+  it('a 4xx other than 408/429 is permanent; 5xx, 408, 429 and no status are retried (#203)', () => {
+    for (const s of [400, 401, 404, 413, 422]) expect(isPermanentHttpFailure(s), String(s)).toBe(true);
+    for (const s of [408, 429, 500, 502, 503, null, undefined]) expect(isPermanentHttpFailure(s), String(s)).toBe(false);
+  });
+
+  it('the production deliverer carries the bolt-api status and marks a 400 permanent (#203)', async () => {
+    vi.stubEnv('INTERNAL_SERVICE_SECRET', 'i'.repeat(40));
+    vi.stubEnv('BOLT_API_INTERNAL_URL', 'http://bolt-api:4006');
+    const row = {
+      id: 'x',
+      organization_id: 'o',
+      kind: 'bolt_event' as const,
+      ordering_key: 'org:o',
+      idempotency_key: 'k',
+      payload: { event_type: 'evaluation.completed', payload: {} },
+      attempts: 0,
+      next_attempt_at: null,
+      created_at: new Date(),
+    };
+    const deliverer = defaultDeliverer({ sql: (() => Promise.resolve([])) as never, storage: null, putTimeoutMs: 1000 });
+    try {
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('{}', { status: 400 })));
+      expect(await deliverer.deliver(row)).toMatchObject({ ok: false, status: 400, permanent: true });
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('{}', { status: 503 })));
+      expect(await deliverer.deliver(row)).toMatchObject({ ok: false, status: 503, permanent: false });
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('{}', { status: 429 })));
+      expect(await deliverer.deliver(row)).toMatchObject({ ok: false, status: 429, permanent: false });
+    } finally {
+      vi.unstubAllGlobals();
+      vi.unstubAllEnvs();
+    }
   });
 
   it('enqueueBastionEvent refuses a name outside BASTION_EVENT_TYPES', async () => {

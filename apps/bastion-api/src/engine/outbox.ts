@@ -5,6 +5,8 @@
 //     blocks the rows behind it on the same key (e.g. a seal object before its ledger.sealed);
 //   - backoff 30 s doubling to 6 h, then `dead` (reported to the worker, which records a worker
 //     error); a dead row stops blocking its key, so later rows proceed;
+//   - a permanent refusal (a 4xx other than 408/429) goes `dead` on that attempt with the reason
+//     in last_error, instead of holding its key for ~14.5 h of backoff (issue #203);
 //   - delivery happens outside any transaction (no outbound HTTP while a row lock is held).
 
 import { BASTION_EVENT_TYPES, publishBoltEventChecked, type BastionEventType } from '@bigbluebam/shared';
@@ -101,7 +103,21 @@ export interface OutboxRow {
   created_at: Date;
 }
 
-export type DeliveryResult = { ok: true } | { ok: false; error: string };
+/**
+ * `permanent` marks a failure no retry can fix (issue #203): the row goes dead on that attempt,
+ * with the reason in last_error, so it never holds its ordering key through the 30 s to 6 h
+ * ladder. `status` is the HTTP status when there was one.
+ */
+export type DeliveryResult = { ok: true } | { ok: false; error: string; permanent?: boolean; status?: number | null };
+
+/**
+ * A 4xx is the receiver refusing THIS request (bad payload, unknown source or event, too large):
+ * resending it unchanged gets the same answer. 408 and 429 are the exceptions, they ask for a
+ * retry. 5xx, timeouts and network errors (no status) stay on the backoff ladder.
+ */
+export function isPermanentHttpFailure(status: number | null | undefined): boolean {
+  return typeof status === 'number' && status >= 400 && status < 500 && status !== 408 && status !== 429;
+}
 
 export interface Deliverer {
   deliver(row: OutboxRow): Promise<DeliveryResult>;
@@ -122,7 +138,9 @@ export function defaultDeliverer(deps: { sql: EngineDeps['sql']; storage: Storag
           typeof p.actor_id === 'string' ? p.actor_id : undefined,
           (p.actor_type as 'user' | 'agent' | 'system' | undefined) ?? 'system',
         );
-        if (!res.ok) return { ok: false, error: res.error ?? 'bolt-api ingest failed' };
+        if (!res.ok) {
+          return { ok: false, error: res.error ?? 'bolt-api ingest failed', status: res.status, permanent: isPermanentHttpFailure(res.status) };
+        }
         if (p.event_type === 'ledger.sealed' && typeof eventPayload.seal_date === 'string') {
           await deps.sql`UPDATE bastion_ledger_seals SET published_at = now()
                           WHERE organization_id = ${row.organization_id} AND seal_date = ${eventPayload.seal_date}::date
@@ -206,13 +224,21 @@ export async function drainOutbox(deps: EngineDeps, deliverer: Deliverer, opts: 
         continue;
       }
       const attempts = head.attempts + 1;
-      const delay = nextBackoffMs(attempts);
+      const delay = result.permanent ? null : nextBackoffMs(attempts);
       if (delay === null) {
+        const reason = result.permanent
+          ? `permanent failure${result.status ? ` (HTTP ${result.status})` : ''}: ${result.error}`
+          : `gave up after ${attempts} attempts: ${result.error}`;
         await deps.sql`UPDATE bastion_outbox SET status = 'dead', attempts = ${attempts}, claimed_by = NULL,
-                         last_error = ${result.error.slice(0, 2000)} WHERE id = ${head.id}`;
+                         last_error = ${reason.slice(0, 2000)} WHERE id = ${head.id}`;
         summary.dead += 1;
         summary.dead_ids.push(head.id);
-        deps.log.error({ outbox_id: head.id, kind: head.kind, ordering_key: head.ordering_key, error: result.error }, 'bastion-outbox: delivery gave up; row is dead');
+        deps.log.error(
+          { outbox_id: head.id, kind: head.kind, ordering_key: head.ordering_key, status: result.status ?? null, permanent: !!result.permanent, error: result.error },
+          result.permanent
+            ? `bastion-outbox: the receiver refused this row (HTTP ${result.status}); dead at once so its key is not blocked`
+            : 'bastion-outbox: delivery gave up; row is dead',
+        );
       } else {
         await deps.sql`UPDATE bastion_outbox SET attempts = ${attempts}, claimed_by = NULL,
                          next_attempt_at = ${new Date(now.getTime() + delay)}, last_error = ${result.error.slice(0, 2000)}

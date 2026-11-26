@@ -250,4 +250,30 @@ describe.skipIf(!DATABASE_URL)('M4 evaluation runs and the outbox (live database
       ['b1', 'delivered'],
     ]);
   });
+
+  it('a permanent refusal (4xx) goes dead on its first attempt with the reason, and the next row on its key proceeds in the same drain (#203)', async () => {
+    const s = await seedOrg(sql, 'outbox-4xx', 1, 1);
+    orgs.push(s.org);
+    const deps = makeDeps(sql, { clock: clock() });
+    for (const idem of ['p1', 'p2']) {
+      await sql.begin(async (raw) => {
+        const tx = raw as unknown as postgres.Sql;
+        await enqueueOutbox(tx, { orgId: s.org, kind: 'bolt_event', orderingKey: `org:${s.org}`, idempotencyKey: idem, payload: { event_type: 'evaluation.completed', payload: {} } });
+      });
+    }
+    const delivered: string[] = [];
+    const deliverer: Deliverer = {
+      async deliver(row) {
+        if (row.idempotency_key === 'p1') return { ok: false, error: 'bolt-api ingest returned 400', status: 400, permanent: true };
+        delivered.push(row.idempotency_key);
+        return { ok: true };
+      },
+    };
+    const res = await drainOutbox(deps, deliverer, { orgId: s.org, claimant: 't' });
+    expect(res).toMatchObject({ dead: 1, delivered: 1, failed: 0 });
+    expect(delivered).toEqual(['p2']);
+    const [p1] = await sql`SELECT status, attempts, last_error FROM bastion_outbox WHERE organization_id = ${s.org} AND idempotency_key = 'p1'`;
+    expect(p1).toMatchObject({ status: 'dead', attempts: 1 });
+    expect(p1!.last_error).toMatch(/^permanent failure \(HTTP 400\)/);
+  });
 });
