@@ -20,6 +20,7 @@ export * from './braid.js';
 export * from './bulwark.js';
 export * from './burn.js';
 export * from './bursar.js';
+export * from './bastion.js';
 export * from './bench.js';
 export * from './bill.js';
 export * from './board.js';
