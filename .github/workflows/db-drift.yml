@@ -107,5 +107,7 @@ jobs:
         with:
           node-version: 22
 
-      - name: Check all tools use registerTool() with returns schema
-        run: node scripts/check-tool-return-coverage.mjs
+      - name: Check all tools use registerTool() with returns schema, and published tool and app counts
+        run: |
+          node scripts/check-tool-return-coverage.mjs
+          node scripts/check-app-counts.mjs

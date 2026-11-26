@@ -7,7 +7,7 @@ generated: "2026-06-24T21:06:05.504Z"
 # Introduction to BigBlueBam
 
 
-Sixteen apps that behave like one product, built for people and AI agents together.
+Twenty-four apps that behave like one product, built for people and AI agents together.
 
 - One login, one organization, one permission model across project management, CRM, chat, help desk, docs, whiteboard, knowledge, scheduling, invoicing, analytics, forms, automation, goals, diagrams, and email
 - Work crosses apps without re-keying: a deal becomes a project, a sticky note becomes a task, a won deal becomes an invoice

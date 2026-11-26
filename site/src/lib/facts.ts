@@ -30,3 +30,14 @@ function toWords(n: number): string {
 
 /** APP_COUNT spelled out for prose ("twenty-four"). */
 export const APP_COUNT_WORDS = toWords(APP_COUNT);
+
+/** App display names in Launchpad order, from the same catalog as APP_COUNT. */
+export const APP_NAMES: string[] = (docsCatalog as { id: string; name: string }[])
+  .filter((p) => p.id !== 'platform')
+  .map((p) => p.name);
+
+/** APP_NAMES as an English list: "Bam, Banter, ..., and Bursar". */
+export const APP_NAMES_LIST =
+  APP_NAMES.length < 2
+    ? APP_NAMES.join('')
+    : `${APP_NAMES.slice(0, -1).join(', ')}, and ${APP_NAMES[APP_NAMES.length - 1]}`;

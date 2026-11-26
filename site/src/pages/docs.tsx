@@ -7,7 +7,7 @@ import {
   Activity, Headset, Building2, Ruler, GitMerge, ShieldCheck,
 } from 'lucide-react';
 import docsCatalog from '../content/docs-catalog.generated.json';
-import { MCP_TOOL_COUNT, APP_COUNT_WORDS } from '@/lib/facts';
+import { MCP_TOOL_COUNT, APP_COUNT_WORDS, APP_NAMES_LIST } from '@/lib/facts';
 
 /* ------------------------------------------------------------------ */
 /*  MCP Tool Data                                                      */
@@ -1391,8 +1391,7 @@ function UserGuideContent() {
             <h3 className="mb-3 text-lg font-semibold text-zinc-900">Navigation Overview</h3>
             <p className="mb-3 text-sm text-zinc-600">
               BigBlueBam uses a cross-app navigation system with colored pills at the top of the screen. Each pill
-              represents one of the {APP_COUNT_WORDS} apps: Bam, Banter, Beacon, Brief, Bolt, Bearing, Board, Bond,
-              Blast, Bill, Blank, Blueprint, Book, Bench, Bureau, Bin, Bay, Blip, Helpdesk, Basis, Braid, Bulwark, Burn, and Bursar. Click any pill to switch apps without losing your place. Within each app, a collapsible
+              represents one of the {APP_COUNT_WORDS} apps: {APP_NAMES_LIST}. Click any pill to switch apps without losing your place. Within each app, a collapsible
               sidebar provides contextual navigation -- projects in Bam, channels in Banter, folders in Brief, and so on.
             </p>
             <p className="text-sm text-zinc-600">
