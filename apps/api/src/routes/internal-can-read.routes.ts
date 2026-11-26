@@ -15,65 +15,18 @@
  * they have collaborator tables.)
  */
 
-import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import { timingSafeEqual } from 'node:crypto';
+import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { env } from '../env.js';
+import { requireInternalSecret } from '../lib/internal-secret.js';
 import { preflightAccess } from '../services/visibility.service.js';
 
 const UUID_REGEX =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-function timingSafeStringEqual(a: string, b: string): boolean {
-  const bufA = Buffer.from(a, 'utf8');
-  const bufB = Buffer.from(b, 'utf8');
-  if (bufA.length !== bufB.length) {
-    timingSafeEqual(bufA, bufA);
-    return false;
-  }
-  return timingSafeEqual(bufA, bufB);
-}
-
-async function requireInternalSecret(
-  request: FastifyRequest,
-  reply: FastifyReply,
-) {
-  const configured = env.INTERNAL_SERVICE_SECRET;
-  if (!configured) {
-    // Fail CLOSED, never open. These routes answer "may this asker see this entity"
-    // for a caller-supplied asker_user_id that is verified against no principal, so
-    // admitting an unauthenticated request here turns them into an oracle over the
-    // whole per-user visibility matrix for anything with internal-network reach.
-    // Every client of this route (packages/shared/src/visibility-client.ts) already
-    // treats a missing secret as a deny; the server must not be more permissive than
-    // its own callers. Matches requireInternalAuth in internal-permissions.routes.ts.
-    request.log.error(
-      'INTERNAL_SERVICE_SECRET is not configured - refusing internal visibility requests.',
-    );
-    return reply.status(401).send({
-      error: {
-        code: 'UNAUTHORIZED',
-        message: 'Internal service authentication is not configured',
-        details: [],
-        request_id: request.id,
-      },
-    });
-  }
-  const header =
-    request.headers['x-internal-service-secret'] ??
-    request.headers['x-internal-secret'];
-  const provided = Array.isArray(header) ? header[0] : header;
-  if (!provided || !timingSafeStringEqual(provided, configured)) {
-    return reply.status(401).send({
-      error: {
-        code: 'UNAUTHORIZED',
-        message: 'Invalid or missing internal service secret',
-        details: [],
-        request_id: request.id,
-      },
-    });
-  }
-}
+// Auth: the shared guard (lib/internal-secret.ts). It fails CLOSED when the secret is unset:
+// these routes answer "may this asker see this entity" for a caller-supplied asker_user_id
+// verified against no principal, so an unauthenticated request would be an oracle over the
+// whole per-user visibility matrix.
 
 const canReadBody = z.object({
   user_id: z.string().uuid(),

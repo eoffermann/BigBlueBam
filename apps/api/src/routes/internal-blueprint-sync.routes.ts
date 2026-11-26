@@ -7,28 +7,17 @@
  * back into blueprint via task.service.ts's outbound call.
  *
  * Auth: x-internal-secret or x-internal-token, validated against
- * INTERNAL_SERVICE_SECRET. Mirrors apps/api/src/routes/internal-llm.routes.ts.
+ * INTERNAL_SERVICE_SECRET by the shared guard in lib/internal-secret.ts.
  *
  * Mount prefix: /internal/sync-from-blueprint
  */
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { eq } from 'drizzle-orm';
-import { timingSafeEqual } from 'node:crypto';
 import { db } from '../db/index.js';
 import { tasks } from '../db/schema/tasks.js';
-import { env } from '../env.js';
+import { requireInternalSecretOrToken } from '../lib/internal-secret.js';
 import { broadcastToProject } from '../services/realtime.service.js';
-
-function timingSafeStringEqual(a: string, b: string): boolean {
-  const bufA = Buffer.from(a, 'utf8');
-  const bufB = Buffer.from(b, 'utf8');
-  if (bufA.length !== bufB.length) {
-    timingSafeEqual(bufA, bufA);
-    return false;
-  }
-  return timingSafeEqual(bufA, bufB);
-}
 
 const syncSchema = z.object({
   task_id: z.string().uuid(),
@@ -37,36 +26,7 @@ const syncSchema = z.object({
 });
 
 export default async function internalBlueprintSyncRoutes(fastify: FastifyInstance) {
-  fastify.post('/internal/sync-from-blueprint', async (request, reply) => {
-    // Internal-auth guard — same pattern as internal-llm.routes.ts.
-    const secretHeader = request.headers['x-internal-secret'];
-    const tokenHeader = request.headers['x-internal-token'];
-    const provided =
-      (Array.isArray(secretHeader) ? secretHeader[0] : secretHeader) ??
-      (Array.isArray(tokenHeader) ? tokenHeader[0] : tokenHeader);
-
-    if (!provided || typeof provided !== 'string') {
-      return reply.status(401).send({
-        error: {
-          code: 'UNAUTHORIZED',
-          message: 'Missing internal service token',
-          details: [],
-          request_id: request.id,
-        },
-      });
-    }
-    const expected = env.INTERNAL_SERVICE_SECRET ?? '';
-    if (!expected || !timingSafeStringEqual(provided, expected)) {
-      return reply.status(401).send({
-        error: {
-          code: 'UNAUTHORIZED',
-          message: 'Invalid internal service token',
-          details: [],
-          request_id: request.id,
-        },
-      });
-    }
-
+  fastify.post('/internal/sync-from-blueprint', { preHandler: [requireInternalSecretOrToken] }, async (request, reply) => {
     const parsed = syncSchema.safeParse(request.body);
     if (!parsed.success) {
       return reply.status(400).send({

@@ -1,47 +1,21 @@
 import type { FastifyRequest, FastifyReply } from 'fastify';
-import { timingSafeEqual } from 'node:crypto';
 import { env } from '../env.js';
+import { refuseNonPrivatePeer, sameSecret } from '../lib/internal-secret.js';
 
 /**
- * HB-7: Guard for the /internal/helpdesk/* surface.
+ * HB-7: Guard for the server-to-server /internal/helpdesk/* routes.
  *
  * Inbound requests MUST carry an X-Internal-Token header whose value
  * matches INTERNAL_HELPDESK_SECRET. Comparison is timing-safe. As a
- * defense-in-depth layer we also allow-list the Docker internal bridge
- * network ranges (172.x private space) so a leaked token alone, from
- * outside the cluster, is not sufficient.
+ * defense-in-depth layer the caller must also be a direct private-network
+ * peer (the TCP socket address, never the spoofable X-Forwarded-For; see
+ * refuseNonPrivatePeer in lib/internal-secret.ts, #226), so a leaked token
+ * alone, from outside the cluster, is not sufficient.
  *
  * Responds:
- *   401 UNAUTHORIZED — missing or mismatched token
- *   403 FORBIDDEN    — token OK but source IP outside the internal allow-list
+ *   401 UNAUTHORIZED - missing or mismatched token
+ *   403 FORBIDDEN    - token OK but caller not a direct private-network peer
  */
-const INTERNAL_IP_PREFIXES = [
-  '172.',    // docker bridge networks (172.16/12)
-  '10.',     // k8s / private
-  '127.',    // loopback (tests, local dev)
-  '::1',     // IPv6 loopback
-  '::ffff:127.', // IPv4-mapped loopback
-  '::ffff:172.',
-  '::ffff:10.',
-];
-
-function isInternalAddress(ip: string | undefined): boolean {
-  if (!ip) return false;
-  return INTERNAL_IP_PREFIXES.some((p) => ip.startsWith(p));
-}
-
-function timingSafeStringEqual(a: string, b: string): boolean {
-  const bufA = Buffer.from(a, 'utf8');
-  const bufB = Buffer.from(b, 'utf8');
-  if (bufA.length !== bufB.length) {
-    // Still perform a constant-time compare against bufA to avoid a length
-    // oracle, then return false.
-    timingSafeEqual(bufA, bufA);
-    return false;
-  }
-  return timingSafeEqual(bufA, bufB);
-}
-
 export async function requireServiceAuth(
   request: FastifyRequest,
   reply: FastifyReply,
@@ -61,7 +35,7 @@ export async function requireServiceAuth(
   }
 
   const expected = env.INTERNAL_HELPDESK_SECRET;
-  if (!timingSafeStringEqual(provided, expected)) {
+  if (!expected || !sameSecret(provided, expected)) {
     return reply.status(401).send({
       error: {
         code: 'UNAUTHORIZED',
@@ -72,20 +46,7 @@ export async function requireServiceAuth(
     });
   }
 
-  if (!isInternalAddress(request.ip)) {
-    request.log.warn(
-      { ip: request.ip, url: request.url },
-      'require-service-auth: valid token but source IP not in internal allow-list',
-    );
-    return reply.status(403).send({
-      error: {
-        code: 'FORBIDDEN',
-        message: 'Internal endpoints are not reachable from this network',
-        details: [],
-        request_id: request.id,
-      },
-    });
-  }
+  if (refuseNonPrivatePeer(request, reply)) return reply;
 
   request.log.info(
     { url: request.url, caller: 'helpdesk-api' },

@@ -19,7 +19,7 @@ import { db } from '../db/index.js';
 import { llmProviders } from '../db/schema/llm-providers.js';
 import { decryptApiKey } from '../services/llm-provider.service.js';
 import { env } from '../env.js';
-import { timingSafeEqual } from 'node:crypto';
+import { requireInternalSecretOrHelpdeskToken } from '../lib/internal-secret.js';
 
 // ---------------------------------------------------------------------------
 // Internal LLM concurrency cap (Burn spec 9.7.1)
@@ -133,62 +133,11 @@ const heldSlots = new WeakMap<
 >();
 
 // ---------------------------------------------------------------------------
-// Internal auth guard (accepts x-internal-secret or x-internal-token)
+// Internal auth: the shared guard (lib/internal-secret.ts). Accepts x-internal-secret or
+// x-internal-token so bolt-api and helpdesk-api can both call this endpoint, matched against
+// INTERNAL_SERVICE_SECRET or INTERNAL_HELPDESK_SECRET, from direct private-network peers only.
 // ---------------------------------------------------------------------------
-
-function timingSafeStringEqual(a: string, b: string): boolean {
-  const bufA = Buffer.from(a, 'utf8');
-  const bufB = Buffer.from(b, 'utf8');
-  if (bufA.length !== bufB.length) {
-    timingSafeEqual(bufA, bufA);
-    return false;
-  }
-  return timingSafeEqual(bufA, bufB);
-}
-
-async function requireInternalAuth(
-  request: import('fastify').FastifyRequest,
-  reply: import('fastify').FastifyReply,
-) {
-  // Accept either header name so bolt-api (x-internal-secret) and
-  // helpdesk-api (x-internal-token) can both call this endpoint.
-  const secretHeader = request.headers['x-internal-secret'];
-  const tokenHeader = request.headers['x-internal-token'];
-  const provided = (
-    Array.isArray(secretHeader) ? secretHeader[0] : secretHeader
-  ) ?? (
-    Array.isArray(tokenHeader) ? tokenHeader[0] : tokenHeader
-  );
-
-  if (!provided || typeof provided !== 'string') {
-    return reply.status(401).send({
-      error: {
-        code: 'UNAUTHORIZED',
-        message: 'Missing internal service token',
-        details: [],
-        request_id: request.id,
-      },
-    });
-  }
-
-  // Check against both secrets (INTERNAL_SERVICE_SECRET is optional)
-  const secrets = [env.INTERNAL_HELPDESK_SECRET];
-  if (env.INTERNAL_SERVICE_SECRET) {
-    secrets.push(env.INTERNAL_SERVICE_SECRET);
-  }
-
-  const matched = secrets.some((s) => timingSafeStringEqual(provided, s));
-  if (!matched) {
-    return reply.status(401).send({
-      error: {
-        code: 'UNAUTHORIZED',
-        message: 'Invalid internal service token',
-        details: [],
-        request_id: request.id,
-      },
-    });
-  }
-}
+const requireInternalAuth = requireInternalSecretOrHelpdeskToken;
 
 // ---------------------------------------------------------------------------
 // Request schema

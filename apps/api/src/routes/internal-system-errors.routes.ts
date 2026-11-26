@@ -30,67 +30,16 @@
  * Mount prefix: /internal (routes register at the root because there's
  * no per-feature prefix here).
  */
-import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
+import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { timingSafeEqual } from 'node:crypto';
 import { db } from '../db/index.js';
 import { systemErrors } from '../db/schema/system-errors.js';
-import { env } from '../env.js';
+import { requireInternalSecret } from '../lib/internal-secret.js';
 import { requireAuth } from '../plugins/auth.js';
 
-// Mirrors the auth pattern in internal-can-read.routes.ts /
-// internal-permissions.routes.ts: x-internal-secret header against
-// INTERNAL_SERVICE_SECRET. (The older requireServiceAuth in middleware/
-// is helpdesk-specific — checks x-internal-token against
-// INTERNAL_HELPDESK_SECRET — and isn't the right gate for general
-// satellite calls.)
-function timingSafeStringEqual(a: string, b: string): boolean {
-  const ba = Buffer.from(a, 'utf8');
-  const bb = Buffer.from(b, 'utf8');
-  if (ba.length !== bb.length) {
-    timingSafeEqual(ba, ba);
-    return false;
-  }
-  return timingSafeEqual(ba, bb);
-}
-
-async function requireInternalSecret(
-  request: FastifyRequest,
-  reply: FastifyReply,
-) {
-  const configured = env.INTERNAL_SERVICE_SECRET;
-  if (!configured) {
-    // Fail CLOSED. This previously returned (admitting the request) to "match other
-    // internal routes", but that shared behavior was itself the defect: an unset
-    // secret turned every internal route into an unauthenticated surface. The secret
-    // is a documented-required env var, so refusing is correct in every environment.
-    request.log.error(
-      'INTERNAL_SERVICE_SECRET is not configured - refusing internal system-error requests.',
-    );
-    return reply.status(401).send({
-      error: {
-        code: 'UNAUTHORIZED',
-        message: 'Internal service authentication is not configured',
-        details: [],
-        request_id: request.id,
-      },
-    });
-  }
-  const header =
-    request.headers['x-internal-service-secret'] ??
-    request.headers['x-internal-secret'];
-  const provided = Array.isArray(header) ? header[0] : header;
-  if (!provided || !timingSafeStringEqual(provided, configured)) {
-    return reply.status(401).send({
-      error: {
-        code: 'UNAUTHORIZED',
-        message: 'Invalid or missing internal service secret',
-        details: [],
-        request_id: request.id,
-      },
-    });
-  }
-}
+// Server-to-server auth is the shared guard in lib/internal-secret.ts (INTERNAL_SERVICE_SECRET,
+// fails CLOSED when unset, direct private-network peers only). The helpdesk requireServiceAuth
+// checks a different secret and is not the right gate for general satellite calls.
 
 const MAX_MESSAGE_LEN = 4000;
 const MAX_STACK_LEN = 16000;

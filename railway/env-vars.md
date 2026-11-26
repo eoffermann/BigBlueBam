@@ -398,12 +398,16 @@ with **R**, optional with `o`.
 | o | `S3_ACCESS_KEY` | reference | `${{minio.MINIO_ROOT_USER}}` |  |
 | o | `S3_SECRET_KEY` | reference | `${{minio.MINIO_ROOT_PASSWORD}}` |  |
 | o | `S3_REGION` | literal | `us-east-1` |  |
+| o | `S3_BUCKET` | literal | `bigbluebam-uploads` |  |
 | o | `CORS_ORIGIN` | public | `<frontend-public-url>` |  |
 | o | `LOG_LEVEL` | literal | `info` |  |
 | o | `BASTION_TRUST_PROXY_HOPS` | literal | `2` |  |
 | o | `BASTION_LLM_TIMEOUT_MS` | literal | `60000` |  |
 | o | `BASTION_ENGINE_TIMEOUT_MS` | literal | `30000` |  |
 | o | `BASTION_PROBE_TIMEOUT_MS` | literal | `8000` |  |
+| o | `BASTION_PUT_TIMEOUT_MS` | literal | `5000` |  |
+| o | `BASTION_RUN_LEASE_MS` | literal | `300000` |  |
+| o | `BASTION_SEAL_RETIRED_PUBLIC_KEYS` | literal | `` | Comma-separated 64-hex Ed25519 PUBLIC keys of replaced seal signing keys (not secret). When BASTION_SEAL_SIGNING_KEY changes, append the old public key here and never remove one, or seals signed under it stop verifying. |
 | o | `RAILWAY_DEPLOYMENT_DRAINING_SECONDS` | literal | `75` |  |
 | o | `BASTION_BACKUP_S3_ENDPOINT` | literal | `` |  |
 | o | `BASTION_BACKUP_S3_BUCKET` | literal | `` |  |

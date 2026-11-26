@@ -11,8 +11,7 @@
 // shared secrets so only trusted in-cluster services (mcp-server, worker,
 // helpdesk-api) can call it.
 
-import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import { timingSafeEqual } from 'node:crypto';
+import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import {
   resolve as resolvePermission,
@@ -29,37 +28,11 @@ import {
   users,
 } from '../db/schema/index.js';
 import { recordDivergence } from '../services/permissions-telemetry.service.js';
-import { env } from '../env.js';
+import { requireInternalSecretOrHelpdeskToken } from '../lib/internal-secret.js';
 
-function timingSafeStringEqual(a: string, b: string): boolean {
-  const bufA = Buffer.from(a, 'utf8');
-  const bufB = Buffer.from(b, 'utf8');
-  if (bufA.length !== bufB.length) {
-    timingSafeEqual(bufA, bufA);
-    return false;
-  }
-  return timingSafeEqual(bufA, bufB);
-}
-
-async function requireInternalAuth(request: FastifyRequest, reply: FastifyReply) {
-  const secretHeader = request.headers['x-internal-secret'];
-  const tokenHeader = request.headers['x-internal-token'];
-  const provided =
-    (Array.isArray(secretHeader) ? secretHeader[0] : secretHeader) ??
-    (Array.isArray(tokenHeader) ? tokenHeader[0] : tokenHeader);
-  if (!provided || typeof provided !== 'string') {
-    return reply.status(401).send({
-      error: { code: 'UNAUTHORIZED', message: 'Missing internal service token' },
-    });
-  }
-  const secrets = [env.INTERNAL_HELPDESK_SECRET];
-  if (env.INTERNAL_SERVICE_SECRET) secrets.push(env.INTERNAL_SERVICE_SECRET);
-  if (!secrets.some((s) => timingSafeStringEqual(provided, s))) {
-    return reply.status(401).send({
-      error: { code: 'UNAUTHORIZED', message: 'Invalid internal service token' },
-    });
-  }
-}
+// Internal auth: the shared guard (lib/internal-secret.ts), x-internal-secret or x-internal-token
+// against INTERNAL_SERVICE_SECRET or INTERNAL_HELPDESK_SECRET, direct private-network peers only.
+const requireInternalAuth = requireInternalSecretOrHelpdeskToken;
 
 const dualReadBodySchema = z.object({
   user_id: z.string().uuid(),

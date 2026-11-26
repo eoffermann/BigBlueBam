@@ -74,6 +74,28 @@ describe('internal-bastion routes', () => {
     expect(svc.upsertBastionTask).not.toHaveBeenCalled();
   });
 
+  it('refuses a correct secret relayed through a proxy or from a public peer, even with a spoofed X-Forwarded-For (#226)', async () => {
+    const url = '/internal/bastion/tasks/upsert';
+    const headers = { 'x-internal-service-secret': SECRET, 'x-forwarded-for': '10.0.0.1' };
+    // Public peer, private-looking X-Forwarded-For: the exact #226 bypass.
+    const spoofed = await app.inject({ method: 'POST', url, headers, payload: upsertBody, remoteAddress: '203.0.113.9' });
+    expect(spoofed.statusCode).toBe(403);
+    expect(spoofed.json().error.code).toBe('FORBIDDEN');
+    // Private peer (the edge nginx) relaying an outside caller.
+    const relayed = await app.inject({ method: 'POST', url, headers, payload: upsertBody, remoteAddress: '172.18.0.5' });
+    expect(relayed.statusCode).toBe(403);
+    // Public peer, no proxy headers.
+    const direct = await app.inject({
+      method: 'POST',
+      url,
+      headers: { 'x-internal-service-secret': SECRET },
+      payload: upsertBody,
+      remoteAddress: '172.32.0.5',
+    });
+    expect(direct.statusCode).toBe(403);
+    expect(svc.upsertBastionTask).not.toHaveBeenCalled();
+  });
+
   it('upsert validates the external_id shape and answers 201 on create', async () => {
     const bad = await app.inject({
       method: 'POST',

@@ -13,6 +13,11 @@
  * LAUNCHPAD_CATALOG (apps/api/src/routes/system-settings.routes.ts) with a local
  * `/<id>/` path is not served by nginx-with-site.conf.
  *
+ * It also guards the internal-route deny (#226): for every proxy location it derives the
+ * upstream path a client URL reaches and fails when one lands on an app's /internal/ or
+ * /v1/internal/ routes without a `return 404` regex catching it first, or when a
+ * browser-facing api route under /internal/ (BROWSER_FACING_INTERNAL) is denied.
+ *
  * Exit codes: 0 clean, 1 drift, 2 parse error.
  */
 
@@ -75,6 +80,141 @@ export function checkConfig(name, text) {
   return { problems, served };
 }
 
+// ─── Internal-route deny (#226) ─────────────────────────────────────────
+//
+// Every app's server-to-server routes live under /internal/ or /v1/internal/ on its upstream.
+// For each proxy location in a config this derives what upstream path a client URL reaches and,
+// when it lands on an internal route, requires a `return 404` regex location to catch it first,
+// so a new app's proxy cannot ship with its internal routes open to the internet. The only
+// client paths allowed through are the api's browser-facing, session-authed routes below.
+
+/** Browser-facing api routes under /internal/ (session-authed, called by the SPAs). */
+export const BROWSER_FACING_INTERNAL = [
+  '/b3/api/internal/system-errors/record-browser', // packages/bureau-client SystemErrorReporter
+  '/b3/api/internal/helpdesk/queue', // Bam helpdesk agent queue page
+  '/b3/api/internal/helpdesk/tickets/0f1e2d3c', // Bam task helpdesk panel
+  '/b3/api/internal/helpdesk/tickets/0f1e2d3c/messages',
+];
+
+/** Known server-to-server routes that must be denied (spot checks on top of the derived probes). */
+const KNOWN_SERVICE_INTERNAL = [
+  '/b3/api/internal/bastion/tasks/upsert',
+  '/b3/api/internal/bastion/proposals/0f1e2d3c/close',
+  '/b3/api/internal/helpdesk/tasks',
+  '/b3/api/internal/helpdesk/tasks/0f1e2d3c/reopen',
+  '/b3/api/internal/can-read',
+  '/b3/api/internal/system-errors/record',
+  '/b3/api/internal/llm/chat',
+  '/b3/api/internal/github/deliveries/process',
+  '/bastion/api/v1/internal/events',
+];
+
+/** Parses `location [mod] pattern { ... }` blocks (brace-balanced, comments stripped). */
+export function parseLocations(text) {
+  const lines = text.split(/\r?\n/).map((l) => l.replace(/(^|\s)#.*$/, ''));
+  const out = [];
+  for (let i = 0; i < lines.length; i++) {
+    const m = /^\s*location\s+(?:(=|~\*|~|\^~)\s+)?("[^"]+"|\S+)\s*\{\s*(.*)$/.exec(lines[i]);
+    if (!m) continue;
+    const mod = m[1] ?? '';
+    const pattern = m[2].replace(/^"|"$/g, '');
+    let depth = 1;
+    const body = [];
+    let rest = m[3];
+    let j = i;
+    for (;;) {
+      for (const ch of rest) {
+        if (ch === '{') depth++;
+        else if (ch === '}') depth--;
+      }
+      body.push(rest);
+      if (depth <= 0 || j + 1 >= lines.length) break;
+      j++;
+      rest = lines[j];
+    }
+    out.push({ mod, pattern, body: body.join('\n') });
+  }
+  return out;
+}
+
+function nginxRegex(loc) {
+  return new RegExp(loc.pattern, loc.mod === '~*' ? 'i' : '');
+}
+
+/** The upstream path a client URI reaches through a prefix proxy location, or null. */
+export function upstreamPath(loc, uri) {
+  if (!uri.startsWith(loc.pattern)) return null;
+  const rw = /rewrite\s+(\S+)\s+(\S+)\s+break\s*;/.exec(loc.body);
+  if (rw) {
+    const re = new RegExp(rw[1]);
+    if (!re.test(uri)) return uri;
+    return uri.replace(re, rw[2].replace(/\$(\d)/g, '$$$1'));
+  }
+  const pp = /proxy_pass\s+https?:\/\/[^/\s;]+(\/[^\s;]*)?\s*;/.exec(loc.body);
+  if (!pp) return null;
+  if (pp[1] === undefined) return uri;
+  return pp[1] + uri.slice(loc.pattern.length);
+}
+
+/** nginx location selection, reduced to what this check needs. Returns the chosen location. */
+export function selectLocation(locations, uri) {
+  const exact = locations.find((l) => l.mod === '=' && l.pattern === uri);
+  if (exact) return exact;
+  let best = null;
+  for (const l of locations) {
+    if ((l.mod === '' || l.mod === '^~') && uri.startsWith(l.pattern)) {
+      if (!best || l.pattern.length > best.pattern.length) best = l;
+    }
+  }
+  if (best && best.mod === '^~') return best;
+  for (const l of locations) {
+    if ((l.mod === '~' || l.mod === '~*') && nginxRegex(l).test(uri)) return l;
+  }
+  return best;
+}
+
+// Third-party or static upstreams with no BigBlueBam /internal/ routes (LiveKit SFU, marketing site).
+const NON_APP_UPSTREAMS = new Set(['livekit', 'site']);
+
+/** The upstream service name of a proxy location (literal proxy_pass host or its `set` variable). */
+export function upstreamHost(loc) {
+  const literal = /proxy_pass\s+https?:\/\/([a-z0-9-]+)/i.exec(loc.body);
+  if (literal) return literal[1];
+  const viaSet = /set\s+\$\w+\s+"?([a-z0-9-]+)/i.exec(loc.body);
+  return viaSet ? viaSet[1] : null;
+}
+
+const isDeny = (loc) => loc !== null && /^\s*return\s+404\s*;/m.test(loc.body) && !/proxy_pass/.test(loc.body);
+const isInternalUpstream = (p) => p !== null && /^\/(?:v1\/)?internal(?:\/|$)/i.test(p);
+
+export function checkInternalDeny(name, text) {
+  const problems = [];
+  const locations = parseLocations(text);
+  const proxies = locations.filter(
+    (l) => (l.mod === '' || l.mod === '^~') && /proxy_pass/.test(l.body) && !NON_APP_UPSTREAMS.has(upstreamHost(l) ?? ''),
+  );
+  const probes = new Set(KNOWN_SERVICE_INTERNAL);
+  for (const p of proxies) {
+    if (!p.pattern.endsWith('/')) continue;
+    for (const tail of ['internal/probe', 'v1/internal/probe', 'internal', 'v1/internal', 'Internal/probe']) {
+      probes.add(p.pattern + tail);
+    }
+  }
+  for (const uri of probes) {
+    const loc = selectLocation(locations, uri);
+    if (isDeny(loc)) continue;
+    const target = loc && proxies.includes(loc) ? upstreamPath(loc, uri) : null;
+    if (isInternalUpstream(target) || KNOWN_SERVICE_INTERNAL.includes(uri)) {
+      problems.push(`${name}: ${uri} reaches the upstream's internal route ${target ?? '(unknown)'} (add it to the internal-route deny regex)`);
+    }
+  }
+  for (const uri of BROWSER_FACING_INTERNAL) {
+    const loc = selectLocation(locations, uri);
+    if (isDeny(loc)) problems.push(`${name}: browser-facing ${uri} is denied (the SPAs call it; exempt it in the deny regex)`);
+  }
+  return problems;
+}
+
 export function launchpadPaths(text) {
   const ids = [];
   const re = /path:\s*'\/([a-z0-9-]+)\/'/g;
@@ -90,6 +230,7 @@ function main() {
     const text = readFileSync(join(REPO_ROOT, rel), 'utf8');
     const res = checkConfig(rel, text);
     problems.push(...res.problems);
+    problems.push(...checkInternalDeny(rel, text));
     if (rel.endsWith('nginx-with-site.conf')) siteServed = res.served;
     console.log(`[nginx-spa] ${rel}: ${res.served.size} SPAs served`);
   }
