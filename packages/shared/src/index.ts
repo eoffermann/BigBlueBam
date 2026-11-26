@@ -24,6 +24,8 @@ export * from './csv-safe.js';
 export * from './end-of-day.js';
 // What makes a Bam phase "open" (the api's task upsert and Bastion's project checks, #253).
 export * from './bam-phase-rules.js';
+// Canonical JSON (keys sorted at every depth) for cache keys and fingerprints (#275). Pure.
+export * from './stable-json.js';
 // NOTE: bulwark-arm-key.ts is intentionally NOT re-exported here. It imports node:crypto and is
 // server-only; re-exporting it from this browser-facing barrel drags node:crypto into every SPA
 // bundle and breaks the rollup production build. Server code (bulwark-api, apps/worker) imports it
