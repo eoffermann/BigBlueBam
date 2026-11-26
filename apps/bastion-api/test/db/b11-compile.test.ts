@@ -121,6 +121,97 @@ describe.skipIf(!DATABASE_URL)('batch 11: AI compile slices (live database)', ()
     expect((fin.drop_reasons as { done_keys: string[] }).done_keys.sort()).toEqual([...KEYS].sort());
   });
 
+  /** Make writes of one control's assertions fail deterministically (like a U+0000 the database refuses). */
+  async function breakWrites(controlId: string, onlyAi: boolean) {
+    const fn = `b11_fail_${controlId.replace(/-/g, '')}`;
+    await sql.unsafe(`
+      CREATE OR REPLACE FUNCTION ${fn}() RETURNS trigger LANGUAGE plpgsql AS $f$
+      BEGIN
+        IF NEW.control_id = '${controlId}'::uuid ${onlyAi ? "AND NEW.proposed_by = 'compiler'" : ''} THEN
+          RAISE EXCEPTION 'unsupported Unicode escape sequence (test)' USING ERRCODE = '22P05';
+        END IF;
+        RETURN NEW;
+      END $f$`);
+    await sql.unsafe(`DROP TRIGGER IF EXISTS ${fn} ON bastion_assertions; CREATE TRIGGER ${fn} BEFORE INSERT ON bastion_assertions FOR EACH ROW EXECUTE FUNCTION ${fn}()`);
+    return async () => {
+      await sql.unsafe(`DROP TRIGGER IF EXISTS ${fn} ON bastion_assertions`);
+      await sql.unsafe(`DROP FUNCTION IF EXISTS ${fn}()`);
+    };
+  }
+
+  async function controlId(org: string, key: string) {
+    return String((await sql`SELECT id FROM bastion_controls WHERE organization_id = ${org} AND control_key = ${key}`)[0]!.id);
+  }
+
+  it('an AI answer the database refuses is counted, released, and the control is retried with the library suggestions (#241)', async () => {
+    const s = await setUp('slice-fail');
+    const engine = makeDeps(sql, { clock: clock() });
+    const replica = await import('../../src/services/compile-ai.service.js?replica=d');
+    const calls: string[] = [];
+    const llm: LlmChat = async ({ messages }) => {
+      const key = controlKeyOf(messages);
+      calls.push(key);
+      return recorded(key);
+    };
+    const d: CompileAiDeps = { engine, llm, permits: openPermits, sliceLock: redisDown, background: false, sliceCutoffMs: 0 };
+    const restore = await breakWrites(await controlId(s.org, 'change.peer_review'), true);
+    try {
+      const body = { organization_id: s.org, run_id: s.runId, claimant: 'worker:W' };
+      let last = await replica.compileSlice(d, body);
+      const seen: Array<{ status: string; llm: number; resume: number }> = [];
+      for (let i = 0; i < 8 && !last.done; i++) {
+        const r = (await sql`SELECT status, llm_calls_used, resume_count FROM bastion_compile_runs WHERE id = ${s.runId}`)[0]!;
+        seen.push({ status: String(r.status), llm: Number(r.llm_calls_used), resume: Number(r.resume_count) });
+        last = await replica.compileSlice(d, body);
+      }
+      // The failing slice was released (queued, resume 1) with its call counted, not re-run forever.
+      expect(seen.some((x) => x.status === 'queued' && x.resume === 1)).toBe(true);
+      expect(last).toMatchObject({ done: true, status: 'succeeded', controls_done: 3 });
+      // change.peer_review was asked once; its retry used the library, not another AI call.
+      expect(calls.filter((k) => k === 'change.peer_review')).toHaveLength(1);
+      const run = (await sql`SELECT llm_calls_used, resume_count, error, drop_reasons FROM bastion_compile_runs WHERE id = ${s.runId}`)[0]!;
+      expect(Number(run.llm_calls_used)).toBe(calls.length);
+      expect(run.error).toBeNull();
+      expect((run.drop_reasons as { fallback_keys: string[] }).fallback_keys).toContain('change.peer_review');
+    } finally {
+      await restore();
+    }
+  });
+
+  it('a control that can never be written parks the run as partial after MAX_RESUMES slices (#241)', async () => {
+    const s = await setUp('slice-park');
+    const engine = makeDeps(sql, { clock: clock() });
+    const replica = await import('../../src/services/compile-ai.service.js?replica=e');
+    const calls: string[] = [];
+    const llm: LlmChat = async ({ messages }) => {
+      const key = controlKeyOf(messages);
+      calls.push(key);
+      return recorded(key);
+    };
+    const d: CompileAiDeps = { engine, llm, permits: openPermits, sliceLock: redisDown, background: false, sliceCutoffMs: 0 };
+    const restore = await breakWrites(await controlId(s.org, 'auth.mfa'), false);
+    try {
+      const body = { organization_id: s.org, run_id: s.runId, claimant: 'worker:W' };
+      let last = await replica.compileSlice(d, body);
+      let polls = 1;
+      for (; polls < 20 && !last.done; polls++) last = await replica.compileSlice(d, body);
+      expect(last).toMatchObject({ done: true, status: 'partial' });
+      expect(polls).toBeLessThanOrEqual(3);
+      const run = (await sql`SELECT llm_calls_used, resume_count, error, slice_token FROM bastion_compile_runs WHERE id = ${s.runId}`)[0]!;
+      expect(Number(run.resume_count)).toBe(3);
+      expect(String(run.error)).toContain('stopped');
+      expect(run.slice_token).toBeNull();
+      // One AI call for the control, ever; its write failures did not un-count it.
+      expect(calls).toEqual(['auth.mfa']);
+      expect(Number(run.llm_calls_used)).toBe(1);
+      // The one-active-compile slot is free again.
+      const next = await orgTx(sql, s.org, (tx) => createQueuedAiRun(tx, s.org, s.framework, s.owner, '00000000-0000-4000-8000-00000000aaaa'));
+      expect(next.status).toBe('queued');
+    } finally {
+      await restore();
+    }
+  });
+
   it('a slice that lost its fence writes nothing for the control it was on (#242)', async () => {
     const s = await setUp('lost');
     const engine = makeDeps(sql, { clock: clock() });

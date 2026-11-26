@@ -101,6 +101,8 @@ export interface CompileProgress {
   cut_off_keys: string[];
   not_applicable: Array<{ control_key: string; ref_code: string; reason: string }>;
   withheld_labels: number;
+  /** Controls whose write failed after an AI answer (#241): the next slice proposes the library's suggestions for them. */
+  retry_with_library: string[];
 }
 
 function progressOf(raw: unknown, providerId: string | null): CompileProgress {
@@ -116,6 +118,7 @@ function progressOf(raw: unknown, providerId: string | null): CompileProgress {
     cut_off_keys: Array.isArray(p.cut_off_keys) ? p.cut_off_keys : [],
     not_applicable: Array.isArray(p.not_applicable) ? p.not_applicable : [],
     withheld_labels: Number(p.withheld_labels ?? 0),
+    retry_with_library: Array.isArray(p.retry_with_library) ? p.retry_with_library : [],
   };
 }
 
@@ -282,9 +285,21 @@ export async function compileSlice(d: CompileAiDeps, body: { organization_id: st
   const mine = claimed[0] as unknown as RunRow;
   const fence: Fence = { claimant, token: String(mine.slice_token) };
 
-  const slice = runSlice(d, mine, fence)
-    .catch((err) => {
-      d.engine.log.error({ run_id: runId, err: (err as Error).message }, 'bastion-compile: slice failed');
+  const current: SliceCursor = { control_key: null };
+  const slice = runSlice(d, mine, fence, current)
+    .catch(async (err) => {
+      if (err instanceof ClaimLostError) {
+        d.engine.log.info({ run_id: runId }, 'bastion-compile: slice stopped; another slice owns the run now');
+        return;
+      }
+      // A slice that throws is recorded and released (#241), never silently re-driven: the run
+      // goes back to `queued` with resume_count + 1 and, at MAX_RESUMES, to `partial`, so a
+      // deterministic failure costs at most a bounded number of slices.
+      const r = await failSlice(d, mine, fence, current.control_key).catch(() => null);
+      d.engine.log.error(
+        { run_id: runId, err: (err as Error).message, resume_count: r?.resume_count ?? null, status: r?.status ?? null },
+        `bastion-compile: slice failed; run ${r?.status === 'partial' ? `parked as partial after ${r.resume_count} attempts` : `released for another attempt (${r?.resume_count ?? '?'} of ${MAX_RESUMES})`}`,
+      );
     })
     .finally(async () => {
       active.delete(runId);
@@ -348,6 +363,11 @@ async function loadPlanContext(tx: Tx, orgId: string, frameworkId: string) {
   };
 }
 
+/** The control a slice is on, so a slice that throws can name it (#241). */
+interface SliceCursor {
+  control_key: string | null;
+}
+
 /** One slice's ownership of the run row: the worker's claimant AND this slice's token (#242). */
 interface Fence {
   claimant: string;
@@ -370,6 +390,27 @@ async function releaseRun(d: CompileAiDeps, run: RunRow, f: Fence): Promise<void
            completed_at = CASE WHEN resume_count + 1 >= ${MAX_RESUMES} THEN ${d.engine.now()}::timestamptz ELSE completed_at END,
            claimed_by = NULL, heartbeat_at = NULL, slice_token = NULL, resume_count = resume_count + 1
      WHERE id = ${run.id} AND organization_id = ${run.organization_id} AND claimed_by = ${f.claimant} AND slice_token = ${f.token} AND status = 'running'`);
+}
+
+export const SLICE_FAILED_RETRYING = 'Setup hit a problem while writing its suggestions and is trying again.';
+export const SLICE_FAILED_PARKED = 'Setup hit the same problem several times and stopped. Start it again from Setup; if it stops again, tell your administrator.';
+
+/** Record a slice that threw and give the run back, fenced (#241). Parks at MAX_RESUMES. */
+async function failSlice(d: CompileAiDeps, run: RunRow, f: Fence, controlKey: string | null): Promise<{ status: string; resume_count: number } | null> {
+  // The control the slice was writing is retried with the library's suggestions (the path a failed
+  // AI call already takes), so one unwritable AI answer cannot park the whole compile.
+  const retry = controlKey ? [controlKey] : [];
+  const r = await orgTx(d.engine.sql, run.organization_id, (tx) => tx`
+    UPDATE bastion_compile_runs
+       SET drop_reasons = jsonb_set(drop_reasons, '{retry_with_library}',
+                                    coalesce(drop_reasons->'retry_with_library', '[]'::jsonb) || ${tx.json(retry as never)}::jsonb),
+           status = CASE WHEN resume_count + 1 >= ${MAX_RESUMES} THEN 'partial' ELSE 'queued' END,
+           error = CASE WHEN resume_count + 1 >= ${MAX_RESUMES} THEN ${SLICE_FAILED_PARKED} ELSE ${SLICE_FAILED_RETRYING} END,
+           completed_at = CASE WHEN resume_count + 1 >= ${MAX_RESUMES} THEN ${d.engine.now()}::timestamptz ELSE completed_at END,
+           claimed_by = NULL, heartbeat_at = NULL, slice_token = NULL, resume_count = resume_count + 1
+     WHERE id = ${run.id} AND organization_id = ${run.organization_id} AND claimed_by = ${f.claimant} AND slice_token = ${f.token} AND status = 'running'
+    RETURNING status, resume_count`);
+  return r[0] ? { status: String(r[0].status), resume_count: Number(r[0].resume_count) } : null;
 }
 
 type AiOutcome =
@@ -429,7 +470,7 @@ async function askAi(
   }
 }
 
-async function runSlice(d: CompileAiDeps, run: RunRow, fence: Fence): Promise<void> {
+async function runSlice(d: CompileAiDeps, run: RunRow, fence: Fence, current: SliceCursor): Promise<void> {
   const sliceStart = Date.now();
   const cutoff = d.sliceCutoffMs ?? LLM_SLICE_START_CUTOFF_MS;
   const orgId = run.organization_id;
@@ -469,15 +510,18 @@ async function runSlice(d: CompileAiDeps, run: RunRow, fence: Fence): Promise<vo
     // Stop starting controls at the cutoff (spec 7.3), but always do at least one per slice.
     if (processed > 0 && Date.now() - sliceStart > cutoff) break;
     processed += 1;
+    current.control_key = c.control_key;
     const lib = libraryControl(c.control_key);
 
     // Ask the AI (outside any transaction), unless there is no provider, no library entry to
-    // tailor, or the run's call budget is spent.
+    // tailor, the run's call budget is spent, or an earlier slice could not write this control's
+    // AI answer (#241).
     let tailored: Parameters<typeof planTailoredControl>[1] = null;
     let fallbackReason: string | null = null;
     let withheld = 0;
     let cutOff = false;
     if (!lib) fallbackReason = null;
+    else if (progress.retry_with_library.includes(c.control_key)) fallbackReason = 'the AI answer for this control could not be saved, so the library suggestions were proposed';
     else if (!providerId) fallbackReason = 'no AI provider is set up, so the library suggestions were proposed';
     else if (calls >= ctx.maxCalls) fallbackReason = `the AI call budget for this run (${ctx.maxCalls}) was used up, so the library suggestions were proposed`;
     else {
@@ -490,7 +534,15 @@ async function runSlice(d: CompileAiDeps, run: RunRow, fence: Fence): Promise<vo
         }
         break;
       }
-      calls += 1;
+      // The call was made: count it NOW, in its own statement (#241). Counted inside the control
+      // transaction it rolled back with any write failure, so the budget never moved and a run
+      // stuck on one control re-spent a call every slice past max_llm_calls_per_compile.
+      const counted = await orgTx(d.engine.sql, orgId, (tx) => tx`
+        UPDATE bastion_compile_runs SET llm_calls_used = llm_calls_used + 1, heartbeat_at = ${d.engine.now()}
+         WHERE id = ${run.id} AND organization_id = ${orgId} AND claimed_by = ${fence.claimant} AND slice_token = ${fence.token} AND status = 'running'
+        RETURNING llm_calls_used`);
+      if (!counted[0]) throw new ClaimLostError();
+      calls = Number(counted[0].llm_calls_used);
       if (outcome.kind === 'fallback') fallbackReason = outcome.reason;
       else {
         withheld = outcome.withheld;
@@ -551,7 +603,7 @@ async function runSlice(d: CompileAiDeps, run: RunRow, fence: Fence): Promise<vo
       const upd = await tx`
         UPDATE bastion_compile_runs
            SET controls_done = ${progress.done_keys.length}, assertions_proposed = assertions_proposed + ${plan.planned.length},
-               assertions_dropped = assertions_dropped + ${plan.dropped.length}, llm_calls_used = ${calls},
+               assertions_dropped = assertions_dropped + ${plan.dropped.length},
                drop_reasons = ${tx.json(progress as never)}, heartbeat_at = ${d.engine.now()}
          WHERE id = ${run.id} AND organization_id = ${orgId} AND claimed_by = ${fence.claimant} AND slice_token = ${fence.token} AND status = 'running'
         RETURNING assertions_proposed, assertions_dropped`;
@@ -559,6 +611,7 @@ async function runSlice(d: CompileAiDeps, run: RunRow, fence: Fence): Promise<vo
       return { planned: plan.planned.length, dropped: plan.dropped.length, proposed_total: Number(upd[0].assertions_proposed), dropped_total: Number(upd[0].assertions_dropped) };
     });
     done.add(c.control_key);
+    current.control_key = null;
     if (!written) continue;
     d.engine.log.info(
       { run_id: run.id },
@@ -579,7 +632,8 @@ async function finishRun(d: CompileAiDeps, run: RunRow, fence: Fence, progress: 
   await orgTx(d.engine.sql, orgId, async (tx) => {
     const r = await tx`
       UPDATE bastion_compile_runs
-         SET status = 'succeeded', used_fallback = ${allFallback}, completed_at = ${d.engine.now()}, heartbeat_at = ${d.engine.now()}, slice_token = NULL
+         SET status = 'succeeded', used_fallback = ${allFallback}, completed_at = ${d.engine.now()}, heartbeat_at = ${d.engine.now()}, slice_token = NULL,
+             error = NULL
        WHERE id = ${run.id} AND organization_id = ${orgId} AND claimed_by = ${fence.claimant} AND slice_token = ${fence.token} AND status = 'running'
       RETURNING assertions_proposed, assertions_dropped, llm_calls_used`;
     const row = r[0];

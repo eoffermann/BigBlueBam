@@ -444,8 +444,16 @@ export async function autofillSlice(d: AutofillDeps, body: { organization_id: st
   const mine = (await readQ(d, orgId, id)) as QRow;
 
   const slice = runSlice(d, mine, fence)
-    .catch((err) => {
-      d.engine.log.error({ questionnaire_id: id, err: (err as Error).message }, 'bastion-autofill: slice failed');
+    .catch(async (err) => {
+      if (err instanceof ClaimLostError) {
+        d.engine.log.info({ questionnaire_id: id }, 'bastion-autofill: slice stopped; another slice owns the questionnaire now');
+        return;
+      }
+      // Same bound as the compile (#241): a slice that throws gives the questionnaire back with
+      // resume_count + 1, and at MAX_RESUMES the undrafted rows go to review as "Needs an expert",
+      // instead of the next poll re-driving (and re-paying for) the same failing row forever.
+      await releaseQ(d, mine, fence).catch(() => undefined);
+      d.engine.log.error({ questionnaire_id: id, err: (err as Error).message }, 'bastion-autofill: slice failed; the questionnaire was released (sent to review after repeated failures)');
     })
     .finally(async () => {
       active.delete(id);
