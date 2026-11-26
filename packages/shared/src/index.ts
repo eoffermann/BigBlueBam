@@ -22,6 +22,8 @@ export * from './queues.js';
 export * from './csv-safe.js';
 // The last instant of a calendar date in an IANA zone (Bastion evidence expiry, spec 3.3). Pure.
 export * from './end-of-day.js';
+// What makes a Bam phase "open" (the api's task upsert and Bastion's project checks, #253).
+export * from './bam-phase-rules.js';
 // NOTE: bulwark-arm-key.ts is intentionally NOT re-exported here. It imports node:crypto and is
 // server-only; re-exporting it from this browser-facing barrel drags node:crypto into every SPA
 // bundle and breaks the rollup production build. Server code (bulwark-api, apps/worker) imports it
