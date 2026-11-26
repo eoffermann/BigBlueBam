@@ -13,12 +13,18 @@ export class CacheService {
     private defaultTtl = 60,
   ) {}
 
-  private key(widgetId: string): string {
-    return `${CACHE_PREFIX}${widgetId}`;
+  /**
+   * Widget result keys carry the org (BNC-1, #246): `bench:query:<orgId>:<widgetId>`.
+   * The old `bench:query:<widgetId>` was one slot shared by every tenant, a
+   * cross-tenant read and cache-poisoning primitive. `orgId` is required so no
+   * caller can build an unnamespaced key.
+   */
+  private key(widgetId: string, orgId: string): string {
+    return `${CACHE_PREFIX}${orgId}:${widgetId}`;
   }
 
-  async get(widgetId: string): Promise<unknown | null> {
-    const data = await this.redis.get(this.key(widgetId));
+  async get(widgetId: string, orgId: string): Promise<unknown | null> {
+    const data = await this.redis.get(this.key(widgetId, orgId));
     if (!data) return null;
     try {
       return JSON.parse(data);
@@ -27,20 +33,13 @@ export class CacheService {
     }
   }
 
-  async set(widgetId: string, data: unknown, ttl?: number): Promise<void> {
+  async set(widgetId: string, orgId: string, data: unknown, ttl?: number): Promise<void> {
     const seconds = ttl ?? this.defaultTtl;
-    await this.redis.setex(this.key(widgetId), seconds, JSON.stringify(data));
+    await this.redis.setex(this.key(widgetId, orgId), seconds, JSON.stringify(data));
   }
 
-  async invalidate(widgetId: string): Promise<void> {
-    await this.redis.del(this.key(widgetId));
-  }
-
-  async invalidateDashboard(dashboardPrefix: string): Promise<void> {
-    const keys = await this.redis.keys(`${CACHE_PREFIX}${dashboardPrefix}*`);
-    if (keys.length > 0) {
-      await this.redis.del(...keys);
-    }
+  async invalidate(widgetId: string, orgId: string): Promise<void> {
+    await this.redis.del(this.key(widgetId, orgId));
   }
 
   // -------------------------------------------------------------------------

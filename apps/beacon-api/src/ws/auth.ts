@@ -1,6 +1,7 @@
 import { eq, and } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import { beaconEntries, projectMemberships } from '../db/schema/index.js';
+import { beaconRefLookup } from '../lib/beacon-ref.js';
 
 // ---------------------------------------------------------------------------
 // WebSocket-specific beacon access checker (Beacon T4 co-editing)
@@ -37,7 +38,6 @@ export interface WsAccessResult {
   canEdit: boolean;
 }
 
-const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
  * Determines whether the given user can connect to a beacon's collaboration
@@ -52,10 +52,8 @@ export async function checkBeaconAccessForWs(
 ): Promise<WsAccessResult> {
   const deny: WsAccessResult = { hasAccess: false, canEdit: false };
 
-  const isUuid = UUID_REGEX.test(beaconIdOrSlug);
-  const condition = isUuid
-    ? eq(beaconEntries.id, beaconIdOrSlug)
-    : eq(beaconEntries.slug, beaconIdOrSlug);
+  // Slugs are unique per org (#246); see lib/beacon-ref.ts.
+  const lookup = beaconRefLookup(beaconIdOrSlug, orgId, isSuperuser);
 
   const [beacon] = await db
     .select({
@@ -67,7 +65,8 @@ export async function checkBeaconAccessForWs(
       created_by: beaconEntries.created_by,
     })
     .from(beaconEntries)
-    .where(condition)
+    .where(lookup.where)
+    .orderBy(lookup.orderBy)
     .limit(1);
 
   if (!beacon) return deny;

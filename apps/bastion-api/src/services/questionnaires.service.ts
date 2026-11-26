@@ -340,21 +340,32 @@ async function citationLabels(tx: Tx, orgId: string, refs: Array<{ entity_type: 
   return out;
 }
 
-async function shapeItems(d: QuestionnaireDeps, viewer: Viewer, tx: Tx, rows: Record<string, unknown>[]) {
+/** can_access for the reader and, when an agent reads for someone, the asker too (narrows, never widens). */
+function visibilityCheck(d: QuestionnaireDeps, viewer: Viewer, asker: string | null) {
+  const cache = new Map<string, boolean>();
+  return async (ref: { entity_type: string; entity_id: string }) => {
+    const k = `${ref.entity_type}:${ref.entity_id}`;
+    let ok = cache.get(k);
+    if (ok === undefined) {
+      ok = await d.canAccess(viewer.id, ref.entity_type, ref.entity_id).catch(() => false);
+      if (ok && asker && asker !== viewer.id) ok = await d.canAccess(asker, ref.entity_type, ref.entity_id).catch(() => false);
+      cache.set(k, ok);
+    }
+    return ok;
+  };
+}
+
+async function shapeItems(d: QuestionnaireDeps, viewer: Viewer, tx: Tx, rows: Record<string, unknown>[], asker: string | null = null) {
   const all = rows.flatMap((r) => (r.cited_refs as Array<{ entity_type: string; entity_id: string }> | null) ?? []);
   const labels = await citationLabels(tx, viewer.org_id, all);
-  const cache = new Map<string, boolean>();
+  const visibleTo = visibilityCheck(d, viewer, asker);
   const out = [];
   for (const r of rows) {
     const refs = (r.cited_refs as Array<{ entity_type: string; entity_id: string }> | null) ?? [];
     const visible = [];
     for (const ref of refs) {
       const k = `${ref.entity_type}:${ref.entity_id}`;
-      let ok = cache.get(k);
-      if (ok === undefined) {
-        ok = await d.canAccess(viewer.id, ref.entity_type, ref.entity_id).catch(() => false);
-        cache.set(k, ok);
-      }
+      const ok = await visibleTo(ref);
       if (ok) visible.push({ ...ref, label: labels.get(k)?.label ?? null, state_words: labels.get(k)?.state ? (STATE_WORDS[labels.get(k)?.state as string] ?? null) : null });
     }
     const band = r.confidence_band as keyof typeof BASTION_CONFIDENCE_WORDS | null;
@@ -370,7 +381,7 @@ async function shapeItems(d: QuestionnaireDeps, viewer: Viewer, tx: Tx, rows: Re
   return out;
 }
 
-export async function listItems(d: QuestionnaireDeps, viewer: Viewer, id: string, q: BastionQuestionnaireItemListQuery) {
+export async function listItems(d: QuestionnaireDeps, viewer: Viewer, id: string, q: BastionQuestionnaireItemListQuery, asker: string | null = null) {
   return orgTx(d.engine.sql, viewer.org_id, async (tx) => {
     await loadQ(tx, viewer.org_id, id);
     const rows = await tx.unsafe(
@@ -382,7 +393,7 @@ export async function listItems(d: QuestionnaireDeps, viewer: Viewer, id: string
         ORDER BY i.sheet_name, i.row_index`,
       [viewer.org_id, id, q.band ?? null, q.review_status ?? null, q.needs_review ?? null],
     );
-    const data = await shapeItems(d, viewer, tx, rows as unknown as Record<string, unknown>[]);
+    const data = await shapeItems(d, viewer, tx, rows as unknown as Record<string, unknown>[], asker);
     const blocking = await approvalBlockers(tx, viewer.org_id, id);
     return { data, approval: blocking, next_cursor: null };
   });
@@ -540,7 +551,7 @@ export async function exportQuestionnaire(d: QuestionnaireDeps, viewer: Viewer, 
 
 /* ------------------------------ answer library ------------------------------ */
 
-export async function listAnswerLibrary(d: QuestionnaireDeps, viewer: Viewer, q: BastionAnswerLibraryQuery) {
+export async function listAnswerLibrary(d: QuestionnaireDeps, viewer: Viewer, q: BastionAnswerLibraryQuery, asker: string | null = null) {
   return orgTx(d.engine.sql, viewer.org_id, async (tx) => {
     const terms = q.q ? tsQueryTerms(q.q) : '';
     const rows = await tx.unsafe(
@@ -553,20 +564,21 @@ export async function listAnswerLibrary(d: QuestionnaireDeps, viewer: Viewer, q:
         ORDER BY rank DESC, l.approved_at DESC NULLS LAST LIMIT $4`,
       terms ? [viewer.org_id, q.include_retired ?? false, q.include_stale ?? true, q.limit, terms] : [viewer.org_id, q.include_retired ?? false, q.include_stale ?? true, q.limit],
     );
-    const shaped = await shapeLibrary(d, viewer, tx, rows as unknown as Record<string, unknown>[]);
+    const shaped = await shapeLibrary(d, viewer, tx, rows as unknown as Record<string, unknown>[], asker);
     return { data: shaped, next_cursor: null };
   });
 }
 
-async function shapeLibrary(d: QuestionnaireDeps, viewer: Viewer, tx: Tx, rows: Record<string, unknown>[]) {
+async function shapeLibrary(d: QuestionnaireDeps, viewer: Viewer, tx: Tx, rows: Record<string, unknown>[], asker: string | null = null) {
   const all = rows.flatMap((r) => (r.cited_refs as Array<{ entity_type: string; entity_id: string }> | null) ?? []);
   const labels = await citationLabels(tx, viewer.org_id, all);
+  const visibleTo = visibilityCheck(d, viewer, asker);
   const out = [];
   for (const r of rows) {
     const refs = (r.cited_refs as Array<{ entity_type: string; entity_id: string }> | null) ?? [];
     const visible = [];
     for (const ref of refs) {
-      if (await d.canAccess(viewer.id, ref.entity_type, ref.entity_id).catch(() => false)) {
+      if (await visibleTo(ref)) {
         visible.push({ ...ref, label: labels.get(`${ref.entity_type}:${ref.entity_id}`)?.label ?? null });
       }
     }

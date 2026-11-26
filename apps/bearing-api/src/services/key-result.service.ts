@@ -55,15 +55,22 @@ export interface AddLinkInput {
 // CRUD
 // ---------------------------------------------------------------------------
 
-export async function listKeyResults(goalId: string) {
+/**
+ * `orgId` is required (BRG-1, #246). bearing_key_results has no org column of
+ * its own, so the only tenant predicate is the join through bearing_goals. A
+ * caller-supplied goal id from another org yields zero rows instead of that
+ * org's key results.
+ */
+export async function listKeyResults(goalId: string, orgId: string) {
   const rows = await db
-    .select()
+    .select({ kr: bearingKeyResults })
     .from(bearingKeyResults)
-    .where(eq(bearingKeyResults.goal_id, goalId))
+    .innerJoin(bearingGoals, eq(bearingKeyResults.goal_id, bearingGoals.id))
+    .where(and(eq(bearingKeyResults.goal_id, goalId), eq(bearingGoals.organization_id, orgId)))
     .orderBy(asc(bearingKeyResults.sort_order))
     .limit(200);
 
-  return { data: rows };
+  return { data: rows.map((r) => r.kr) };
 }
 
 export async function getKeyResult(id: string) {

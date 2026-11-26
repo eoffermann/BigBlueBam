@@ -45,6 +45,17 @@ import type {
   BastionPolicyUpdate,
   BastionRequestAttestations,
 } from '@bigbluebam/shared';
+import type {
+  BastionAnswerLibraryQuery,
+  BastionAnswerLibraryUpdate,
+  BastionDraftAnswer,
+  BastionQuestionnaireAutofill,
+  BastionQuestionnaireCreate,
+  BastionQuestionnaireItemListQuery,
+  BastionQuestionnaireItemReview,
+  BastionQuestionnaireListQuery,
+  BastionQuestionnaireUpdate,
+} from '@bigbluebam/shared';
 import type { ApiClient } from '../middleware/api-client.js';
 
 /**
@@ -243,6 +254,39 @@ export function createBastionClient(bastionApiUrl: string, api: ApiClient, fetch
     listPolicyAttestations: (id: string) => request('GET', `/policies/${id}/attestations`),
     myAttestations: () => request('GET', '/me/attestations'),
     requestAttestations: (id: string, body: BastionRequestAttestations) => request('POST', `/policies/${id}/request-attestations`, body),
+    // ── M8: questionnaires and the answer library (spec 5.1 rows 72-83) ─────────────────
+    // Row 79 (approve) has no client method: session required (spec 2.8, #136). Row 80 (export)
+    // is a byte response: no method.
+    listQuestionnaires: (q: Partial<BastionQuestionnaireListQuery> = {}) =>
+      request('GET', `/questionnaires${qs({ status: q.status, limit: q.limit === undefined ? undefined : String(q.limit) })}`),
+    createQuestionnaire: (body: BastionQuestionnaireCreate) => request('POST', '/questionnaires', body),
+    getQuestionnaire: (id: string, a: Partial<Asker> = {}) => request('GET', `/questionnaires/${id}${qs({ asker_user_id: a.asker_user_id })}`),
+    updateQuestionnaire: (id: string, body: BastionQuestionnaireUpdate) => request('PATCH', `/questionnaires/${id}`, body),
+    autofillQuestionnaire: (id: string, body: BastionQuestionnaireAutofill) => request('POST', `/questionnaires/${id}/autofill`, body),
+    listQuestionnaireItems: (id: string, q: Partial<BastionQuestionnaireItemListQuery> & Partial<Asker> = {}) =>
+      request(
+        'GET',
+        `/questionnaires/${id}/items${qs({
+          band: q.band,
+          review_status: q.review_status,
+          needs_review: q.needs_review === undefined ? undefined : String(q.needs_review),
+          asker_user_id: q.asker_user_id,
+        })}`,
+      ),
+    reviewQuestionnaireItem: (itemId: string, body: BastionQuestionnaireItemReview) => request('PATCH', `/questionnaire-items/${itemId}`, body),
+    draftAnswer: (body: BastionDraftAnswer) => request('POST', '/answers/draft', body),
+    searchAnswerLibrary: (q: Partial<BastionAnswerLibraryQuery> & Partial<Asker> = {}) =>
+      request(
+        'GET',
+        `/answer-library${qs({
+          q: q.q,
+          include_stale: q.include_stale === undefined ? undefined : String(q.include_stale),
+          include_retired: q.include_retired === undefined ? undefined : String(q.include_retired),
+          limit: q.limit === undefined ? undefined : String(q.limit),
+          asker_user_id: q.asker_user_id,
+        })}`,
+      ),
+    updateAnswerLibrary: (id: string, body: BastionAnswerLibraryUpdate) => request('PATCH', `/answer-library/${id}`, body),
     // Row 9 with the M7 option: use_ai false forces the library's suggestions.
     compileFrameworkWith: (id: string, body: BastionCompileFramework) => request('POST', `/frameworks/${id}/compile`, body),
   };

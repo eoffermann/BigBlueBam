@@ -206,7 +206,11 @@ export default async function keyResultRoutes(fastify: FastifyInstance) {
     '/goals/:id/key-results',
     { preHandler: [requireAuth, requireGoalAccess(), shadowOnly('bearing.goal_key_result.get')] },
     async (request, reply) => {
-      const result = await krService.listKeyResults((request as any).goal.id);
+      // The vetted goal's own org, not the caller's: requireGoalAccess() has
+      // already authorized this goal and deliberately allows SuperUser
+      // cross-org reads.
+      const goal = (request as any).goal;
+      const result = await krService.listKeyResults(goal.id, goal.organization_id);
       return reply.send(result);
     },
   );

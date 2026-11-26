@@ -479,7 +479,7 @@ async function releaseQ(d: AutofillDeps, q: QRow, claimant: string): Promise<voi
 export async function parkQuestionnaire(tx: Tx, orgId: string, id: string): Promise<void> {
   await tx`
     UPDATE bastion_questionnaire_items
-       SET confidence_band = 'low', confidence = 0, band_reasons = ${NOT_DRAFTED_REASONS}::jsonb
+       SET confidence_band = 'low', confidence = 0, band_reasons = ${NOT_DRAFTED_REASONS}::text::jsonb
      WHERE organization_id = ${orgId} AND questionnaire_id = ${id} AND confidence_band IS NULL`;
   const n = await recount(tx, orgId, id);
   await tx`

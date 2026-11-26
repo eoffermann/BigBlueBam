@@ -2,6 +2,7 @@ import type { FastifyRequest, FastifyReply } from 'fastify';
 import { eq, and } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import { beaconEntries, projectMemberships, users, projects } from '../db/schema/index.js';
+import { beaconRefLookup } from '../lib/beacon-ref.js';
 
 const ROLE_HIERARCHY = ['viewer', 'member', 'admin', 'owner'] as const;
 function roleLevel(role: string): number {
@@ -171,12 +172,9 @@ export function requireBeaconReadAccess() {
       });
     }
 
-    // Accept UUID or slug
-    const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-    const isUuid = UUID_REGEX.test(id);
-    const condition = isUuid
-      ? eq(beaconEntries.id, id)
-      : eq(beaconEntries.slug, id);
+    // Accept UUID or slug. Slugs are unique per org (#246), so a slug resolves
+    // within the caller's org; see lib/beacon-ref.ts.
+    const lookup = beaconRefLookup(id, request.user.org_id, request.user.is_superuser);
 
     const rows = await db
       .select({
@@ -187,7 +185,8 @@ export function requireBeaconReadAccess() {
       .from(beaconEntries)
       .leftJoin(users, eq(users.id, beaconEntries.owned_by))
       .leftJoin(projects, eq(projects.id, beaconEntries.project_id))
-      .where(condition)
+      .where(lookup.where)
+      .orderBy(lookup.orderBy)
       .limit(1);
     const row = rows[0];
     const beacon = row ? { ...row.beacon, owner_name: row.owner_name, project_name: row.project_name } : undefined;
