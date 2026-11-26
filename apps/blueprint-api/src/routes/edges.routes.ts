@@ -53,7 +53,7 @@ export default async function edgeRoutes(fastify: FastifyInstance) {
       const orgId = request.user!.org_id;
       const userId = request.user!.id;
       try {
-        await diagramSvc.assertCanEdit(orgId, userId, request.params.id);
+        await diagramSvc.assertCanEdit(orgId, request.user!, request.params.id);
         const row = await svc.createEdge(request.params.id, body);
         publishBoltEvent(
           'edge.created',
@@ -83,9 +83,8 @@ export default async function edgeRoutes(fastify: FastifyInstance) {
     async (request, reply) => {
       const body = updateEdgeSchema.parse(request.body);
       const orgId = request.user!.org_id;
-      const userId = request.user!.id;
       try {
-        await diagramSvc.assertCanEdit(orgId, userId, request.params.id);
+        await diagramSvc.assertCanEdit(orgId, request.user!, request.params.id);
         const row = await svc.updateEdge(request.params.id, request.params.edgeId, body);
         await broadcastToDiagram(fastify.redis, request.params.id, {
           type: 'blueprint.edge.updated',
@@ -108,9 +107,8 @@ export default async function edgeRoutes(fastify: FastifyInstance) {
     { preHandler: [requireAuth, requireScope('read_write'), fastify.requireCan('blueprint.diagram.write')] },
     async (request, reply) => {
       const orgId = request.user!.org_id;
-      const userId = request.user!.id;
       try {
-        await diagramSvc.assertCanEdit(orgId, userId, request.params.id);
+        await diagramSvc.assertCanEdit(orgId, request.user!, request.params.id);
         const row = await svc.deleteEdge(request.params.id, request.params.edgeId);
         await broadcastToDiagram(fastify.redis, request.params.id, {
           type: 'blueprint.edge.deleted',

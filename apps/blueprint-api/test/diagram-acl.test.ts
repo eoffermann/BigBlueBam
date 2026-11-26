@@ -123,6 +123,11 @@ const PRIVATE = '00000000-0000-0000-0000-00000000d001';
 const SHARED = '00000000-0000-0000-0000-00000000d002';
 const C_OWNER = '00000000-0000-0000-0000-00000000c001';
 const C_SHARED = '00000000-0000-0000-0000-00000000c002';
+// Issue #181: a Bam project, a member of it, and diagrams scoped to it.
+const PROJECT = '00000000-0000-0000-0000-0000000000f1';
+const PROJ_MEMBER = '00000000-0000-0000-0000-000000000006';
+const PROJ_DIAG = '00000000-0000-0000-0000-00000000d003';
+const UNSCOPED_PROJ_DIAG = '00000000-0000-0000-0000-00000000d004';
 
 const ROLE_OF: Record<string, string> = {
   [OWNER]: 'member',
@@ -130,6 +135,7 @@ const ROLE_OF: Record<string, string> = {
   [EDITOR]: 'member',
   [CO_OWNER]: 'member',
   [ADMIN]: 'admin',
+  [PROJ_MEMBER]: 'member',
 };
 
 vi.mock('../src/plugins/auth.js', () => ({
@@ -159,6 +165,8 @@ beforeAll(async () => {
   app.decorate('redis', { publish: vi.fn(async () => 1) });
   const mod = await import('../src/routes/diagrams.routes.js');
   await app.register(mod.default, { prefix: '/v1' });
+  const cross = await import('../src/routes/cross-product.routes.js');
+  await app.register(cross.default, { prefix: '/v1' });
   await app.ready();
 });
 
@@ -174,8 +182,13 @@ beforeEach(() => {
       [
         { id: PRIVATE, org_id: ORG, visibility: 'private', created_by: OWNER, name: 'Private' },
         { id: SHARED, org_id: ORG, visibility: 'organization', created_by: OWNER, name: 'Shared' },
+        { id: PROJ_DIAG, org_id: ORG, visibility: 'project', project_id: PROJECT, created_by: OWNER, name: 'Project' },
+        { id: UNSCOPED_PROJ_DIAG, org_id: ORG, visibility: 'project', project_id: null, created_by: OWNER, name: 'Unscoped' },
       ],
     ],
+    [schema.projects, [{ id: PROJECT, org_id: ORG, name: 'Restricted' }]],
+    [schema.projectMemberships, [{ id: 'pm1', project_id: PROJECT, user_id: PROJ_MEMBER }]],
+    [schema.tasksStub, []],
     [
       schema.blueprintCollaborators,
       [
@@ -283,6 +296,55 @@ describe('changing visibility is owner-only (#179)', () => {
     expect((await call(OWNER, 'PATCH', `/v1/diagrams/${PRIVATE}`, { visibility: 'organization' })).statusCode).toBe(200);
     expect((await call(CO_OWNER, 'PATCH', `/v1/diagrams/${PRIVATE}`, { visibility: 'project' })).statusCode).toBe(200);
     expect((await call(ADMIN, 'PATCH', `/v1/diagrams/${SHARED}`, { visibility: 'private' })).statusCode).toBe(200);
+  });
+});
+
+describe('Bam project membership gates project diagrams and from-bam (#181)', () => {
+  const nonMemberAttacks: Array<[string, string, unknown?]> = [
+    ['GET', `/v1/diagrams/${PROJ_DIAG}`],
+    ['GET', `/v1/diagrams/${PROJ_DIAG}/graph`],
+    ['GET', `/v1/diagrams/${PROJ_DIAG}/nodes`],
+    ['GET', `/v1/diagrams/${PROJ_DIAG}/export`],
+    ['GET', `/v1/diagrams/${PROJ_DIAG}/comments`],
+    ['PATCH', `/v1/diagrams/${PROJ_DIAG}`, { name: 'hijacked' }],
+    ['POST', `/v1/diagrams/${PROJ_DIAG}/comments`, { body: 'hi' }],
+    ['POST', `/v1/diagrams/${PROJ_DIAG}/versions`, {}],
+    ['POST', `/v1/diagrams/${PROJ_DIAG}/promote-to-tasks`, { project_id: PROJECT }],
+    ['POST', '/v1/diagrams/from-bam', { project_id: PROJECT, include_completed: true }],
+  ];
+  it.each(nonMemberAttacks)('a non-member org member: %s %s -> 403 with no write', async (method, url, payload) => {
+    const res = await call(MEMBER, method, url, payload);
+    expect(res.statusCode).toBe(403);
+    expect(state.writes).toEqual([]);
+  });
+
+  it('a project member reads and edits the project diagram', async () => {
+    expect((await call(PROJ_MEMBER, 'GET', `/v1/diagrams/${PROJ_DIAG}/graph`)).statusCode).toBe(200);
+    expect((await call(PROJ_MEMBER, 'PATCH', `/v1/diagrams/${PROJ_DIAG}`, { name: 'v2' })).statusCode).toBe(200);
+  });
+
+  it('an org admin and the creator read it without a membership row', async () => {
+    expect((await call(ADMIN, 'GET', `/v1/diagrams/${PROJ_DIAG}`)).statusCode).toBe(200);
+    expect((await call(OWNER, 'GET', `/v1/diagrams/${PROJ_DIAG}`)).statusCode).toBe(200);
+  });
+
+  it('a project diagram with no project_id stays org-wide', async () => {
+    expect((await call(MEMBER, 'GET', `/v1/diagrams/${UNSCOPED_PROJ_DIAG}`)).statusCode).toBe(200);
+  });
+
+  it('the list hides the project diagram from a non-member and shows it to a member', async () => {
+    // include_archived only because the fake rows carry no is_archived column.
+    const ids = async (u: string) =>
+      ((await call(u, 'GET', '/v1/diagrams?include_archived=true')).json().data as Array<{ id: string }>).map((d) => d.id);
+    expect(await ids(MEMBER)).not.toContain(PROJ_DIAG);
+    expect(await ids(MEMBER)).toContain(UNSCOPED_PROJ_DIAG);
+    expect(await ids(PROJ_MEMBER)).toContain(PROJ_DIAG);
+    expect(await ids(ADMIN)).toContain(PROJ_DIAG);
+  });
+
+  it('from-bam lets a project member past the gate (404 here only because the fake project has no tasks)', async () => {
+    const res = await call(PROJ_MEMBER, 'POST', '/v1/diagrams/from-bam', { project_id: PROJECT, include_completed: true });
+    expect(res.statusCode).toBe(404);
   });
 });
 

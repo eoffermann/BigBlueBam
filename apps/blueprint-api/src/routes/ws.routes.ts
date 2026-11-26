@@ -130,7 +130,7 @@ export default async function wsRoutes(fastify: FastifyInstance) {
               // Same gate as GET /v1/diagrams/:id/graph — org scoping and
               // per-diagram ACLs included. A socket may only ever stream a
               // diagram its user could fetch (applies to both channels).
-              await svc.assertCanRead(user.org_id, user.id, diagramId);
+              await svc.assertCanRead(user.org_id, user, diagramId);
             } catch {
               send({
                 type: 'error',
