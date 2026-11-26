@@ -38,14 +38,12 @@
 
 import { readFileSync } from 'node:fs';
 import { execSync } from 'node:child_process';
-import { randomBytes } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
 import { RailwayClient } from './shared/railway-api.mjs';
 import { RailwayOrchestrator } from './shared/railway-orchestrator.mjs';
-import { hintFor } from './shared/env-hints.mjs';
-import { stableSecretNames } from './shared/secrets.mjs';
+import { collectSharedSecrets, fillMissingSecrets } from './shared/railway-secrets.mjs';
 import { APP_SERVICES, INFRA_SERVICES, JOB_SERVICES } from './shared/services.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -97,73 +95,10 @@ function detectGithubRepo() {
 
 // ─── Secret sourcing ──────────────────────────────────────────────────
 //
-// Which env keys are `secret`-kind across the whole catalog. Everything else
-// is plugin/reference/computed/literal (Railway resolves it) or public/user
-// (skipped for a fresh *-api service that does not need them).
-function secretKeyCatalog() {
-  const keys = new Set();
-  const all = [...APP_SERVICES, ...INFRA_SERVICES, ...JOB_SERVICES];
-  for (const svc of all) {
-    for (const name of [...(svc.env?.required ?? []), ...(svc.env?.optional ?? [])]) {
-      if (hintFor(name).kind === 'secret') keys.add(name);
-    }
-  }
-  return keys;
-}
-
-// The services we prefer to read shared secrets off, in priority order. `api`
-// carries SESSION_SECRET + INTERNAL_*; `minio` carries MINIO_*; `livekit`
-// carries LIVEKIT_*. First value wins so a shared secret is copied verbatim.
-const SECRET_SOURCE_SERVICES = ['api', 'minio', 'livekit', 'helpdesk-api', 'banter-api'];
-
-async function collectSharedSecrets(client, { projectId, environmentId, liveByName }) {
-  const wanted = secretKeyCatalog();
-  const collected = {};
-  // Stable secrets (secrets.mjs) usually live on ONE app service (e.g. bastion-api), not
-  // on api/minio, so also read every live service whose catalog entry lists one. A value
-  // found here is reused; fillMissingSecrets only generates when none exists live.
-  const stable = new Set(stableSecretNames());
-  const stableHolders = [...APP_SERVICES, ...INFRA_SERVICES, ...JOB_SERVICES]
-    .filter((s) => [...(s.env?.required ?? []), ...(s.env?.optional ?? [])].some((n) => stable.has(n)))
-    .map((s) => s.name);
-  const sources = [...new Set([...SECRET_SOURCE_SERVICES, ...stableHolders])];
-  for (const name of sources) {
-    const serviceId = liveByName.get(name);
-    if (!serviceId) continue;
-    let vars;
-    try {
-      vars = await client.getServiceVariables({ projectId, environmentId, serviceId });
-    } catch (err) {
-      log(`  (could not read variables off "${name}": ${err?.message ?? err})`);
-      continue;
-    }
-    for (const key of wanted) {
-      if (collected[key] === undefined && vars[key] !== undefined && vars[key] !== '') {
-        collected[key] = vars[key];
-      }
-    }
-  }
-  return collected;
-}
-
-// For every service the catalog says is MISSING on Railway, ensure each of its
-// required secret-kind vars has a value: prefer the shared one we just copied,
-// else GENERATE a fresh 32-byte hex secret (safe only for service-local
-// secrets that nothing else references — a brand-new service has no peers that
-// need to agree on the value yet).
-function fillMissingSecrets(collected, missingServices) {
-  const generated = [];
-  for (const svc of missingServices) {
-    for (const name of svc.env?.required ?? []) {
-      if (hintFor(name).kind !== 'secret') continue;
-      if (collected[name] === undefined || collected[name] === '') {
-        collected[name] = randomBytes(32).toString('hex');
-        generated.push(`${name} (for ${svc.name})`);
-      }
-    }
-  }
-  return generated;
-}
+// collectSharedSecrets / fillMissingSecrets live in shared/railway-secrets.mjs so
+// they are unit tested. A stable secret whose live holder could not be read makes
+// fillMissingSecrets throw StableSecretUnreadableError (issue #139): the run stops
+// instead of minting a value that would diverge from the one already in use.
 
 // ─── Main ─────────────────────────────────────────────────────────────
 
@@ -243,10 +178,11 @@ async function main() {
 
   // Copy shared secrets forward off the live stack.
   log('Reading shared secrets off the live stack…');
-  const generatedSecrets = await collectSharedSecrets(client, {
+  const { collected: generatedSecrets, readFailures } = await collectSharedSecrets(client, {
     projectId: project.id,
     environmentId: env.id,
     liveByName,
+    log,
   });
   const copied = Object.keys(generatedSecrets);
   log(`  copied ${copied.length} shared secret(s): ${copied.join(', ') || '(none)'}`);
@@ -256,7 +192,13 @@ async function main() {
   const requiredCatalog = APP_SERVICES.filter((s) => s.required && s.name !== 'voice-agent');
   const missing = [...requiredCatalog, ...INFRA_SERVICES.filter((i) => !i.managed_on_railway), ...JOB_SERVICES]
     .filter((s) => !liveByName.has(s.name));
-  const gen = fillMissingSecrets(generatedSecrets, missing);
+  let gen;
+  try {
+    gen = fillMissingSecrets(generatedSecrets, missing, { readFailures, liveByName });
+  } catch (err) {
+    if (err?.code === 'STABLE_SECRET_UNREADABLE') fail(err.message);
+    throw err;
+  }
   if (gen.length) log(`  generated ${gen.length} fresh service-local secret(s): ${gen.join(', ')}`);
 
   if (missing.length === 0) {
