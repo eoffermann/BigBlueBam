@@ -60,6 +60,48 @@ const REQUIRES_SUPERUSER_IDS = new Set([
   'platform.system.list_beta_signups',
   'platform.system.test_slack_webhook',
   'bam.context.switch',
+  // Every permission referenced only by a route file that mounts the
+  // requirePlatformSuperuser guard (platform.routes.ts, superuser.routes.ts).
+  // The guard blocks those routes in every posture, but without these flags
+  // the resolver's requires_superuser step never fired, so under
+  // BBB_PERMISSIONS_ENFORCE=on the decision fell through to group defaults and
+  // an org Owner's builtin group granted them (promote self to SuperUser,
+  // impersonate anyone, join any org). Delta migration 0291 sets the same
+  // flags in the DB; scripts/lib/superuser-catalog.test.mjs fails when a
+  // SuperUser-only route's permission is missing here.
+  // bam.platform_stop_impersonation.create is deliberately NOT listed: it must
+  // stay callable while impersonating, when the request user is the
+  // non-SuperUser target.
+  'bam.audit_log.list',
+  'bam.beta_signup.list',
+  'bam.context_clear.create',
+  'bam.organization.get',
+  'bam.organization.list',
+  'bam.overview.list',
+  'bam.user.delete',
+  'bam.user_active.update',
+  'bam.user_email.update',
+  'bam.user_login_history.get',
+  'bam.user_membership.create',
+  'bam.user_membership.delete',
+  'bam.user_membership.update',
+  'bam.user_project.get',
+  'bam.user_session.delete',
+  'bam.user_session.get',
+  'bam.user_session_revoke_all.create',
+  'bam.user_set_default_org.create',
+  'bam.platform_audit_log.list',
+  'bam.platform_impersonate.create',
+  'bam.platform_impersonation_session.list',
+  'bam.platform_org_member.get',
+  'bam.platform_org.create',
+  'bam.platform_org.delete',
+  'bam.platform_org.get',
+  'bam.platform_org.list',
+  'bam.platform_org.update',
+  'bam.platform_setting.list',
+  'bam.platform_setting.update',
+  'bam.platform_user_superuser.update',
 ]);
 
 function computeRequiresSuperuser(id, resource) {
