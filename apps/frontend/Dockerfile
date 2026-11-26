@@ -24,6 +24,7 @@ COPY apps/braid/package.json ./apps/braid/
 COPY apps/bulwark/package.json ./apps/bulwark/
 COPY apps/burn/package.json ./apps/burn/
 COPY apps/bursar/package.json ./apps/bursar/
+COPY apps/bastion/package.json ./apps/bastion/
 COPY apps/bill/package.json ./apps/bill/
 COPY apps/blank/package.json ./apps/blank/
 COPY apps/blueprint/package.json ./apps/blueprint/
@@ -72,6 +73,7 @@ COPY apps/braid/ ./apps/braid/
 COPY apps/bulwark/ ./apps/bulwark/
 COPY apps/burn/ ./apps/burn/
 COPY apps/bursar/ ./apps/bursar/
+COPY apps/bastion/ ./apps/bastion/
 COPY apps/bill/ ./apps/bill/
 COPY apps/blank/ ./apps/blank/
 COPY apps/blueprint/ ./apps/blueprint/
@@ -99,6 +101,7 @@ RUN pnpm --filter @bigbluebam/shared build \
  && pnpm --filter @bigbluebam/bulwark build \
  && pnpm --filter @bigbluebam/burn build \
  && pnpm --filter @bigbluebam/bursar build \
+ && pnpm --filter @bigbluebam/bastion build \
  && pnpm --filter @bigbluebam/bill build \
  && pnpm --filter @bigbluebam/blank build \
  && pnpm --filter @bigbluebam/blueprint build \
@@ -127,6 +130,7 @@ COPY --from=build /app/apps/braid/dist /usr/share/nginx/html/braid
 COPY --from=build /app/apps/bulwark/dist /usr/share/nginx/html/bulwark
 COPY --from=build /app/apps/burn/dist /usr/share/nginx/html/burn
 COPY --from=build /app/apps/bursar/dist /usr/share/nginx/html/bursar
+COPY --from=build /app/apps/bastion/dist /usr/share/nginx/html/bastion
 COPY --from=build /app/apps/bill/dist /usr/share/nginx/html/bill
 COPY --from=build /app/apps/blank/dist /usr/share/nginx/html/blank
 COPY --from=build /app/apps/blueprint/dist /usr/share/nginx/html/blueprint
