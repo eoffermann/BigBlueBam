@@ -26,6 +26,12 @@ export type CanAccess = (askerUserId: string, entityType: string, entityId: stri
 export interface DecisionDeps {
   engine: EngineDeps;
   canAccess: CanAccess;
+  /**
+   * M8 (spec 2.4): ask the AI to reword a drafted fix's title and body. Resolves to null when there
+   * is no provider, no AI slot, a failure, or the injection gate refused the answer; the template's
+   * words then stay. Absent in tests that do not exercise it.
+   */
+  reword?: (orgId: string, input: import('../library/fix-reword.js').RewordInput) => Promise<import('../library/fix-reword.js').Reworded | null>;
 }
 
 /**

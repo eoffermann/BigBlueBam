@@ -25,6 +25,7 @@ import { auditRaw } from '../lib/audit-raw.js';
 import { ConflictError, ForbiddenError, NotFoundError } from '../lib/errors.js';
 import { delimitAsData, scanLabel } from '../lib/injection-prescan.js';
 import { boltRuleShapeFor } from '../library/fix-templates.js';
+import { REWORD_PROMPT_VERSION, REWORDABLE_TEMPLATES } from '../library/fix-reword.js';
 import { orgTx, type Tx } from '../engine/context.js';
 import { sortGaps } from '../engine/gaps.js';
 import { loadControlStates } from '../engine/numbers.js';
@@ -397,7 +398,56 @@ export async function proposeFix(d: DecisionDeps, viewer: Viewer, gapId: string,
     await auditRaw(tx, viewer, 'fix.propose', { type: 'fix_draft', id }, { gap_id: gapId, template: g.fix_template, proposal_id: proposalId });
     return id;
   });
+  // M8 (spec 2.4): the AI may reword the drafted words, after the template's draft is safely saved.
+  if (d.reword) {
+    await rewordFixDraft(d, viewer, draftId).catch((err) => {
+      d.engine.log.warn({ fix_draft_id: draftId, err: (err as Error).message }, 'bastion-fix: AI rewording failed; the template words stay');
+    });
+  }
   return getFixDraft(d, viewer, draftId);
+}
+
+const BOLT_RULE_NOTE = 'Approving lets you create this automation in Bolt, turned off, so you can look at it before switching it on.';
+
+/**
+ * Replace a just-drafted fix's title and body with the AI's rewording, when the template allows it
+ * and the injection gate passed. Only the words change: for bolt_rule the rule shape keeps its
+ * trigger, conditions and actions and gains only the new name and description. Compare-and-set on
+ * the saved words, and only while the draft is still `proposed`.
+ */
+export async function rewordFixDraft(d: DecisionDeps, viewer: Viewer, draftId: string): Promise<boolean> {
+  if (!d.reword) return false;
+  const row = await orgTx(d.engine.sql, viewer.org_id, (tx) => tx`
+    SELECT d.template, d.title, d.body_markdown, d.payload, d.status, c.title AS control_title
+      FROM bastion_fix_drafts d
+      LEFT JOIN bastion_gaps g ON g.id = d.gap_id AND g.organization_id = d.organization_id
+      LEFT JOIN bastion_controls c ON c.id = g.control_id AND c.organization_id = d.organization_id
+     WHERE d.organization_id = ${viewer.org_id} AND d.id = ${draftId}`);
+  const r = row[0];
+  if (!r || r.status !== 'proposed' || !REWORDABLE_TEMPLATES.has(String(r.template))) return false;
+  const payload = (r.payload as Record<string, unknown> | null) ?? {};
+  const shape = (payload.bolt_rule as { name?: string; description?: string } | undefined) ?? null;
+  if (r.template === 'bolt_rule' && !shape) return false;
+  const input = {
+    template: String(r.template),
+    control_title: String(r.control_title ?? ''),
+    title: shape ? String(shape.name ?? r.title) : String(r.title),
+    body: shape ? String(shape.description ?? '') : String(r.body_markdown ?? ''),
+  };
+  const out = await d.reword(viewer.org_id, input);
+  if (!out) return false;
+  const title = out.title.slice(0, 512);
+  const body = shape ? `${out.body}\n\n${BOLT_RULE_NOTE}` : out.body;
+  const nextPayload = {
+    ...payload,
+    ...(shape ? { bolt_rule: { ...shape, name: title, description: out.body } } : {}),
+    reworded: { by: 'ai', prompt_version: REWORD_PROMPT_VERSION },
+  };
+  const upd = await orgTx(d.engine.sql, viewer.org_id, (tx) => tx`
+    UPDATE bastion_fix_drafts SET title = ${title}, body_markdown = ${body}, payload = ${tx.json(nextPayload as never)}
+     WHERE organization_id = ${viewer.org_id} AND id = ${draftId} AND status = 'proposed' AND title = ${String(r.title)}
+    RETURNING id`);
+  return upd.length > 0;
 }
 
 // ── Reads ───────────────────────────────────────────────────────────────────────────────

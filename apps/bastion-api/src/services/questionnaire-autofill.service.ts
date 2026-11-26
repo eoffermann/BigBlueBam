@@ -263,7 +263,9 @@ async function askAi(
     }
     hooks.onWaiting(null);
     try {
-      const res = await d.llm({ providerId, messages, maxTokens: 700 });
+      // 2048, as the compile: reasoning models spend tokens before the answer (the recording at 700
+      // came back empty with finish_reason "length" on a sixth of the questions).
+      const res = await d.llm({ providerId, messages, maxTokens: 2048 });
       const parsed = parseDraftResponse(res.content, res.finish_reason);
       return { kind: 'answer', response: parsed.ok ? parsed.value : null, reason: parsed.ok ? null : parsed.reason };
     } catch (err) {
