@@ -29,6 +29,11 @@ import {
   type PolicyAudience,
   type PolicyBody,
   type PolicyRow,
+  type AnswerLibraryRow,
+  type QuestionnaireApproval,
+  type QuestionnaireItemRow,
+  type QuestionnaireRow,
+  type QuestionnaireSheetMap,
   type SummaryResponse,
   type RequirementsResponse,
   type SetupState,
@@ -199,6 +204,109 @@ export function useCompileFramework() {
       const a = typeof args === 'string' ? { frameworkId: args } : args;
       return api.post(`/frameworks/${a.frameworkId}/compile`, a.useAi === false ? { use_ai: false } : {});
     },
+    onSuccess: invalidate,
+  });
+}
+
+/* ------------------------------ M8: questionnaires ------------------------------ */
+
+export function useQuestionnaires() {
+  return useQuery({ queryKey: key('questionnaires'), queryFn: () => api.get<{ data: QuestionnaireRow[] }>('/questionnaires') });
+}
+
+/** Polls only while Bastion is drafting (spec 6.3). */
+export function useQuestionnaire(id: string) {
+  return useQuery({
+    queryKey: key('questionnaire', id),
+    queryFn: () => api.get<{ data: QuestionnaireRow }>(`/questionnaires/${id}`),
+    refetchInterval: (q) => (q.state.data?.data.status === 'answering' ? 5000 : false),
+  });
+}
+
+export function useQuestionnaireItems(id: string, drafting: boolean) {
+  return useQuery({
+    queryKey: key('questionnaire-items', id),
+    queryFn: () => api.get<{ data: QuestionnaireItemRow[]; approval: QuestionnaireApproval }>(`/questionnaires/${id}/items`),
+    refetchInterval: drafting ? 5000 : false,
+  });
+}
+
+export function useCreateQuestionnaire() {
+  const invalidate = useInvalidate();
+  return useMutation({
+    mutationFn: (body: {
+      title: string;
+      requester_label?: string | null;
+      source: { kind: 'bin_asset'; bin_asset_id: string } | { kind: 'pasted'; text: string; format: 'tsv' | 'csv' };
+    }) => api.post<{ data: QuestionnaireRow }>('/questionnaires', body),
+    onSuccess: invalidate,
+  });
+}
+
+export function useUpdateQuestionnaire() {
+  const invalidate = useInvalidate();
+  return useMutation({
+    mutationFn: (args: { id: string; body: { column_map?: { sheets: QuestionnaireSheetMap[] }; title?: string } }) =>
+      api.patch<{ data: QuestionnaireRow }>(`/questionnaires/${args.id}`, args.body),
+    onSuccess: invalidate,
+  });
+}
+
+export function useAutofill() {
+  const invalidate = useInvalidate();
+  return useMutation({
+    mutationFn: (args: { id: string; redraft?: boolean }) => api.post<{ data: QuestionnaireRow }>(`/questionnaires/${args.id}/autofill`, { redraft: args.redraft ?? false }),
+    onSuccess: invalidate,
+  });
+}
+
+/** Review one answer; optimistic in the grid, rolled back on failure (spec 6.3). */
+export function useReviewItem(questionnaireId: string) {
+  const qc = useQueryClient();
+  const itemsKey = key('questionnaire-items', questionnaireId);
+  return useMutation({
+    mutationFn: (args: { id: string; review_status: 'accepted' | 'edited' | 'needs_owner' | 'pending'; final_answer?: string | null; final_yes_no?: boolean | null; assigned_to?: string | null }) => {
+      const { id, ...body } = args;
+      return api.patch<{ data: QuestionnaireItemRow; approval: QuestionnaireApproval }>(`/questionnaire-items/${id}`, body);
+    },
+    onMutate: async (args) => {
+      await qc.cancelQueries({ queryKey: itemsKey });
+      const prev = qc.getQueryData<{ data: QuestionnaireItemRow[]; approval: QuestionnaireApproval }>(itemsKey);
+      if (prev) {
+        qc.setQueryData(itemsKey, {
+          ...prev,
+          data: prev.data.map((i) => (i.id === args.id ? { ...i, review_status: args.review_status, needs_review: false } : i)),
+        });
+      }
+      return { prev };
+    },
+    onError: (_e, _a, ctx) => {
+      if (ctx?.prev) qc.setQueryData(itemsKey, ctx.prev);
+    },
+    onSettled: () => qc.invalidateQueries({ queryKey: ['bastion'] }),
+  });
+}
+
+/** Approve: a vouching route (session, not impersonated, a person). */
+export function useApproveQuestionnaire() {
+  const invalidate = useInvalidate();
+  return useMutation({
+    mutationFn: (id: string) => api.post<{ data: QuestionnaireRow }>(`/questionnaires/${id}/approve`, { confirm: true }),
+    onSuccess: invalidate,
+  });
+}
+
+export function useAnswerLibrary(q: string) {
+  return useQuery({
+    queryKey: key('answer-library', q),
+    queryFn: () => api.get<{ data: AnswerLibraryRow[] }>('/answer-library', { q: q || undefined }),
+  });
+}
+
+export function useUpdateAnswerLibrary() {
+  const invalidate = useInvalidate();
+  return useMutation({
+    mutationFn: (args: { id: string; body: { stale?: false; retired?: boolean } }) => api.patch(`/answer-library/${args.id}`, args.body),
     onSuccess: invalidate,
   });
 }
