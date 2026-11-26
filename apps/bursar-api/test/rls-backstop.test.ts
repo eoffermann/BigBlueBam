@@ -34,7 +34,11 @@ import postgres from 'postgres';
  * ─────────────────────────────────────────────────────────────────────────────
  */
 
-const DATABASE_URL = process.env.DATABASE_URL;
+// Issue #152: CI connects DATABASE_URL as a SUPERUSER, so the Test workflow creates a
+// NOSUPERUSER NOBYPASSRLS role (scripts/ci/create-rls-probe-role.sql) and passes it here
+// as RLS_PROBE_DATABASE_URL. Outside CI, DATABASE_URL is used as before.
+const DATABASE_URL = process.env.RLS_PROBE_DATABASE_URL || process.env.DATABASE_URL;
+const IN_CI = process.env.CI === 'true' || process.env.CI === '1';
 
 const ORG_A = '00000000-0000-0000-0000-0000b0a50001';
 const ORG_B = '00000000-0000-0000-0000-0000b0a50002';
@@ -86,7 +90,17 @@ async function readPosture(): Promise<{ skipReason: string | null }> {
 
 const { skipReason } = await readPosture();
 
-if (skipReason) {
+if (skipReason && IN_CI) {
+  // In CI a skip is a silent gap in tenant-isolation coverage, so it FAILS instead (#152).
+  describe('bursar_vendors RLS org isolation', () => {
+    it('runs against a NOSUPERUSER NOBYPASSRLS role in CI', () => {
+      throw new Error(
+        `[bursar-api/rls-backstop] would skip in CI: ${skipReason} Set RLS_PROBE_DATABASE_URL ` +
+          '(the Test workflow creates it with scripts/ci/create-rls-probe-role.sql).',
+      );
+    });
+  });
+} else if (skipReason) {
   console.warn(`[bursar-api/rls-backstop] SKIPPING: ${skipReason}`);
 }
 

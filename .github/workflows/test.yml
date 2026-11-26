@@ -108,10 +108,22 @@ jobs:
           MIGRATIONS_DIR: ${{ github.workspace }}/infra/postgres/migrations
         run: node apps/api/dist/migrate.js
 
+      - name: Create the RLS probe role
+        # Issue #152: the service's POSTGRES_USER is a SUPERUSER and bypasses row-level
+        # security, so every apps/*/test/rls-backstop.test.ts skipped. This role is
+        # NOSUPERUSER NOBYPASSRLS; the probes read it from RLS_PROBE_DATABASE_URL and FAIL
+        # (not skip) under CI=true when they cannot use it. Any new product's rls-backstop
+        # test that reads RLS_PROBE_DATABASE_URL is covered automatically.
+        run: |
+          psql -h localhost -U bigbluebam -d bigbluebam -v ON_ERROR_STOP=1 -f scripts/ci/create-rls-probe-role.sql
+          psql -h localhost -U bigbluebam -d bigbluebam -tAc \
+            "SELECT rolname, rolsuper, rolbypassrls FROM pg_roles WHERE rolname = 'bbb_rls_probe'"
+
       - name: Run unit tests (shard ${{ matrix.shard }}/4)
         env:
           SHARD: ${{ matrix.shard }}
           TOTAL: 4
+          RLS_PROBE_DATABASE_URL: postgresql://bbb_rls_probe:rls_probe@localhost:5432/bigbluebam
         run: |
           # Deterministically round-robin every workspace package that has a
           # test script across the shards, then run this shard's packages one at
