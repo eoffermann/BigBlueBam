@@ -63,11 +63,12 @@ Each milestone lands as small commits, is pushed, and is followed by the post-co
   - [x] Gate: `db:check` 0 drift (324/324 tables); definer-function `proconfig`/`proacl` assertion green live (27 functions); `ping` stores `subscribed_events` (route test, and webhook-shaped rows read back by the `change.*` probes live); spec 4.6 probe owner 50, admin 50, member 25, viewer 10, guest 0
   - [ ] GILLIGAN seed rows: none at M2 (no Bastion seeder exists yet; it lands at M3 with the test harness)
 - [ ] **M3 - Library, crosswalk, setup, deterministic compile, test harness**
-  - [ ] SOC 2 and ISO 27001 libraries (own plain-language summaries), static crosswalk, per-requirement applicability, Statement of Applicability
-  - [ ] Setup wizard page (incl. required Compliance project), deterministic compile
-  - [ ] **MCP parity reconciliation** (plan-review 3): reconcile every spec 5.1 skip against the sanctioned categories; build read tools for read rows the spec skipped as "UI reading surface" or similar; record each remaining skip and its category in the decisions below
-  - [ ] Test harness: `scripts/seed-gilligan/bastion.mjs` registered last in `run-all.mjs`, `bastion.expectations.mjs`, `appProject('bastion')` in `apps/e2e/playwright.config.ts`, `apps/e2e/src/apps/bastion/bastion-expectations.d.ts`
-  - [ ] Gate: SOC 2 then ISO share controls; SoA completeness test green
+  - [x] SOC 2 and ISO 27001 libraries (own plain-language summaries), static crosswalk, per-requirement applicability, Statement of Applicability (b5f45714; routes caac9dff, edb76f9e)
+  - [x] Setup wizard page (incl. required Compliance project), deterministic compile; Controls list stub with "Not set up yet" (8e9809be; first SPA component tests)
+  - [x] **MCP parity reconciliation** (plan-review 3): table in the decisions below; 7 pending `bastion_*` handlers and `clients/bastion-client.ts` (01a789ed); surface map 26 rows, self-check 0
+  - [x] Test harness: `scripts/seed-gilligan/bastion.mjs` registered last in `run-all.mjs`, `bastion.expectations.mjs`, `appProject('bastion')` in `apps/e2e/playwright.config.ts`, `apps/e2e/src/apps/bastion/bastion-expectations.d.ts`, M3 story `bastion-setup.spec.ts` (a48f04a5)
+  - [x] Gate: SOC 2 then ISO share controls (DB-backed `test/db/m3-services.test.ts` green against the local database: 45 shared controls reused, SoA completes only after all 93 decisions, population confirmation enforced, archive retires single-framework controls); SoA completeness unit test green
+  - [ ] GILLIGAN seed rows and the M3 Playwright story run live (needs bastion-api and the rebuilt frontend up; `node scripts/seed-gilligan/run-all.mjs`, then the `bastion` Playwright project as Skipper)
 - [ ] **M4 - Evidence engine**
   - [ ] Probes via `runInOrgScopeRead`; evaluator (time budgets, resumption, orphan re-enqueue, staleness); ledger; seals plus bucket objects; identity-based restore detection with provisional epochs and append blocking; outbox with ordering keys
   - [ ] `bastion-shared.ts` and `registerBastionSweep` (with `withRetention` and the no-bare-`add` scanning test); jobs: evaluate-tick, evaluate-run, outbox-drain, ledger-seal, ledger-verify, run-reaper, evaluation-missed, weekly-readiness, retention
@@ -135,9 +136,63 @@ Each milestone lands as small commits, is pushed, and is followed by the post-co
 - **M2 `github_pr_events`.** Bam-owned, `org_id` (Bam naming), no RLS (written before any org scope, like `github_integrations`). Every `pull_request` and `pull_request_review` delivery from an enabled integration is recorded, all actions; a disabled integration records nothing; the insert runs before task linking and a failure fails the delivery so GitHub's Redeliver retries it; redelivery is a no-op on `(repo, delivery_id)`. A `ping` without a usable `hook.events` leaves `subscribed_events` as it was.
 - **M2 permission generator.** `bastion-api` is in `NOT_ROUTE_SCANNED`. The stale-entry check now accepts a classified app directory that has no routes yet (only an entry naming no app is stale), so ids can be registered ahead of routes; test added. Viewer gets `attestation.sign` (not a read), so 0282 uses explicit member and viewer lists rather than `is_read`.
 - **M2 verification mechanics.** Postgres is not exposed to the host: `db:check` ran in a `node:22-alpine` container on `bigbluebam_backend`; the DB-backed vitest suites ran from the host through a temporary `alpine/socat` forwarder (`127.0.0.1:15432`, removed afterwards). In CI they run in `test.yml`, which migrates its postgres and sets `DATABASE_URL`. The api container was not running, so the `ping` gate is proven by the route test plus the probe reading webhook-shaped rows, not by a delivery to the live stack.
+- **M3 library.** 48 internal controls (`apps/bastion-api/src/library/controls.ts`), SOC 2 common criteria CC1.1-CC9.2 (33) and ISO 27001:2022 Annex A (93) as templates; 46 controls serve SOC 2, 47 serve ISO, 45 are shared (the static crosswalk). Reference codes are the public numbers; every title and summary is our own plain wording, never AICPA or ISO text. `starter.ts` (spec 2.1) is deferred: the M3 scope is SOC 2 and ISO, and nothing reads a starter template yet. The ten ISO premises requirements (A.7.1-A.7.6, A.7.8, A.7.11-A.7.13) map only to `physical.premises`, so excluding them excludes one control in the ISO view while CC6.4 keeps it applicable for SOC 2.
+- **M3 probe catalog home.** Each probe's params and threshold schemas live in `library/probe-catalog.ts` (key, version, plain title, population kind, inherited). The M4 probe modules import them rather than restating them, so one place encodes each probe's inputs. Population probes also accept `population_labels` (what people see; the SQL reads only `expected_population`) and the confirmation stamp.
+- **M3 compile runs inline.** The deterministic compile is pure planning plus one insert, so `POST /frameworks/:id/compile` claims the run (one active run per framework, else 409 `COMPILE_RUNNING`), plans and inserts in the request, and answers 202 with the finished run (`used_fallback = true`, `proposed_by = 'library'`). A failure marks the run `failed`. M7 moves the LLM-tailored compile onto the worker behind the same contract. A control whose derived applicability is not_applicable gets no proposals.
+- **M3 "decision" for the SoA.** A requirement counts as decided only when every live link has `decided_at` set; the default `applicable` with nobody deciding does not count, because the Statement of Applicability is a human statement. `assertSoaCompleteForPacket` (library/soa.ts) is the check the M9 packet builder calls; unit-tested now.
+- **M3 setup routes outside spec 5.1.** `GET /setup` (state, `framework.read`), `PATCH /setup/profile` and `POST /setup/compliance-project` (`framework.write`), and `POST /frameworks/:id/applicability` (bulk, `control.write`, the row 15 permission). Setup is "done" when a framework is adopted and compiled, the Compliance project is set and (ISO) the SoA is complete; reviewing every proposed check is not required, because anything left is counted under "Not set up yet".
+- **M3 Compliance project.** The project is created through the existing Bam API (`POST /b3/api/projects` from the wizard with Bam's CSRF header; `POST /projects` with Skipper's key in the seeder), so Bam applies its own permission and membership rules; bastion-api then records it after checking the project belongs to the org. No new internal Bam route.
+- **M3 population confirmation.** Confirming a population check needs a non-empty list (an empty `expected_population` makes the 0279 probe fall back to whatever is connected, which defeats the rule; 400 `POPULATION_EMPTY`) and `population_confirmed: true` (400 `POPULATION_CONFIRMATION_REQUIRED`). Revising never carries the old confirmation stamp over. GitHub repository values are lower-cased as the probe compares them.
+- **M3 assertion kind of the caller.** `proposed_by` is `human` or `agent` from `users.kind` read in the caller's transaction (the auth plugin does not carry kind); audit rows record `actor_kind`, the impersonator and the auth method.
+- **M3 lists.** The M3 list routes return the whole org set with `next_cursor: null` (at most a few hundred controls per org); cursor pagination lands if a list can grow past that.
+- **M3 surface map dashes.** The `— _(skip: ...)_` marker in `mcp-endpoint-mapping.md` is the format CLAUDE.md and the self-check require, so it stays; no other dash appears in what M3 wrote.
+- **MCP parity reconciliation (M3, plan-review 3).** Every spec 5.1 skip, against the categories CLAUDE.md sanctions (auth/credentials, multipart/binary, public-inbound, SuperUser/permission admin, internal service-to-service, realtime, resolver-done-internally, health) plus one this build treats as sanctioned because spec 2.8 binds it: **human gate** (setup and admin writes, applicability decisions, vouching, decisions, disclosure and destructive acts; the vouching routes also require a cookie session, so no API key could call them). Read rows skipped for any other reason become tools, built by the milestone that ships the route:
+
+  | Spec row | Route | Spec skip reason | Outcome | Category or tool (milestone) |
+  | --- | --- | --- | --- | --- |
+  | 1 | `GET /library/templates` | static catalog | **now a tool** | `bastion_list_frameworks` (M3, built) |
+  | 3, 5, 6 | framework create, edit, archive | human act / admin / destructive | skip | human gate |
+  | 8 | SoA csv | binary download | skip | multipart/binary |
+  | 12, 14, 15 | control create, edit, applicability | human admin / decision | skip | human gate |
+  | 18, 19 | assertion confirm, reject | human gate | skip | human gate (session required) |
+  | 28, 35 | evidence and manual-evidence download | binary | skip | multipart/binary |
+  | 29 | `GET /ledger/seals` | verification material | **now a tool** | `bastion_list_seals` (M4) |
+  | 30 | `GET /ledger/restores` | integrity admin surface | **now a tool** | `bastion_list_restores` (M4) |
+  | 31 | restore acknowledge | human integrity act | skip | human gate |
+  | 32, 40 | manual evidence upload, supersede | a human attests | skip | multipart/binary and human gate |
+  | 36-39, 41 | link, unlink, review, withdraw, redact | human curation / destructive | skip | human gate |
+  | 42 | `GET /feeds` | admin configuration | **now a tool** | `bastion_list_feeds` (M5) |
+  | 43, 44 | feed create, edit | admin configuration | skip | human gate (admin) |
+  | 45-47 | feed keys list, mint, revoke | credential admin | skip | auth/credentials |
+  | 48 | `POST /feeds/:feed_key/records` | machine ingest | skip | public-inbound (own credential) |
+  | 49 | `GET /feeds/:id/records` | admin inspection | **now a tool** | `bastion_list_feed_records` (M5) |
+  | 53 | gap dismiss | human adjudication | skip | human gate |
+  | 54, 55 | `GET /fix-drafts`, `GET /fix-drafts/:id` | read in the review queue | **now a tool** | `bastion_list_fix_drafts` (M6) |
+  | 56, 57, 61, 63 | decide, mark applied, exception decide, drift acknowledge | humans decide in Bastion | skip | human gate |
+  | 64 | `GET /policies` | covered by `bastion_attestation_status` | **now a tool** | `bastion_attestation_status` gains a list mode (M7) |
+  | 65, 66, 71 | policy create, edit, request attestations | human admin / nudge | skip | human gate |
+  | 67 | `GET /policies/:id/body` | UI reading surface | **now a tool** | `bastion_get_policy_body` (M7) |
+  | 69 | `GET /me/attestations` | personal UI list | **now a tool** | `bastion_my_attestations` (M7) |
+  | 70 | attest | humans only | skip | human gate (never an agent) |
+  | 73, 80 | questionnaire upload, export | file intake / binary | skip | multipart/binary |
+  | 75, 78, 79, 83 | mapping, item review, approve, answer-library edit | human review / release | skip | human gate |
+  | 84, 88, 89 | auditor rooms, access log, auditor requests (reads) | floored | skip | human gate (spec 2.8: rooms have no tool) |
+  | 85-87, 90 | room create, revoke, unlock, respond | disclosure | skip | human gate |
+  | 91, 93 | packet create, download | binary packet | skip | multipart/binary |
+  | 92 | `GET /exports` | floored | **now a tool** | `bastion_list_exports` (M9) |
+  | 95 | `GET /search` | consumed by `search_everything` | skip | resolver-done-internally |
+  | 96-99 | settings read and write, delivery problems, retry | admin / operator | skip | human gate (spec 2.8: settings have no tool) |
+  | 100 | `GET /audit` | floored | **now a tool** | `bastion_audit_log` (M9) |
+  | 101-104 | auditor room public routes | public | skip | public-inbound |
+  | 105, 106 | internal events, engines | service-to-service | skip | internal service-to-service |
+  | 107 | health | health | skip | health |
+
+  Plus the new M3 read `GET /setup`, which gets `bastion_get_setup_status` (built). Net: 12 spec rows move from skip to a tool (1 built at M3, 11 assigned), and the tool roster grows from the spec's 24 to 34 (`bastion_get_setup_status`, `bastion_list_seals`, `bastion_list_restores`, `bastion_list_feeds`, `bastion_list_feed_records`, `bastion_list_fix_drafts`, `bastion_get_policy_body`, `bastion_my_attestations`, `bastion_list_exports`, `bastion_audit_log`). Playwright story 16 ("/docs lists 24 Bastion tools") takes its number from the registered file at M11, not from the spec.
 - **Plan review.** An adversarial review of this plan against the spec and the build skill (15 findings: 2 blockers, 12 majors, 1 minor) was folded in on 2026-11-26; this version of the file reflects it.
 
 ## Progress log
+
+- 2026-11-26: **M3 library, crosswalk, setup, deterministic compile, test harness** (b5f45714..8e9809be): 48 controls, SOC 2 (33) and ISO 27001 Annex A (93) templates with our own wording, 45 shared controls; 25 bastion-api routes (spec 5.1 rows 1-21 plus setup and bulk applicability), each with requireAuth and a catalogued requireCan, confirm and reject behind `requireSession` + `rejectWhenImpersonating`; Setup wizard and Controls pages; 7 pending MCP handlers; seeder, expectations and the M3 Playwright story. Gates: bastion-api 134 tests (incl. the DB-backed M3 gate through a temporary forwarder, removed afterwards), shared 263, mcp-server 352, bastion SPA 7; `tsc --noEmit` clean for bastion-api, bastion, shared, mcp-server; `check-permission-catalog` in sync (1570 rows); Biome budget 4796/4796; `check-tool-return-coverage` 885 tools unchanged; `docs:catalog:check` current; surface-map self-check 0; no migration added (tip 0282). Not yet run live: the seeder and Playwright, because bastion-api was not up (the stack had only postgres, redis, minio and qdrant running).
 
 - 2026-11-26: **M2 data model and permission chain** (6a075ed6..7b4928ee): migrations 0273-0282 applied locally (rehearsed first inside a rolled-back transaction with every probe called against the GILLIGAN org); 35 `bastion_*` tables plus `github_pr_events`; `db:check` 0 drift; 21 DB-backed Bastion tests green live (definer hardening, org guard, immutability, access-log age guard, RLS coverage, change probes) and the spec 5.5 parity test; spec 4.6 probe 50/50/25/10/0; `check-permission-catalog` in sync with the DB (1570 rows); `lint:migrations` 0 violations; Biome budget 4805/4805; surface-map self-check 0. The change-probe test caught a double-encoded params bug in the test harness itself (recorded as an M4 hazard above).
 
