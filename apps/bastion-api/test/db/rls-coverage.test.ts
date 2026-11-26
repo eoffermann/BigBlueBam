@@ -60,6 +60,8 @@ const SPEC_TABLES = [
   'bastion_auditor_access_log',
   'bastion_auditor_requests',
   'bastion_export_packets',
+  // Added after spec 4.1.1: durable notice markers (migration 0287, issue #243).
+  'bastion_notice_markers',
 ];
 
 describe.skipIf(!DATABASE_URL)('bastion_* RLS policy coverage', () => {
@@ -73,7 +75,7 @@ describe.skipIf(!DATABASE_URL)('bastion_* RLS policy coverage', () => {
     if (sql) await sql.end({ timeout: 5 });
   });
 
-  it('has exactly the 35 tables of spec 4.1.1', async () => {
+  it('has exactly the 35 tables of spec 4.1.1 plus the later additions', async () => {
     const rows = await sql<Array<{ tablename: string }>>`
       SELECT tablename FROM pg_tables
        WHERE schemaname = 'public' AND tablename LIKE 'bastion\\_%'

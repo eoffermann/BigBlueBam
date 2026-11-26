@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import postgres from 'postgres';
-import { attest, createPolicy, getPolicyBody, type PolicyDeps } from '../../src/services/policies.service.js';
+import { evaluationMissed, retention } from '../../src/engine/sweeps.js';
+import { attest, attestationNudge, createPolicy, getPolicyBody, type PolicyDeps } from '../../src/services/policies.service.js';
 import type { Viewer } from '../../src/services/types.js';
 import { clock, DATABASE_URL, makeDeps, seedOrg, wipeOrg } from './engine-harness.js';
 
@@ -71,6 +72,44 @@ describe.skipIf(!DATABASE_URL)('batch 11: policies and attestation (live databas
       enqueueRuns: async () => {},
     };
   }
+
+  /** Mark this org's outbox delivered 40 days ago and let bastion-retention prune it (as production does). */
+  async function deliverAndPrune(org: string, engine: ReturnType<typeof makeDeps>) {
+    await sql`UPDATE bastion_outbox SET status = 'delivered', delivered_at = now() - interval '40 days' WHERE organization_id = ${org}`;
+    await retention(engine, { organization_id: org });
+    expect(await sql`SELECT 1 FROM bastion_outbox WHERE organization_id = ${org}`).toHaveLength(0);
+  }
+
+  it('the nudge stays once per cadence after retention prunes the delivered outbox rows (#243)', async () => {
+    const s = await setUp('nudge-retention');
+    const c = clock();
+    const d = { ...deps(), engine: makeDeps(sql, { clock: c }) };
+    const owner = viewer(s.org, s.owner);
+    await createPolicy(d, owner, { beacon_entry_id: s.entry, audience: { kind: 'all' }, cadence_days: 365 });
+
+    expect((await attestationNudge(d.engine, { organization_id: s.org })).nudged).toBe(3);
+    await deliverAndPrune(s.org, d.engine);
+    // A month later the outbox keys are gone; the durable markers still say "already nudged".
+    c.offsetMs = 31 * 86_400_000;
+    expect((await attestationNudge(d.engine, { organization_id: s.org })).nudged).toBe(0);
+    c.offsetMs = 200 * 86_400_000;
+    expect((await attestationNudge(d.engine, { organization_id: s.org })).nudged).toBe(0);
+    // A full cadence after the last nudge (anchored to it, not to an epoch bucket): nudged again.
+    c.offsetMs = 366 * 86_400_000;
+    expect((await attestationNudge(d.engine, { organization_id: s.org })).nudged).toBe(3);
+    expect((await attestationNudge(d.engine, { organization_id: s.org })).nudged).toBe(0);
+  });
+
+  it('evaluation.missed fires once per missed period however long it lasts, past outbox retention (#243)', async () => {
+    const s = await setUp('missed');
+    const c = clock();
+    const engine = makeDeps(sql, { clock: c });
+    c.offsetMs = 2 * 86_400_000;
+    expect((await evaluationMissed(engine, { organization_id: s.org })).fired).toBe(1);
+    await deliverAndPrune(s.org, engine);
+    c.offsetMs = 40 * 86_400_000;
+    expect((await evaluationMissed(engine, { organization_id: s.org })).fired).toBe(0);
+  });
 
   it('a double submit of one attestation answers both requests, once created and once not, never a 500 (#245)', async () => {
     const s = await setUp('double');

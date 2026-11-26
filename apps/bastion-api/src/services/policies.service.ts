@@ -26,6 +26,7 @@ import { ConflictError, ForbiddenError, NotFoundError, ValidationFailure } from 
 import { canonicalJson, sha256Hex } from '../lib/ledger-canonical.js';
 import { type EngineDeps, orgTx, type Tx, utcDate } from '../engine/context.js';
 import { appendLedger } from '../engine/ledger.js';
+import { claimNoticeEvery } from '../engine/notice-markers.js';
 import { enqueueBastionEvent } from '../engine/outbox.js';
 import { queueControlRuns, type QueuedRun } from '../engine/evidence-store.js';
 import type { CanAccess } from './decisions.service.js';
@@ -563,9 +564,12 @@ export interface NudgeSummary {
 }
 
 /**
- * Every active policy in every Bastion org: one attestation.overdue per person still due, keyed by
- * policy, version, person and cadence period, so a person is nudged once per period (not daily)
- * and again when a new version resets the requirement.
+ * Every active policy in every Bastion org: one attestation.overdue per person still due, at most
+ * once per cadence and again when a new version resets the requirement. The "already nudged"
+ * record is a durable bastion_notice_markers row keyed by policy, version and person (#243): the
+ * outbox key alone was pruned by retention after 30 days, which re-nudged everyone monthly. The
+ * re-nudge is anchored to the person's last nudge, not to an epoch-aligned bucket, so nobody is
+ * nudged on two consecutive days across a bucket boundary.
  */
 export async function attestationNudge(engine: EngineDeps, opts: { organization_id?: string } = {}): Promise<NudgeSummary> {
   const now = engine.now();
@@ -584,14 +588,17 @@ export async function attestationNudge(engine: EngineDeps, opts: { organization_
       for (const p of policies) {
         const facts = await policyFacts(tx, orgId, String(p.id), now);
         due += facts.not_attested_ids.length;
-        const period = Math.floor(now.getTime() / (Number(p.cadence_days) * DAY_MS));
+        const everyMs = Number(p.cadence_days) * DAY_MS;
         for (const u of facts.not_attested_ids) {
+          const marker = `attestation.overdue:${String(p.id)}:${facts.beacon_version ?? 0}:${u}`;
+          const n = await claimNoticeEvery(tx, orgId, marker, now, everyMs);
+          if (n === null) continue;
           if (
             await enqueueBastionEvent(
               'attestation.overdue',
               { policy_id: String(p.id), beacon_entry_id: String(p.beacon_entry_id), beacon_version: facts.beacon_version, user_id: u, requested: false },
               tx,
-              { orgId, idempotencyKey: `attestation.overdue:${String(p.id)}:${facts.beacon_version ?? 0}:${u}:p${period}` },
+              { orgId, idempotencyKey: `${marker}:n${n}` },
             )
           )
             nudged += 1;

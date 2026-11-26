@@ -63,3 +63,5 @@ export { bastionAuditorRooms } from './bastion-auditor-rooms.js';
 export { bastionAuditorAccessLog } from './bastion-auditor-access-log.js';
 export { bastionAuditorRequests } from './bastion-auditor-requests.js';
 export { bastionExportPackets } from './bastion-export-packets.js';
+// Durable "this notice already went out" markers (migration 0287, issue #243)
+export { bastionNoticeMarkers } from './bastion-notice-markers.js';
