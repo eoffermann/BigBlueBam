@@ -172,9 +172,37 @@ describe('shapeClassBDrivers per-viewer resolution + k>=2 suppression', () => {
   });
 });
 
-// Executable spec-of-record for the one invariant still unimplemented.
-describe('deferred spec-of-record (not yet implemented)', () => {
-  // Registration-time guard: a label column sourced from a restricted entity must
-  // not be registerable as Class A.
-  it.todo('registration rejects a restricted-entity label column as Class A');
+// Spec section 2.2 invariant: a label column joined from a restricted entity can
+// never be Class A. This used to be an it.todo awaiting a "registration-time"
+// guard, but there is no registration step to guard: classifyDimension() is the
+// only way a dimension gets a class, and it answers from the curated
+// CLASS_A_DIMENSIONS allowlist alone, so the invariant holds by construction. The
+// test pins that construction so widening the allowlist to an entity-derived
+// column fails here.
+describe('restricted-entity label columns are never Class A (spec 2.2)', () => {
+  it('rejects entity label and key columns as Class A', () => {
+    for (const col of [
+      'company_name',
+      'owner_name',
+      'contact_name',
+      'deal_name',
+      'assignee_name',
+      'customer',
+      'owner_id',
+      'company_id',
+      'project_id',
+      'stage_id',
+      'type',
+      'category',
+      'kind',
+    ]) {
+      expect(classifyDimension(col), col).toBe('B');
+    }
+  });
+
+  it('the Class A allowlist holds only bounded enum names, no entity-derived column shapes', () => {
+    for (const dim of CLASS_A_DIMENSIONS) {
+      expect(dim, dim).not.toMatch(/(_id|_name|_email|_label)$/);
+    }
+  });
 });

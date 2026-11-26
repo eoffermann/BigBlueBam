@@ -70,39 +70,73 @@ const SERVICE = '44444444-4444-4444-4444-444444444444';
 
 describe('findMeetingTimeForMixedRoster (§18 Wave 5)', () => {
   let service: typeof import('../src/services/availability.service.js');
+  let schema: typeof import('../src/db/schema/index.js');
+  let refs: typeof import('../src/db/schema/bbb-refs.js');
 
   beforeEach(async () => {
     vi.clearAllMocks();
+    mockSelect.mockReset();
     vi.resetModules();
     service = await import('../src/services/availability.service.js');
+    // Same module instances the service just loaded, so table identity matches.
+    schema = await import('../src/db/schema/index.js');
+    refs = await import('../src/db/schema/bbb-refs.js');
   });
 
-  // TODO(§18 Wave 5): test mock-queue count doesn't match the service's actual
-  // query count when working-hours rows are present; getAvailability emits 3
-  // awaits but only the first chain's `.then` plugs into the drizzle-like
-  // proxy, so the nested `Date.prototype.getTime` reads trip on undefined.
-  // Tracked as test-fixture debt; skipping to unblock CI.
-  it.skip('humans-only roster: runs the normal availability intersection', async () => {
-    // Sequence of db.select() calls the implementation will make:
-    //   1. resolveUserKinds              → [{ id: HUMAN_A, kind: 'human' },
-    //                                        { id: HUMAN_B, kind: 'human' }]
-    //   2. getAvailability(HUMAN_A) → working_hours, events, external_events
-    //   3. getAvailability(HUMAN_B) → working_hours, events, external_events
-    mockSelect
-      .mockReturnValueOnce(
-        makeChain([
-          { id: HUMAN_A, kind: 'human' },
-          { id: HUMAN_B, kind: 'human' },
-        ]),
-      )
-      // HUMAN_A: working hours for mon-fri 09:00-17:00
-      .mockReturnValueOnce(makeChain(workingHoursRowsForWeek()))
-      .mockReturnValueOnce(makeChain([])) // events
-      .mockReturnValueOnce(makeChain([])) // external events
-      // HUMAN_B
-      .mockReturnValueOnce(makeChain(workingHoursRowsForWeek()))
-      .mockReturnValueOnce(makeChain([])) // events
-      .mockReturnValueOnce(makeChain([])); // external events
+  /**
+   * Answer db.select() by the table passed to .from(), not by call order.
+   * Working-hours rows are handed out per call in roster order: each concurrent
+   * getAvailability() issues its working-hours query synchronously, in map order,
+   * before its first await. Events and external events are always empty here.
+   */
+  function routeSelects(plan: { kinds: unknown[]; workingHours?: unknown[][] }): string[] {
+    const wh = [...(plan.workingHours ?? [])];
+    const calls: string[] = [];
+    mockSelect.mockImplementation(() => {
+      let result: unknown[] = [];
+      const chain: any = {};
+      chain.from = vi.fn((table: unknown) => {
+        if (table === refs.users) {
+          calls.push('kinds');
+          result = plan.kinds;
+        } else if (table === schema.bookWorkingHours) {
+          calls.push('working_hours');
+          result = wh.shift() ?? [];
+        } else if (table === schema.bookEvents) {
+          calls.push('events');
+          result = [];
+        } else if (table === schema.bookExternalEvents) {
+          calls.push('external');
+          result = [];
+        } else {
+          throw new Error('availability-mixed test: unexpected table');
+        }
+        return chain;
+      });
+      chain.where = vi.fn(() => chain);
+      chain.orderBy = vi.fn(() => chain);
+      chain.limit = vi.fn(async () => result);
+      chain.then = (resolve: Function, reject?: Function) =>
+        Promise.resolve(result).then(resolve as any, reject as any);
+      return chain;
+    });
+    return calls;
+  }
+
+  // These three tests used to be it.skip'd as "test-fixture debt": they queued
+  // one mock result per db.select() call in a fixed order, but the service pulls
+  // every human's availability concurrently (Promise.all), so the calls
+  // interleave and each user received another query's rows. routeSelects()
+  // below answers by TABLE instead, which is order-independent.
+  it('humans-only roster: runs the normal availability intersection', async () => {
+    // HUMAN_A and HUMAN_B both work Mon-Fri 09:00-17:00 with no events.
+    const calls = routeSelects({
+      kinds: [
+        { id: HUMAN_A, kind: 'human' },
+        { id: HUMAN_B, kind: 'human' },
+      ],
+      workingHours: [workingHoursRowsForWeek(), workingHoursRowsForWeek()],
+    });
 
     const result = await service.findMeetingTimeForMixedRoster({
       user_ids: [HUMAN_A, HUMAN_B],
@@ -123,23 +157,26 @@ describe('findMeetingTimeForMixedRoster (§18 Wave 5)', () => {
       expect(slot.attendees.every((a) => a.kind === 'human')).toBe(true);
       expect(slot.attendees.every((a) => a.available)).toBe(true);
     }
+    // 1 kinds lookup + 3 selects per human.
+    expect(calls.sort()).toEqual(
+      ['kinds', 'working_hours', 'working_hours', 'events', 'events', 'external', 'external'].sort(),
+    );
+    // Slots are 30-minute meetings inside Monday 09:00-17:00 UTC.
+    expect(result.slots[0]!.start).toBe('2026-04-20T09:00:00.000Z');
   });
 
-  it.skip('mixed roster: agents and service accounts are skipped from conflict detection', async () => {
+  it('mixed roster: agents and service accounts are skipped from conflict detection', async () => {
     // resolveUserKinds says HUMAN_A is human, AGENT is agent, SERVICE is service.
     // Then only HUMAN_A's calendar is consulted.
-    mockSelect
-      .mockReturnValueOnce(
-        makeChain([
-          { id: HUMAN_A, kind: 'human' },
-          { id: AGENT, kind: 'agent' },
-          { id: SERVICE, kind: 'service' },
-        ]),
-      )
+    routeSelects({
+      kinds: [
+        { id: HUMAN_A, kind: 'human' },
+        { id: AGENT, kind: 'agent' },
+        { id: SERVICE, kind: 'service' },
+      ],
       // HUMAN_A only
-      .mockReturnValueOnce(makeChain(workingHoursRowsForWeek()))
-      .mockReturnValueOnce(makeChain([])) // events
-      .mockReturnValueOnce(makeChain([])); // external events
+      workingHours: [workingHoursRowsForWeek()],
+    });
 
     const result = await service.findMeetingTimeForMixedRoster({
       user_ids: [HUMAN_A, AGENT, SERVICE],
@@ -208,25 +245,17 @@ describe('findMeetingTimeForMixedRoster (§18 Wave 5)', () => {
     expect(result.slots).toHaveLength(0);
   });
 
-  it.skip('respect_working_hours_for_humans_only=false treats everyone as human', async () => {
-    // All three IDs should go through the per-user availability pull.
-    mockSelect
-      .mockReturnValueOnce(
-        makeChain([
-          { id: HUMAN_A, kind: 'human' },
-          { id: AGENT, kind: 'agent' },
-        ]),
-      )
-      // HUMAN_A
-      .mockReturnValueOnce(makeChain(workingHoursRowsForWeek()))
-      .mockReturnValueOnce(makeChain([]))
-      .mockReturnValueOnce(makeChain([]))
-      // AGENT — now treated like a human and has no working hours configured
-      // which means no slots should be generated for this user; the
-      // intersection with HUMAN_A then produces zero slots.
-      .mockReturnValueOnce(makeChain([])) // no working hours
-      .mockReturnValueOnce(makeChain([])) // events
-      .mockReturnValueOnce(makeChain([])); // external events
+  it('respect_working_hours_for_humans_only=false treats everyone as human', async () => {
+    // Both IDs go through the per-user availability pull. AGENT is now treated
+    // like a human and has no working hours configured, so it has no slots and
+    // the intersection with HUMAN_A is empty.
+    routeSelects({
+      kinds: [
+        { id: HUMAN_A, kind: 'human' },
+        { id: AGENT, kind: 'agent' },
+      ],
+      workingHours: [workingHoursRowsForWeek(), []],
+    });
 
     const result = await service.findMeetingTimeForMixedRoster({
       user_ids: [HUMAN_A, AGENT],
@@ -238,8 +267,9 @@ describe('findMeetingTimeForMixedRoster (§18 Wave 5)', () => {
       respect_working_hours_for_humans_only: false,
     });
 
-    // 1 (kinds) + 2 users * 3 selects = 7
-    expect(mockSelect).toHaveBeenCalledTimes(7);
+    // 1 (kinds) + 3 for HUMAN_A + 1 for AGENT: getAvailability returns as soon
+    // as a user has no working hours, before the two event queries.
+    expect(mockSelect).toHaveBeenCalledTimes(5);
     // AGENT had no working hours, so intersection with HUMAN_A is empty.
     expect(result.slots).toHaveLength(0);
   });
