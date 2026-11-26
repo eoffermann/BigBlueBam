@@ -32,9 +32,11 @@ jobs:
         uses: ./.github/actions/setup-node-pnpm
 
       - name: Install dependencies
+        id: install
         run: pnpm install --frozen-lockfile
 
       - name: Run lint
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
         run: pnpm lint
 
       # Issue #132: Biome warnings never fail `pnpm lint`, so this ratchet does. Fails when
@@ -43,29 +45,47 @@ jobs:
       # the baseline names a package that no longer exists. Refresh the baseline with
       # `node scripts/check-biome-budget.mjs --update` after cleaning a package.
       - name: Biome warning budget
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
         run: pnpm check:biome-budget
 
       - name: Lint migration files
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
         run: pnpm lint:migrations
 
       # Issue #235: every workflow job sets timeout-minutes, so a hang fails fast instead of
       # holding its lane (and the next push's run) for GitHub's 360-minute default.
       - name: Workflow job timeouts
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
         run: pnpm check:workflow-timeouts
 
       - name: Check permission catalog drift
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
         run: pnpm check:permission-catalog
+
+      # Issue #251: z.coerce.boolean() parses the string 'false' as true. Query strings use
+      # boolQueryParam() and env vars use envBool(), both from @bigbluebam/shared.
+      - name: No z.coerce.boolean
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: pnpm check:no-coerce-boolean
+
+      # Issue #252: internal routes authenticate through the one shared guard in
+      # @bigbluebam/service-health; no service reads an internal-secret header itself.
+      - name: Internal-secret guard is shared
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: pnpm check:internal-secret-guard
 
       # Bolt event-catalog drift guard: every publishBoltEvent(source, event_type) call site
       # must be declared in apps/bolt-api/src/services/event-catalog.ts. Exists at
       # package.json but ran in no workflow until this build wired it in (Burn spec 8.2).
       - name: Check bolt event catalog drift
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
         run: pnpm check:bolt-catalog
 
       # Deploy/infra script unit tests written with node:test (no vitest config is
       # needed, since scripts/ sits outside the pnpm workspace). Covers the Railway nginx
       # generator transform, the syncNew variable reconcile, and the stable-secret class.
       - name: Script unit tests (node:test)
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
         run: pnpm test:scripts
 
       # Issue #135: the older scripts/deploy/shared vitest suite (deploy catalog, env
@@ -73,16 +93,19 @@ jobs:
       # workspace, so it borrows the api package's vitest binary; tls.test.mjs shells out
       # to openssl, which ubuntu-latest ships.
       - name: Deploy script unit tests (vitest)
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
         run: pnpm test:deploy
 
       # Issue #127: the index.html no-cache and assets-cache regexes in every nginx
       # config must list exactly the SPAs that config serves (and every Launchpad app).
       - name: Check nginx SPA lists
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
         run: pnpm check:nginx-spa
 
       # Issue #198: a recursive chown in an app Dockerfile duplicates node_modules
       # into a second layer and takes over an hour on slow Docker disks.
       - name: Check Dockerfiles use COPY --chown
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
         run: pnpm check:dockerfile-chown
 
       # Guards scripts/deploy/shared/env-hints.mjs against catalog vars that have
@@ -93,9 +116,11 @@ jobs:
       # vitest suite runs nowhere -- this is a plain node script for that reason,
       # matching how db-drift.yml invokes scripts/db-check.coverage.test.mjs.
       - name: Check env-hints coverage
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
         run: pnpm check:env-hints
 
       - name: Check help index drift
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
         run: pnpm help:check
 
       # Launchpad completeness gate: the Launchpad is the suite's "ready for
@@ -106,17 +131,21 @@ jobs:
       # here on purpose - it must not reach a user. The autonomous loop treats this
       # red as a trigger to resume engineering on the app, not to weaken the gate.
       - name: Check Launchpad app completeness
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
         run: pnpm check:app-completeness
 
       - name: Check docs catalog drift
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
         run: pnpm docs:catalog:check
 
       # Issue #147: the Bolt action editor's typed MCP parameter picker reads this committed
       # generated file; it silently drifted to 273 of 885 tools before this check existed.
       - name: Check MCP tool schema drift
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
         run: pnpm check:mcp-tool-schemas
 
       - name: Check docs manual drift
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
         run: pnpm docs:manual:check
 
       # README app-catalog drift guard: the README's AUTODOCS:APP_SECTIONS region is
@@ -125,4 +154,5 @@ jobs:
       # docs/apps/<app>/help.md - without a trip to the marketing site. Fails if the
       # committed README lags the roster.
       - name: Check README app-catalog drift
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
         run: pnpm docs:readme:check

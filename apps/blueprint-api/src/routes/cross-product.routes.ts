@@ -23,6 +23,12 @@ import { broadcastToDiagram } from '../lib/broadcast.js';
 import { ForbiddenError, NotFoundError, ValidationError } from '../lib/errors.js';
 import { env } from '../env.js';
 import { caller } from '../lib/caller.js';
+import { createInternalSecretGuard } from '@bigbluebam/service-health';
+
+const requireInternalSecretOrToken = createInternalSecretGuard({
+  secrets: () => [env.INTERNAL_SERVICE_SECRET],
+  acceptTokenHeader: true,
+});
 
 function mapErr(err: unknown, requestId: string) {
   if (err instanceof NotFoundError) {
@@ -146,27 +152,9 @@ export default async function crossProductRoutes(fastify: FastifyInstance) {
   fastify.post(
     '/internal/sync-from-task',
     async (request, reply) => {
-      // Accept either x-internal-secret or x-internal-token to match the
-      // bolt-api and helpdesk-api conventions exactly.
-      const secretHeader = request.headers['x-internal-secret'];
-      const tokenHeader = request.headers['x-internal-token'];
-      const provided =
-        (Array.isArray(secretHeader) ? secretHeader[0] : secretHeader) ??
-        (Array.isArray(tokenHeader) ? tokenHeader[0] : tokenHeader);
-      if (
-        !env.INTERNAL_SERVICE_SECRET ||
-        typeof provided !== 'string' ||
-        provided !== env.INTERNAL_SERVICE_SECRET
-      ) {
-        return reply.status(401).send({
-          error: {
-            code: 'UNAUTHORIZED',
-            message: 'Missing or invalid internal service token',
-            details: [],
-            request_id: request.id,
-          },
-        });
-      }
+      // The suite-wide guard (#252): x-internal-secret / x-internal-service-secret, plus the
+      // x-internal-token convention; constant-time (this was a plain !==), private peers only.
+      if (!requireInternalSecretOrToken(request, reply)) return reply;
       const body = syncFromTaskSchema.parse(request.body);
       const result = await crossSvc.applyTaskSyncToNodes(
         body.task_id,

@@ -28,6 +28,7 @@ import { auditRaw } from '../lib/audit-raw.js';
 import { type CitedRef, labelRefs, labelsFor } from '../lib/ref-labels.js';
 import { isAdminViewer, type Viewer } from './types.js';
 import { type CanAccess, visibleRefs } from './decisions.service.js';
+import { type NameVisible, populationNames, populationVisibility } from '../lib/population-visibility.js';
 
 
 const RUN_SELECT = `id, trigger, scope, control_id, nightly_for_date::text AS nightly_for_date, as_of, status, partial_reason,
@@ -104,32 +105,68 @@ async function detailAllowed(tx: Tx, viewer: Viewer, controlId: string): Promise
 }
 
 /**
- * Shape one snapshot for a reader. explain() is counts-only unless the viewer may see detail
- * (owner, admin, or the control's owner); cited refs are dropped from the counts-only view.
+ * The summary a counts-only reader gets (#250): scalar facts only (counts, window lengths,
+ * statuses, dates). Arrays and objects (summary.repos with repository names and webhook settings,
+ * summary.population_missing) are names, not counts, so they are dropped whatever the probe.
  */
-export function present(row: Record<string, unknown>, detail: boolean) {
+export function countsOnlySummary(summary: Record<string, unknown> | null | undefined): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(summary ?? {})) {
+    if (v === null || typeof v === 'number' || typeof v === 'boolean' || typeof v === 'string') out[k] = v;
+  }
+  return out;
+}
+
+const everyName: NameVisible = () => true;
+
+/**
+ * Shape one snapshot for a reader. explain() is counts-only unless the viewer may see detail
+ * (owner, admin, or the control's owner); cited refs are dropped from the counts-only view, and so
+ * is every list of names in the population and the summary (#250). A detail reader sees only the
+ * names `visibleName` allows (repositories of Bam projects they can open); the rest are counted
+ * in population_hidden_count and named nowhere, including the explanation sentence.
+ */
+export function present(row: Record<string, unknown>, detail: boolean, visibleName: NameVisible = everyName) {
+  const rawSummary = (row.summary as Record<string, unknown> | null) ?? {};
+  const strings = (v: unknown): string[] => (Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : []);
+  const checkedAll = strings(row.population_checked);
+  const checked = checkedAll.filter(visibleName);
+  const unlisted = strings(row.population_unlisted).filter(visibleName);
+  const summary: Record<string, unknown> = detail ? { ...rawSummary } : countsOnlySummary(rawSummary);
+  if (detail && Array.isArray(rawSummary.repos)) {
+    summary.repos = (rawSummary.repos as Array<Record<string, unknown> | null>).filter(
+      (r) => typeof r?.repo === 'string' && visibleName(r.repo as string),
+    );
+  }
+  const hiddenPopulation = detail ? checkedAll.length - checked.length : 0;
+
   const def = row.probe_key ? probeDefinition(row.probe_key as string) : undefined;
   let explanation: string | null = null;
   if (def) {
+    // Counts-only readers get the sentence from the full facts with names off (it prints counts
+    // only); detail readers get it from the filtered facts plus the hidden count.
     const result = {
       probe_key: row.probe_key,
       probe_version: row.probe_version,
       as_of: '',
-      summary: (row.summary as Record<string, unknown>) ?? {},
+      summary: detail ? summary : rawSummary,
       cited_refs: (row.cited_refs as BastionProbeResult['cited_refs']) ?? [],
-      cited_count: Number((row.summary as Record<string, unknown>)?.cited_count ?? 0),
+      cited_count: Number(rawSummary.cited_count ?? 0),
       overflow_count: Number(row.overflow_count ?? 0),
-      population_checked: (row.population_checked as string[] | null) ?? undefined,
-      population_unlisted: (row.population_unlisted as string[] | null) ?? undefined,
-      population_missing: ((row.summary as Record<string, unknown>)?.population_missing as string[] | undefined) ?? undefined,
-    } as BastionProbeResult;
+      population_checked: row.population_checked == null ? undefined : detail ? checked : checkedAll,
+      population_unlisted: row.population_unlisted == null ? undefined : detail ? unlisted : strings(row.population_unlisted),
+      population_missing: (rawSummary.population_missing as string[] | undefined) ?? undefined,
+      population_hidden_count: hiddenPopulation,
+    } as BastionProbeResult & { population_hidden_count: number };
     explanation = def.explain(result, detail);
   }
   return {
     ...row,
+    summary,
     cited_refs: detail ? row.cited_refs : [],
-    population_checked: detail ? row.population_checked : null,
-    population_unlisted: detail ? row.population_unlisted : null,
+    population_checked: detail && row.population_checked != null ? checked : null,
+    population_unlisted: detail && row.population_unlisted != null ? unlisted : null,
+    population_hidden_count: hiddenPopulation,
     explanation,
     detail_visible: detail,
   };
@@ -146,8 +183,14 @@ async function visibleRefKeys(canAccess: CanAccess, viewer: Viewer, refs: CitedR
   return new Set((await visibleRefs(canAccess, viewer, refs)).map(refKey));
 }
 
-function withVisibleRefs(row: Record<string, unknown>, detail: boolean, visible: Set<string>, names: Map<string, string>) {
-  const shaped = present(row, detail);
+function withVisibleRefs(
+  row: Record<string, unknown>,
+  detail: boolean,
+  visible: Set<string>,
+  names: Map<string, string>,
+  visibleName: NameVisible,
+) {
+  const shaped = present(row, detail, visibleName);
   const all = detail ? ((row.cited_refs as CitedRef[] | null) ?? []) : [];
   const refs = all.filter((r) => visible.has(refKey(r)));
   return {
@@ -179,9 +222,13 @@ export async function listControlEvidence(deps: EngineDeps, viewer: Viewer, cont
     const allRefs = detail ? page.data.flatMap((r) => ((r as Record<string, unknown>).cited_refs as CitedRef[] | null) ?? []) : [];
     const visible = detail ? await visibleRefKeys(canAccess, viewer, allRefs) : new Set<string>();
     const names = detail ? await labelRefs(tx, viewer.org_id, allRefs.filter((r) => visible.has(refKey(r)))) : new Map<string, string>();
+    // Repository names pass the same project-membership rule as the PRs they come from (#250).
+    const visibleName = detail
+      ? await populationVisibility(tx, canAccess, viewer, page.data.flatMap((r) => populationNames(r as Record<string, unknown>)))
+      : everyName;
     return {
       ...page,
-      data: page.data.map((r) => withVisibleRefs(r as Record<string, unknown>, detail, visible, names)),
+      data: page.data.map((r) => withVisibleRefs(r as Record<string, unknown>, detail, visible, names, visibleName)),
     };
   });
 }
@@ -195,7 +242,8 @@ export async function getEvidence(deps: EngineDeps, viewer: Viewer, id: string, 
     const refs = detail ? ((row.cited_refs as CitedRef[] | null) ?? []) : [];
     const visible = detail ? await visibleRefKeys(canAccess, viewer, refs) : new Set<string>();
     const names = detail ? await labelRefs(tx, viewer.org_id, refs.filter((r) => visible.has(refKey(r)))) : new Map<string, string>();
-    return { data: withVisibleRefs(row, detail, visible, names) };
+    const visibleName = detail ? await populationVisibility(tx, canAccess, viewer, populationNames(row)) : everyName;
+    return { data: withVisibleRefs(row, detail, visible, names, visibleName) };
   });
 }
 

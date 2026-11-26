@@ -103,23 +103,19 @@ export async function upsertEntryBySlug(
   }
 
   const slug = input.slug.trim();
+  const expiryDays = await resolveDefaultExpiryDays(orgId);
+  const expiresAt = new Date(Date.now() + expiryDays * 24 * 60 * 60 * 1000);
 
-  // Pre-check so we can discriminate create vs. update before we decide
-  // whether to emit a new beacon_versions row and bump `version`.
-  const [existing] = await db
-    .select()
-    .from(beaconEntries)
-    .where(and(eq(beaconEntries.organization_id, orgId), eq(beaconEntries.slug, slug)))
-    .limit(1);
-
-  if (!existing) {
-    const expiryDays = await resolveDefaultExpiryDays(orgId);
-    const expiresAt = new Date(Date.now() + expiryDays * 24 * 60 * 60 * 1000);
-
-    // Race-safe insert: if a parallel writer grabbed the same slug between
-    // our pre-check and this statement, ON CONFLICT (organization_id, slug)
-    // gives us the existing row (in this org only). `xmax = 0` is true only for the freshly-inserted row.
-    const inserted = await db
+  // One transaction, so the entry write and its beacon_versions snapshot commit or roll back
+  // together (#280). Concurrency, for two callers upserting the same org + slug at once:
+  //   - create race: INSERT ... ON CONFLICT DO NOTHING lets exactly one insert win; the loser
+  //     gets no row back and falls through to the update path, so its content is APPLIED as the
+  //     next version (it used to be silently dropped with created:false).
+  //   - update race: the UPDATE takes the row lock and bumps `version = version + 1` in SQL, so
+  //     the second caller waits and writes N + 2 (two callers used to both write N + 1, and the
+  //     second 500'd on beacon_versions_beacon_id_version_key after its entry update landed).
+  return db.transaction(async (tx) => {
+    const inserted = await tx
       .insert(beaconEntries)
       .values({
         slug,
@@ -137,34 +133,15 @@ export async function upsertEntryBySlug(
         expires_at: expiresAt,
         metadata: input.metadata ?? {},
       })
-      .onConflictDoUpdate({
-        target: [beaconEntries.organization_id, beaconEntries.slug],
-        set: {
-          // Deliberately narrow set: the conflict branch only happens when
-          // a parallel writer raced us. Let the canonical update path
-          // below handle the richer update semantics (version bump,
-          // version snapshot). Here we just keep the row non-stale.
-          updated_at: new Date(),
-        },
-      })
-      .returning({
-        // Drizzle's returning() types do not accept a full table reference
-        // under @bigbluebam/db-stubs; cast so we still get the whole row
-        // back without enumerating every column by hand.
-        entry: beaconEntries as unknown as import('drizzle-orm').SQL<typeof beaconEntries.$inferSelect>,
-        created: sql<boolean>`(xmax = 0)`.as('created'),
-      });
+      // Conflict target is the per-org unique key: another org's row with this slug never
+      // conflicts (#246). On conflict, nothing is returned and the update path below runs.
+      .onConflictDoNothing({ target: [beaconEntries.organization_id, beaconEntries.slug] })
+      .returning();
 
-    const row = inserted[0];
-    if (!row) {
-      throw new EntryUpsertError('INTERNAL', 'Upsert returned no row', 500);
-    }
-    const entry = row.entry as typeof beaconEntries.$inferSelect;
-    const created = row.created === true;
-
+    const created = inserted[0];
     if (created) {
-      await db.insert(beaconVersions).values({
-        beacon_id: entry.id,
+      await tx.insert(beaconVersions).values({
+        beacon_id: created.id,
         version: 1,
         title: input.title,
         summary: input.summary ?? null,
@@ -172,52 +149,42 @@ export async function upsertEntryBySlug(
         changed_by: userId,
         change_note: 'Initial version (upsert)',
       });
+      return { data: created, created: true, idempotency_key: `slug:${slug}` };
     }
 
-    return {
-      data: entry,
-      created,
-      idempotency_key: `slug:${slug}`,
-    };
-  }
-
-  // Update path: existing row with same slug in this org. Bump version and
-  // write a snapshot to mirror beacon_update.
-  const newVersion = existing.version + 1;
-  const [entry] = await db
-    .update(beaconEntries)
-    .set({
+    // Update path: the row exists in this org. Only the fields the caller sent replace the stored
+    // ones (body_html, visibility and metadata keep their values when omitted).
+    const set: Record<string, unknown> = {
       title: input.title,
       summary: input.summary ?? null,
       body_markdown: input.body_markdown,
-      body_html: input.body_html ? sanitizeHtml(input.body_html) : existing.body_html,
-      version: newVersion,
-      visibility: input.visibility ?? existing.visibility,
-      metadata: input.metadata ?? existing.metadata,
+      version: sql`${beaconEntries.version} + 1`,
       updated_at: new Date(),
-    })
-    // The org predicate is redundant with the scoped lookup above on purpose:
-    // a future regression there cannot become a cross-tenant overwrite here.
-    .where(and(eq(beaconEntries.id, existing.id), eq(beaconEntries.organization_id, orgId)))
-    .returning();
+    };
+    if (input.body_html) set.body_html = sanitizeHtml(input.body_html);
+    if (input.visibility) set.visibility = input.visibility;
+    if (input.metadata) set.metadata = input.metadata;
 
-  if (!entry) {
-    throw new EntryUpsertError('INTERNAL', 'Update returned no row', 500);
-  }
+    const [entry] = await tx
+      .update(beaconEntries)
+      .set(set)
+      .where(and(eq(beaconEntries.organization_id, orgId), eq(beaconEntries.slug, slug)))
+      .returning();
+    if (!entry) {
+      throw new EntryUpsertError('INTERNAL', 'Update returned no row', 500);
+    }
 
-  await db.insert(beaconVersions).values({
-    beacon_id: entry.id,
-    version: newVersion,
-    title: input.title,
-    summary: input.summary ?? null,
-    body_markdown: input.body_markdown,
-    changed_by: userId,
-    change_note: input.change_note ?? 'upserted via beacon_upsert_by_slug',
+    // The snapshot carries the version the UPDATE just wrote, under its row lock.
+    await tx.insert(beaconVersions).values({
+      beacon_id: entry.id,
+      version: entry.version,
+      title: input.title,
+      summary: input.summary ?? null,
+      body_markdown: input.body_markdown,
+      changed_by: userId,
+      change_note: input.change_note ?? 'upserted via beacon_upsert_by_slug',
+    });
+
+    return { data: entry, created: false, idempotency_key: `slug:${slug}` };
   });
-
-  return {
-    data: entry,
-    created: false,
-    idempotency_key: `slug:${slug}`,
-  };
 }

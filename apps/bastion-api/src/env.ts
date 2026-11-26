@@ -1,5 +1,6 @@
 import { LLM_CALL_TIMEOUT_DEFAULT_MS, LLM_CALL_TIMEOUT_MAX_MS, LLM_CALL_TIMEOUT_MIN_MS, LLM_HOLD_MARGIN_MS } from '@bigbluebam/shared';
 import { z } from 'zod';
+import { envBool } from '@bigbluebam/shared';
 import { checkStableSecrets, formatStableSecretRefusal } from './boot/stable-secrets.js';
 import { COMPILE_MAX_TOKENS_DEFAULT } from './library/compile-budget.js';
 
@@ -31,7 +32,7 @@ const envSchema = z.object({
   INTERNAL_SERVICE_SECRET: z.string().min(32),
 
   COOKIE_DOMAIN: z.string().optional(),
-  COOKIE_SECURE: z.coerce.boolean().default(false),
+  COOKIE_SECURE: envBool(false),
 
   // Spec 5.2: the number of proxies in front of bastion-api whose X-Forwarded-For entries are
   // trusted. Compose 1 (nginx), Railway 2. Never `true`.

@@ -22,6 +22,10 @@ export * from './queues.js';
 export * from './csv-safe.js';
 // The last instant of a calendar date in an IANA zone (Bastion evidence expiry, spec 3.3). Pure.
 export * from './end-of-day.js';
+// What makes a Bam phase "open" (the api's task upsert and Bastion's project checks, #253).
+export * from './bam-phase-rules.js';
+// Canonical JSON (keys sorted at every depth) for cache keys and fingerprints (#275). Pure.
+export * from './stable-json.js';
 // The internal LLM proxy's call deadline, its cap and the hold windows derived from it (#257). Pure.
 export * from './llm-deadline.js';
 // NOTE: bulwark-arm-key.ts is intentionally NOT re-exported here. It imports node:crypto and is

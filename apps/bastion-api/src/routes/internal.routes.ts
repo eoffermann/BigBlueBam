@@ -12,11 +12,11 @@ import {
   bastionMirrorEngineSchema,
   bastionVerifyCommitmentsEngineSchema,
 } from '@bigbluebam/shared';
+import { createInternalSecretGuard } from '@bigbluebam/service-health';
 import { mirrorObjects, objectSweep } from '../engine/objects.js';
 import { verifyCommitments } from '../engine/commitments.js';
 import { exportPacketEngine, reapPackets } from '../services/packet.service.js';
 import { backupStorage } from '../services/evidence-runtime.js';
-import { requireInternalSecret } from '../lib/internal-secret.js';
 import { validationError } from '../lib/http.js';
 import { canonicalJson, sha256Hex } from '../lib/ledger-canonical.js';
 import { publishedSealKeyMap } from '../lib/keys.js';
@@ -36,6 +36,10 @@ import { compileAiDeps } from '../services/compile-runtime.js';
 import { attestationNudge } from '../services/policies.service.js';
 import { autofillSlice } from '../services/questionnaire-autofill.service.js';
 import { autofillDeps } from '../services/questionnaire-runtime.js';
+
+// The suite-wide internal-route guard (#252, @bigbluebam/service-health): constant-time compare,
+// fails CLOSED with no secret configured, direct private-network peers only.
+const requireInternalSecret = createInternalSecretGuard({ secrets: () => [env.INTERNAL_SERVICE_SECRET] });
 
 /**
  * Service-to-service routes (spec 5.1 rows 105-106), behind the shared internal secret and

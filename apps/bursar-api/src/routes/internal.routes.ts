@@ -10,7 +10,8 @@ import {
   publishBoltEvent,
   type BursarSourceFormat,
 } from '@bigbluebam/shared';
-import { requireInternalSecret } from '../lib/internal-secret.js';
+import { createInternalSecretGuard } from '@bigbluebam/service-health';
+import { env } from '../env.js';
 import { validationError } from '../lib/http.js';
 import { runInOrgScope } from '../plugins/rls.js';
 import { consumeInternalEvent } from '../services/ingest.service.js';
@@ -44,6 +45,10 @@ import {
 import { makeDbLevelingStore, makeLlmCoverageClassifier } from '../services/engines/leveling.store.js';
 import { loadLevelingSettings } from '../services/leveling.service.js';
 import type { CoverageClassifier } from '../services/engines/leveling-classifier.js';
+
+// The suite-wide internal-route guard (#252, @bigbluebam/service-health): constant-time compare,
+// fails CLOSED with no secret configured, direct private-network peers only.
+const requireInternalSecret = createInternalSecretGuard({ secrets: () => [env.INTERNAL_SERVICE_SECRET] });
 
 /** Map a MIME content-type to a Bursar source format for content-type pinning (spec 5.4). */
 function formatFromContentType(ct: string | null | undefined): BursarSourceFormat | null {

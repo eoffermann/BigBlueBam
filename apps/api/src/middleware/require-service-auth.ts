@@ -1,5 +1,6 @@
 import type { FastifyRequest, FastifyReply } from 'fastify';
 import { env } from '../env.js';
+import { INTERNAL_TOKEN_HEADER } from '@bigbluebam/service-health';
 import { refuseNonPrivatePeer, sameSecret } from '../lib/internal-secret.js';
 
 /**
@@ -20,7 +21,7 @@ export async function requireServiceAuth(
   request: FastifyRequest,
   reply: FastifyReply,
 ) {
-  const header = request.headers['x-internal-token'];
+  const header = request.headers[INTERNAL_TOKEN_HEADER];
   const provided = Array.isArray(header) ? header[0] : header;
 
   if (!provided || typeof provided !== 'string') {

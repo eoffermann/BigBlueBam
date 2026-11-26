@@ -1,5 +1,5 @@
-import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import { timingSafeEqual } from 'node:crypto';
+import type { FastifyInstance } from 'fastify';
+import { createInternalSecretGuard } from '@bigbluebam/service-health';
 import { Queue } from 'bullmq';
 import IORedis from 'ioredis';
 import { sql } from 'drizzle-orm';
@@ -56,28 +56,9 @@ function rows<T>(raw: unknown): T[] {
   return (Array.isArray(raw) ? raw : ((raw as { rows?: unknown[] }).rows ?? [])) as T[];
 }
 
-// Fail-closed internal guard: reject unconditionally when the sole secret is empty.
-function requireInternalSecret(request: FastifyRequest, reply: FastifyReply): boolean {
-  const configured = env.INTERNAL_SERVICE_SECRET;
-  const provided = request.headers['x-internal-secret'];
-  const ok =
-    !!configured &&
-    typeof provided === 'string' &&
-    provided.length === configured.length &&
-    timingSafeEqual(Buffer.from(provided), Buffer.from(configured));
-  if (!ok) {
-    reply.status(401).send({
-      error: {
-        code: 'UNAUTHORIZED',
-        message: 'Invalid or missing X-Internal-Secret header',
-        details: [],
-        request_id: request.id,
-      },
-    });
-    return false;
-  }
-  return true;
-}
+// The suite-wide internal-route guard (#252, @bigbluebam/service-health): fails closed on an
+// empty secret, constant-time compare, direct private-network peers only.
+const requireInternalSecret = createInternalSecretGuard({ secrets: () => [env.INTERNAL_SERVICE_SECRET] });
 
 // Resolve a recipient entity ref (or literal email) to an address. Company -> the first
 // associated contact carrying an email. Returns null when nothing resolves (fail closed).

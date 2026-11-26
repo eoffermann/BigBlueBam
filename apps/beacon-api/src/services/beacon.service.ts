@@ -380,10 +380,12 @@ export async function updateBeacon(
   const existing = await getBeaconById(id, orgId);
   if (!existing) throw new BeaconError('NOT_FOUND', 'Beacon not found', 404);
 
-  const newVersion = existing.version + 1;
-
+  // `version = version + 1` in SQL under the UPDATE's row lock, and the snapshot taken from the
+  // row the UPDATE returned, in one transaction (#280): two concurrent edits used to both write
+  // existing.version + 1, the second then 500'd on the (beacon_id, version) unique key after its
+  // entry update had landed, and the snapshot copied unchanged fields from a stale read.
   const updateValues: Record<string, unknown> = {
-    version: newVersion,
+    version: sql`${beaconEntries.version} + 1`,
     updated_at: new Date(),
   };
   if (data.title !== undefined) updateValues.title = data.title;
@@ -393,24 +395,26 @@ export async function updateBeacon(
   if (data.visibility !== undefined) updateValues.visibility = data.visibility;
   if (data.metadata !== undefined) updateValues.metadata = data.metadata;
 
-  const [beacon] = await db
-    .update(beaconEntries)
-    .set(updateValues)
-    .where(eq(beaconEntries.id, id))
-    .returning();
+  return db.transaction(async (tx) => {
+    const [beacon] = await tx
+      .update(beaconEntries)
+      .set(updateValues)
+      .where(and(eq(beaconEntries.id, id), eq(beaconEntries.organization_id, orgId)))
+      .returning();
+    if (!beacon) throw new BeaconError('NOT_FOUND', 'Beacon not found', 404);
 
-  // Insert version snapshot
-  await db.insert(beaconVersions).values({
-    beacon_id: id,
-    version: newVersion,
-    title: data.title ?? existing.title,
-    summary: data.summary !== undefined ? data.summary : existing.summary,
-    body_markdown: data.body_markdown ?? existing.body_markdown,
-    changed_by: userId,
-    change_note: data.change_note ?? null,
+    await tx.insert(beaconVersions).values({
+      beacon_id: id,
+      version: beacon.version,
+      title: beacon.title,
+      summary: beacon.summary,
+      body_markdown: beacon.body_markdown,
+      changed_by: userId,
+      change_note: data.change_note ?? null,
+    });
+
+    return beacon;
   });
-
-  return beacon!;
 }
 
 export async function retireBeacon(id: string, _userId: string, orgId: string) {

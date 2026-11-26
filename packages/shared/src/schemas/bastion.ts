@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { BEACON_SLUG } from '../suite-links.js';
+import { boolQueryParam } from './common.js';
 
 // Bastion (continuous compliance evidence) shared schemas.
 //
@@ -12,12 +13,9 @@ import { BEACON_SLUG } from '../suite-links.js';
 //
 // See docs/brainstorming/2026_11_25_20_03_APP_DESIGN_bastion.md sections 2.3, 3.1-3.5, 4.1.
 
-/**
- * A boolean query parameter: 'true' / 'false' (or a real boolean) only. Never z.coerce.boolean(),
- * which turns the string 'false' into true and inverts the filter (#215, #231). bastion.test.ts
- * fails if z.coerce.boolean appears in this file again.
- */
-export const boolQueryParam = () => z.preprocess((v) => (v === 'true' ? true : v === 'false' ? false : v), z.boolean());
+// Boolean query parameters use boolQueryParam from ./common.ts (#251), the one suite-wide owner of
+// "string flag -> boolean". It is still exported from @bigbluebam/shared (schemas/index.ts
+// re-exports common.ts), so `import { boolQueryParam } from '@bigbluebam/shared'` is unchanged.
 
 /* ------------------------------------------------------------------ */
 /*  Frameworks and controls                                           */
@@ -1743,7 +1741,7 @@ export const bastionQuestionnaireItemListQuerySchema = z
   .object({
     band: BastionConfidenceBand.optional(),
     review_status: BastionItemReviewStatus.optional(),
-    needs_review: z.preprocess((v) => (v === 'true' ? true : v === 'false' ? false : v), z.boolean()).optional(),
+    needs_review: boolQueryParam().optional(),
   })
   .strict();
 export type BastionQuestionnaireItemListQuery = z.infer<typeof bastionQuestionnaireItemListQuerySchema>;
@@ -1800,8 +1798,8 @@ export type BastionDraftAnswer = z.infer<typeof bastionDraftAnswerSchema>;
 export const bastionAnswerLibraryQuerySchema = z
   .object({
     q: z.string().trim().max(500).optional(),
-    include_stale: z.preprocess((v) => (v === 'true' ? true : v === 'false' ? false : v), z.boolean()).optional(),
-    include_retired: z.preprocess((v) => (v === 'true' ? true : v === 'false' ? false : v), z.boolean()).optional(),
+    include_stale: boolQueryParam().optional(),
+    include_retired: boolQueryParam().optional(),
     limit: z.coerce.number().int().min(1).max(100).default(25),
   })
   .strict();

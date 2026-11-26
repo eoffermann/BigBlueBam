@@ -3,6 +3,7 @@ import { ArrowLeft, Loader2 } from 'lucide-react';
 import { useCan } from '@bigbluebam/ui/use-can';
 import type { ExceptionRow } from '@/lib/api';
 import { friendlyError } from '@/lib/errors';
+import { hiddenItemsSentence } from '@/lib/wording';
 import {
   useAcknowledgeDrift,
   useCheckControlNow,
@@ -273,9 +274,9 @@ export function ControlDetailPage({ controlId, onNavigate }: { controlId: string
                     ))}
                   </div>
                 )}
-                {(s.hidden_citation_count ?? 0) > 0 && (
+                {hiddenItemsSentence(s.hidden_citation_count) && (
                   <p className="text-xs text-zinc-500" data-testid="hidden-citations">
-                    {s.hidden_citation_count} cited item(s) are hidden because you cannot see them.
+                    {hiddenItemsSentence(s.hidden_citation_count)}
                   </p>
                 )}
               </li>

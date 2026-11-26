@@ -144,4 +144,64 @@ describe.skipIf(!DATABASE_URL)('beacon slugs are per-org (#246)', () => {
       .limit(1);
     expect(first?.org).toBe(ORG_A);
   });
+
+  // #280: the upsert and beacon_update run in one transaction with the version bumped under the
+  // row lock, so parallel writers neither 500 nor drop content, and history stays contiguous.
+  const versionsOf = async (id: string) =>
+    (await sql`SELECT version, body_markdown FROM beacon_versions WHERE beacon_id = ${id} ORDER BY version`).map((r) => ({
+      version: Number(r.version),
+      body: String(r.body_markdown),
+    }));
+
+  it('two parallel upserts creating the same slug: one creates, the other is applied as v2, no throw', async () => {
+    const { upsertEntryBySlug } = await import('../../src/services/entry-upsert.service.js');
+    const slug = `race-create-${run}`;
+    const results = await Promise.all([
+      upsertEntryBySlug({ slug, title: 'one', body_markdown: 'body one' }, userA, ORG_A),
+      upsertEntryBySlug({ slug, title: 'two', body_markdown: 'body two' }, userA, ORG_A),
+    ]);
+    expect(results.filter((r) => r.created)).toHaveLength(1);
+    const id = results[0]!.data.id;
+    expect(results[1]!.data.id).toBe(id);
+    const [row] = await sql`SELECT version, body_markdown FROM beacon_entries WHERE id = ${id}`;
+    expect(Number(row!.version)).toBe(2);
+    const history = await versionsOf(id);
+    expect(history.map((v) => v.version)).toEqual([1, 2]);
+    // The loser's content was applied (the old ON CONFLICT dropped it), and the live row is v2.
+    expect(new Set(history.map((v) => v.body))).toEqual(new Set(['body one', 'body two']));
+    expect(row!.body_markdown).toBe(history[1]!.body);
+  });
+
+  it('two parallel upserts updating an existing slug write contiguous versions, no throw', async () => {
+    const { upsertEntryBySlug } = await import('../../src/services/entry-upsert.service.js');
+    const slug = `race-update-${run}`;
+    const created = await upsertEntryBySlug({ slug, title: 'base', body_markdown: 'base body' }, userA, ORG_A);
+    await Promise.all([
+      upsertEntryBySlug({ slug, title: 'x', body_markdown: 'body x' }, userA, ORG_A),
+      upsertEntryBySlug({ slug, title: 'y', body_markdown: 'body y' }, userA, ORG_A),
+    ]);
+    const history = await versionsOf(created.data.id);
+    expect(history.map((v) => v.version)).toEqual([1, 2, 3]);
+    const [row] = await sql`SELECT version, body_markdown FROM beacon_entries WHERE id = ${created.data.id}`;
+    expect(Number(row!.version)).toBe(3);
+    expect(row!.body_markdown).toBe(history[2]!.body);
+  });
+
+  it('two parallel beacon_update calls write contiguous versions whose snapshots match the row', async () => {
+    const { upsertEntryBySlug } = await import('../../src/services/entry-upsert.service.js');
+    const { updateBeacon } = await import('../../src/services/beacon.service.js');
+    const slug = `race-edit-${run}`;
+    const created = await upsertEntryBySlug({ slug, title: 'edit base', body_markdown: 'edit base' }, userA, ORG_A);
+    await Promise.all([
+      updateBeacon(created.data.id, { body_markdown: 'edit p' }, userA, ORG_A),
+      updateBeacon(created.data.id, { title: 'edit q title' }, userA, ORG_A),
+    ]);
+    const history = await versionsOf(created.data.id);
+    expect(history.map((v) => v.version)).toEqual([1, 2, 3]);
+    const [row] = await sql`SELECT version, title, body_markdown FROM beacon_entries WHERE id = ${created.data.id}`;
+    expect(Number(row!.version)).toBe(3);
+    // Both edits survive (title from q, body from p), and the v3 snapshot equals the live row.
+    expect(row).toMatchObject({ title: 'edit q title', body_markdown: 'edit p' });
+    expect(history[2]!.body).toBe('edit p');
+  });
 });

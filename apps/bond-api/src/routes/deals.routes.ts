@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
+import { listBondDealsQuerySchema } from '@bigbluebam/shared';
 import { requireAuth, requireScope } from '../plugins/auth.js';
 import * as dealService from '../services/deal.service.js';
 import { broadcastToPipeline } from '../lib/broadcast.js';
@@ -52,22 +53,8 @@ const addContactSchema = z.object({
   role: z.string().max(60).optional(),
 });
 
-const listQuerySchema = z.object({
-  pipeline_id: z.string().uuid().optional(),
-  stage_id: z.string().uuid().optional(),
-  owner_id: z.string().uuid().optional(),
-  company_id: z.string().uuid().optional(),
-  value_min: z.coerce.number().int().optional(),
-  value_max: z.coerce.number().int().optional(),
-  expected_close_after: z.string().optional(),
-  expected_close_before: z.string().optional(),
-  stale: z.coerce.boolean().optional(),
-  search: z.string().max(200).optional(),
-  include_deleted: z.enum(['true', 'false']).optional(),
-  limit: z.coerce.number().int().min(1).max(100).optional(),
-  offset: z.coerce.number().int().min(0).optional(),
-  sort: z.string().optional(),
-});
+// GET /deals query: the shared schema (#251), where `stale=false` means false.
+const listQuerySchema = listBondDealsQuerySchema;
 
 // ---------------------------------------------------------------------------
 // Routes

@@ -452,15 +452,13 @@ export async function executeQuery(
   config: QueryConfig,
   orgId: string,
 ): Promise<{ rows: Record<string, unknown>[]; sql?: string; duration_ms: number; cached?: boolean }> {
-  // Try date-range-aware cache before hitting the DB
-  if (_cacheService && config.date_range) {
-    const configHash = _cacheService.hashQueryConfig(config as unknown as Record<string, unknown>);
-    const cacheKey = _cacheService.buildAdHocCacheKey(configHash, config.date_range, orgId);
-    if (cacheKey) {
-      const cached = await _cacheService.getAdHoc(cacheKey);
-      if (cached) {
-        return cached as { rows: Record<string, unknown>[]; duration_ms: number; cached: boolean };
-      }
+  // Try the date-range-aware cache before hitting the DB. One key for the read and the write
+  // below, over every input buildQuery takes (#275).
+  const cacheKey = _cacheService && config.date_range ? _cacheService.adHocKey(product, entity, config, orgId) : null;
+  if (_cacheService && cacheKey) {
+    const cached = await _cacheService.getAdHoc(cacheKey);
+    if (cached) {
+      return cached as { rows: Record<string, unknown>[]; duration_ms: number; cached: boolean };
     }
   }
 
@@ -481,16 +479,12 @@ export async function executeQuery(
     };
 
     // Cache the result if the date range is historical (not including today)
-    if (_cacheService && config.date_range) {
-      const configHash = _cacheService.hashQueryConfig(config as unknown as Record<string, unknown>);
-      const cacheKey = _cacheService.buildAdHocCacheKey(configHash, config.date_range, orgId);
-      if (cacheKey) {
-        // Store without the sql field for security
-        const toCache = { rows: output.rows, duration_ms: output.duration_ms, cached: true };
-        _cacheService.setAdHoc(cacheKey, toCache).catch(() => {
-          // Best-effort cache write
-        });
-      }
+    if (_cacheService && cacheKey) {
+      // Store without the sql field for security
+      const toCache = { rows: output.rows, duration_ms: output.duration_ms, cached: true };
+      _cacheService.setAdHoc(cacheKey, toCache).catch(() => {
+        // Best-effort cache write
+      });
     }
 
     return output;

@@ -57,11 +57,13 @@ jobs:
           exit 1
 
       - name: Apply all migrations (full replay)
+        id: migrate
         env:
           MIGRATIONS_DIR: ${{ github.workspace }}/infra/postgres/migrations
         run: node apps/api/dist/migrate.js
 
       - name: Verify migration count
+        if: ${{ !cancelled() && steps.migrate.outcome == 'success' }}
         run: |
           EXPECTED=$(ls infra/postgres/migrations/*.sql | wc -l)
           APPLIED=$(psql -h localhost -U bigbluebam -d bigbluebam -t -c \
@@ -73,7 +75,10 @@ jobs:
           fi
 
       - name: Run drift guard
+        if: ${{ !cancelled() && steps.migrate.outcome == 'success' }}
         run: pnpm db:check
 
       - name: Lint migration files
+        # A file scan; it needs no database, so it reports even when the replay fails.
+        if: ${{ !cancelled() }}
         run: node scripts/lint-migrations.mjs

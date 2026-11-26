@@ -41,6 +41,9 @@ export const APP_SERVICES = [
       optional: [
         'CORS_ORIGIN', 'LOG_LEVEL', 'PUBLIC_URL',
         'INTERNAL_SERVICE_SECRET',
+        // The assignment notification's Banter DM (notification-fanout.service.ts, #278). Without
+        // it the api falls back to http://banter-api:4002, the wrong host and port on Railway.
+        'BANTER_API_URL',
         'S3_ENDPOINT', 'S3_ACCESS_KEY', 'S3_SECRET_KEY', 'S3_BUCKET', 'S3_REGION',
         'OAUTH_GITHUB_CLIENT_ID', 'OAUTH_GITHUB_CLIENT_SECRET',
         'OAUTH_GOOGLE_CLIENT_ID', 'OAUTH_GOOGLE_CLIENT_SECRET',
@@ -62,7 +65,8 @@ export const APP_SERVICES = [
     needs: ['postgres', 'redis', 'minio', 'api'],
     public_paths: ['/helpdesk/api/', '/helpdesk/ws'],
     env: {
-      required: ['DATABASE_URL', 'REDIS_URL', 'SESSION_SECRET', 'INTERNAL_HELPDESK_SECRET', 'BBB_API_INTERNAL_URL'],
+      // INTERNAL_SERVICE_SECRET: helpdesk-api publishes Bolt events (#248).
+      required: ['DATABASE_URL', 'REDIS_URL', 'SESSION_SECRET', 'INTERNAL_HELPDESK_SECRET', 'INTERNAL_SERVICE_SECRET', 'BBB_API_INTERNAL_URL'],
       optional: [
         'CORS_ORIGIN', 'LOG_LEVEL', 'HELPDESK_URL',
         'S3_ENDPOINT', 'S3_ACCESS_KEY', 'S3_SECRET_KEY', 'S3_BUCKET', 'S3_REGION',
@@ -245,7 +249,8 @@ export const APP_SERVICES = [
     needs: ['postgres', 'redis', 'api'],
     public_paths: ['/bench/api/'],
     env: {
-      required: ['DATABASE_URL', 'REDIS_URL', 'SESSION_SECRET', 'BBB_API_INTERNAL_URL'],
+      // INTERNAL_SERVICE_SECRET: POST /internal/query (Basis governed queries) refuses every call without it.
+      required: ['DATABASE_URL', 'REDIS_URL', 'SESSION_SECRET', 'INTERNAL_SERVICE_SECRET', 'BBB_API_INTERNAL_URL'],
       optional: ['DATABASE_READ_URL', 'CORS_ORIGIN', 'LOG_LEVEL', 'QUERY_TIMEOUT_MS', 'CACHE_TTL_SECONDS'],
     },
   },

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { envBool } from '@bigbluebam/shared';
 
 const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
@@ -24,10 +25,8 @@ const envSchema = z.object({
   // brute-force protection in production. The flag must be explicitly set on
   // any container running with NODE_ENV=production for it to take effect, so
   // production deployments stay strict by default.
-  BBB_E2E_PERMISSIVE_RATE_LIMIT: z.preprocess(
-    (val) => (val === '' || val === undefined ? undefined : val),
-    z.coerce.boolean().optional(),
-  ),
+  // envBool (#251): with z.coerce.boolean, BBB_E2E_PERMISSIVE_RATE_LIMIT=false turned it ON.
+  BBB_E2E_PERMISSIVE_RATE_LIMIT: envBool(),
   RATE_LIMIT_E2E_MULTIPLIER: z.preprocess(
     (val) => (val === '' || val === undefined ? undefined : val),
     z.coerce.number().int().positive().default(100),
@@ -66,20 +65,9 @@ const envSchema = z.object({
   // COOKIE_SECURE=false in .env to disable the Secure flag for HTTP-only
   // local-network deploys: the cookie still went out with Secure, the
   // browser silently dropped it, and every page reload bounced through
-  // /login. Parse the strings ourselves so 'false' / '0' actually mean
-  // false; '' / undefined falls through to the NODE_ENV-based default.
-  COOKIE_SECURE: z.preprocess(
-    (val) => {
-      if (val === '' || val === undefined) return undefined;
-      if (typeof val === 'string') {
-        const v = val.toLowerCase();
-        if (v === 'false' || v === '0' || v === 'no' || v === 'off') return false;
-        if (v === 'true' || v === '1' || v === 'yes' || v === 'on') return true;
-      }
-      return val;
-    },
-    z.boolean().optional(),
-  ),
+  // /login. The shared envBool (#251) makes 'false' / '0' mean false;
+  // '' / undefined falls through to the NODE_ENV-based default below.
+  COOKIE_SECURE: envBool(),
 
   // SMTP / email (P1-30). Optional — if SMTP_HOST is unset, outbound emails
   // are logged by the worker instead of delivered. The API enqueues jobs to

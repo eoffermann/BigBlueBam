@@ -1,7 +1,7 @@
-import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
+import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { BOLT_SOURCES } from '@bigbluebam/shared';
-import { timingSafeEqual } from 'node:crypto';
+import { createInternalSecretGuard, internalSecretPreHandler } from '@bigbluebam/service-health';
 import { randomUUID } from 'node:crypto';
 import { eq, and, asc } from 'drizzle-orm';
 import { env } from '../env.js';
@@ -51,38 +51,14 @@ export const ingestEventSchema = z.object({
 // Internal auth middleware
 // ---------------------------------------------------------------------------
 
-async function requireInternalSecret(
-  request: FastifyRequest,
-  reply: FastifyReply,
-) {
-  const configuredSecret = env.INTERNAL_SERVICE_SECRET;
-
-  if (!configuredSecret) {
-    request.log.warn(
-      'INTERNAL_SERVICE_SECRET is not configured — event ingestion routes are unprotected. ' +
-        'Set INTERNAL_SERVICE_SECRET env var (min 32 chars) to secure service-to-service calls.',
-    );
-    return;
-  }
-
-  const providedSecret = request.headers['x-internal-secret'] as string | undefined;
-
-  const secretsMatch =
-    providedSecret &&
-    providedSecret.length === configuredSecret.length &&
-    timingSafeEqual(Buffer.from(providedSecret), Buffer.from(configuredSecret));
-
-  if (!secretsMatch) {
-    return reply.status(401).send({
-      error: {
-        code: 'UNAUTHORIZED',
-        message: 'Invalid or missing X-Internal-Secret header',
-        details: [],
-        request_id: request.id,
-      },
-    });
-  }
-}
+// The suite-wide internal-route guard (#252, @bigbluebam/service-health). Ingest used to fail
+// OPEN when INTERNAL_SERVICE_SECRET was unset and accepted callers relayed through the edge nginx
+// (/bolt/api/v1/events/ingest is not under an /internal path the edge denies). It now fails
+// closed and admits direct private-network peers only; every publisher (publishBoltEvent in
+// @bigbluebam/shared) calls bolt-api directly at BOLT_API_INTERNAL_URL.
+const requireInternalSecret = internalSecretPreHandler(
+  createInternalSecretGuard({ secrets: () => [env.INTERNAL_SERVICE_SECRET] }),
+);
 
 // ---------------------------------------------------------------------------
 // Lazy BullMQ queue

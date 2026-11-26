@@ -84,6 +84,21 @@ describe('publishBoltEvent timeout', () => {
     expect(warn).not.toHaveBeenCalled();
   });
 
+  it('warns, naming INTERNAL_SERVICE_SECRET, when bolt-api refuses the secret (#248)', async () => {
+    server = createServer((_req, res) => {
+      res.writeHead(401, { 'content-type': 'application/json' });
+      res.end('{"error":{"code":"UNAUTHORIZED"}}');
+    });
+    process.env.BOLT_API_INTERNAL_URL = await listen(server);
+    delete process.env.INTERNAL_SERVICE_SECRET;
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    await expect(publishBoltEvent('ticket.created', 'helpdesk', {}, ORG)).resolves.toBeUndefined();
+    expect(warn).toHaveBeenCalledTimes(1);
+    const logged = JSON.parse(String(warn.mock.calls[0]![0]));
+    expect(logged.msg).toContain('INTERNAL_SERVICE_SECRET');
+    expect(logged).toMatchObject({ source: 'helpdesk', internal_service_secret_set: false });
+  });
+
   it('never throws when bolt-api is unreachable', async () => {
     process.env.BOLT_API_INTERNAL_URL = 'http://127.0.0.1:1';
     await expect(publishBoltEvent('thing.happened', 'bam', {}, ORG)).resolves.toBeUndefined();

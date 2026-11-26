@@ -83,7 +83,7 @@ graph LR
 
 ### SDK
 
-Built with the official `@modelcontextprotocol/sdk` TypeScript package. Runs as a sidecar Docker container on internal port 3001, exposed externally at `/mcp/` through the shared nginx reverse proxy on port 80. Communicates with the API server over the internal Docker network.
+Built with the official `@modelcontextprotocol/sdk` TypeScript package. Runs as a sidecar Docker container on internal port 3001, exposed externally at `/mcp/` through the shared nginx reverse proxy on port 80. Communicates with the API server over the internal Docker network. On Docker Compose the container port is also published for local MCP clients, bound to the host's loopback only (`127.0.0.1:${MCP_PORT:-3001}`), so `http://localhost:3001/` works on the Docker host itself and nothing listens on a LAN or public interface (#276). Off-host clients use `https://DOMAIN/mcp/`.
 
 ### Endpoint paths
 
@@ -95,7 +95,7 @@ The canonical MCP endpoint for an MCP client is the `/mcp/` path on the public i
 | `https://DOMAIN/mcp/health` | `/health` | Liveness probe. Returns `{"status":"ok","server":"BigBlueBam MCP","version":"..."}`. No auth. |
 | `https://DOMAIN/mcp/sse` | `/sse` | SSE transport connection (only active when `MCP_TRANSPORT=sse`; the default is `streamable-http` and this route returns 404). |
 | `https://DOMAIN/mcp/messages` | `/messages` | SSE transport POST endpoint for client→server messages (only active when `MCP_TRANSPORT=sse`). |
-| _(none: nginx returns 404 for `/mcp/tools/call`)_ | `/tools/call` | Internal shared-secret direct-invocation route for service-to-service callers (bolt-api, worker, api), reached only on the private network at `MCP_INTERNAL_URL` (e.g. `http://mcp-server:3001/tools/call`). Not for external MCP clients — use `/mcp/` for that. |
+| _(none: nginx returns 404 for `/mcp/tools/call`)_ | `/tools/call` | Internal shared-secret direct-invocation route for service-to-service callers (bolt-api, worker, api), reached only on the private network at `MCP_INTERNAL_URL` (e.g. `http://mcp-server:3001/tools/call`). The Compose port mapping is loopback-only (`127.0.0.1:3001`), so the route is not reachable off-host around nginx (#276). Not for external MCP clients — use `/mcp/` for that. |
 
 Configured in `infra/nginx/nginx-with-site.conf` (docker-compose) and `infra/nginx/nginx.conf` (baked-in fallback); the Railway flavor `infra/nginx/nginx.railway.conf` is auto-generated from the former. The routing matches `apps/mcp-server/src/server.ts`.
 
@@ -813,7 +813,7 @@ The MCP server is configured via environment variables:
 |---|---|---|
 | `MCP_ENABLED` | `true` | Enable/disable the MCP server |
 | `MCP_TRANSPORT` | `streamable-http` | Transport: `streamable-http`, `sse`, `stdio` |
-| `MCP_PORT` | `3001` | Port for MCP server (sidecar mode) |
+| `MCP_PORT` | `3001` | Port for MCP server (sidecar mode). On Compose, also the host port of the loopback-only mapping `127.0.0.1:${MCP_PORT}` |
 | `MCP_PATH` | `/mcp` | URL path prefix (integrated mode) |
 | `MCP_AUTH_REQUIRED` | `true` | Require authentication (disable only for local dev) |
 | `MCP_RATE_LIMIT_RPM` | `100` | Requests per minute per session |
