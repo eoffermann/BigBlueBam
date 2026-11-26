@@ -54,6 +54,12 @@ jobs:
       - name: Check bolt event catalog drift
         run: pnpm check:bolt-catalog
 
+      # Deploy/infra script unit tests written with node:test (no vitest config is
+      # needed, since scripts/ sits outside the pnpm workspace). Covers the Railway nginx
+      # generator transform, the syncNew variable reconcile, and the stable-secret class.
+      - name: Script unit tests (node:test)
+        run: pnpm test:scripts
+
       # Guards scripts/deploy/shared/env-hints.mjs against catalog vars that have
       # no hint. An unhinted OPTIONAL var is silently dropped from the Railway
       # service (the integration is just absent in prod, with no signal); an

@@ -35,6 +35,7 @@ import {
   JOB_SERVICES,
 } from './deploy/shared/services.mjs';
 import { hintFor } from './deploy/shared/env-hints.mjs';
+import { transformNginxForRailway } from './lib/railway-nginx.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const OUT_DIR = join(ROOT, 'railway');
@@ -225,182 +226,24 @@ writeFileSync(join(OUT_DIR, 'README.md'), readmeLines.join('\n'));
 function generateRailwayNginxConf() {
   const sourcePath = join(ROOT, 'infra/nginx/nginx-with-site.conf');
   const outPath = join(ROOT, 'infra/nginx/nginx.railway.conf');
-  // Normalize CRLF → LF before any regex work. On a Windows checkout the source
-  // has CRLF terminators, and JS regex in `m` mode treats a lone `\r` as its own
-  // line boundary — so `/^\s*__HTTP_LISTEN__\s*$/m` would start matching at the
-  // `\r` after the preceding comment and its `\s*` would swallow the following
-  // `\n`, welding `listen 8080;` onto the comment line (commenting it out).
-  // nginx then has no valid listen directive, falls back to port 80, and every
-  // Railway healthcheck on 8080 fails — which silently froze the frontend at an
-  // old build in production. Stripping `\r` up front makes generation
-  // deterministic regardless of the checkout's line endings.
-  const source = readFileSync(sourcePath, 'utf8').replace(/\r\n?/g, '\n');
+  // CRLF is normalized to LF inside transformNginxForRailway before any regex work.
+  // On a Windows checkout a lone `\r` is its own line boundary in `m` mode, which once
+  // welded `listen 8080;` onto a comment line; nginx then had no valid listen, fell back
+  // to port 80, and every Railway healthcheck on 8080 failed, silently freezing the
+  // frontend at an old build in production.
+  const source = readFileSync(sourcePath, 'utf8');
 
-  // Build the set of valid service hostnames (matches docker-compose service
-  // names, which are the same as upstream names in the source nginx config).
-  const validHosts = new Set([
-    ...APP_SERVICES.map((s) => s.name),
-    ...INFRA_SERVICES.map((s) => s.name),
-    ...JOB_SERVICES.map((s) => s.name),
-  ]);
-
-  // Bam app services bind to PORT=8080 on Railway regardless of their
-  // nominal docker-compose port, because they read process.env.PORT and
-  // Railway sets PORT=8080 unconditionally. Third-party images
-  // (minio/qdrant/livekit) ignore $PORT and keep their default ports.
-  // We keep the original port when the upstream is third-party.
-  const RAILWAY_DYNAMIC_PORT = 8080;
-  const appHosts = new Set(APP_SERVICES.map((s) => s.name));
-  const railwayPortFor = (host) =>
-    appHosts.has(host) ? String(RAILWAY_DYNAMIC_PORT) : null;
-
-  let rewrittenProxyPass = 0;
-  let rewrittenListen = 0;
-
-  // 1. Rewrite proxy_pass upstreams: add `.railway.internal`, swap the
-  //    port to 8080 for Bam services, leave third-party ports alone.
-  let out = source.replace(
-    /proxy_pass(\s+)http:\/\/([a-z][a-z0-9-]*):(\d+)/gi,
-    (match, ws, host, port) => {
-      if (!validHosts.has(host)) return match;
-      rewrittenProxyPass++;
-      const railwayPort = railwayPortFor(host) ?? port;
-      return `proxy_pass${ws}http://${host}.railway.internal:${railwayPort}`;
-    },
-  );
-
-  // 2. The frontend nginx itself runs ON Railway and must bind to PORT=8080
-  //    so Railway's healthcheck and public proxy can reach it. The source
-  //    config uses two placeholders that entrypoint.sh substitutes at
-  //    container start for the docker-compose flow:
-  //
-  //      __HTTP_LISTEN__      → "    listen 80;" (or empty for TLS modes)
-  //      __TLS_LISTEN_BLOCK__ → ssl listen + cert + HSTS lines (or empty)
-  //
-  //    Neither substitution is correct for Railway: TLS terminates at
-  //    Railway's edge proxy so no in-container cert, and the port must be
-  //    8080 (not 80) for Railway's healthcheck to land. Materialize the
-  //    final values into the railway profile so entrypoint.sh's
-  //    `grep -q '__HTTP_LISTEN__'` test returns false on Railway and the
-  //    TLS substitution branch is bypassed entirely.
-  out = out.replace(/^\s*__HTTP_LISTEN__\s*$/m, `    listen ${RAILWAY_DYNAMIC_PORT};`);
-  out = out.replace(/^\s*__TLS_LISTEN_BLOCK__\s*$/m, '');
-  rewrittenListen++;
-
-  // 2b. Rewrite any remaining `listen N;` directive (typically none after the
-  //     placeholder substitution above, but kept for any future inline ones)
-  //     to `listen 8080;`. Source IPs and SSL options are preserved.
-  //
-  //     Walk line-by-line so we can skip comment lines. The source has a
-  //     documentation block describing what entrypoint.sh injects (literally
-  //     "listen 80;" inside a `# … "listen 80;" or "" …` comment), and we
-  //     must NOT rewrite those — both because they're not real directives,
-  //     and because step 3's resolver insertion would split the comment in
-  //     half and the orphan trailing fragment would be parsed as a real
-  //     directive at boot, crashing nginx with a healthcheck-loop on Railway.
-  //     A leading `#` (after any indentation) is the only nginx comment form,
-  //     so a simple prefix test is sufficient.
-  const isComment = (line) => /^\s*#/.test(line);
-  const listenRewriteRe = /(\blisten\s+)(\d+)([^;]*);/g;
-  const listenLines = out.split('\n').map((line) => {
-    if (isComment(line)) return line;
-    return line.replace(listenRewriteRe, (_match, prefix, port, suffix) => {
-      if (port === String(RAILWAY_DYNAMIC_PORT)) return _match;
-      rewrittenListen++;
-      return `${prefix}${RAILWAY_DYNAMIC_PORT}${suffix};`;
-    });
+  // Valid upstream hostnames match docker-compose service names. Bam app services
+  // bind to PORT=8080 on Railway; third-party images keep their default ports.
+  // The transform itself lives in scripts/lib/railway-nginx.mjs (unit tested).
+  const { out, counts } = transformNginxForRailway(source, {
+    validHosts: [
+      ...APP_SERVICES.map((s) => s.name),
+      ...INFRA_SERVICES.map((s) => s.name),
+      ...JOB_SERVICES.map((s) => s.name),
+    ],
+    appHosts: APP_SERVICES.map((s) => s.name),
   });
-  out = listenLines.join('\n');
-
-  // 3. Inject a `resolver` directive right after the listen. Without it,
-  //    nginx resolves upstream hostnames ONCE at config load and caches the
-  //    IP forever — so any time an upstream service (api, site, helpdesk-api,
-  //    …) is redeployed its internal IP changes and the frontend keeps
-  //    hitting the dead old IP until someone also redeploys frontend. The
-  //    `__RESOLVER__` placeholder is replaced at container start by
-  //    infra/nginx/entrypoint.sh with the nameserver(s) from
-  //    /etc/resolv.conf, so the config stays portable.
-  //
-  //    Same comment-skip applies here: a `listen N;` mention inside a
-  //    `# …` documentation block must not get a resolver line injected
-  //    after it, or the comment splits and the second half becomes a
-  //    real directive.
-  const resolverRe = /(\blisten\s+\d+[^;]*;)/;
-  let resolverInjected = false;
-  const resolverLines = out.split('\n').map((line) => {
-    if (resolverInjected || isComment(line)) return line;
-    const replaced = line.replace(resolverRe, `$1\n    resolver __RESOLVER__ valid=10s;`);
-    if (replaced !== line) resolverInjected = true;
-    return replaced;
-  });
-  out = resolverLines.join('\n');
-
-  // 4. Rewrite each `proxy_pass http://<host>.railway.internal:<port>[<uri>]`
-  //    to use a variable so nginx uses the resolver (with 10s TTL) to re-
-  //    resolve the hostname at request time. nginx only consults the
-  //    resolver when the upstream URL contains a variable; a static hostname
-  //    is resolved once at startup and the IP is cached forever.
-  //
-  //    Because variable-style proxy_pass cannot do URI rewriting itself
-  //    (nginx docs: "URI is passed as-is"), we replace the static-URI form
-  //    with an explicit `rewrite ... break` that reproduces the original
-  //    path substitution, then a URI-less proxy_pass to the variable.
-  let rewrittenVariable = 0;
-  const lines = out.split('\n');
-  const resultLines = [];
-  let currentLoc = null;
-  let braceDepth = 0;
-  let locBraceDepth = 0;
-  let varSeq = 0;
-  const locRe = /^(\s*)location\s+([^\s{]+(?:\s+[^\s{]+)*)\s*\{\s*$/;
-  const closeRe = /^\s*}\s*$/;
-  const openRe = /\{/;
-  const proxyRe =
-    /^(\s*)proxy_pass\s+http:\/\/([a-z][a-z0-9-]*\.railway\.internal):(\d+)(\/[^\s;]*)?;(\s*)$/;
-  for (const line of lines) {
-    const mLoc = line.match(locRe);
-    if (mLoc) {
-      currentLoc = mLoc[2];
-      locBraceDepth = braceDepth;
-      braceDepth++;
-      resultLines.push(line);
-      continue;
-    }
-    if (closeRe.test(line)) {
-      braceDepth = Math.max(0, braceDepth - 1);
-      if (currentLoc && braceDepth === locBraceDepth) currentLoc = null;
-      resultLines.push(line);
-      continue;
-    }
-    if (openRe.test(line)) {
-      // non-location block opening (e.g. `server {`). Track depth.
-      braceDepth++;
-    }
-    const mProxy = line.match(proxyRe);
-    if (mProxy && currentLoc) {
-      const [, indent, host, port, uri, trailing] = mProxy;
-      const varName = `$rw_upstream_${++varSeq}`;
-      resultLines.push(`${indent}set ${varName} "${host}";`);
-      if (uri && uri !== '') {
-        // Strip the `= ` exact-match modifier (and any leading whitespace)
-        // from currentLoc so the rewrite regex sees only the URI path.
-        // Without this, `location = /mcp` would produce a rewrite anchored
-        // on literal `= /mcp`, which nginx parses as a broken regex.
-        const locPath = currentLoc.replace(/^=\s+/, '');
-        const locEsc = locPath.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        resultLines.push(
-          `${indent}rewrite ^${locEsc}(.*)$ ${uri}$1 break;`,
-        );
-      }
-      resultLines.push(
-        `${indent}proxy_pass http://${varName}:${port};${trailing ?? ''}`,
-      );
-      rewrittenVariable++;
-      continue;
-    }
-    resultLines.push(line);
-  }
-  out = resultLines.join('\n');
 
   const header = [
     '# AUTO-GENERATED by scripts/gen-railway-configs.mjs from',
@@ -444,12 +287,7 @@ function generateRailwayNginxConf() {
   ].join('\n');
 
   writeFileSync(outPath, header + out);
-  return {
-    path: outPath,
-    rewrittenProxyPass,
-    rewrittenListen,
-    rewrittenVariable,
-  };
+  return { path: outPath, ...counts };
 }
 
 const nginxResult = generateRailwayNginxConf();
@@ -596,7 +434,7 @@ for (const m of manifests) {
   process.stdout.write(`  - ${m.name.padEnd(14)} ${m.kind.padEnd(8)} ${m.file}\n`);
 }
 process.stdout.write(
-  `\nWrote nginx.railway.conf (${nginxResult.rewrittenProxyPass} upstreams + ${nginxResult.rewrittenListen} listen + ${nginxResult.rewrittenVariable} dynamic-DNS proxy_pass directives rewritten)\n`,
+  `\nWrote nginx.railway.conf (${nginxResult.rewrittenProxyPass} upstreams + ${nginxResult.rewrittenSetUpstream} set-variable upstreams + ${nginxResult.rewrittenResolver} docker resolvers + ${nginxResult.rewrittenListen} listen + ${nginxResult.rewrittenVariable} dynamic-DNS proxy_pass directives rewritten)\n`,
 );
 process.stdout.write(`  - ${nginxResult.path}\n`);
 process.stdout.write(`\nWrote env-vars.md\n`);
