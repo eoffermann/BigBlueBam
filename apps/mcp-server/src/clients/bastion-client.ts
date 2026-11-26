@@ -56,6 +56,14 @@ import type {
   BastionQuestionnaireListQuery,
   BastionQuestionnaireUpdate,
 } from '@bigbluebam/shared';
+import type {
+  BastionAuditLogQuery,
+  BastionAuditorRequestUpdate,
+  BastionDeliveryProblemListQuery,
+  BastionExportCreate,
+  BastionExportListQuery,
+  BastionSettingsUpdate,
+} from '@bigbluebam/shared';
 import type { ApiClient } from '../middleware/api-client.js';
 
 /**
@@ -289,6 +297,25 @@ export function createBastionClient(bastionApiUrl: string, api: ApiClient, fetch
     updateAnswerLibrary: (id: string, body: BastionAnswerLibraryUpdate) => request('PATCH', `/answer-library/${id}`, body),
     // Row 9 with the M7 option: use_ai false forces the library's suggestions.
     compileFrameworkWith: (id: string, body: BastionCompileFramework) => request('POST', `/frameworks/${id}/compile`, body),
+
+    // ── M9: sharing, settings and the audit log (spec 5.1 rows 84-100) ──────────
+    // Rows 85-87 (room create, revoke, unlock) have no client method: session required (spec
+    // 2.8, #136). Row 93 (packet download) is a byte response. Rows 101-104 are the public room.
+    previewAuditorRoom: (roomId: string) => request('GET', `/auditor-rooms/${roomId}/preview`),
+    respondAuditorRequest: (id: string, body: BastionAuditorRequestUpdate) => request('PATCH', `/auditor-requests/${id}`, body),
+    createExport: (body: BastionExportCreate) => request('POST', '/exports', body),
+    listExports: (q: Partial<BastionExportListQuery> = {}) =>
+      request('GET', `/exports${qs({ status: q.status, limit: q.limit === undefined ? undefined : String(q.limit) })}`),
+    getSettings: () => request('GET', '/settings'),
+    updateSettings: (body: BastionSettingsUpdate) => request('PATCH', '/settings', body),
+    listDeliveryProblems: (q: Partial<BastionDeliveryProblemListQuery> = {}) =>
+      request('GET', `/delivery-problems${qs({ limit: q.limit === undefined ? undefined : String(q.limit) })}`),
+    retryDelivery: (id: string) => request('POST', `/delivery-problems/${id}/retry`, {}),
+    auditLog: (q: Partial<BastionAuditLogQuery> = {}) =>
+      request(
+        'GET',
+        `/audit${qs({ action: q.action, subject_type: q.subject_type, cursor: q.cursor, limit: q.limit === undefined ? undefined : String(q.limit) })}`,
+      ),
   };
 }
 

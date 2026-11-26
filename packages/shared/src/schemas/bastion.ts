@@ -1999,7 +1999,7 @@ export const BastionPacketStage = z.enum(['collecting', 'checking_commitments', 
 export type BastionPacketStage = z.infer<typeof BastionPacketStage>;
 
 /** PATCH /settings (row 97). Every field optional; the medium floor stays below the high floor. */
-export const bastionSettingsUpdateSchema = z
+export const bastionSettingsUpdateFields = z
   .object({
     remediation_tasks: BastionRemediationTasks.optional(),
     timezone: z.string().trim().min(1).max(64).optional(),
@@ -2017,7 +2017,9 @@ export const bastionSettingsUpdateSchema = z
     /** 10 MB to 10 GB. */
     max_packet_bytes: z.number().int().min(10 * 1024 * 1024).max(10 * 1024 * 1024 * 1024).optional(),
   })
-  .strict()
+  .strict();
+/** The fields plus the cross-field rules (the route and the MCP tool both validate with this). */
+export const bastionSettingsUpdateSchema = bastionSettingsUpdateFields
   .refine((b) => Object.keys(b).length > 0, { message: 'Nothing to change' })
   .refine(
     (b) => b.questionnaire_high_floor === undefined || b.questionnaire_medium_floor === undefined || b.questionnaire_medium_floor < b.questionnaire_high_floor,

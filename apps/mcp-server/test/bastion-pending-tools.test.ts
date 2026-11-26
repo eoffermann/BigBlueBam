@@ -74,8 +74,9 @@ describe('Bastion pending tools stay out of the registered surface until M11', (
     // 14 milestone handlers (M3 + M4) + 9 #196 parity handlers + M5 (7 evidence + 2 feed admin;
     // withdrawal has no tool, #217) + M6 (9 gap, fix, exception and drift handlers) + M7 (6 policy
     // handlers; attest has none) + the not-applicable suggestions read (#238) + M8 (9 questionnaire
-    // and answer-library handlers; approve and the export have none).
-    expect((PENDING.match(/registerTool\(server, \{/g) ?? []).length).toBe(57);
+    // and answer-library handlers; approve and the export have none) + M9 (9 sharing, settings and
+    // audit handlers; room create, revoke and unlock and the packet download have none).
+    expect((PENDING.match(/registerTool\(server, \{/g) ?? []).length).toBe(66);
     expect(PENDING).not.toMatch(/server\.tool\(/);
   });
 });
@@ -90,6 +91,7 @@ describe('Bastion M3 tool handlers', () => {
       BASTION_DECISION_TOOL_NAMES,
       BASTION_POLICY_TOOL_NAMES,
       BASTION_QUESTIONNAIRE_TOOL_NAMES,
+      BASTION_SHARING_TOOL_NAMES,
     } = await import('../src/tools-pending/bastion.js');
     expect(captured.map((c) => c.name).sort()).toEqual(
       [
@@ -99,6 +101,7 @@ describe('Bastion M3 tool handlers', () => {
         ...BASTION_DECISION_TOOL_NAMES,
         ...BASTION_POLICY_TOOL_NAMES,
         ...BASTION_QUESTIONNAIRE_TOOL_NAMES,
+        ...BASTION_SHARING_TOOL_NAMES,
       ].sort(),
     );
   });
@@ -710,5 +713,61 @@ describe('Bastion M8 tools (questionnaires and the answer library)', () => {
     await load();
     expect(PENDING).not.toMatch(/\/questionnaires\/\$\{[^}]+\}\/(approve|export)/);
     expect(captured.map((c) => c.name).join(' ')).not.toMatch(/approve_questionnaire|export_questionnaire/);
+  });
+});
+
+describe('Bastion M9 sharing, settings and audit tools', () => {
+  const ROOM = '99999999-9999-4999-8999-999999999991';
+  const REQ = '99999999-9999-4999-8999-999999999992';
+  const DEAD = '99999999-9999-4999-8999-999999999993';
+  const FWID = '99999999-9999-4999-8999-999999999994';
+
+  it('each tool calls its spec route with the shared-Zod body', async () => {
+    const tool = await load();
+    await tool('bastion_auditor_room_view').handler({ room_id: ROOM } as never);
+    await tool('bastion_respond_auditor_request').handler({ request_id: REQ, status: 'answered', answer_note: 'See the 2-Step report.' } as never);
+    await tool('bastion_create_export').handler({ framework_id: FWID, period_start: '2026-09-01', period_end: '2026-11-26', include_restricted: false } as never);
+    await tool('bastion_list_exports').handler({ status: 'succeeded' } as never);
+    await tool('bastion_get_settings').handler({} as never);
+    await tool('bastion_update_settings').handler({ settings: { auditor_room_max_days: 60 } } as never);
+    await tool('bastion_list_delivery_problems').handler({} as never);
+    await tool('bastion_retry_delivery').handler({ delivery_id: DEAD } as never);
+    await tool('bastion_audit_log').handler({ action: 'auditor_room.create', limit: 10 } as never);
+    expect(calls.map((c) => `${c.method} ${c.url}`)).toEqual([
+      `GET http://bastion-api:4024/v1/auditor-rooms/${ROOM}/preview`,
+      `PATCH http://bastion-api:4024/v1/auditor-requests/${REQ}`,
+      'POST http://bastion-api:4024/v1/exports',
+      'GET http://bastion-api:4024/v1/exports?status=succeeded',
+      'GET http://bastion-api:4024/v1/settings',
+      'PATCH http://bastion-api:4024/v1/settings',
+      'GET http://bastion-api:4024/v1/delivery-problems',
+      `POST http://bastion-api:4024/v1/delivery-problems/${DEAD}/retry`,
+      'GET http://bastion-api:4024/v1/audit?action=auditor_room.create&limit=10',
+    ]);
+    expect(calls[1]!.body).toEqual({ status: 'answered', answer_note: 'See the 2-Step report.' });
+    expect(calls[2]!.body).toEqual({ framework_id: FWID, period_start: '2026-09-01', period_end: '2026-11-26', include_restricted: false });
+    expect(calls[5]!.body).toEqual({ auditor_room_max_days: 60 });
+  });
+
+  it('refuses invalid input before calling bastion-api', async () => {
+    const tool = await load();
+    const noNote = (await tool('bastion_respond_auditor_request').handler({ request_id: REQ, status: 'answered' } as never)) as { isError?: boolean };
+    const tooLong = (await tool('bastion_create_export').handler({ framework_id: FWID, period_start: '2025-01-01', period_end: '2026-11-26' } as never)) as {
+      isError?: boolean;
+    };
+    const floors = (await tool('bastion_update_settings').handler({ settings: { questionnaire_high_floor: 0.6, questionnaire_medium_floor: 0.7 } } as never)) as {
+      isError?: boolean;
+    };
+    const empty = (await tool('bastion_update_settings').handler({ settings: {} } as never)) as { isError?: boolean };
+    expect([noNote.isError, tooLong.isError, floors.isError, empty.isError]).toEqual([true, true, true, true]);
+    expect(calls).toHaveLength(0);
+  });
+
+  it('has no tool that opens, closes or unlocks a room, or reads the public room or a packet zip', async () => {
+    await load();
+    const names = captured.map((c) => c.name).join(' ');
+    expect(names).not.toMatch(/create_auditor_room|revoke_auditor_room|unlock_auditor_room|download/);
+    const CLIENT = readFileSync(join(SRC, 'clients', 'bastion-client.ts'), 'utf8');
+    expect(CLIENT).not.toMatch(/'POST', '\/auditor-rooms'|auditor-rooms\/\$\{[^}]+\}\/(revoke|unlock)|\/public\/room|\/exports\/\$\{[^}]+\}\/download/);
   });
 });
