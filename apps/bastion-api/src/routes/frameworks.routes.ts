@@ -4,6 +4,7 @@ import {
   bastionArchiveFrameworkSchema,
   bastionBulkApplicabilitySchema,
   bastionCompileFrameworkSchema,
+  bastionCompileRunListQuerySchema,
   bastionFrameworkUpdateSchema,
 } from '@bigbluebam/shared';
 import { requireAuth } from '../plugins/auth.js';
@@ -36,7 +37,7 @@ export default async function frameworkRoutes(fastify: FastifyInstance) {
     );
   });
 
-  // Row 3: adopt a framework (setup is a human act; no MCP tool).
+  // Row 3: adopt a framework (MCP: bastion_adopt_framework, issue #196).
   fastify.post('/frameworks', { preHandler: [requireAuth, can('bastion.framework.write')] }, async (request, reply) => {
     const parsed = bastionAdoptFrameworkSchema.safeParse(request.body);
     if (!parsed.success) return validationError(request, reply, parsed.error);
@@ -114,16 +115,18 @@ export default async function frameworkRoutes(fastify: FastifyInstance) {
     const parsed = bastionCompileFrameworkSchema.safeParse(request.body ?? {});
     if (!parsed.success) return validationError(request, reply, parsed.error);
     return handled(request, reply, async () => {
-      const result = await compile.compileFramework(viewerOf(request), id);
+      const result = await compile.compileFramework(viewerOf(request), id, request.log);
       reply.status(202);
       return result;
     });
   });
 
-  // Row 10.
+  // Row 10: newest first, cursor-paginated (`next_cursor`, `has_more`).
   fastify.get('/frameworks/:id/compile-runs', { preHandler: [requireAuth, can('bastion.framework.read')] }, async (request, reply) => {
     const id = idParam(request);
     if (!id) return notFound(request, reply);
-    return handled(request, reply, () => compile.listCompileRuns(viewerOf(request), id));
+    const parsed = bastionCompileRunListQuerySchema.safeParse(request.query ?? {});
+    if (!parsed.success) return validationError(request, reply, parsed.error);
+    return handled(request, reply, () => compile.listCompileRuns(viewerOf(request), id, parsed.data));
   });
 }

@@ -516,6 +516,15 @@ export type BastionArchiveFramework = z.infer<typeof bastionArchiveFrameworkSche
 export const bastionCompileFrameworkSchema = z.object({}).strict();
 export type BastionCompileFramework = z.infer<typeof bastionCompileFrameworkSchema>;
 
+/** GET /frameworks/:id/compile-runs: newest first, cursor-paginated (next_cursor + has_more). */
+export const bastionCompileRunListQuerySchema = z
+  .object({
+    cursor: z.string().trim().min(1).max(200).optional(),
+    limit: z.coerce.number().int().min(1).max(200).optional(),
+  })
+  .strict();
+export type BastionCompileRunListQuery = z.infer<typeof bastionCompileRunListQuerySchema>;
+
 /** PATCH /control-requirements/:id (one link's Statement of Applicability decision). */
 export const bastionRequirementApplicabilitySchema = z
   .object({

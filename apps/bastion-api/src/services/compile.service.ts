@@ -4,9 +4,21 @@
 // `proposed` for a person to confirm. The run is short (pure planning plus one insert), so it
 // completes inside the request; the route still answers 202 with the run, and M7 moves the
 // LLM-tailored compile onto the worker behind the same contract.
+//
+// Atomicity (issue #193): the claim, the plan, the inserts and the `succeeded` update are ONE
+// transaction. The partial unique index idx_bastion_compile_runs_one_active still serializes a
+// double click (the second insert waits on the first's uncommitted key, then gets 23505 and a
+// plain 409), and a crash, restart or pool timeout rolls the claim back with everything else, so
+// an inline run can never be left `running` with nobody behind it. A committed inline claim can
+// only come from a build before this fix (or a request that held one across a deploy); the next
+// compile treats it as stale once its heartbeat is older than INLINE_RUN_LEASE_MS, marks it
+// `failed` and proceeds. The M4 reaper must likewise mark `bastion-api:inline` runs `failed`,
+// never `queued` (no worker resumes an inline run).
 
-import { and, desc, eq, inArray, isNull } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNull, lt, or, sql } from 'drizzle-orm';
+import { createLogger } from '@bigbluebam/logging';
 import { runInOrgScope } from '../plugins/rls.js';
+import type { DbTx } from '../db/index.js';
 import {
   bastionAssertions,
   bastionCompileRuns,
@@ -14,45 +26,135 @@ import {
   bastionControls,
   bastionFrameworks,
 } from '../db/schema/index.js';
-import { ConflictError, one } from '../lib/errors.js';
+import { ConflictError, NotFoundError, ValidationFailure, one } from '../lib/errors.js';
 import { audit } from '../lib/audit.js';
 import { planCompile } from '../library/compile-plan.js';
 import { derivedApplicability } from '../library/setup-state.js';
 import { connectedPopulations, isUniqueViolation, loadFramework } from './shared.js';
 import type { Viewer } from './types.js';
 
-export async function compileFramework(viewer: Viewer, frameworkId: string) {
-  // 1. Claim the run in its own transaction: the partial unique index allows one queued or
-  //    running compile per framework, so a double click gets a plain 409.
-  const run = await runInOrgScope(viewer.org_id, async (tx) => {
+/** The claim an inline (in-request) compile records. No worker ever resumes such a run. */
+export const INLINE_COMPILE_CLAIM = 'bastion-api:inline';
+/** A committed inline claim whose heartbeat is older than this is stale (its request is gone). */
+export const INLINE_RUN_LEASE_MS = 2 * 60 * 1000;
+
+const STALE_RUN_MESSAGE =
+  'This setup run stopped before it finished (the server restarted or lost its connection), so it was released.';
+
+/** Where a failure that cannot be recorded is reported. Routes pass the request logger. */
+export interface CompileLogger {
+  warn(obj: Record<string, unknown>, msg: string): void;
+}
+
+let fallbackLogger: CompileLogger | null = null;
+function defaultLogger(): CompileLogger {
+  if (!fallbackLogger) fallbackLogger = createLogger({ service: 'bastion-api' });
+  return fallbackLogger;
+}
+
+/**
+ * Release committed inline claims on this framework whose heartbeat is older than the lease:
+ * they belong to a request that no longer exists. Marked `failed` (never `queued`: nothing would
+ * resume them). Returns how many were released.
+ */
+async function releaseStaleInlineRuns(tx: DbTx, orgId: string, frameworkId: string): Promise<number> {
+  const cutoff = new Date(Date.now() - INLINE_RUN_LEASE_MS);
+  const released = await tx
+    .update(bastionCompileRuns)
+    .set({ status: 'failed', error: STALE_RUN_MESSAGE, completed_at: new Date() })
+    .where(
+      and(
+        eq(bastionCompileRuns.organization_id, orgId),
+        eq(bastionCompileRuns.framework_id, frameworkId),
+        eq(bastionCompileRuns.claimed_by, INLINE_COMPILE_CLAIM),
+        inArray(bastionCompileRuns.status, ['queued', 'running']),
+        or(isNull(bastionCompileRuns.heartbeat_at), lt(bastionCompileRuns.heartbeat_at, cutoff)),
+      ),
+    )
+    .returning({ id: bastionCompileRuns.id });
+  return released.length;
+}
+
+/**
+ * Record a compile that failed after it started, in its own transaction (the compile's own
+ * transaction rolled back, taking its claim with it), so the run history stays honest. A failure
+ * to record is logged, never swallowed silently; it does not mask the original error.
+ */
+async function recordFailedRun(viewer: Viewer, frameworkId: string, cause: unknown, log: CompileLogger) {
+  try {
+    await runInOrgScope(viewer.org_id, (tx) =>
+      tx.insert(bastionCompileRuns).values({
+        organization_id: viewer.org_id,
+        framework_id: frameworkId,
+        status: 'failed',
+        used_fallback: true,
+        claimed_by: INLINE_COMPILE_CLAIM,
+        error: String((cause as Error)?.message ?? cause).slice(0, 2000),
+        started_by: viewer.id,
+        started_at: new Date(),
+        heartbeat_at: new Date(),
+        completed_at: new Date(),
+      }),
+    );
+  } catch (recordErr) {
+    log.warn(
+      {
+        err: recordErr,
+        cause: (cause as Error)?.message ?? String(cause),
+        framework_id: frameworkId,
+        organization_id: viewer.org_id,
+      },
+      'bastion compile failed and the failed run could not be recorded',
+    );
+  }
+}
+
+export async function compileFramework(viewer: Viewer, frameworkId: string, log: CompileLogger = defaultLogger()) {
+  try {
+    return await compileInOneTransaction(viewer, frameworkId);
+  } catch (err) {
+    // A refusal (not found, archived, already running, bad input) started nothing: nothing to record.
+    if (err instanceof ConflictError || err instanceof NotFoundError || err instanceof ValidationFailure) throw err;
+    await recordFailedRun(viewer, frameworkId, err, log);
+    throw err;
+  }
+}
+
+async function compileInOneTransaction(viewer: Viewer, frameworkId: string) {
+  return runInOrgScope(viewer.org_id, async (tx) => {
     const f = await loadFramework(tx, viewer.org_id, frameworkId);
     if (f.status === 'archived') throw new ConflictError('This framework is archived.', 'FRAMEWORK_ARCHIVED');
+    await releaseStaleInlineRuns(tx, viewer.org_id, frameworkId);
+
+    // Claim. A unique violation (another compile holds the one active slot) is a plain 409; the
+    // throw rolls this transaction back.
+    let run: typeof bastionCompileRuns.$inferSelect;
     try {
-      const r = one(await tx
-        .insert(bastionCompileRuns)
-        .values({
-          organization_id: viewer.org_id,
-          framework_id: frameworkId,
-          status: 'running',
-          used_fallback: true,
-          claimed_by: 'bastion-api:inline',
-          heartbeat_at: new Date(),
-          started_by: viewer.id,
-          started_at: new Date(),
-        })
-        .returning(), 'r');
-      return r;
+      run = one(
+        await tx
+          .insert(bastionCompileRuns)
+          .values({
+            organization_id: viewer.org_id,
+            framework_id: frameworkId,
+            status: 'running',
+            used_fallback: true,
+            claimed_by: INLINE_COMPILE_CLAIM,
+            heartbeat_at: new Date(),
+            started_by: viewer.id,
+            started_at: new Date(),
+          })
+          .returning(),
+        'compile run',
+      );
     } catch (err) {
       if (isUniqueViolation(err)) {
         throw new ConflictError('A setup run is already going for this framework.', 'COMPILE_RUNNING');
       }
       throw err;
     }
-  });
 
-  try {
-    // 2. Plan and insert in one transaction; mark the run succeeded in the same one.
-    return await runInOrgScope(viewer.org_id, async (tx) => {
+    // Plan, insert and mark the run succeeded in the same transaction.
+    {
       const links = await tx
         .select({
           control_id: bastionControlRequirements.control_id,
@@ -160,28 +262,65 @@ export async function compileFramework(viewer: Viewer, frameworkId: string) {
         used_fallback: true,
       });
       return { data: done };
-    });
-  } catch (err) {
-    // 3. Never leave a run claimed: a failed plan marks the run failed so a retry can start.
-    await runInOrgScope(viewer.org_id, (tx) =>
-      tx
-        .update(bastionCompileRuns)
-        .set({ status: 'failed', error: (err as Error).message.slice(0, 2000), completed_at: new Date() })
-        .where(and(eq(bastionCompileRuns.id, run.id), isNull(bastionCompileRuns.completed_at))),
-    ).catch(() => {});
-    throw err;
+    }
+  });
+}
+
+/* ------------------------------ Run history ------------------------------ */
+
+export const COMPILE_RUNS_DEFAULT_LIMIT = 50;
+export const COMPILE_RUNS_MAX_LIMIT = 200;
+
+/**
+ * Opaque keyset cursor: the last row's id. The page boundary is read back from the row itself
+ * (`(created_at, id) < (SELECT created_at, id ...)`), so microsecond timestamps never lose
+ * precision through JavaScript.
+ */
+export function encodeRunCursor(row: { id: string }): string {
+  return Buffer.from(row.id, 'utf8').toString('base64url');
+}
+
+export function decodeRunCursor(cursor: string): string {
+  try {
+    const id = Buffer.from(cursor, 'base64url').toString('utf8');
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) throw new Error('bad');
+    return id;
+  } catch {
+    throw new ValidationFailure('That page link is no longer valid. Start from the first page.', 'INVALID_CURSOR', [
+      { field: 'cursor', issue: 'invalid' },
+    ]);
   }
 }
 
-export async function listCompileRuns(viewer: Viewer, frameworkId: string) {
+/**
+ * GET /frameworks/:id/compile-runs, newest first, cursor-paginated (issue #193: the list used to
+ * stop at 50 while claiming to be complete). `next_cursor` is null only on the last page.
+ */
+export async function listCompileRuns(viewer: Viewer, frameworkId: string, query: { cursor?: string; limit?: number } = {}) {
+  const limit = Math.min(Math.max(query.limit ?? COMPILE_RUNS_DEFAULT_LIMIT, 1), COMPILE_RUNS_MAX_LIMIT);
+  const after = query.cursor ? decodeRunCursor(query.cursor) : null;
   return runInOrgScope(viewer.org_id, async (tx) => {
     await loadFramework(tx, viewer.org_id, frameworkId);
     const rows = await tx
       .select()
       .from(bastionCompileRuns)
-      .where(and(eq(bastionCompileRuns.organization_id, viewer.org_id), eq(bastionCompileRuns.framework_id, frameworkId)))
-      .orderBy(desc(bastionCompileRuns.created_at))
-      .limit(50);
-    return { data: rows, next_cursor: null };
+      .where(
+        and(
+          eq(bastionCompileRuns.organization_id, viewer.org_id),
+          eq(bastionCompileRuns.framework_id, frameworkId),
+          after
+            ? sql`(${bastionCompileRuns.created_at}, ${bastionCompileRuns.id}) < (
+                SELECT c.created_at, c.id FROM bastion_compile_runs c
+                 WHERE c.id = ${after}::uuid AND c.organization_id = ${viewer.org_id}::uuid
+              )`
+            : undefined,
+        ),
+      )
+      .orderBy(desc(bastionCompileRuns.created_at), desc(bastionCompileRuns.id))
+      .limit(limit + 1);
+    const page = rows.slice(0, limit);
+    const last = page[page.length - 1];
+    const has_more = rows.length > limit;
+    return { data: page, has_more, next_cursor: has_more && last ? encodeRunCursor(last) : null };
   });
 }
