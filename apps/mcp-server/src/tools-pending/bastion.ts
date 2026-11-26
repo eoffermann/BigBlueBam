@@ -32,6 +32,8 @@ import {
   bastionFeedUpdateSchema,
   bastionManualEvidenceListQuerySchema,
 } from '@bigbluebam/shared';
+// M7 policy tools (registerBastionPolicyTools at the very end).
+import { bastionPolicyAudienceSchema, bastionPolicyCreateSchema, bastionPolicyUpdateSchema } from '@bigbluebam/shared';
 import {
   BastionAuditorRequestStatus,
   bastionAdoptFrameworkSchema,
@@ -116,6 +118,7 @@ export function registerBastionTools(
   registerBastionAdminTools(server, client, confirmTokenStore);
   registerBastionEvidenceTools(server, client);
   registerBastionDecisionTools(server, client);
+  registerBastionPolicyTools(server, client);
 
   // ── 1. bastion_list_frameworks (rows 1, 2, 4, 7) ───────────────────────────
   registerTool(server, {
@@ -151,15 +154,19 @@ export function registerBastionTools(
   registerTool(server, {
     name: 'bastion_compile_framework',
     description:
-      'Propose checks for a framework\'s controls (POST /frameworks/:id/compile, 202 with the run), or list its past runs with action="list_runs" (GET /frameworks/:id/compile-runs, newest first; pass next_cursor back as cursor while has_more is true). The compile only PROPOSES: every check lands as proposed and a person must confirm it in Bastion (including "This is the complete list" for any list of systems). Re-running proposes nothing a control already has. A run already going returns 409 COMPILE_RUNNING.',
+      'Propose checks for a framework\'s controls (POST /frameworks/:id/compile, 202 with the run). With an AI provider the run comes back `queued` and the worker tailors each control from the closed probe menu (the AI never writes queries; anything invalid is dropped with a reason, and a control the AI cannot help with gets the library suggestions); poll with action="list_runs" until it is succeeded. Without a provider, or with use_ai=false, the library suggestions are proposed and the run is already finished. Or list its past runs with action="list_runs" (GET /frameworks/:id/compile-runs, newest first; pass next_cursor back as cursor while has_more is true). The compile only PROPOSES: every check lands as proposed and a person must confirm it in Bastion (including "This is the complete list" for any list of systems). Re-running proposes nothing a control already has. A run already going returns 409 COMPILE_RUNNING.',
     input: {
       framework_id: z.string().uuid(),
       action: z.enum(['start', 'list_runs']).optional().describe('Default "start".'),
+      use_ai: z
+        .boolean()
+        .optional()
+        .describe('start: false proposes the library suggestions verbatim, finished at once. Default true: with an AI provider the run is queued and tailored on the worker (poll list_runs).'),
       cursor: z.string().max(200).optional().describe('list_runs: next_cursor from the previous page.'),
       limit: z.number().int().min(1).max(200).optional().describe('list_runs: page size (default 50).'),
     },
     returns: z.record(z.unknown()),
-    handler: async ({ framework_id, action, cursor, limit }) => {
+    handler: async ({ framework_id, action, cursor, limit, use_ai }) => {
       if (action === 'list_runs') {
         const r =
           cursor || limit
@@ -167,7 +174,7 @@ export function registerBastionTools(
             : await client.listCompileRuns(framework_id);
         return r.ok ? ok(r.data) : err('listing compile runs', r.data);
       }
-      const r = await client.compileFramework(framework_id);
+      const r = use_ai === undefined ? await client.compileFramework(framework_id) : await client.compileFrameworkWith(framework_id, { use_ai });
       return r.ok ? ok(r.data) : err('starting compile', r.data);
     },
   });
@@ -964,6 +971,126 @@ export function registerBastionDecisionTools(server: McpServer, client: BastionC
     handler: async ({ drift_id, note }) => {
       const r = await client.acknowledgeDrift(drift_id, { note: note ?? null });
       return r.ok ? ok(r.data) : err('acknowledging the change', r.data);
+    },
+  });
+}
+
+/* ------------------------------------------------------------------ */
+/*  M7: policies and attestation (spec 3.6; 5.1 rows 64-71)           */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Deliberately NO tool for row 70 (POST /policies/:id/attest, "I have read and understood
+ * this"): category "auth: session required (spec 2.8, #136)". Only the person, signed in and not
+ * impersonated, acknowledges a policy; an agent never can.
+ */
+export const BASTION_POLICY_TOOL_NAMES = [
+  'bastion_attestation_status',
+  'bastion_get_policy_body',
+  'bastion_my_attestations',
+  'bastion_create_policy',
+  'bastion_update_policy',
+  'bastion_request_attestations',
+] as const;
+
+export function registerBastionPolicyTools(server: McpServer, client: BastionClient): void {
+  // ── P1. bastion_attestation_status (rows 64, 68) ───────────────────────────
+  registerTool(server, {
+    name: 'bastion_attestation_status',
+    description:
+      'Policy acknowledgements. Without policy_id: every linked policy (GET /policies) with its Beacon article, audience, how often it must be re-read, owner, whether it is still shared with everyone, Beacon\'s expiry, and "X of Y have read the current version". With policy_id: who has read the current version and when, who has not, and who cannot even open the article in Beacon ("N people can\'t open this policy", from can_access per person) (GET /policies/:id/attestations). Read-only; needs bastion.policy.read or bastion.attestation.read.',
+    input: {
+      policy_id: z.string().uuid().optional(),
+      status: z.enum(['active', 'retired', 'all']).optional().describe('List mode: default "active".'),
+    },
+    returns: z.record(z.unknown()),
+    handler: async ({ policy_id, status }) => {
+      const r = policy_id ? await client.listPolicyAttestations(policy_id) : await client.listPolicies({ status });
+      return r.ok ? ok(r.data) : err(policy_id ? 'reading who has read the policy' : 'listing policies', r.data);
+    },
+  });
+
+  // ── P2. bastion_get_policy_body (row 67) ───────────────────────────────────
+  registerTool(server, {
+    name: 'bastion_get_policy_body',
+    description:
+      'The exact text of a policy\'s current version as Bastion serves it for acknowledgement (GET /policies/:id/body): title, Beacon version, the frozen body in Markdown, its SHA-256, Beacon\'s expiry, and whether the caller is asked to read it and is due. Refused with POLICY_NOT_SHARED when the article is no longer shared with everyone, and POLICY_NOT_READABLE when the caller cannot open it in Beacon. Reading it never acknowledges it: only the person can, signed in to Bastion. Read-only; needs bastion.attestation.read.',
+    input: { policy_id: z.string().uuid() },
+    returns: z.record(z.unknown()),
+    handler: async ({ policy_id }) => {
+      const r = await client.getPolicyBody(policy_id);
+      return r.ok ? ok(r.data) : err('reading the policy', r.data);
+    },
+  });
+
+  // ── P3. bastion_my_attestations (row 69) ───────────────────────────────────
+  registerTool(server, {
+    name: 'bastion_my_attestations',
+    description:
+      'The caller\'s own policies to read (GET /me/attestations): each policy they are asked to read, whether they are due ("Please read and acknowledge", "A new version or a new year: please read it again", "Read and acknowledged"), the version they last acknowledged and when it is next due. Read-only; needs bastion.attestation.read.',
+    input: {},
+    returns: z.record(z.unknown()),
+    handler: async () => {
+      const r = await client.myAttestations();
+      return r.ok ? ok(r.data) : err('listing your policies', r.data);
+    },
+  });
+
+  // ── P4. bastion_create_policy (row 65) ─────────────────────────────────────
+  registerTool(server, {
+    name: 'bastion_create_policy',
+    description:
+      'Link a Beacon article as a policy people must read and acknowledge (POST /policies). The article must be shared with everyone (Beacon visibility Organization or Public; else 409 POLICY_NOT_SHARED). audience is everyone (default) or a list of members; cadence_days is how often it must be re-read (default 365). With control_id, Bastion proposes that control\'s two policy checks (read and acknowledged; kept current) pinned to this policy, for a person to confirm. 409 POLICY_ALREADY_LINKED. Needs bastion.policy.write (owners and admins).',
+    input: {
+      beacon_entry_id: z.string().uuid(),
+      audience: bastionPolicyAudienceSchema.optional(),
+      cadence_days: z.number().int().min(1).max(1095).optional(),
+      owner_user_id: z.string().uuid().optional(),
+      control_id: z.string().uuid().optional(),
+    },
+    returns: z.record(z.unknown()),
+    handler: async (input) => {
+      const parsed = bastionPolicyCreateSchema.safeParse(input);
+      if (!parsed.success) return err('linking the policy', { code: 'VALIDATION_ERROR', message: parsed.error.errors[0]?.message });
+      const r = await client.createPolicy(parsed.data);
+      return r.ok ? ok(r.data) : err('linking the policy', r.data);
+    },
+  });
+
+  // ── P5. bastion_update_policy (row 66) ─────────────────────────────────────
+  registerTool(server, {
+    name: 'bastion_update_policy',
+    description:
+      'Change a policy\'s audience, re-read cadence or owner, or retire it (status "retired") (PATCH /policies/:id). Retiring keeps every acknowledgement already recorded (they are immutable). Needs bastion.policy.write (owners and admins).',
+    input: {
+      policy_id: z.string().uuid(),
+      audience: bastionPolicyAudienceSchema.optional(),
+      cadence_days: z.number().int().min(1).max(1095).optional(),
+      owner_user_id: z.string().uuid().nullable().optional(),
+      status: z.enum(['active', 'retired']).optional(),
+    },
+    returns: z.record(z.unknown()),
+    handler: async ({ policy_id, ...rest }) => {
+      const parsed = bastionPolicyUpdateSchema.safeParse(Object.fromEntries(Object.entries(rest).filter(([, v]) => v !== undefined)));
+      if (!parsed.success) return err('changing the policy', { code: 'VALIDATION_ERROR', message: parsed.error.errors[0]?.message });
+      const r = await client.updatePolicy(policy_id, parsed.data);
+      return r.ok ? ok(r.data) : err('changing the policy', r.data);
+    },
+  });
+
+  // ── P6. bastion_request_attestations (row 71) ──────────────────────────────
+  registerTool(server, {
+    name: 'bastion_request_attestations',
+    description:
+      'Ask the people still due on a policy to read it (POST /policies/:id/request-attestations): one attestation.overdue Bolt event per person, at most once per person, version and day (a repeat the same day nudges nobody). Optionally only the named members. It does not acknowledge anything. Needs bastion.attestation.request (owners and admins).',
+    input: {
+      policy_id: z.string().uuid(),
+      user_ids: z.array(z.string().uuid()).min(1).max(500).optional(),
+    },
+    returns: z.record(z.unknown()),
+    handler: async ({ policy_id, user_ids }) => {
+      const r = await client.requestAttestations(policy_id, user_ids ? { user_ids } : {});
+      return r.ok ? ok(r.data) : err('asking people to read the policy', r.data);
     },
   });
 }
