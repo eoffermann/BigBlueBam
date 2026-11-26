@@ -75,7 +75,7 @@ describe.skipIf(!DATABASE_URL)('Bastion M3 services (live database)', { timeout:
     await sql`DELETE FROM organizations WHERE id = ${ORG}`;
     await sql.end();
     const db = await import('../../src/db/index.js');
-    await db.connection.end();
+    for (const c of db.allConnections()) await c.end();
   });
 
   let soc2Id = '';

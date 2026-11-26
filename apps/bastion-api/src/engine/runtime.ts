@@ -3,7 +3,7 @@
 
 import type { FastifyBaseLogger } from 'fastify';
 import type { Redis } from 'ioredis';
-import { connection, readConnection } from '../db/index.js';
+import { engineConnection, engineReadConnection } from '../db/index.js';
 import { env } from '../env.js';
 import { currentSealSigner, pdHmacKeyId } from '../lib/keys.js';
 import { createBastionStorage } from '../lib/storage.js';
@@ -17,10 +17,11 @@ const sealCache = new Map<string, SealCacheEntry>();
 export function engineDeps(log: FastifyBaseLogger, redis: Redis): EngineDeps {
   if (deps) return deps;
   deps = {
-    sql: connection,
+    // The engines' own clients: never the drizzle-wrapped ones (see db/index.ts).
+    sql: engineConnection,
     runRead: makeRunInOrgScopeRead({
-      primary: connection,
-      read: readConnection,
+      primary: engineConnection,
+      read: engineReadConnection,
       statementTimeoutMs: env.BASTION_PROBE_TIMEOUT_MS,
     }),
     storage: createBastionStorage(env),

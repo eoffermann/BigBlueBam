@@ -18,7 +18,7 @@ import { assertRlsBound } from './boot/assert-rls-bound.js';
 import { runBucketCheck } from './boot/bucket-check.js';
 import { buildFastifyOptions } from './lib/fastify-options.js';
 import { createBastionStorage } from './lib/storage.js';
-import { db, connection, readConnection } from './db/index.js';
+import { db, allConnections } from './db/index.js';
 import redisPlugin from './plugins/redis.js';
 import authPlugin from './plugins/auth.js';
 import permissionsPlugin from './plugins/permissions.js';
@@ -136,8 +136,7 @@ for (const signal of signals) {
       // claim stays with the worker's claimant, which re-drives the run on its next poll.
       await fastify.close();
       await closeBastionQueues();
-      await connection.end();
-      if (readConnection !== connection) await readConnection.end();
+      for (const c of allConnections()) await c.end();
     } finally {
       process.exit(0);
     }
@@ -167,7 +166,7 @@ void (async () => {
   try {
     const deps = engineDeps(fastify.log, fastify.redis);
     if (!deps.storage) return;
-    const orgs = await connection`SELECT DISTINCT organization_id FROM bastion_ledger_entries`;
+    const orgs = await deps.sql`SELECT DISTINCT organization_id FROM bastion_ledger_entries`;
     fastify.log.info(`[${elapsed()}] checking ${orgs.length} evidence ledgers against their bucket seals...`);
     for (const [i, o] of orgs.entries()) {
       const r = await checkLedgerIdentity(deps, o.organization_id as string);

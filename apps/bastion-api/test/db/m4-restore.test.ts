@@ -64,7 +64,33 @@ describe.skipIf(!DATABASE_URL)('M4 restore detection (live database)', () => {
     for (const org of orgs) await wipeOrg(sql, org);
     await sql.end();
     const db = await import('../../src/db/index.js');
-    await db.connection.end();
+    for (const c of db.allConnections()) await c.end();
+  });
+
+  it('the PRODUCTION engine clients bind Dates and JSON (drizzle-wrapped clients cannot)', async () => {
+    // Invariant checked where it is consumed: engineDeps() is what the internal engines route
+    // and the M4 routes use in bastion-api. The M4 live rehearsal failed every engine with
+    // "Received an instance of Date" because they ran on drizzle's client.
+    const db = await import('../../src/db/index.js');
+    const { engineDeps } = await import('../../src/engine/runtime.js');
+    const { evaluateTick } = await import('../../src/engine/sweeps.js');
+    const log = { info: () => {}, warn: () => {}, error: () => {} };
+    const live = engineDeps(log as never, { get: async () => null, set: async () => 'OK' } as never);
+    expect(live.sql).not.toBe(db.connection);
+
+    await expect(db.connection`SELECT ${new Date()}::timestamptz AS t`).rejects.toThrow(/instance of Date/);
+    const [row] = await live.sql`SELECT ${new Date('2026-11-26T03:00:00Z')}::timestamptz AS t, ${live.sql.json({ a: 1 } as never)}::jsonb AS j`;
+    expect(new Date(row!.t as Date).toISOString()).toBe('2026-11-26T03:00:00.000Z');
+    expect(row!.j).toEqual({ a: 1 });
+
+    // The tick and a slice run end to end on those clients (no bucket configured here, so the
+    // run ends partial / storage_unavailable, which is the designed outcome).
+    const s = await seedOrg(sql, 'prod-clients');
+    orgs.push(s.org);
+    const tick = await evaluateTick(live, { organization_id: s.org });
+    expect(tick.runs).toHaveLength(1);
+    const slice = await runEvaluationSlice(live, { organization_id: s.org, run_id: tick.runs[0]!.run_id, claimant: 'prod-clients' });
+    expect(slice).toMatchObject({ done: true, status: live.storage ? 'succeeded' : 'partial' });
   });
 
   /** Bolt events are recorded, seal objects go to the (fake) bucket. */
