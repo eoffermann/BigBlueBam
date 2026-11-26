@@ -318,7 +318,7 @@ export function AdminCallingSettingsPage({ onNavigate }: AdminCallingSettingsPag
               type="number"
               value={String(settings.max_call_participants)}
               onChange={(v) =>
-                update('max_call_participants', Math.max(2, Math.min(500, parseInt(v, 10) || 50)))
+                update('max_call_participants', Math.max(2, Math.min(500, Number.parseInt(v, 10) || 50)))
               }
             />
             <InputField
@@ -327,7 +327,7 @@ export function AdminCallingSettingsPage({ onNavigate }: AdminCallingSettingsPag
               type="number"
               value={String(settings.max_call_duration_minutes)}
               onChange={(v) =>
-                update('max_call_duration_minutes', Math.max(1, parseInt(v, 10) || 480))
+                update('max_call_duration_minutes', Math.max(1, Number.parseInt(v, 10) || 480))
               }
             />
           </Section>

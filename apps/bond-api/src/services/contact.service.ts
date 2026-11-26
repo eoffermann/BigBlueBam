@@ -493,7 +493,7 @@ export async function mergeContacts(
 export async function searchContacts(
   orgId: string,
   query: string,
-  limit: number = 20,
+  limit = 20,
 ) {
   const pattern = `%${escapeLike(query)}%`;
 

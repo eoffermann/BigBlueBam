@@ -126,7 +126,7 @@ export function ChatsPage() {
       const body =
         value === 'forever'
           ? { retain_forever: true }
-          : { retention_hours: parseInt(value, 10), retain_forever: false };
+          : { retention_hours: Number.parseInt(value, 10), retain_forever: false };
       const res = await api<{ data: { retention_hours: number; retain_forever: boolean } }>(
         `/chat/rooms/${encodeURIComponent(openRoom.room_key)}/retention`,
         { method: 'PATCH', body },

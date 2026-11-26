@@ -121,7 +121,7 @@ export function SmtpSettingsForm({ isSuperuser }: { isSuperuser: boolean }) {
       // boolean for secure) rather than coercing everything to strings.
       const entries: Array<[SmtpKey, unknown]> = [
         ['smtp_host', next.smtp_host],
-        ['smtp_port', parseInt(next.smtp_port, 10)],
+        ['smtp_port', Number.parseInt(next.smtp_port, 10)],
         ['smtp_user', next.smtp_user],
         ['smtp_password', next.smtp_password],
         ['smtp_from', next.smtp_from],

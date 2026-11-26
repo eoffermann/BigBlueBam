@@ -252,7 +252,7 @@ export function ListView({ phases, onTaskClick, onUpdateTask, onEpicClick }: Lis
             min={0}
             value={task.story_points ?? ''}
             onChange={(e) => {
-              const val = e.target.value === '' ? null : parseInt(e.target.value, 10);
+              const val = e.target.value === '' ? null : Number.parseInt(e.target.value, 10);
               onUpdateTask?.(task.id, { story_points: val } as Partial<Task>);
             }}
             className="w-full rounded border border-zinc-200 bg-transparent px-2 py-1 text-xs text-center focus:outline-none focus:ring-1 focus:ring-primary-500 dark:border-zinc-700 dark:text-zinc-100"

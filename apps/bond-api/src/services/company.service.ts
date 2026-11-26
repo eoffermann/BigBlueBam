@@ -273,7 +273,7 @@ export async function restoreCompany(id: string, orgId: string) {
 export async function searchCompanies(
   orgId: string,
   query: string,
-  limit: number = 20,
+  limit = 20,
 ) {
   const pattern = `%${escapeLike(query)}%`;
 

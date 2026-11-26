@@ -413,7 +413,7 @@ export async function getRankedFeed(
   nowMs: number,
 ): Promise<{ data: HydratedFeedEntry[]; next_cursor: string | null }> {
   const limit = Math.min(Math.max(opts.limit ?? 30, 1), 100);
-  const offset = opts.cursor ? Math.max(0, parseInt(opts.cursor, 10) || 0) : 0;
+  const offset = opts.cursor ? Math.max(0, Number.parseInt(opts.cursor, 10) || 0) : 0;
 
   const { weights, version } = await loadEffectiveWeights(orgId);
 

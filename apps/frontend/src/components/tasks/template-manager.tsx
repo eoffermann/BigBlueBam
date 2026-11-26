@@ -77,7 +77,7 @@ export function TemplateManager({ open, onOpenChange, projectId }: TemplateManag
       name: newName.trim(),
       description: newDescription.trim(),
       priority: newPriority,
-      story_points: newStoryPoints ? parseInt(newStoryPoints, 10) : null,
+      story_points: newStoryPoints ? Number.parseInt(newStoryPoints, 10) : null,
     });
   };
 

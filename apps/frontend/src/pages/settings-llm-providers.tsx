@@ -167,12 +167,12 @@ export function SettingsLlmProviders() {
           provider_type: formProviderType,
           model_id: formModelId.trim(),
           api_endpoint: formApiEndpoint.trim() || null,
-          max_tokens: parseInt(formMaxTokens, 10) || 4096,
-          temperature: parseFloat(formTemperature) || 0.7,
+          max_tokens: Number.parseInt(formMaxTokens, 10) || 4096,
+          temperature: Number.parseFloat(formTemperature) || 0.7,
           is_default: formIsDefault,
           enabled: formEnabled,
-          max_requests_per_hour: parseInt(formMaxRequestsPerHour, 10) || 100,
-          max_tokens_per_hour: parseInt(formMaxTokensPerHour, 10) || 500000,
+          max_requests_per_hour: Number.parseInt(formMaxRequestsPerHour, 10) || 100,
+          max_tokens_per_hour: Number.parseInt(formMaxTokensPerHour, 10) || 500000,
         };
         // Only include api_key if the user entered a new one
         if (formApiKey.trim()) {
@@ -192,12 +192,12 @@ export function SettingsLlmProviders() {
           model_id: formModelId.trim(),
           api_endpoint: formApiEndpoint.trim() || null,
           api_key: formApiKey.trim(),
-          max_tokens: parseInt(formMaxTokens, 10) || 4096,
-          temperature: parseFloat(formTemperature) || 0.7,
+          max_tokens: Number.parseInt(formMaxTokens, 10) || 4096,
+          temperature: Number.parseFloat(formTemperature) || 0.7,
           is_default: formIsDefault,
           enabled: formEnabled,
-          max_requests_per_hour: parseInt(formMaxRequestsPerHour, 10) || 100,
-          max_tokens_per_hour: parseInt(formMaxTokensPerHour, 10) || 500000,
+          max_requests_per_hour: Number.parseInt(formMaxRequestsPerHour, 10) || 100,
+          max_tokens_per_hour: Number.parseInt(formMaxTokensPerHour, 10) || 500000,
         };
         if (formScope === 'project' && formProjectId) {
           data.project_id = formProjectId;

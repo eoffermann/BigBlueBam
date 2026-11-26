@@ -10,7 +10,7 @@ const ADHOC_CACHE_PREFIX = 'bench:adhoc:';
 export class CacheService {
   constructor(
     private redis: Redis,
-    private defaultTtl: number = 60,
+    private defaultTtl = 60,
   ) {}
 
   private key(widgetId: string): string {

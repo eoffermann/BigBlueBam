@@ -36,10 +36,10 @@ interface BBox {
 }
 
 function computeBBox(elements: Record<string, unknown>[]): BBox {
-  let minX = Infinity;
-  let minY = Infinity;
-  let maxX = -Infinity;
-  let maxY = -Infinity;
+  let minX = Number.POSITIVE_INFINITY;
+  let minY = Number.POSITIVE_INFINITY;
+  let maxX = Number.NEGATIVE_INFINITY;
+  let maxY = Number.NEGATIVE_INFINITY;
 
   for (const el of elements) {
     const x = typeof el.x === 'number' ? el.x : 0;

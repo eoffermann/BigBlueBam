@@ -168,7 +168,7 @@ export function GraphCanvas({
   useEffect(() => {
     if (positionedNodes.length === 0) return;
     const pad = 80;
-    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    let minX = Number.POSITIVE_INFINITY, minY = Number.POSITIVE_INFINITY, maxX = Number.NEGATIVE_INFINITY, maxY = Number.NEGATIVE_INFINITY;
     for (const n of positionedNodes) {
       minX = Math.min(minX, n.x - n.radius);
       minY = Math.min(minY, n.y - n.radius);

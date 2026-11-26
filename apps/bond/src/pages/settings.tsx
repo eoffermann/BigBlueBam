@@ -773,7 +773,7 @@ function CreateScoringRuleDialog({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) return;
-    const delta = parseInt(scoreDelta, 10);
+    const delta = Number.parseInt(scoreDelta, 10);
     if (isNaN(delta)) return;
 
     await createRule.mutateAsync({
@@ -902,7 +902,7 @@ function EditScoringRuleDialog({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) return;
-    const delta = parseInt(scoreDelta, 10);
+    const delta = Number.parseInt(scoreDelta, 10);
     if (isNaN(delta)) return;
 
     await updateRule.mutateAsync({

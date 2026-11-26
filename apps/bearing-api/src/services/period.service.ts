@@ -116,7 +116,7 @@ export async function getPeriod(id: string, orgId: string) {
     ...period,
     stats: {
       goal_count: row.goal_count,
-      avg_progress: parseFloat(row.avg_progress),
+      avg_progress: Number.parseFloat(row.avg_progress),
       at_risk_count: row.at_risk_count,
     },
   };

@@ -22,7 +22,7 @@ export default async function versionRoutes(fastify: FastifyInstance) {
     { preHandler: [requireAuth, requireBeaconReadAccess(), shadowOnly('beacon.beacon_version.get')] },
     async (request, reply) => {
       const beacon = (request as any).beacon;
-      const versionNumber = parseInt(request.params.v, 10);
+      const versionNumber = Number.parseInt(request.params.v, 10);
 
       if (Number.isNaN(versionNumber) || versionNumber < 1) {
         return reply.status(400).send({

@@ -191,7 +191,7 @@ export async function deleteBeaconChunks(beaconId: string): Promise<void> {
 export async function searchChunks(
   queryVector: number[],
   filters: QdrantSearchFilters,
-  topK: number = 50,
+  topK = 50,
 ): Promise<QdrantSearchResult[]> {
   const client = getQdrantClient();
 

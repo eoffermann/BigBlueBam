@@ -706,8 +706,8 @@ function sanitizeCss(css: string): string {
  */
 function adjustBrightness(hex: string, percent: number): string {
   const h = hex.replace('#', '');
-  const r = Math.max(0, Math.min(255, parseInt(h.substring(0, 2), 16) + Math.round(2.55 * percent)));
-  const g = Math.max(0, Math.min(255, parseInt(h.substring(2, 4), 16) + Math.round(2.55 * percent)));
-  const b = Math.max(0, Math.min(255, parseInt(h.substring(4, 6), 16) + Math.round(2.55 * percent)));
+  const r = Math.max(0, Math.min(255, Number.parseInt(h.substring(0, 2), 16) + Math.round(2.55 * percent)));
+  const g = Math.max(0, Math.min(255, Number.parseInt(h.substring(2, 4), 16) + Math.round(2.55 * percent)));
+  const b = Math.max(0, Math.min(255, Number.parseInt(h.substring(4, 6), 16) + Math.round(2.55 * percent)));
   return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
 }

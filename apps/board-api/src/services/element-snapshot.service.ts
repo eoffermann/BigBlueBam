@@ -69,7 +69,7 @@ function parseElement(el: Record<string, unknown>): ParsedElement | null {
   // Extract arrow binding metadata
   let arrowStart: unknown | null = null;
   let arrowEnd: unknown | null = null;
-  let arrowLabel: string | null = null;
+  const arrowLabel: string | null = null;
 
   if (elementType === 'connector') {
     if (el.startBinding && typeof el.startBinding === 'object') {

@@ -1451,7 +1451,7 @@ export function TaskDetailDrawer({
                           min={0}
                           value={task.story_points ?? ''}
                           onChange={(e) => {
-                            const val = e.target.value === '' ? null : parseInt(e.target.value, 10);
+                            const val = e.target.value === '' ? null : Number.parseInt(e.target.value, 10);
                             onUpdate?.(task.id, { story_points: val } as Partial<Task>);
                           }}
                           className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 dark:bg-zinc-800 dark:border-zinc-700 dark:text-zinc-100"
@@ -1506,11 +1506,11 @@ export function TaskDetailDrawer({
                               <Button
                                 size="sm"
                                 className="flex-1"
-                                disabled={!timeMinutes || parseInt(timeMinutes) <= 0}
+                                disabled={!timeMinutes || Number.parseInt(timeMinutes) <= 0}
                                 loading={createTimeEntry.isPending}
                                 onClick={() =>
                                   createTimeEntry.mutate({
-                                    minutes: parseInt(timeMinutes),
+                                    minutes: Number.parseInt(timeMinutes),
                                     date: timeDate,
                                     description: timeDescription,
                                   })

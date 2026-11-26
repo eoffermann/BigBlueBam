@@ -34,7 +34,7 @@ import { Button } from '@/components/common/button';
 import { Input } from '@/components/common/input';
 import { Dialog } from '@/components/common/dialog';
 import { Badge } from '@/components/common/badge';
-import { ApiError } from '@/lib/api';
+import type { ApiError } from '@/lib/api';
 import {
   superuserPermissionsApi,
   type PermissionCatalogItem,

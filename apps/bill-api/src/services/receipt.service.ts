@@ -24,7 +24,7 @@ function getMinio(): MinioClient {
     const [host, portStr] = endpoint.split(':');
     _minio = new MinioClient({
       endPoint: host!,
-      port: portStr ? parseInt(portStr, 10) : 9000,
+      port: portStr ? Number.parseInt(portStr, 10) : 9000,
       useSSL: false,
       accessKey: env.MINIO_ACCESS_KEY ?? 'minioadmin',
       secretKey: env.MINIO_SECRET_KEY ?? 'minioadmin',

@@ -126,7 +126,7 @@ export default async function feedRoutes(fastify: FastifyInstance) {
         user.id,
         user.org_id,
         {
-          limit: q.limit ? parseInt(q.limit, 10) : undefined,
+          limit: q.limit ? Number.parseInt(q.limit, 10) : undefined,
           cursor: q.cursor ?? null,
           category: q.category,
           source: q.source,

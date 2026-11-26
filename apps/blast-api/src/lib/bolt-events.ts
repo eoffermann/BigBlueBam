@@ -6,7 +6,7 @@ import {
   users,
   blastTemplates,
   blastSegments,
-  blastCampaigns,
+  type blastCampaigns,
 } from '../db/schema/index.js';
 
 export { publishBoltEvent } from '@bigbluebam/shared';

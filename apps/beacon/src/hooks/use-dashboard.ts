@@ -42,8 +42,8 @@ export function useAtRiskBeacons(days = 7) {
         return exp > now && exp <= cutoff;
       })
       .sort((a, b) => {
-        const ae = a.expires_at ? new Date(a.expires_at).getTime() : Infinity;
-        const be = b.expires_at ? new Date(b.expires_at).getTime() : Infinity;
+        const ae = a.expires_at ? new Date(a.expires_at).getTime() : Number.POSITIVE_INFINITY;
+        const be = b.expires_at ? new Date(b.expires_at).getTime() : Number.POSITIVE_INFINITY;
         return ae - be;
       });
   }, [allActive, days]);

@@ -133,14 +133,14 @@ function readClock(d: Date, timezone: string): {
   const parts = fmt.formatToParts(d);
   const bag: Record<string, string> = {};
   for (const p of parts) bag[p.type] = p.value;
-  const hour = parseInt(bag.hour ?? '0', 10) % 24;
+  const hour = Number.parseInt(bag.hour ?? '0', 10) % 24;
   const weekdayMap: Record<string, number> = {
     Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6,
   };
   const weekday = weekdayMap[bag.weekday ?? 'Sun'] ?? 0;
-  const year = parseInt(bag.year ?? '1970', 10);
-  const month = parseInt(bag.month ?? '01', 10);
-  const day = parseInt(bag.day ?? '01', 10);
+  const year = Number.parseInt(bag.year ?? '1970', 10);
+  const month = Number.parseInt(bag.month ?? '01', 10);
+  const day = Number.parseInt(bag.day ?? '01', 10);
   return { hour, weekday, year, month, day };
 }
 

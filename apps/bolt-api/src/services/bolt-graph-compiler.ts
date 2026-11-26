@@ -7,7 +7,7 @@ import type {
 } from '@bigbluebam/shared';
 import { isSimpleShape } from '@bigbluebam/shared';
 import type { InferInsertModel, InferSelectModel } from 'drizzle-orm';
-import { boltConditions, boltActions } from '../db/schema/index.js';
+import type { boltConditions, boltActions } from '../db/schema/index.js';
 
 // ---------------------------------------------------------------------------
 // Row types derived from Drizzle schemas
@@ -298,7 +298,7 @@ export function projectRowsToGraph(rows: {
         const match = value.match(STEP_TEMPLATE_RE);
         if (match) {
           // This parameter was wired from a previous action's output.
-          const srcSortOrder = parseInt(match[1]!, 10);
+          const srcSortOrder = Number.parseInt(match[1]!, 10);
           const field = match[2]!;
           // Don't include the template string in the param — the edge replaces it.
           dataFlowEdgesToEmit.push({ srcSortOrder, field, paramKey: key });

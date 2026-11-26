@@ -127,12 +127,12 @@ try {
   window.addEventListener('banter:channels-updated', onChange);
   const origPush = window.history.pushState.bind(window.history);
   const origReplace = window.history.replaceState.bind(window.history);
-  window.history.pushState = function (...args: Parameters<typeof origPush>) {
+  window.history.pushState = (...args: Parameters<typeof origPush>) => {
     const ret = origPush(...args);
     onChange();
     return ret;
   };
-  window.history.replaceState = function (...args: Parameters<typeof origReplace>) {
+  window.history.replaceState = (...args: Parameters<typeof origReplace>) => {
     const ret = origReplace(...args);
     onChange();
     return ret;

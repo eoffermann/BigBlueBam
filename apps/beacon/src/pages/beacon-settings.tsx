@@ -146,10 +146,10 @@ function PolicyEditor({
   }, [effective]);
 
   const validate = (): boolean => {
-    const min = parseInt(minDays, 10);
-    const max = parseInt(maxDays, 10);
-    const def = parseInt(defaultDays, 10);
-    const grace = parseInt(graceDays, 10);
+    const min = Number.parseInt(minDays, 10);
+    const max = Number.parseInt(maxDays, 10);
+    const def = Number.parseInt(defaultDays, 10);
+    const grace = Number.parseInt(graceDays, 10);
 
     if ([min, max, def, grace].some((v) => isNaN(v) || v < 1)) {
       setValidationError('All values must be positive integers');
@@ -192,10 +192,10 @@ function PolicyEditor({
         scope,
         organization_id: scope === 'Organization' ? user?.org_id : undefined,
         project_id: projectId,
-        min_expiry_days: parseInt(minDays, 10),
-        max_expiry_days: parseInt(maxDays, 10),
-        default_expiry_days: parseInt(defaultDays, 10),
-        grace_period_days: parseInt(graceDays, 10),
+        min_expiry_days: Number.parseInt(minDays, 10),
+        max_expiry_days: Number.parseInt(maxDays, 10),
+        default_expiry_days: Number.parseInt(defaultDays, 10),
+        grace_period_days: Number.parseInt(graceDays, 10),
       });
 
       if (result.warnings && result.warnings.length > 0) {

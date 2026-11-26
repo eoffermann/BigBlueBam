@@ -327,7 +327,7 @@ export function QueryBuilder() {
 
   // Freshness helper: convert days input to ISO timestamp
   const handleFreshnessChange = (days: string) => {
-    const n = parseInt(days, 10);
+    const n = Number.parseInt(days, 10);
     if (Number.isNaN(n) || n <= 0) {
       setExpiresAfter(null);
       return;

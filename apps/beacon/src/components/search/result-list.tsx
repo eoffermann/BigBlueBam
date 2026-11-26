@@ -27,8 +27,8 @@ function sortResults(results: SearchResult[], mode: SortMode): SearchResult[] {
       });
     case 'expiry':
       return copy.sort((a, b) => {
-        const aTime = a.expires_at ? new Date(a.expires_at).getTime() : Infinity;
-        const bTime = b.expires_at ? new Date(b.expires_at).getTime() : Infinity;
+        const aTime = a.expires_at ? new Date(a.expires_at).getTime() : Number.POSITIVE_INFINITY;
+        const bTime = b.expires_at ? new Date(b.expires_at).getTime() : Number.POSITIVE_INFINITY;
         return aTime - bTime;
       });
     case 'authority':

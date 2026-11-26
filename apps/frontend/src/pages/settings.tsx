@@ -2133,7 +2133,7 @@ export function SettingsPage({ onNavigate, ftue = false, onFtueComplete }: Setti
                         min={1}
                         max={1024}
                         value={permissions.max_file_upload_mb}
-                        onChange={(e) => setPermissions((p) => ({ ...p, max_file_upload_mb: Math.max(1, parseInt(e.target.value, 10) || 1) }))}
+                        onChange={(e) => setPermissions((p) => ({ ...p, max_file_upload_mb: Math.max(1, Number.parseInt(e.target.value, 10) || 1) }))}
                         className="w-24"
                       />
                     </label>

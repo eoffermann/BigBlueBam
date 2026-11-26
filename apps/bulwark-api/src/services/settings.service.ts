@@ -1,6 +1,6 @@
 import { eq } from 'drizzle-orm';
-import { z } from 'zod';
-import { bulwarkUpdateSettingsSchema, type BulwarkOrgSettings } from '@bigbluebam/shared';
+import type { z } from 'zod';
+import type { bulwarkUpdateSettingsSchema, BulwarkOrgSettings } from '@bigbluebam/shared';
 import { db } from '../db/index.js';
 import { bulwarkOrgSettings } from '../db/schema/index.js';
 import { ValidationFailure } from '../lib/errors.js';

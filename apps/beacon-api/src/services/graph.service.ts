@@ -5,7 +5,7 @@
 
 import { sql } from 'drizzle-orm';
 import { db } from '../db/index.js';
-import Redis from 'ioredis';
+import type Redis from 'ioredis';
 
 /** Convert a JS string array to a sql`IN (...)` fragment safe for Drizzle. */
 function sqlInList(arr: string[]) {

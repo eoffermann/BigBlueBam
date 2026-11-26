@@ -166,7 +166,7 @@ export function PhaseManager({ open, onOpenChange, projectId }: PhaseManagerProp
     } else if (field === 'color') {
       data = { color: value };
     } else if (field === 'wip_limit') {
-      const num = value === '' ? null : parseInt(value as string, 10);
+      const num = value === '' ? null : Number.parseInt(value as string, 10);
       if (num !== null && isNaN(num)) return;
       data = { wip_limit: num };
     } else if (field === 'is_start' || field === 'is_terminal') {

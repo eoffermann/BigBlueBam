@@ -416,7 +416,7 @@ export async function hybridSearch(
 export async function suggestBeacons(
   query: string,
   orgId: string,
-  limit: number = 10,
+  limit = 10,
   userId?: string,
 ): Promise<{ id: string; slug: string; title: string; tags: string[] }[]> {
   const pattern = `%${escapeLike(query)}%`;

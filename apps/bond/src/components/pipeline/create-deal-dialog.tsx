@@ -26,7 +26,7 @@ export function CreateDealDialog({ open, onOpenChange, pipelineId, stageId, onSu
       name: name.trim(),
       pipeline_id: pipelineId,
       stage_id: stageId,
-      value: value ? Math.round(parseFloat(value) * 100) : undefined,
+      value: value ? Math.round(Number.parseFloat(value) * 100) : undefined,
       expected_close_date: expectedClose || undefined,
     });
 

@@ -1,4 +1,4 @@
-import { type DragEvent } from 'react';
+import type { DragEvent } from 'react';
 import { Zap, Filter, Play, type LucideIcon } from 'lucide-react';
 import { useGraphEditorStore } from '@/stores/graph-editor.store';
 import type { BoltNodeKind } from '@/types/bolt-graph';

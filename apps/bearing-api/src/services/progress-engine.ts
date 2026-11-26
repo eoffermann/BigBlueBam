@@ -25,9 +25,9 @@ export function computeKrProgress(kr: {
     return 0;
   }
 
-  const start = parseFloat(kr.start_value);
-  const current = parseFloat(kr.current_value);
-  const target = parseFloat(kr.target_value);
+  const start = Number.parseFloat(kr.start_value);
+  const current = Number.parseFloat(kr.current_value);
+  const target = Number.parseFloat(kr.target_value);
 
   if (kr.direction === 'decrease') {
     // For decrease direction: progress when current goes down from start toward target
@@ -215,7 +215,7 @@ export async function computeGoalProgress(goalId: string): Promise<number> {
 
   const row = result[0];
   if (!row || row.avg_progress === null) return 0;
-  return parseFloat(row.avg_progress);
+  return Number.parseFloat(row.avg_progress);
 }
 
 /**
@@ -242,7 +242,7 @@ export async function computeGoalStatus(
   if (!period) return goal.status;
 
   return computeAutoStatus({
-    progress: parseFloat(goal.progress),
+    progress: Number.parseFloat(goal.progress),
     starts_at: period.starts_at,
     ends_at: period.ends_at,
   });
@@ -257,7 +257,7 @@ export async function getCachedGoalProgress(
 ): Promise<number> {
   const cacheKey = `bearing:goal:progress:${goalId}`;
   const cached = await redis.get(cacheKey);
-  if (cached !== null) return parseFloat(cached);
+  if (cached !== null) return Number.parseFloat(cached);
 
   const progress = await computeGoalProgress(goalId);
   await redis.set(cacheKey, progress.toString(), 'EX', CACHE_TTL_SECONDS);

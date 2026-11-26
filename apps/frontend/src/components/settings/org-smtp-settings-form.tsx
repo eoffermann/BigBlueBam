@@ -96,7 +96,7 @@ export function OrgSmtpSettingsForm({ canEdit }: { canEdit: boolean }) {
     mutationFn: (next: FormState) =>
       api.put<{ data: OrgSmtpData }>('/org/smtp-settings', {
         host: next.host,
-        port: parseInt(next.port, 10) || 587,
+        port: Number.parseInt(next.port, 10) || 587,
         user: next.user,
         password: next.password,
         from: next.from,

@@ -363,7 +363,7 @@ export function AdminPage({ onNavigate }: AdminPageProps) {
                 description="0 = keep forever"
                 placeholder="0"
                 value={String(settings.message_retention_days)}
-                onChange={(v) => update('message_retention_days', parseInt(v, 10) || 0)}
+                onChange={(v) => update('message_retention_days', Number.parseInt(v, 10) || 0)}
                 type="number"
               />
 
@@ -371,7 +371,7 @@ export function AdminPage({ onNavigate }: AdminPageProps) {
                 label="Max file upload size (MB)"
                 placeholder="25"
                 value={String(settings.max_file_size_mb)}
-                onChange={(v) => update('max_file_size_mb', parseInt(v, 10) || 25)}
+                onChange={(v) => update('max_file_size_mb', Number.parseInt(v, 10) || 25)}
                 type="number"
               />
             </div>

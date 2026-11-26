@@ -86,7 +86,7 @@ export function resolveTemplateString(template: string, context: ResolverContext
     // {{ step[N].result.field }}
     const stepMatch = STEP_REGEX.exec(trimmed);
     if (stepMatch) {
-      const stepIndex = parseInt(stepMatch[1]!, 10);
+      const stepIndex = Number.parseInt(stepMatch[1]!, 10);
       const fieldPath = stepMatch[2]!;
       const stepData = context.stepResults?.[stepIndex];
       if (!stepData) return '';

@@ -47,7 +47,7 @@ export interface GraphRecentResponse {
 
 export function useGraphNeighbors(
   beaconId: string | undefined,
-  hops: number = 1,
+  hops = 1,
   options?: {
     includeImplicit?: boolean;
     tagAffinityThreshold?: number;
@@ -73,7 +73,7 @@ export function useGraphNeighbors(
 export function useGraphHubs(
   scope: 'project' | 'organization' = 'organization',
   projectId?: string,
-  topK: number = 20,
+  topK = 20,
 ) {
   return useQuery({
     queryKey: ['graph-hubs', scope, projectId, topK],
@@ -90,7 +90,7 @@ export function useGraphHubs(
 export function useGraphRecent(
   scope: 'project' | 'organization' = 'organization',
   projectId?: string,
-  days: number = 7,
+  days = 7,
 ) {
   return useQuery({
     queryKey: ['graph-recent', scope, projectId, days],

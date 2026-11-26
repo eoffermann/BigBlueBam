@@ -127,7 +127,7 @@ function describeCron(cron: string): string {
   if (parts.hour !== '*') {
     if (parts.hour.startsWith('*/')) segments.push(`every ${parts.hour.slice(2)} hours`);
     else {
-      const h = parseInt(parts.hour, 10);
+      const h = Number.parseInt(parts.hour, 10);
       const ampm = h >= 12 ? 'PM' : 'AM';
       const h12 = h === 0 ? 12 : h > 12 ? h - 12 : h;
       segments.push(`at ${h12}:${parts.minute === '*' ? '00' : parts.minute.padStart(2, '0')} ${ampm}`);
@@ -139,7 +139,7 @@ function describeCron(cron: string): string {
     if (parts.dayOfWeek === '1-5') segments.push('on weekdays');
     else if (parts.dayOfWeek === '0,6') segments.push('on weekends');
     else {
-      const dayNums = parts.dayOfWeek.split(',').map((d) => DAYS_OF_WEEK[parseInt(d, 10)] ?? d);
+      const dayNums = parts.dayOfWeek.split(',').map((d) => DAYS_OF_WEEK[Number.parseInt(d, 10)] ?? d);
       segments.push(`on ${dayNums.join(', ')}`);
     }
   }

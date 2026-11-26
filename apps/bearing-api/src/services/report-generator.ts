@@ -127,7 +127,7 @@ export async function generatePeriodReportData(periodId: string, orgId: string):
       // Apply every snapshot recorded on or before the end of this day.
       const dayEnd = new Date(`${day}T23:59:59.999Z`).getTime();
       while (cursor < snapshots.length && new Date(snapshots[cursor]!.recorded_at).getTime() <= dayEnd) {
-        latestByKr.set(snapshots[cursor]!.key_result_id, parseFloat(snapshots[cursor]!.progress));
+        latestByKr.set(snapshots[cursor]!.key_result_id, Number.parseFloat(snapshots[cursor]!.progress));
         cursor++;
       }
 
@@ -193,7 +193,7 @@ export async function generatePeriodReport(periodId: string, orgId: string) {
   const atRiskGoals = goals.filter((g) => g.status === 'at_risk' || g.status === 'behind').length;
   const avgProgress =
     totalGoals > 0
-      ? goals.reduce((sum, g) => sum + parseFloat(g.progress), 0) / totalGoals
+      ? goals.reduce((sum, g) => sum + Number.parseFloat(g.progress), 0) / totalGoals
       : 0;
 
   markdown += `## Summary\n\n`;
@@ -287,7 +287,7 @@ export async function generateAtRiskReport(orgId: string) {
       if (krs.length > 0) {
         markdown += `\n**Key Results:**\n\n`;
         for (const kr of krs) {
-          const behindMarker = parseFloat(kr.progress) < 50 ? ' :warning:' : '';
+          const behindMarker = Number.parseFloat(kr.progress) < 50 ? ' :warning:' : '';
           markdown += `- ${kr.title}: ${kr.progress}%${behindMarker}\n`;
         }
       }

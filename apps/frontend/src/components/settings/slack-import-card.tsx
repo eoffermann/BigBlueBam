@@ -1419,7 +1419,7 @@ function OptionsPanel({
           max={1_000_000}
           value={options.daily_message_rate_cap}
           onChange={(e) =>
-            onChange({ daily_message_rate_cap: Math.max(100, parseInt(e.target.value, 10) || 100) })
+            onChange({ daily_message_rate_cap: Math.max(100, Number.parseInt(e.target.value, 10) || 100) })
           }
           className="w-32 rounded-md border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-3 py-2 text-sm"
         />

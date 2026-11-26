@@ -25,7 +25,7 @@ export default async function submissionRoutes(fastify: FastifyInstance) {
         request.user!.org_id,
         {
           cursor: query.cursor,
-          limit: query.limit ? parseInt(query.limit, 10) : undefined,
+          limit: query.limit ? Number.parseInt(query.limit, 10) : undefined,
           file_processing_status:
             query['filter[file_processing_status]'] ?? query.file_processing_status,
         },

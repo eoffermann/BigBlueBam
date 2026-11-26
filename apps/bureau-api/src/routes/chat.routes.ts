@@ -71,7 +71,7 @@ export default async function chatRoutes(fastify: FastifyInstance) {
       }
       const before = request.query.before ? new Date(request.query.before) : undefined;
       const limit = request.query.limit
-        ? Math.min(parseInt(request.query.limit, 10) || 50, 200)
+        ? Math.min(Number.parseInt(request.query.limit, 10) || 50, 200)
         : 100;
       const messages = await chat.listRecentMessages(user.org_id, roomKey, limit, before);
       const avatars = await chat.loadAuthorAvatars(

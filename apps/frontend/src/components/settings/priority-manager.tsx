@@ -161,7 +161,7 @@ export function PriorityManager({ open, onOpenChange }: PriorityManagerProps) {
             const raw = prompt(
               `${errObj.body.error.message}\n\nEnter the number of the priority to redirect them to:\n${labels}`,
             );
-            const idx = raw ? parseInt(raw, 10) - 1 : -1;
+            const idx = raw ? Number.parseInt(raw, 10) - 1 : -1;
             if (idx < 0 || idx >= alternatives.length) return;
             deletePriority.mutate({ id: row.id, migrate_to: alternatives[idx]!.value });
             return;

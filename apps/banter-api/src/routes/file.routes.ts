@@ -48,7 +48,7 @@ function getMinioClient(): Minio.Client {
     const url = new URL(env.S3_ENDPOINT);
     minioClient = new Minio.Client({
       endPoint: url.hostname,
-      port: parseInt(url.port || '9000', 10),
+      port: Number.parseInt(url.port || '9000', 10),
       useSSL: url.protocol === 'https:',
       accessKey: env.S3_ACCESS_KEY,
       secretKey: env.S3_SECRET_KEY,

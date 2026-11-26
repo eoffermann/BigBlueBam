@@ -16,7 +16,7 @@ import Redis from 'ioredis';
 import * as Minio from 'minio';
 import StreamZip from 'node-stream-zip';
 import { and, eq } from 'drizzle-orm';
-import { Readable } from 'node:stream';
+import type { Readable } from 'node:stream';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
@@ -34,7 +34,7 @@ export function getMinioClient(): Minio.Client {
     const url = new URL(env.S3_ENDPOINT);
     minioClient = new Minio.Client({
       endPoint: url.hostname,
-      port: parseInt(url.port || '9000', 10),
+      port: Number.parseInt(url.port || '9000', 10),
       useSSL: url.protocol === 'https:',
       accessKey: env.S3_ACCESS_KEY,
       secretKey: env.S3_SECRET_KEY,
@@ -264,7 +264,7 @@ export async function buildPreview(zipPath: string): Promise<SlackPreview> {
 
     // Workspace name fallback: try first channel's creator workspace, then
     // the top-level dir name embedded in an entry, then 'slack-workspace'.
-    let workspaceName = 'slack-workspace';
+    const workspaceName = 'slack-workspace';
     const firstEntry = Object.keys(entries).find((n) => n.includes('/'));
     if (firstEntry) {
       const root = firstEntry.split('/')[0];

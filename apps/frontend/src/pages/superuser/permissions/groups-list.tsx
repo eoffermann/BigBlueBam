@@ -12,7 +12,7 @@ import { Select } from '@/components/common/select';
 import { Dialog } from '@/components/common/dialog';
 import { Badge } from '@/components/common/badge';
 import { formatRelativeTime } from '@/lib/utils';
-import { ApiError } from '@/lib/api';
+import type { ApiError } from '@/lib/api';
 import {
   superuserPermissionsApi,
   type PermissionGroupListItem,
