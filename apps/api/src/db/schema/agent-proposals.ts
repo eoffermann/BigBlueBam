@@ -1,4 +1,5 @@
-import { pgTable, pgEnum, uuid, text, jsonb, timestamp, index } from 'drizzle-orm/pg-core';
+import { sql } from 'drizzle-orm';
+import { pgTable, pgEnum, uuid, text, jsonb, timestamp, index, boolean } from 'drizzle-orm/pg-core';
 import { organizations } from './organizations.js';
 import { users, actorTypeEnum } from './users.js';
 
@@ -43,6 +44,18 @@ export const agentProposals = pgTable(
     status: proposalStatusEnum('status').default('pending').notNull(),
     decided_at: timestamp('decided_at', { withTimezone: true }),
     decision_reason: text('decision_reason'),
+    // Issue #128 (migration 0261): who actually decided, their users.kind at decision
+    // time, and the SuperUser behind an impersonated session (null otherwise).
+    decided_by: uuid('decided_by').references(() => users.id, { onDelete: 'set null' }),
+    decided_by_kind: actorTypeEnum('decided_by_kind'),
+    decided_impersonator_id: uuid('decided_impersonator_id').references(() => users.id, {
+      onDelete: 'set null',
+    }),
+    // When set, only the named app may close the proposal; the generic decide route
+    // answers 409 DECIDE_IN_APP.
+    owning_app: text('owning_app'),
+    // When true, the decide route rejects non-human and impersonated deciders (403).
+    require_human_decider: boolean('require_human_decider').default(false).notNull(),
     expires_at: timestamp('expires_at', { withTimezone: true }).notNull(),
     created_at: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
     updated_at: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
@@ -52,5 +65,8 @@ export const agentProposals = pgTable(
     index('idx_agent_proposals_org_status_created').on(table.org_id, table.status, table.created_at),
     index('idx_agent_proposals_actor_created').on(table.actor_id, table.created_at),
     index('idx_agent_proposals_expires_pending').on(table.expires_at),
+    index('idx_agent_proposals_owning_app_status')
+      .on(table.owning_app, table.status)
+      .where(sql`${table.owning_app} IS NOT NULL`),
   ],
 );

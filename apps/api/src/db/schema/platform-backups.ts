@@ -21,6 +21,11 @@ export const platformBackups = pgTable(
     started_at: timestamp('started_at', { withTimezone: true }),
     completed_at: timestamp('completed_at', { withTimezone: true }),
     error: text('error'),
+    // Bastion off-site evidence mirror (spec 9.7, migration 0261). Written by the
+    // bastion-object-backup job AFTER this backup's own status is recorded; a mirror
+    // failure never changes `status`. Null when no mirror ran.
+    bastion_mirror_status: text('bastion_mirror_status'),
+    bastion_mirror_cursor: timestamp('bastion_mirror_cursor', { withTimezone: true }),
     created_at: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => [

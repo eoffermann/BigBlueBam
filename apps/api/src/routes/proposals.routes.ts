@@ -15,6 +15,12 @@ import { publishBoltEvent } from '../lib/bolt-events.js';
  *   GET  /v1/proposals               list proposals visible to caller
  *   POST /v1/proposals/:id/decide    approve / reject / request_revision
  *
+ * Decider record (issue #128, migration 0261): decide stores decided_by,
+ * decided_by_kind (users.kind at decision time) and decided_impersonator_id;
+ * require_human_decider proposals reject non-human or impersonated deciders
+ * with 403 HUMAN_DECIDER_REQUIRED; owning_app proposals answer 409
+ * DECIDE_IN_APP because only the owning app may close them.
+ *
  * Design notes:
  *   - Every proposal has a mandatory approver and expiry. Callers that just
  *     want to fire an approval event without durable state should continue to
@@ -47,6 +53,15 @@ const createSchema = z.object({
     .max(MAX_TTL_SECONDS)
     .optional(),
   decision_reason: z.string().max(4000).optional(),
+  // Issue #128. Tightening only: any creator may demand a human decider.
+  require_human_decider: z.boolean().optional(),
+  // Issue #128. The app that must close this proposal itself; the generic decide
+  // route then answers 409 DECIDE_IN_APP. Only service accounts (app identities)
+  // may set it, so a person or agent cannot park a proposal out of everyone's reach.
+  owning_app: z
+    .string()
+    .regex(/^[a-z][a-z0-9_-]{1,39}$/, 'owning_app must be a lowercase app name')
+    .optional(),
 });
 
 const decideSchema = z.object({
@@ -88,6 +103,18 @@ export default async function proposalRoutes(fastify: FastifyInstance) {
 
       const user = request.user!;
       const data = parsed.data;
+
+      if (data.owning_app !== undefined && user.kind !== 'service') {
+        return reply.status(403).send({
+          error: {
+            code: 'FORBIDDEN',
+            message: 'Only an app service account can create a proposal owned by an app',
+            details: [{ field: 'owning_app', issue: 'service_account_required' }],
+            request_id: request.id,
+          },
+        });
+      }
+
       const ttl = data.ttl_seconds ?? DEFAULT_TTL_SECONDS;
       const expiresAt = new Date(Date.now() + ttl * 1000);
 
@@ -105,6 +132,8 @@ export default async function proposalRoutes(fastify: FastifyInstance) {
           status: 'pending',
           expires_at: expiresAt,
           decision_reason: data.decision_reason ?? null,
+          require_human_decider: data.require_human_decider ?? false,
+          owning_app: data.owning_app ?? null,
         })
         .returning();
 
@@ -283,6 +312,35 @@ export default async function proposalRoutes(fastify: FastifyInstance) {
         });
       }
 
+      // Issue #128: an app-owned proposal is closed only inside its app (which records
+      // its own decision through an internal route); the generic route must not move it.
+      if (existing.owning_app) {
+        return reply.status(409).send({
+          error: {
+            code: 'DECIDE_IN_APP',
+            message: `This proposal belongs to ${existing.owning_app} and must be decided there`,
+            details: [{ field: 'owning_app', issue: existing.owning_app }],
+            request_id: request.id,
+          },
+        });
+      }
+
+      // Issue #128: a proposal that demands a human decider rejects agents, service
+      // accounts, and any decision made while a SuperUser impersonates someone.
+      const impersonatorId = request.isImpersonating ? (request.impersonator?.id ?? null) : null;
+      if (existing.require_human_decider && (user.kind !== 'human' || request.isImpersonating)) {
+        return reply.status(403).send({
+          error: {
+            code: 'HUMAN_DECIDER_REQUIRED',
+            message: request.isImpersonating
+              ? 'This proposal must be decided by a person signed in as themselves, not through impersonation'
+              : 'This proposal must be decided by a person, not an agent or service account',
+            details: [],
+            request_id: request.id,
+          },
+        });
+      }
+
       // Lazy expiry: if the proposal is past its expires_at, transition it to
       // 'expired' and surface 410 so the caller knows it's unactionable. This
       // saves the client from racing the background sweep.
@@ -320,10 +378,30 @@ export default async function proposalRoutes(fastify: FastifyInstance) {
           status: newStatus,
           decided_at: now,
           decision_reason: parsed.data.reason ?? null,
+          decided_by: user.id,
+          decided_by_kind: user.kind,
+          decided_impersonator_id: impersonatorId,
           updated_at: now,
         })
-        .where(eq(agentProposals.id, existing.id))
+        // Guard the transition so two concurrent deciders cannot both win.
+        .where(
+          and(
+            eq(agentProposals.id, existing.id),
+            or(eq(agentProposals.status, 'pending'), eq(agentProposals.status, 'revising')),
+          ),
+        )
         .returning();
+
+      if (!updated) {
+        return reply.status(409).send({
+          error: {
+            code: 'PROPOSAL_ALREADY_DECIDED',
+            message: 'Proposal was decided by someone else first',
+            details: [],
+            request_id: request.id,
+          },
+        });
+      }
 
       await publishBoltEvent(
         'proposal.decided',
@@ -337,6 +415,9 @@ export default async function proposalRoutes(fastify: FastifyInstance) {
             approver_id: updated!.approver_id,
             actor_id: updated!.actor_id,
             decided_at: updated!.decided_at?.toISOString() ?? null,
+            decided_by: updated!.decided_by,
+            decided_by_kind: updated!.decided_by_kind,
+            decided_impersonator_id: updated!.decided_impersonator_id,
           },
           org: { id: user.active_org_id },
         },

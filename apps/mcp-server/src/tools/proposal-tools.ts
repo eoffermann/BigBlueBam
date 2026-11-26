@@ -58,6 +58,10 @@ export function registerProposalTools(server: McpServer, api: ApiClient): void {
         .max(4000)
         .optional()
         .describe('Optional initial context for the approver.'),
+      require_human_decider: z
+        .boolean()
+        .optional()
+        .describe('When true, only a human signed in as themselves (not an agent, service account, or impersonated session) can decide.'),
     },
     returns: z
       .object({
@@ -137,6 +141,13 @@ export function registerProposalTools(server: McpServer, api: ApiClient): void {
             actor_id: z.string().uuid(),
             created_at: z.string(),
             expires_at: z.string(),
+            // Issue #128: who actually decided and how.
+            decided_at: z.string().nullable().optional(),
+            decided_by: z.string().uuid().nullable().optional(),
+            decided_by_kind: z.enum(['human', 'agent', 'service']).nullable().optional(),
+            decided_impersonator_id: z.string().uuid().nullable().optional(),
+            owning_app: z.string().nullable().optional(),
+            require_human_decider: z.boolean().optional(),
           })
           .passthrough(),
       ),
@@ -176,7 +187,7 @@ export function registerProposalTools(server: McpServer, api: ApiClient): void {
   registerTool(server, {
     name: 'proposal_decide',
     description:
-      "Decide a pending or revising proposal. Only the designated approver (or an org admin) may decide. Returns 409 if the proposal was already decided, 410 if it expired, 403 if the caller is not authorized.",
+      "Decide a pending or revising proposal. Only the designated approver (or an org admin) may decide. The decider, their kind (human/agent/service) and any impersonating SuperUser are recorded. Returns 409 PROPOSAL_ALREADY_DECIDED if it was already decided, 409 DECIDE_IN_APP if the proposal belongs to an app (owning_app) and must be decided there, 410 if it expired, 403 if the caller is not authorized, and 403 HUMAN_DECIDER_REQUIRED when the proposal requires a human decider and the caller is an agent, a service account, or an impersonated session.",
     input: {
       proposal_id: z.string().uuid().describe('Proposal id to decide.'),
       decision: z
@@ -192,6 +203,9 @@ export function registerProposalTools(server: McpServer, api: ApiClient): void {
             status: z.string(),
             decided_at: z.string().nullable().optional(),
             decision_reason: z.string().nullable().optional(),
+            decided_by: z.string().uuid().nullable().optional(),
+            decided_by_kind: z.enum(['human', 'agent', 'service']).nullable().optional(),
+            decided_impersonator_id: z.string().uuid().nullable().optional(),
           })
           .passthrough(),
       })

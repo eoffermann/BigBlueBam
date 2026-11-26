@@ -120,10 +120,25 @@ const OTHER_HUMAN: TestUser = {
   org_id: ORG_A,
 };
 
+const SUPERUSER: TestUser = {
+  id: 'ffffffff-ffff-ffff-ffff-ffffffffffff',
+  active_org_id: ORG_A,
+  kind: 'human',
+  role: 'owner',
+  is_superuser: true,
+  org_id: ORG_A,
+};
+
 async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({ logger: false });
   app.decorateRequest('user', null);
+  app.decorateRequest('impersonator', null);
+  app.decorateRequest('isImpersonating', false);
   app.addHook('preHandler', async (request) => {
+    if (request.headers['x-test-impersonated'] === '1') {
+      (request as any).isImpersonating = true;
+      (request as any).impersonator = SUPERUSER;
+    }
     const header = request.headers['x-test-user'];
     if (header === 'human') (request as any).user = HUMAN_USER;
     else if (header === 'admin') (request as any).user = ADMIN_USER;
@@ -163,6 +178,7 @@ function mockUpdateReturning(rows: any[]) {
   const where = vi.fn().mockReturnValue({ returning });
   const set = vi.fn().mockReturnValue({ where });
   mockDb.update.mockReturnValueOnce({ set });
+  return set;
 }
 
 function mockUpdateNoReturning() {
@@ -440,6 +456,185 @@ describe('proposals routes', () => {
         payload: { decision: 'approve' },
       });
       expect(res.statusCode).toBe(200);
+    });
+
+    // ---- issue #128: decider record, require_human_decider, owning_app ----
+
+    it('records decided_by, decided_by_kind and no impersonator on a normal decide', async () => {
+      mockSelectFromWhereLimit([existingPending()]);
+      const set = mockUpdateReturning([
+        {
+          ...existingPending(),
+          status: 'approved',
+          decided_at: new Date(),
+          decided_by: HUMAN_USER.id,
+          decided_by_kind: 'human',
+          decided_impersonator_id: null,
+        },
+      ]);
+      const res = await app.inject({
+        method: 'POST',
+        url: `/v1/proposals/${PROPOSAL_ID}/decide`,
+        headers: { 'x-test-user': 'human' },
+        payload: { decision: 'approve' },
+      });
+      expect(res.statusCode).toBe(200);
+      expect(set).toHaveBeenCalledWith(
+        expect.objectContaining({
+          decided_by: HUMAN_USER.id,
+          decided_by_kind: 'human',
+          decided_impersonator_id: null,
+        }),
+      );
+      expect(res.json().data.decided_by_kind).toBe('human');
+      const last = publishBoltEventSpy.mock.calls.at(-1)!;
+      expect((last[2] as any).proposal.decided_by_kind).toBe('human');
+    });
+
+    it('records the impersonating SuperUser when deciding under impersonation', async () => {
+      mockSelectFromWhereLimit([existingPending()]);
+      const set = mockUpdateReturning([{ ...existingPending(), status: 'approved' }]);
+      const res = await app.inject({
+        method: 'POST',
+        url: `/v1/proposals/${PROPOSAL_ID}/decide`,
+        headers: { 'x-test-user': 'human', 'x-test-impersonated': '1' },
+        payload: { decision: 'approve' },
+      });
+      expect(res.statusCode).toBe(200);
+      expect(set).toHaveBeenCalledWith(
+        expect.objectContaining({ decided_by: HUMAN_USER.id, decided_impersonator_id: SUPERUSER.id }),
+      );
+    });
+
+    it('records a service-account decider kind', async () => {
+      mockSelectFromWhereLimit([{ ...existingPending(), approver_id: AGENT_USER.id }]);
+      const set = mockUpdateReturning([{ ...existingPending(), status: 'rejected' }]);
+      const res = await app.inject({
+        method: 'POST',
+        url: `/v1/proposals/${PROPOSAL_ID}/decide`,
+        headers: { 'x-test-user': 'agent' },
+        payload: { decision: 'reject' },
+      });
+      expect(res.statusCode).toBe(200);
+      expect(set).toHaveBeenCalledWith(expect.objectContaining({ decided_by_kind: 'service' }));
+    });
+
+    it('returns 409 DECIDE_IN_APP for an app-owned proposal and does not update it', async () => {
+      mockSelectFromWhereLimit([{ ...existingPending(), owning_app: 'bastion' }]);
+      const res = await app.inject({
+        method: 'POST',
+        url: `/v1/proposals/${PROPOSAL_ID}/decide`,
+        headers: { 'x-test-user': 'admin' },
+        payload: { decision: 'approve' },
+      });
+      expect(res.statusCode).toBe(409);
+      expect(res.json().error.code).toBe('DECIDE_IN_APP');
+      expect(mockDb.update).not.toHaveBeenCalled();
+      expect(publishBoltEventSpy).not.toHaveBeenCalled();
+    });
+
+    it('rejects a service-account decider when require_human_decider is set', async () => {
+      mockSelectFromWhereLimit([
+        { ...existingPending(), approver_id: AGENT_USER.id, require_human_decider: true },
+      ]);
+      const res = await app.inject({
+        method: 'POST',
+        url: `/v1/proposals/${PROPOSAL_ID}/decide`,
+        headers: { 'x-test-user': 'agent' },
+        payload: { decision: 'approve' },
+      });
+      expect(res.statusCode).toBe(403);
+      expect(res.json().error.code).toBe('HUMAN_DECIDER_REQUIRED');
+      expect(mockDb.update).not.toHaveBeenCalled();
+    });
+
+    it('rejects an impersonated decider when require_human_decider is set', async () => {
+      mockSelectFromWhereLimit([{ ...existingPending(), require_human_decider: true }]);
+      const res = await app.inject({
+        method: 'POST',
+        url: `/v1/proposals/${PROPOSAL_ID}/decide`,
+        headers: { 'x-test-user': 'human', 'x-test-impersonated': '1' },
+        payload: { decision: 'approve' },
+      });
+      expect(res.statusCode).toBe(403);
+      expect(res.json().error.code).toBe('HUMAN_DECIDER_REQUIRED');
+    });
+
+    it('allows a human decider when require_human_decider is set', async () => {
+      mockSelectFromWhereLimit([{ ...existingPending(), require_human_decider: true }]);
+      mockUpdateReturning([{ ...existingPending(), status: 'approved' }]);
+      const res = await app.inject({
+        method: 'POST',
+        url: `/v1/proposals/${PROPOSAL_ID}/decide`,
+        headers: { 'x-test-user': 'human' },
+        payload: { decision: 'approve' },
+      });
+      expect(res.statusCode).toBe(200);
+    });
+
+    it('returns 409 when a concurrent decider won the guarded update', async () => {
+      mockSelectFromWhereLimit([existingPending()]);
+      mockUpdateReturning([]);
+      const res = await app.inject({
+        method: 'POST',
+        url: `/v1/proposals/${PROPOSAL_ID}/decide`,
+        headers: { 'x-test-user': 'human' },
+        payload: { decision: 'approve' },
+      });
+      expect(res.statusCode).toBe(409);
+      expect(res.json().error.code).toBe('PROPOSAL_ALREADY_DECIDED');
+      expect(publishBoltEventSpy).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('POST /v1/proposals owning_app (issue #128)', () => {
+    it('refuses owning_app from a non-service caller', async () => {
+      const res = await app.inject({
+        method: 'POST',
+        url: '/v1/proposals',
+        headers: { 'x-test-user': 'human' },
+        payload: { proposed_action: 'x', approver_id: OTHER_HUMAN.id, owning_app: 'bastion' },
+      });
+      expect(res.statusCode).toBe(403);
+      expect(mockDb.insert).not.toHaveBeenCalled();
+    });
+
+    it('stores owning_app and require_human_decider from a service account', async () => {
+      const now = new Date();
+      const returning = vi.fn().mockResolvedValue([
+        {
+          id: 'dddddddd-dddd-dddd-dddd-dddddddddddd',
+          org_id: ORG_A,
+          actor_id: AGENT_USER.id,
+          proposer_kind: 'service',
+          proposed_action: 'bastion.exception.accept',
+          approver_id: HUMAN_USER.id,
+          status: 'pending',
+          owning_app: 'bastion',
+          require_human_decider: true,
+          expires_at: new Date(now.getTime() + 86400_000),
+          created_at: now,
+          subject_type: null,
+          subject_id: null,
+        },
+      ]);
+      const values = vi.fn().mockReturnValue({ returning });
+      mockDb.insert.mockReturnValueOnce({ values });
+      const res = await app.inject({
+        method: 'POST',
+        url: '/v1/proposals',
+        headers: { 'x-test-user': 'agent' },
+        payload: {
+          proposed_action: 'bastion.exception.accept',
+          approver_id: HUMAN_USER.id,
+          owning_app: 'bastion',
+          require_human_decider: true,
+        },
+      });
+      expect(res.statusCode).toBe(201);
+      expect(values).toHaveBeenCalledWith(
+        expect.objectContaining({ owning_app: 'bastion', require_human_decider: true }),
+      );
     });
   });
 });

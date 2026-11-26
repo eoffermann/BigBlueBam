@@ -1770,9 +1770,9 @@ External prefix for the Bam api is `/b3/api/`, so a route shown as `POST /v1/pro
 | REST endpoint | MCP tool | Description | UI call site |
 |---|---|---|---|
 | `POST /v1/approvals` | — _(skip: deprecated — use proposal_create / proposal_list)_ | Deprecated fire-and-forget `approval.requested` emitter | — |
-| `GET /v1/proposals` | `proposal_list` | List proposals visible to caller | — |
-| `POST /v1/proposals` | `proposal_create` | Create a durable, decidable proposal | — |
-| `POST /v1/proposals/:id/decide` | `proposal_decide` | Approve / reject / request_revision a proposal | — |
+| `GET /v1/proposals` | `proposal_list` | List proposals visible to caller; rows carry `decided_by`, `decided_by_kind`, `decided_impersonator_id`, `owning_app`, `require_human_decider` (#128) | — |
+| `POST /v1/proposals` | `proposal_create` | Create a durable, decidable proposal; optional `require_human_decider`; `owning_app` only from a service account (403 otherwise) | — |
+| `POST /v1/proposals/:id/decide` | `proposal_decide` | Approve / reject / request_revision a proposal; records the decider, kind and impersonator; 409 `DECIDE_IN_APP` when `owning_app` is set; 403 `HUMAN_DECIDER_REQUIRED` for non-human or impersonated deciders when `require_human_decider` is true | — |
 
 
 ## Cross-app — Visibility preflight
