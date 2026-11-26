@@ -708,7 +708,7 @@ export function registerBastionEvidenceTools(server: McpServer, client: BastionC
   registerTool(server, {
     name: 'bastion_check_evidence_scan_again',
     description:
-      'For an upload still waiting on its virus scan, check Bin again right now instead of waiting for the next automatic retry (POST /manual-evidence/:id/check-again; the review queue\'s "Check again"). If the scan finished clean (or scanning is off) the file is copied into Bastion\'s evidence store; an infected or failed scan blocks it. check_result is copied, still_pending, blocked or skipped. 409 NOT_PENDING_SCAN when the item is not waiting. Needs bastion.evidence.upload.',
+      'For an upload still waiting on its virus scan, check Bin again right now instead of waiting for the next automatic retry (POST /manual-evidence/:id/check-again; the review queue\'s "Check again"). If the scan finished clean (or scanning is off) the file is copied into Bastion\'s evidence store; an infected or failed scan blocks it. check_result is copied, copy_started (a large file is still being saved), still_pending, blocked or skipped. 409 NOT_PENDING_SCAN when the item is not waiting. Needs bastion.evidence.upload.',
     input: { manual_evidence_id: z.string().uuid() },
     returns: z.record(z.unknown()),
     handler: async ({ manual_evidence_id }) => {

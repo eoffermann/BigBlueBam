@@ -21,6 +21,33 @@ export const SLICE_TAIL_MARGIN_MS = 2_000;
  * rather than written past the worker's engine timeout (issue #201).
  */
 export const SLICE_WRITE_CUTOFF_MS = ENGINE_TIMEOUT_MS - PUT_TIMEOUT_MS - LEDGER_LOCK_TIMEOUT_MS - SLICE_TAIL_MARGIN_MS;
+// ── evidence-ingest copies (#222) ─────────────────────────────────────────────────────────
+/** evidence-ingest stops STARTING pending-scan retries once a call has run this long. */
+export const EVIDENCE_INGEST_START_CUTOFF_MS = 20_000;
+/** Conservative bucket-to-bucket throughput used to decide whether a copy fits the call. */
+export const EVIDENCE_COPY_MIN_BYTES_PER_SEC = 2 * 1024 * 1024;
+/** Fixed cost of one copy (GET + PUT round-trips) on top of its bytes. */
+export const EVIDENCE_COPY_FIXED_MS = 1_000;
+/** Reserved after a copy for its transaction (ledger lock wait, writes) and the reply. */
+export const EVIDENCE_COPY_WRITE_RESERVE_MS = LEDGER_LOCK_TIMEOUT_MS + SLICE_TAIL_MARGIN_MS + 2_000;
+/** The longest any single copy may run (spec 3.3: files up to 100 MB). */
+export const EVIDENCE_COPY_TIMEOUT_MS = 120_000;
+/**
+ * A copy claims its item for this long (next_attempt_at pushed forward before the copy starts),
+ * so a worker retry, the next tick or another replica never starts a second copy of the same file.
+ */
+export const EVIDENCE_COPY_LEASE_MS = EVIDENCE_COPY_TIMEOUT_MS + 60_000;
+
+/** Estimated wall time of copying `bytes` at the conservative throughput. */
+export function estimateCopyMs(bytes: number): number {
+  return EVIDENCE_COPY_FIXED_MS + Math.ceil((Math.max(0, bytes) * 1000) / EVIDENCE_COPY_MIN_BYTES_PER_SEC);
+}
+
+/** Time left for a copy started `elapsedMs` into an engine call, keeping the write reserve. */
+export function evidenceCopyBudgetMs(elapsedMs: number): number {
+  return Math.max(0, ENGINE_TIMEOUT_MS - elapsedMs - EVIDENCE_COPY_WRITE_RESERVE_MS);
+}
+
 /** Run lease: a claim whose heartbeat is older than this may be taken over or released. */
 export const RUN_LEASE_MS = 300_000;
 /** A 409 naming a claim whose heartbeat is older than this is treated as stale by the worker. */

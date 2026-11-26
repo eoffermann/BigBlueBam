@@ -10,6 +10,7 @@
 //                    once per item; expired evidence publishes evidence.expired once per item and
 //                    re-evaluates the controls it is linked to. Exception expiry joins at M6.
 
+import { EVIDENCE_INGEST_START_CUTOFF_MS, evidenceCopyBudgetMs } from '../engine/budgets.js';
 import { type EngineDeps, orgTx } from '../engine/context.js';
 import { type QueuedRun, queueControlRuns } from '../engine/evidence-store.js';
 import { daysLeft } from '../engine/manual.js';
@@ -19,7 +20,6 @@ import { ingestBoltEventFeeds } from './feeds.service.js';
 import { retryPendingScan, retryRedactedDeletes, type ScanRetryOutcome } from './manual-evidence.service.js';
 
 const DAY_MS = 86_400_000;
-const INGEST_BUDGET_MS = 20_000;
 
 async function orgsWith(engine: EngineDeps, sqlWhere: 'pending' | 'feeds' | 'evidence', only?: string): Promise<string[]> {
   const rows =
@@ -50,9 +50,12 @@ export async function evidenceIngest(d: EvidenceDeps, opts: { organization_id?: 
          ${opts.manual_evidence_id ? tx`AND id = ${opts.manual_evidence_id}` : tx``}
        ORDER BY next_attempt_at NULLS FIRST, created_at LIMIT 100`);
     for (const r of due) {
-      if (Date.now() - started > INGEST_BUDGET_MS) break;
+      const elapsed = Date.now() - started;
+      if (elapsed > EVIDENCE_INGEST_START_CUTOFF_MS) break;
       try {
-        outcomes.push(await retryPendingScan(d, orgId, String(r.id)));
+        // Bound each copy by what is left of this call (#222): one that will not fit starts in the
+        // background under its lease instead of running past the worker's engine timeout.
+        outcomes.push(await retryPendingScan(d, orgId, String(r.id), { copyBudgetMs: evidenceCopyBudgetMs(elapsed) }));
       } catch (err) {
         engine.log.warn({ organization_id: orgId, manual_evidence_id: r.id, err: (err as Error).message }, 'bastion-evidence-ingest: retry failed; it stays pending');
       }
@@ -85,6 +88,7 @@ export async function evidenceIngest(d: EvidenceDeps, opts: { organization_id?: 
   const summary = {
     scans_checked: outcomes.filter((o) => o.result !== 'skipped').length,
     copied: outcomes.filter((o) => o.result === 'copied').length,
+    copies_started: outcomes.filter((o) => o.result === 'copy_started').length,
     still_pending: outcomes.filter((o) => o.result === 'still_pending').length,
     blocked: outcomes.filter((o) => o.result === 'blocked').length,
     feed_records: recorded,

@@ -38,6 +38,7 @@ import {
   type StoredBytes,
   storeBuffer,
 } from '../engine/evidence-store.js';
+import { EVIDENCE_COPY_LEASE_MS, EVIDENCE_COPY_TIMEOUT_MS, estimateCopyMs } from '../engine/budgets.js';
 import { appendLedger } from '../engine/ledger.js';
 import { daysLeft } from '../engine/manual.js';
 import { enqueueBastionEvent } from '../engine/outbox.js';
@@ -750,7 +751,8 @@ export async function retryRedactedDeletes(engine: EvidenceDeps['engine'], only?
 
 export interface ScanRetryOutcome {
   manual_evidence_id: string;
-  result: 'copied' | 'still_pending' | 'blocked' | 'skipped';
+  /** copy_started: the scan is clean and a large copy runs on under its lease (#222). */
+  result: 'copied' | 'copy_started' | 'still_pending' | 'blocked' | 'skipped';
   blocked_reason?: string;
 }
 
@@ -758,12 +760,14 @@ export interface ScanRetryOutcome {
  * One retry of one `pending_scan` item. Re-checks the PINNED Bin version: clean or skipped copies
  * now and records the ledger entry; still pending backs off (daily after 24 h); infected or error
  * blocks; a newer version before the scan finished blocks `changed_before_scan`.
+ * `copyBudgetMs` (evidence-ingest) bounds a synchronous copy; one that will not fit starts in the
+ * background instead (#222). Without it (Check again) the copy runs inline up to its own timeout.
  */
 export async function retryPendingScan(
   d: EvidenceDeps,
   orgId: string,
   id: string,
-  opts: { force?: boolean } = {},
+  opts: { force?: boolean; copyBudgetMs?: number } = {},
 ): Promise<ScanRetryOutcome> {
   const engine = d.engine;
   const now = engine.now();
@@ -796,8 +800,73 @@ export async function retryPendingScan(
        WHERE organization_id = ${orgId} AND id = ${id} AND status = 'pending_scan'`);
     return { manual_evidence_id: id, result: 'still_pending' };
   }
+  // Claim the item for this copy (#222): push next_attempt_at out by the copy lease with a
+  // compare-and-set on `attempts`, so a worker retry, the next tick or another replica sees it as
+  // not due and never starts a second copy of the same file. A failed copy hands it back to the
+  // normal backoff schedule.
+  if (inFlightCopies.has(id)) return { manual_evidence_id: id, result: 'skipped' };
+  const claimed = await orgTx(engine.sql, orgId, (tx) => tx`
+    UPDATE bastion_manual_evidence SET next_attempt_at = ${new Date(now.getTime() + EVIDENCE_COPY_LEASE_MS)}
+     WHERE organization_id = ${orgId} AND id = ${id} AND status = 'pending_scan' AND attempts = ${Number(item.attempts)}
+       AND (${opts.force === true}::boolean OR next_attempt_at IS NULL OR next_attempt_at <= ${now})
+    RETURNING id`);
+  if (claimed.length === 0) return { manual_evidence_id: id, result: 'skipped' };
+
+  const size = Number(check.version.size);
+  const sizeText = `${(size / (1024 * 1024)).toFixed(1)} MB`;
+  const budget = opts.copyBudgetMs;
+  const copy = async (timeoutMs: number): Promise<ScanRetryOutcome> => {
+    const started = Date.now();
+    engine.log.info({ organization_id: orgId, manual_evidence_id: id, size_bytes: size }, `bastion-evidence-ingest: copying ${sizeText} for ${id}`);
+    try {
+      const out = await copyAndRecord(d, orgId, id, check.version, dec.scan_label, timeoutMs);
+      engine.log.info(
+        { organization_id: orgId, manual_evidence_id: id, elapsed_ms: Date.now() - started },
+        `bastion-evidence-ingest: copied ${sizeText} for ${id} in ${Date.now() - started} ms`,
+      );
+      return out;
+    } catch (err) {
+      engine.log.warn({ organization_id: orgId, manual_evidence_id: id, err: (err as Error).message }, 'bastion-evidence-ingest: copy failed; it stays pending');
+      const attempts = Number(item.attempts) + 1;
+      await orgTx(engine.sql, orgId, (tx) => tx`
+        UPDATE bastion_manual_evidence SET attempts = ${attempts}, next_attempt_at = ${nextScanAttemptAt(new Date(item.created_at as string), attempts, engine.now())}
+         WHERE organization_id = ${orgId} AND id = ${id} AND status = 'pending_scan'`).catch(() => undefined);
+      throw err;
+    }
+  };
+  // A copy that cannot finish inside the caller's budget runs on in the background under its lease
+  // (the async-start pattern), instead of holding the engine call past the worker's timeout.
+  if (budget !== undefined && estimateCopyMs(size) > budget) {
+    inFlightCopies.add(id);
+    void copy(EVIDENCE_COPY_TIMEOUT_MS)
+      .catch(() => undefined)
+      .finally(() => inFlightCopies.delete(id));
+    return { manual_evidence_id: id, result: 'copy_started' };
+  }
+  inFlightCopies.add(id);
+  try {
+    return await copy(budget ?? EVIDENCE_COPY_TIMEOUT_MS);
+  } finally {
+    inFlightCopies.delete(id);
+  }
+}
+
+/** Copies running in this process (a cheap same-instance guard on top of the DB lease). */
+const inFlightCopies = new Set<string>();
+
+async function copyAndRecord(
+  d: EvidenceDeps,
+  orgId: string,
+  id: string,
+  version: { object_key: string; size: number; content_type: string },
+  scanLabel: 'clean' | 'not_scanned',
+  timeoutMs: number,
+): Promise<ScanRetryOutcome> {
+  const engine = d.engine;
+  const now = engine.now();
   const highest = await beginLedgerBatch(engine, orgId);
-  const stored = await copyFromBin(engine, d.binStorage, orgId, check.version);
+  const stored = await copyFromBin(engine, d.binStorage, orgId, version, timeoutMs);
+  const dec = { scan_label: scanLabel };
   let duplicateKey: string | null = null;
   try {
     duplicateKey = await orgTx(engine.sql, orgId, async (tx) => {

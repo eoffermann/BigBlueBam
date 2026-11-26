@@ -24,6 +24,7 @@ import {
   getManualEvidence,
   linkManualEvidence,
   redactPersonalData,
+  retryPendingScan,
   reviewManualEvidence,
   supersedeManualEvidence,
   unlinkManualEvidence,
@@ -319,6 +320,38 @@ describe.skipIf(!DATABASE_URL)('M5 manual evidence, personal data, feeds and the
       status: 'blocked',
       blocked_reason: 'changed_before_scan',
     });
+  });
+
+  it('a pending copy is claimed once; one that will not fit the call budget runs in the background (#222)', async () => {
+    const o = await seed(sql, 'copylease', 3);
+    orgs.push(o.org);
+    const engine = makeDeps(sql);
+    const bin: FakeBin = { assets: new Map(), versions: new Map(), bucket: fakeBucket() };
+    const d = evidenceDepsFor(engine, bin, []);
+    const v = viewer(o, o.others[0]!);
+    const due = (id: string) => sql`UPDATE bastion_manual_evidence SET next_attempt_at = now() - interval '1 minute' WHERE id = ${id}`;
+
+    const a = await putBinFile(bin, o.org, 'lease bytes', 'pending');
+    const aId = ((await createManualEvidence(d, v, fileBody(o, a.asset, { assertion_ids: [] }))).data as Record<string, unknown>).id as string;
+    bin.assets.get(a.asset)!.scan_status = 'clean';
+    await due(aId);
+    // Two retries at once (a worker retry racing the next tick): exactly one copies.
+    const results = await Promise.all([retryPendingScan(d, o.org, aId, { copyBudgetMs: 25_000 }), retryPendingScan(d, o.org, aId, { copyBudgetMs: 25_000 })]);
+    expect(results.map((r) => r.result).sort()).toEqual(['copied', 'skipped']);
+    expect((await sql`SELECT count(*)::int AS n FROM bastion_evidence_objects WHERE organization_id = ${o.org}`)[0]!.n).toBe(1);
+
+    const b = await putBinFile(bin, o.org, 'large-file stand-in', 'pending');
+    const bId = ((await createManualEvidence(d, v, fileBody(o, b.asset, { assertion_ids: [] }))).data as Record<string, unknown>).id as string;
+    bin.assets.get(b.asset)!.scan_status = 'clean';
+    await due(bId);
+    expect((await retryPendingScan(d, o.org, bId, { copyBudgetMs: 0 })).result).toBe('copy_started');
+    // While it runs, its lease keeps every other caller off it.
+    expect((await retryPendingScan(d, o.org, bId, { copyBudgetMs: 25_000 })).result).toBe('skipped');
+    for (let i = 0; i < 50; i++) {
+      if ((await sql`SELECT status FROM bastion_manual_evidence WHERE id = ${bId}`)[0]!.status === 'active') break;
+      await new Promise((r) => setTimeout(r, 100));
+    }
+    expect((await sql`SELECT status FROM bastion_manual_evidence WHERE id = ${bId}`)[0]!.status).toBe('active');
   });
 
   it('identical bytes share one object; bytes go only when the last holder is redacted; withdraw records a ledger entry', async () => {

@@ -11,13 +11,14 @@ import { createHash, randomUUID } from 'node:crypto';
 import { PassThrough } from 'node:stream';
 import { withStorageTimeout, type StorageDriver } from '@bigbluebam/storage';
 import { ConflictError, UnavailableError } from '../lib/errors.js';
+import { EVIDENCE_COPY_TIMEOUT_MS } from './budgets.js';
 import { type EngineDeps, orgTx, type Tx } from './context.js';
 
 export const MANUAL_OBJECT_PREFIX = 'manual';
 /** Largest single manual-evidence file Bastion will copy (Bin's own cap is larger). */
 export const MAX_MANUAL_EVIDENCE_BYTES = 100 * 1024 * 1024;
 /** Copying a large file can take longer than a probe write; still bounded. */
-const COPY_TIMEOUT_MS = 120_000;
+const COPY_TIMEOUT_MS = EVIDENCE_COPY_TIMEOUT_MS;
 
 export interface StoredBytes {
   object_key: string;
@@ -47,12 +48,28 @@ export async function storeBuffer(deps: EngineDeps, orgId: string, body: Buffer,
   return { object_key: key, content_sha256: createHash('sha256').update(body).digest('hex'), size_bytes: body.length, content_type: contentType };
 }
 
-/** Stream one pinned Bin object into Bastion's bucket, hashing as it goes. */
+/** Destroy a stream if it can be destroyed; never throws (#223). */
+function destroyQuietly(stream: unknown): void {
+  try {
+    (stream as { destroy?: (err?: Error) => void } | null)?.destroy?.();
+  } catch {
+    /* already closed */
+  }
+}
+
+/**
+ * Stream one pinned Bin object into Bastion's bucket, hashing as it goes. `timeoutMs` bounds the
+ * whole put (evidence-ingest passes what is left of its call budget, #222). On a timeout or any
+ * failure both the Bin read stream and the PassThrough feeding the put are destroyed, which also
+ * aborts the in-flight upload, so a degraded bucket never strands open sockets (#223). A Bin
+ * GET that resolves only after its timeout has its stream destroyed when it arrives.
+ */
 export async function copyFromBin(
   deps: EngineDeps,
   binStorage: StorageDriver | null,
   orgId: string,
   source: { object_key: string; size: number; content_type: string },
+  timeoutMs: number = COPY_TIMEOUT_MS,
 ): Promise<StoredBytes> {
   if (!deps.storage) throw new UnavailableError("Evidence storage isn't set up on this installation, so evidence can't be saved yet.", 'STORAGE_NOT_SET_UP');
   if (!binStorage) throw new UnavailableError("Bastion can't read files from Bin on this installation (storage isn't set up).", 'BIN_STORAGE_NOT_SET_UP');
@@ -63,18 +80,24 @@ export async function copyFromBin(
   await writeIntent(deps, orgId, key);
   const hash = createHash('sha256');
   let size = 0;
+  const pass = new PassThrough();
+  let readStream: NodeJS.ReadableStream | null = null;
+  const get = binStorage.getStream(source.object_key);
   try {
-    const { stream } = await withStorageTimeout('get', binStorage.getStream(source.object_key), deps.putTimeoutMs);
-    const pass = new PassThrough();
-    (stream as NodeJS.ReadableStream).on('data', (chunk: Buffer | string) => {
+    const { stream } = await withStorageTimeout('get', get, Math.min(deps.putTimeoutMs, timeoutMs));
+    readStream = stream;
+    stream.on('data', (chunk: Buffer | string) => {
       const b = typeof chunk === 'string' ? Buffer.from(chunk) : chunk;
       hash.update(b);
       size += b.length;
     });
-    (stream as NodeJS.ReadableStream).on('error', (err) => pass.destroy(err));
-    (stream as NodeJS.ReadableStream).pipe(pass);
-    await withStorageTimeout('put', deps.storage.put(key, pass, { contentType: source.content_type, size: source.size }), COPY_TIMEOUT_MS);
+    stream.on('error', (err) => pass.destroy(err));
+    stream.pipe(pass);
+    await withStorageTimeout('put', deps.storage.put(key, pass, { contentType: source.content_type, size: source.size }), timeoutMs);
   } catch {
+    destroyQuietly(readStream);
+    destroyQuietly(pass);
+    if (!readStream) void get.then((r) => destroyQuietly(r.stream)).catch(() => undefined);
     throw new UnavailableError(STORAGE_DOWN, 'STORAGE_UNAVAILABLE');
   }
   return { object_key: key, content_sha256: hash.digest('hex'), size_bytes: size, content_type: source.content_type };

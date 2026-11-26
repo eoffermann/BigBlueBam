@@ -155,7 +155,15 @@ function StuckScans({ items }: { items: EvidenceItem[] }) {
           </li>
         ))}
       </ul>
-      {check.data && <p className="mt-2 text-xs text-zinc-600">{check.data.data.check_result === 'copied' ? 'The scan finished and the file is saved.' : 'Still waiting for the scan.'}</p>}
+      {check.data && (
+        <p className="mt-2 text-xs text-zinc-600">
+          {check.data.data.check_result === 'copied'
+            ? 'The scan finished and the file is saved.'
+            : check.data.data.check_result === 'copy_started'
+              ? 'The scan finished. The file is large, so it is being saved now; this can take a minute or two.'
+              : 'Still waiting for the scan.'}
+        </p>
+      )}
       {check.error && <p className="mt-2 text-xs text-red-600">{friendlyError(check.error)}</p>}
     </section>
   );
