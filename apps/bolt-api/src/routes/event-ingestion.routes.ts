@@ -1,5 +1,6 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
+import { BOLT_SOURCES } from '@bigbluebam/shared';
 import { timingSafeEqual } from 'node:crypto';
 import { randomUUID } from 'node:crypto';
 import { eq, and, asc } from 'drizzle-orm';
@@ -30,38 +31,12 @@ import type Redis from 'ioredis';
 // Input schema
 // ---------------------------------------------------------------------------
 
-const ingestEventSchema = z.object({
+export const ingestEventSchema = z.object({
   event_type: z.string().min(1).max(60),
-  source: z.enum([
-    'bam',
-    'banter',
-    'beacon',
-    'brief',
-    'helpdesk',
-    'schedule',
-    'bond',
-    'blast',
-    'board',
-    'bench',
-    'bearing',
-    'bill',
-    'book',
-    'blank',
-    // Satellite-app sources. These were a pre-existing latent gap: apps that publish their own
-    // events with these source names were being 400-rejected by this enum (publishBoltEvent
-    // swallows the failure, so it went unnoticed). Added so burn - and the other satellites -
-    // can publish. 'burn' is required for this build.
-    'burn',
-    'bulwark',
-    'braid',
-    'basis',
-    'blip',
-    'blueprint',
-    'bureau',
-    'bin',
-    'bay',
-    'platform',
-  ]),
+  // Derived from the single shared list (issue #124). A hand-written enum here silently
+  // 400-rejected burn, bulwark, braid, basis and then bursar in turn, because
+  // publishBoltEvent swallows the failure. Add new sources to BOLT_SOURCES only.
+  source: z.enum(BOLT_SOURCES),
   payload: z.record(z.unknown()),
   org_id: z.string().uuid(),
   project_id: z.string().uuid().optional(),

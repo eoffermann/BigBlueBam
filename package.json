@@ -33,6 +33,7 @@
     "help:index": "node scripts/help/build-help-index.mjs",
     "help:check": "node scripts/help/build-help-index.mjs --check",
     "check:bolt-catalog": "node scripts/check-bolt-catalog.mjs",
+    "check:bolt-enum": "node scripts/check-bolt-enum.mjs",
     "check:permission-catalog": "node scripts/check-permission-catalog.mjs",
     "check:env-hints": "node scripts/check-env-hints.mjs",
     "check:app-completeness": "node scripts/check-app-completeness.mjs",

@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
+import { BOLT_SOURCES } from '@bigbluebam/shared';
 import { requireAuth, requireScope } from '../plugins/auth.js';
 import { shadowOnly } from '../middleware/dual-read.js';
 import {
@@ -10,22 +11,8 @@ import * as automationService from '../services/automation.service.js';
 import { validateActionTools, validateActionParameters } from '../services/automation.service.js';
 import { compileGraphToRows, BoltGraphShapeError } from '../services/bolt-graph-compiler.js';
 
-const TRIGGER_SOURCES = [
-  'bam',
-  'banter',
-  'beacon',
-  'brief',
-  'helpdesk',
-  'schedule',
-  'bond',
-  'blast',
-  'board',
-  'bench',
-  'bearing',
-  'bill',
-  'book',
-  'blank',
-] as const;
+// Derived from the single shared list (issue #124); do not hand-list sources here.
+const TRIGGER_SOURCES = BOLT_SOURCES;
 const CONDITION_OPERATORS = [
   'equals', 'not_equals', 'contains', 'not_contains',
   'starts_with', 'ends_with', 'greater_than', 'less_than',

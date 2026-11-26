@@ -74,6 +74,12 @@ jobs:
       - name: Run drift guard
         run: pnpm db:check
 
+      # Issue #124: the Postgres enum bolt_trigger_source cannot be derived from
+      # BOLT_SOURCES (packages/shared/src/bolt-sources.ts), so it is checked here
+      # against the fully migrated DB. Names any missing or extra values.
+      - name: Check bolt_trigger_source enum matches BOLT_SOURCES
+        run: pnpm check:bolt-enum
+
   migration-lint:
     name: Migration file lint (header + idempotency)
     runs-on: ubuntu-latest

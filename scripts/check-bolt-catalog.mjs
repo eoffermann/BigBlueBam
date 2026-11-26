@@ -23,6 +23,7 @@
 
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
+import { BOLT_SOURCES_FILE, loadBoltSources } from './lib/bolt-sources.mjs';
 
 const ROOT = resolve(new URL('..', import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, '$1'));
 const CATALOG_FILE = join(ROOT, 'apps', 'bolt-api', 'src', 'services', 'event-catalog.ts');
@@ -259,6 +260,18 @@ function checkCalls(catalog) {
       // they are tracked as TODOs, not new drift.
       if (LEGACY_PREFIXED_ALLOWLIST.has(key)) continue;
 
+      // Rule 2a (issue #124): the source must be in the shared BOLT_SOURCES list, or
+      // bolt-api ingest 400-rejects it and publishBoltEvent swallows the failure.
+      if (catalog.boltSources && !catalog.boltSources.has(source)) {
+        violations.push({
+          file,
+          eventName,
+          source,
+          reason: `source "${source}" is not in BOLT_SOURCES (packages/shared/src/bolt-sources.ts); bolt-api ingest would reject it`,
+        });
+        continue;
+      }
+
       // Rule 2: (source, eventName) pair must exist in the catalog.
       if (!catalog.pairs.has(key)) {
         violations.push({
@@ -278,7 +291,28 @@ function main() {
   const catalog = loadCatalog();
   console.log(`[bolt-catalog] parsed ${catalog.pairs.size} (source, event_type) pairs from catalog`);
 
-  const violations = checkCalls(catalog);
+  // Issue #124: every event source declared in the catalog must be a member of the
+  // single shared BOLT_SOURCES list (which drives the ingest enum, TRIGGER_SOURCES,
+  // TriggerSourceV1 and the Drizzle pgEnum; check-bolt-enum.mjs checks the DB enum).
+  let boltSourceList;
+  try {
+    boltSourceList = loadBoltSources();
+  } catch (err) {
+    console.error(`[bolt-catalog] failed to read BOLT_SOURCES from ${relative(ROOT, BOLT_SOURCES_FILE)}: ${err.message}`);
+    process.exit(2);
+  }
+  catalog.boltSources = new Set(boltSourceList);
+  console.log(`[bolt-catalog] BOLT_SOURCES has ${boltSourceList.length} sources`);
+  const sourceViolations = [...catalog.sources]
+    .filter((s) => !catalog.boltSources.has(s))
+    .map((s) => ({
+      file: CATALOG_FILE,
+      eventName: '*',
+      source: s,
+      reason: `catalog source "${s}" is not in BOLT_SOURCES (packages/shared/src/bolt-sources.ts)`,
+    }));
+
+  const violations = [...sourceViolations, ...checkCalls(catalog)];
 
   if (violations.length === 0) {
     console.log('[bolt-catalog] OK: all publishBoltEvent calls match the catalog');

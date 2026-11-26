@@ -50,7 +50,8 @@ vi.mock('../src/db/index.js', () => ({
 // ---------------------------------------------------------------------------
 
 const mockPublish = vi.fn().mockResolvedValue(undefined);
-vi.mock('@bigbluebam/shared', () => ({
+vi.mock('@bigbluebam/shared', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@bigbluebam/shared')>()),
   publishBoltEvent: (...args: unknown[]) => mockPublish(...args),
 }));
 

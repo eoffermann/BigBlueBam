@@ -10,24 +10,13 @@ import {
   timestamp,
   index,
 } from 'drizzle-orm/pg-core';
+import { BOLT_SOURCES } from '@bigbluebam/shared';
 import { organizations, projects, users } from './bbb-refs.js';
 
-export const boltTriggerSourceEnum = pgEnum('bolt_trigger_source', [
-  'bam',
-  'banter',
-  'beacon',
-  'brief',
-  'helpdesk',
-  'schedule',
-  'bond',
-  'blast',
-  'board',
-  'bench',
-  'bearing',
-  'bill',
-  'book',
-  'blank',
-]);
+// Values derive from the single shared list (issue #124). The live Postgres enum is
+// extended by migrations (0041, 0121, 0260, ...) and checked against BOLT_SOURCES by
+// scripts/check-bolt-enum.mjs in the db-drift CI job.
+export const boltTriggerSourceEnum = pgEnum('bolt_trigger_source', BOLT_SOURCES);
 
 export const boltAutomations = pgTable(
   'bolt_automations',

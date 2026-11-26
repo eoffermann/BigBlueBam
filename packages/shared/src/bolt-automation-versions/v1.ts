@@ -7,10 +7,10 @@
  * It is intentionally separate from the HTTP request/response shapes.
  */
 
-export type TriggerSourceV1 =
-  | 'bam' | 'banter' | 'beacon' | 'brief' | 'helpdesk'
-  | 'schedule' | 'bond' | 'blast' | 'board' | 'bench'
-  | 'bearing' | 'bill' | 'book' | 'blank';
+import type { BoltSource } from '../bolt-sources.js';
+
+// Derived from the single BOLT_SOURCES list (issue #124); do not hand-list values here.
+export type TriggerSourceV1 = BoltSource;
 
 export type ConditionOperatorV1 =
   | 'equals' | 'not_equals' | 'contains' | 'not_contains'
