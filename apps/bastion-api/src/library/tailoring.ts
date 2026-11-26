@@ -183,8 +183,19 @@ export interface TailoredSuggestions {
 
 const CONFIRMATION_KEYS = ['population_confirmed_at', 'population_confirmed_by', 'population_labels'] as const;
 
+/**
+ * House style for anything shown to people: one line, no em or en dashes (a dash between words
+ * becomes a comma). Applied to every piece of AI text before it can land on a proposal.
+ */
+export function normalizeAiText(text: string): string {
+  return text
+    .replace(/\s*[—–]\s*/g, ', ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 function plainOrDefault(text: string | undefined, fallback: string): { text: string; suspect: boolean } {
-  const t = (text ?? '').replace(/\s+/g, ' ').trim().slice(0, 2000);
+  const t = normalizeAiText(text ?? '').slice(0, 2000);
   if (!t) return { text: fallback, suspect: false };
   return { text: t, suspect: scanLabel(t).suspected };
 }
@@ -243,15 +254,16 @@ export function tailoredSuggestions(controlKey: string, answer: TailoringRespons
   }
 
   for (const m of answer.manual) {
-    const title = (m.title ?? '').trim();
+    const title = normalizeAiText(m.title ?? '');
+    const description = normalizeAiText(m.description ?? '');
     const statement = plainOrDefault(m.plain_statement, title || 'Evidence a person provides.');
-    if (scanLabel(title).suspected || scanLabel(m.description ?? '').suspected || statement.suspect) {
+    if (scanLabel(title).suspected || scanLabel(description).suspected || statement.suspect) {
       drop(`AI evidence request ${title.slice(0, 60)}`, 'its wording looked like an instruction');
       continue;
     }
     const spec = {
       title,
-      description: (m.description ?? '').trim(),
+      description,
       kind: m.kind,
       cadence_days: m.cadence_days,
     } as unknown as BastionManualEvidenceSpec;
@@ -260,7 +272,7 @@ export function tailoredSuggestions(controlKey: string, answer: TailoringRespons
 
   const refs = new Set(input.requirements.map((r) => r.ref_code));
   for (const na of answer.not_applicable) {
-    const reason = na.reason.replace(/\s+/g, ' ').trim();
+    const reason = normalizeAiText(na.reason);
     if (!refs.has(na.ref_code)) {
       drop(`AI not-applicable ${na.ref_code.slice(0, 40)}`, 'that requirement is not one this control serves');
       continue;
