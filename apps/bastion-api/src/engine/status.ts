@@ -86,9 +86,15 @@ export function infraDecision(control: ControlErrorState, nightlyForDate: string
   };
 }
 
-/** coverage_kind from the kinds of a control's confirmed assertions. */
-export function coverageKindOf(kinds: BastionAssertionKind[]): BastionCoverageKind {
-  const mapped = new Set(kinds.map((k) => (k === 'probe' ? 'native' : k === 'feed' ? 'feed' : 'manual_file')));
+/**
+ * coverage_kind from the kinds of a control's confirmed assertions. A manual assertion that asks
+ * for a written statement (manual_evidence_spec.kind = attestation_statement) is `self_attested`
+ * (M5); one that asks for a file is `manual_file`.
+ */
+export function coverageKindOf(kinds: Array<BastionAssertionKind | 'self_attested'>): BastionCoverageKind {
+  const mapped = new Set(
+    kinds.map((k) => (k === 'probe' ? 'native' : k === 'feed' ? 'feed' : k === 'self_attested' ? 'self_attested' : 'manual_file')),
+  );
   if (mapped.size === 0) return 'none';
   if (mapped.size === 1) return [...mapped][0] as BastionCoverageKind;
   return 'mixed';

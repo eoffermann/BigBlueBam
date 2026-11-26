@@ -1145,6 +1145,9 @@ services:
       - S3_SECRET_KEY=${MINIO_ROOT_PASSWORD:-}
       - S3_REGION=${S3_REGION:-us-east-1}
       - BASTION_S3_BUCKET=${BASTION_S3_BUCKET:-bigbluebam-bastion}
+      # The shared uploads bucket Bin writes to, READ-ONLY for Bastion: manual evidence is copied
+      # from the pinned Bin version into Bastion's own bucket at attach (spec 3.3, M5).
+      - S3_BUCKET=${S3_BUCKET:-bigbluebam-uploads}
       # Off-site evidence backup (spec 9.7, M9); unset disables the mirror.
       - BASTION_BACKUP_S3_ENDPOINT=${BASTION_BACKUP_S3_ENDPOINT:-}
       - BASTION_BACKUP_S3_BUCKET=${BASTION_BACKUP_S3_BUCKET:-}

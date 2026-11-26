@@ -28,6 +28,10 @@ import controlRoutes from './routes/controls.routes.js';
 import setupRoutes from './routes/setup.routes.js';
 import evidenceRoutes from './routes/evidence.routes.js';
 import internalRoutes from './routes/internal.routes.js';
+import manualEvidenceRoutes from './routes/manual-evidence.routes.js';
+import feedRoutes from './routes/feeds.routes.js';
+import feedIngestRoutes from './routes/feed-ingest.routes.js';
+import coverageRoutes from './routes/coverage.routes.js';
 import { engineDeps } from './engine/runtime.js';
 import { checkLedgerIdentity } from './engine/restore.js';
 import { closeBastionQueues } from './lib/queue.js';
@@ -116,6 +120,11 @@ await fastify.register(
     await v1.register(controlRoutes);
     await v1.register(setupRoutes);
     await v1.register(evidenceRoutes);
+    // M5: manual evidence and personal data, feeds (and the machine push), coverage and summary.
+    await v1.register(manualEvidenceRoutes);
+    await v1.register(feedRoutes);
+    await v1.register(feedIngestRoutes);
+    await v1.register(coverageRoutes);
     await v1.register(internalRoutes);
   },
   { prefix: '/v1' },

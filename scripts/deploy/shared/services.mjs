@@ -425,6 +425,8 @@ export const APP_SERVICES = [
       optional: [
         'DATABASE_READ_URL',
         'S3_ENDPOINT', 'S3_ACCESS_KEY', 'S3_SECRET_KEY', 'S3_REGION',
+        // Bin's shared uploads bucket, read-only: manual evidence is copied from it at attach (M5).
+        'S3_BUCKET',
         'CORS_ORIGIN',
         'LOG_LEVEL',
         'BASTION_TRUST_PROXY_HOPS',

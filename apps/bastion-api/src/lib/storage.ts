@@ -44,3 +44,12 @@ export function isStorageConfigured(env: BastionStorageEnv): boolean {
 export function createBastionStorage(env: BastionStorageEnv): StorageDriver | null {
   return createEnvBootstrapDriver(asStorageEnv(env));
 }
+
+/**
+ * A READ-ONLY view of the shared uploads bucket Bin writes to (M5, spec 3.3): manual evidence is
+ * copied from the pinned Bin version into Bastion's own bucket at attach. Bastion never writes or
+ * deletes here; the only calls made on this driver are getStream and stat.
+ */
+export function createBinStorage(env: BastionStorageEnv & { S3_BUCKET: string }): StorageDriver | null {
+  return createEnvBootstrapDriver({ ...asStorageEnv(env), S3_BUCKET: env.S3_BUCKET });
+}
