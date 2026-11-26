@@ -57,7 +57,7 @@ test('a failed read of the stable-secret holder aborts: nothing is generated', a
     thrown = err;
   }
   assert.ok(thrown instanceof StableSecretUnreadableError);
-  assert.equal(thrown.code, 'STABLE_SECRET_UNREADABLE');
+  assert.equal(thrown.code, 'SECRET_UNREADABLE');
   assert.match(thrown.message, new RegExp(STABLE));
   assert.match(thrown.message, /x-api/);
   assert.equal(collected[STABLE], undefined, 'no value may be minted');
@@ -115,4 +115,102 @@ test('a failed read of an unrelated service does not block a stable secret it do
   assert.ok('api' in readFailures);
   fillMissingSecrets(collected, [consumer], { readFailures, liveByName: live, services, stableNames, generate });
   assert.equal(collected[STABLE], 'canonical');
+});
+
+// ── Issue #154: ordinary shared secrets fail closed too ────────────────────────
+// SESSION_SECRET and INTERNAL_SERVICE_SECRET are `secret`-kind in env-hints and are
+// shared by every app; neither is a stable secret.
+const SHARED = ['SESSION_SECRET', 'INTERNAL_SERVICE_SECRET'];
+const sApi = { name: 'api', env: { required: SHARED, optional: [] } };
+const sPeer = { name: 'peer-api', env: { required: SHARED, optional: [] } };
+const sNew = { name: 'new-api', env: { required: SHARED, optional: [] } };
+const sServices = [sApi, sPeer, sNew];
+
+async function collectShared(client, live) {
+  return collectSharedSecrets(client, {
+    projectId: 'p',
+    environmentId: 'e',
+    liveByName: live,
+    services: sServices,
+    stableNames: [],
+  });
+}
+
+test('#154: api unreadable and no other holder answers: SESSION_SECRET is not minted, the run stops', async () => {
+  const live = new Map([['api', 'id-api']]);
+  const client = fakeClient({ throwFor: new Set(['id-api']) });
+  const { collected, readFailures } = await collectShared(client, live);
+  let thrown;
+  try {
+    fillMissingSecrets(collected, [sNew], { readFailures, liveByName: live, services: sServices, stableNames: [], generate });
+  } catch (err) {
+    thrown = err;
+  }
+  assert.ok(thrown, 'must throw instead of generating');
+  assert.equal(thrown.code, 'SECRET_UNREADABLE');
+  assert.match(thrown.message, /SESSION_SECRET \(needed by new-api\) is held by api/);
+  assert.match(thrown.message, /INTERNAL_SERVICE_SECRET/);
+  assert.equal(collected.SESSION_SECRET, undefined);
+  assert.equal(collected.INTERNAL_SERVICE_SECRET, undefined);
+});
+
+test('#154: api unreadable but another live holder has the values: they are copied, nothing generated', async () => {
+  const live = new Map([
+    ['api', 'id-api'],
+    ['peer-api', 'id-peer'],
+  ]);
+  const client = fakeClient({
+    vars: { 'id-peer': { SESSION_SECRET: 'sess-live', INTERNAL_SERVICE_SECRET: 'int-live' } },
+    throwFor: new Set(['id-api']),
+  });
+  const { collected, readFailures } = await collectShared(client, live);
+  assert.ok(client.reads.includes('id-peer'), 'falls back to reading the other live holder');
+  const gen = fillMissingSecrets(collected, [sNew], {
+    readFailures,
+    liveByName: live,
+    services: sServices,
+    stableNames: [],
+    generate,
+  });
+  assert.deepEqual(gen, []);
+  assert.equal(collected.SESSION_SECRET, 'sess-live');
+  assert.equal(collected.INTERNAL_SERVICE_SECRET, 'int-live');
+});
+
+test('#154: the copied value wins over generation even when the preferred source lacks it', async () => {
+  const live = new Map([
+    ['api', 'id-api'],
+    ['peer-api', 'id-peer'],
+  ]);
+  const client = fakeClient({ vars: { 'id-api': {}, 'id-peer': { SESSION_SECRET: 'sess-peer', INTERNAL_SERVICE_SECRET: 'int-peer' } } });
+  const { collected, readFailures } = await collectShared(client, live);
+  fillMissingSecrets(collected, [sNew], { readFailures, liveByName: live, services: sServices, stableNames: [], generate });
+  assert.equal(collected.SESSION_SECRET, 'sess-peer');
+});
+
+test('#154: every live holder read and none holds it: generation is allowed', async () => {
+  const live = new Map([['api', 'id-api']]);
+  const client = fakeClient({ vars: { 'id-api': {} } });
+  const { collected, readFailures } = await collectShared(client, live);
+  const gen = fillMissingSecrets(collected, [sNew], {
+    readFailures,
+    liveByName: live,
+    services: sServices,
+    stableNames: [],
+    generate,
+  });
+  assert.deepEqual(gen.sort(), ['INTERNAL_SERVICE_SECRET (for new-api)', 'SESSION_SECRET (for new-api)']);
+});
+
+test('#154: first provisioning (nothing live) still generates the shared secrets once', async () => {
+  const live = new Map();
+  const { collected, readFailures } = await collectShared(fakeClient(), live);
+  const gen = fillMissingSecrets(collected, [sApi, sNew], {
+    readFailures,
+    liveByName: live,
+    services: sServices,
+    stableNames: [],
+    generate,
+  });
+  assert.deepEqual(gen.sort(), ['INTERNAL_SERVICE_SECRET (for api)', 'SESSION_SECRET (for api)']);
 });

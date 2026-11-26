@@ -96,9 +96,10 @@ function detectGithubRepo() {
 // ─── Secret sourcing ──────────────────────────────────────────────────
 //
 // collectSharedSecrets / fillMissingSecrets live in shared/railway-secrets.mjs so
-// they are unit tested. A stable secret whose live holder could not be read makes
-// fillMissingSecrets throw StableSecretUnreadableError (issue #139): the run stops
-// instead of minting a value that would diverge from the one already in use.
+// they are unit tested. A stable (issue #139) or shared (issue #154) secret whose
+// live holder could not be read makes fillMissingSecrets throw
+// SecretUnreadableError: the run stops instead of minting a value that would
+// diverge from the one already in use.
 
 // ─── Main ─────────────────────────────────────────────────────────────
 
@@ -196,7 +197,7 @@ async function main() {
   try {
     gen = fillMissingSecrets(generatedSecrets, missing, { readFailures, liveByName });
   } catch (err) {
-    if (err?.code === 'STABLE_SECRET_UNREADABLE') fail(err.message);
+    if (err?.code === 'SECRET_UNREADABLE') fail(err.message);
     throw err;
   }
   if (gen.length) log(`  generated ${gen.length} fresh service-local secret(s): ${gen.join(', ')}`);
