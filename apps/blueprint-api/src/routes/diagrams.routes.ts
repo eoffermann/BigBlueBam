@@ -11,6 +11,7 @@ import * as importSvc from '../services/import.service.js';
 import { broadcastToDiagram } from '../lib/broadcast.js';
 import { ForbiddenError, NotFoundError, ValidationError, ConflictError } from '../lib/errors.js';
 import { env } from '../env.js';
+import { caller } from '../lib/caller.js';
 
 const createDiagramSchema = z.object({
   name: z.string().min(1).max(200),
@@ -67,12 +68,6 @@ function emitBolt(eventType: string, payload: Record<string, unknown>, orgId: st
   publishBoltEvent(eventType, 'blueprint', payload, orgId, userId, 'user').catch(() => {});
 }
 
-/** requireAuth has run on every route here, so the user is set; this narrows it. */
-function caller(request: FastifyRequest) {
-  const user = request.user;
-  if (!user) throw new ForbiddenError('Authentication required');
-  return user;
-}
 
 /** The per-diagram ACL (#167) for the :id route being served. */
 const acl = {
@@ -87,7 +82,7 @@ export default async function diagramRoutes(fastify: FastifyInstance) {
   // ─── List + Create ──────────────────────────────────────────────────
   fastify.get('/diagrams', { preHandler: [requireAuth, fastify.requireCan('blueprint.diagram.read')] }, async (request, reply) => {
     const query = request.query as Record<string, string>;
-    const rows = await svc.listDiagrams(request.user!.org_id, request.user!, {
+    const rows = await svc.listDiagrams(request.user!.org_id, caller(request), {
       project_id: query.project_id,
       diagram_type: query.diagram_type,
       starred_by: query.starred === 'true' ? request.user!.id : undefined,
@@ -128,7 +123,7 @@ export default async function diagramRoutes(fastify: FastifyInstance) {
       try {
         const row = await svc.assertCanRead(
           request.user!.org_id,
-          request.user!,
+          caller(request),
           request.params.id,
         );
         return reply.send({ data: row });
@@ -148,7 +143,7 @@ export default async function diagramRoutes(fastify: FastifyInstance) {
       const orgId = request.user!.org_id;
       const userId = request.user!.id;
       try {
-        const current = await svc.assertCanEdit(orgId, request.user!, request.params.id);
+        const current = await svc.assertCanEdit(orgId, caller(request), request.params.id);
         // Changing who can see a diagram is a sharing decision, the same as
         // adding a collaborator: owner-only (#179). An editor may still change
         // every other field, and may resend the current visibility unchanged.
@@ -260,7 +255,7 @@ export default async function diagramRoutes(fastify: FastifyInstance) {
       const orgId = request.user!.org_id;
       const userId = request.user!.id;
       try {
-        await svc.assertCanEdit(orgId, request.user!, request.params.id);
+        await svc.assertCanEdit(orgId, caller(request), request.params.id);
         const nodes = await nodeSvc.listNodes(request.params.id);
         if (nodes.length > env.LAYOUT_INPROCESS_NODE_LIMIT) {
           return reply.status(202).send({
@@ -333,7 +328,7 @@ export default async function diagramRoutes(fastify: FastifyInstance) {
       const orgId = request.user!.org_id;
       const userId = request.user!.id;
       try {
-        await svc.assertCanEdit(orgId, request.user!, request.params.id);
+        await svc.assertCanEdit(orgId, caller(request), request.params.id);
         if (body.replace) {
           // Drop everything first via the import-replace utility
           await importSvc.importMermaid(request.params.id, '', { replace: true });
@@ -404,7 +399,7 @@ export default async function diagramRoutes(fastify: FastifyInstance) {
       const orgId = request.user!.org_id;
       const userId = request.user!.id;
       try {
-        await svc.assertCanEdit(orgId, request.user!, request.params.id);
+        await svc.assertCanEdit(orgId, caller(request), request.params.id);
         const result = await importSvc.importMermaid(request.params.id, body.source, {
           replace: body.replace,
         });
@@ -633,7 +628,7 @@ export default async function diagramRoutes(fastify: FastifyInstance) {
       const orgId = request.user!.org_id;
       const userId = request.user!.id;
       try {
-        await svc.assertCanComment(orgId, request.user!, request.params.id);
+        await svc.assertCanComment(orgId, caller(request), request.params.id);
         const row = await svc.addComment(
           orgId,
           request.params.id,

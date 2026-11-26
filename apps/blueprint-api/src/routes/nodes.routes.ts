@@ -6,6 +6,7 @@ import * as svc from '../services/node.service.js';
 import * as diagramSvc from '../services/diagram.service.js';
 import { broadcastToDiagram } from '../lib/broadcast.js';
 import { NotFoundError, ForbiddenError, ValidationError } from '../lib/errors.js';
+import { caller } from '../lib/caller.js';
 
 function mapErr(err: unknown, requestId: string) {
   if (err instanceof NotFoundError) {
@@ -79,7 +80,7 @@ export default async function nodeRoutes(fastify: FastifyInstance) {
       const orgId = request.user!.org_id;
       const userId = request.user!.id;
       try {
-        await diagramSvc.assertCanEdit(orgId, request.user!, request.params.id);
+        await diagramSvc.assertCanEdit(orgId, caller(request), request.params.id);
         const row = await svc.createNode(request.params.id, body);
         publishBoltEvent(
           'node.created',
@@ -110,7 +111,7 @@ export default async function nodeRoutes(fastify: FastifyInstance) {
       const body = updateNodeSchema.parse(request.body);
       const orgId = request.user!.org_id;
       try {
-        await diagramSvc.assertCanEdit(orgId, request.user!, request.params.id);
+        await diagramSvc.assertCanEdit(orgId, caller(request), request.params.id);
         const row = await svc.updateNode(request.params.id, request.params.nodeId, body);
         await broadcastToDiagram(fastify.redis, request.params.id, {
           type: 'blueprint.node.updated',
@@ -135,7 +136,7 @@ export default async function nodeRoutes(fastify: FastifyInstance) {
       const body = moveNodeSchema.parse(request.body);
       const orgId = request.user!.org_id;
       try {
-        await diagramSvc.assertCanEdit(orgId, request.user!, request.params.id);
+        await diagramSvc.assertCanEdit(orgId, caller(request), request.params.id);
         const row = await svc.moveNode(
           request.params.id,
           request.params.nodeId,
@@ -172,7 +173,7 @@ export default async function nodeRoutes(fastify: FastifyInstance) {
       const orgId = request.user!.org_id;
       const userId = request.user!.id;
       try {
-        await diagramSvc.assertCanEdit(orgId, request.user!, request.params.id);
+        await diagramSvc.assertCanEdit(orgId, caller(request), request.params.id);
         const row = await svc.duplicateNode(
           request.params.id,
           request.params.nodeId,
@@ -212,7 +213,7 @@ export default async function nodeRoutes(fastify: FastifyInstance) {
     async (request, reply) => {
       const orgId = request.user!.org_id;
       try {
-        await diagramSvc.assertCanEdit(orgId, request.user!, request.params.id);
+        await diagramSvc.assertCanEdit(orgId, caller(request), request.params.id);
         const result = await svc.deleteNode(request.params.id, request.params.nodeId);
         await broadcastToDiagram(fastify.redis, request.params.id, {
           type: 'blueprint.node.deleted',
@@ -237,7 +238,7 @@ export default async function nodeRoutes(fastify: FastifyInstance) {
       const body = linkEntitySchema.parse(request.body);
       const orgId = request.user!.org_id;
       try {
-        await diagramSvc.assertCanEdit(orgId, request.user!, request.params.id);
+        await diagramSvc.assertCanEdit(orgId, caller(request), request.params.id);
         const row = await svc.updateNode(request.params.id, request.params.nodeId, {
           ref_entity_type: body.ref_entity_type,
           ref_entity_id: body.ref_entity_id,
@@ -263,7 +264,7 @@ export default async function nodeRoutes(fastify: FastifyInstance) {
       // the SPA already has a session cookie so it can do the second hop.
       const orgId = request.user!.org_id;
       try {
-        await diagramSvc.assertCanEdit(orgId, request.user!, request.params.id);
+        await diagramSvc.assertCanEdit(orgId, caller(request), request.params.id);
         const nodes = await svc.listNodes(request.params.id);
         const node = nodes.find((n) => n.id === request.params.nodeId);
         if (!node) {
