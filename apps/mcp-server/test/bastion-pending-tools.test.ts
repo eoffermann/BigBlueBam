@@ -71,8 +71,8 @@ describe('Bastion pending tools stay out of the registered surface until M11', (
   });
 
   it('every handler goes through registerTool (agent policies apply once registered)', () => {
-    // 14 milestone handlers (M3 + M4) + 9 #196 parity handlers.
-    expect((PENDING.match(/registerTool\(server, \{/g) ?? []).length).toBe(23);
+    // 14 milestone handlers (M3 + M4) + 9 #196 parity handlers + M5 (8 evidence + 2 feed admin).
+    expect((PENDING.match(/registerTool\(server, \{/g) ?? []).length).toBe(33);
     expect(PENDING).not.toMatch(/server\.tool\(/);
   });
 });
@@ -80,8 +80,10 @@ describe('Bastion pending tools stay out of the registered surface until M11', (
 describe('Bastion M3 tool handlers', () => {
   it('registers exactly the M3 roster', async () => {
     await load();
-    const { BASTION_PENDING_TOOL_NAMES, BASTION_ADMIN_TOOL_NAMES } = await import('../src/tools-pending/bastion.js');
-    expect(captured.map((c) => c.name).sort()).toEqual([...BASTION_PENDING_TOOL_NAMES, ...BASTION_ADMIN_TOOL_NAMES].sort());
+    const { BASTION_PENDING_TOOL_NAMES, BASTION_ADMIN_TOOL_NAMES, BASTION_EVIDENCE_TOOL_NAMES } = await import('../src/tools-pending/bastion.js');
+    expect(captured.map((c) => c.name).sort()).toEqual(
+      [...BASTION_PENDING_TOOL_NAMES, ...BASTION_ADMIN_TOOL_NAMES, ...BASTION_EVIDENCE_TOOL_NAMES].sort(),
+    );
   });
 
   it('has no tool for a vouching act (confirm or reject a check): auth, session required (spec 2.8, #136)', async () => {
@@ -353,5 +355,103 @@ describe('Bastion #196 parity tools (setup and admin writes, room reads)', () =>
       `GET http://bastion-api:4024/v1/auditor-rooms/${ROOM}/access-log`,
       `GET http://bastion-api:4024/v1/auditor-requests?room_id=${ROOM}&status=open`,
     ]);
+  });
+});
+
+describe('Bastion M5 tools (manual evidence, feeds, coverage)', () => {
+  const ME = '88888888-8888-4888-8888-888888888888';
+  const FEED = '99999999-9999-4999-8999-999999999999';
+  const parse = (res: unknown) => JSON.parse((res as { content: Array<{ text: string }> }).content[0]!.text);
+
+  it('bastion_list_manual_evidence lists with filters or reads one item', async () => {
+    const tool = await load();
+    await tool('bastion_list_manual_evidence').handler({ status: 'pending_scan', stuck: true, control_id: CTRL, limit: 20 } as never);
+    await tool('bastion_list_manual_evidence').handler({ manual_evidence_id: ME } as never);
+    expect(calls.map((c) => `${c.method} ${c.url}`)).toEqual([
+      `GET http://bastion-api:4024/v1/manual-evidence?status=pending_scan&control_id=${CTRL}&stuck=true&limit=20`,
+      `GET http://bastion-api:4024/v1/manual-evidence/${ME}`,
+    ]);
+    const status = tool('bastion_list_manual_evidence').input.status as { safeParse: (v: unknown) => { success: boolean } };
+    expect(status.safeParse('active').success).toBe(true);
+    expect(status.safeParse('deleted').success).toBe(false);
+  });
+
+  it('link and unlink call the link routes; check-again posts to the item', async () => {
+    const tool = await load();
+    await tool('bastion_link_manual_evidence').handler({ manual_evidence_id: ME, assertion_id: ASSERTION } as never);
+    await tool('bastion_unlink_manual_evidence').handler({ manual_evidence_id: ME, assertion_id: ASSERTION } as never);
+    await tool('bastion_check_evidence_scan_again').handler({ manual_evidence_id: ME } as never);
+    expect(calls).toEqual([
+      { url: `http://bastion-api:4024/v1/manual-evidence/${ME}/links`, method: 'POST', body: { assertion_id: ASSERTION } },
+      { url: `http://bastion-api:4024/v1/manual-evidence/${ME}/links/${ASSERTION}`, method: 'DELETE', body: undefined },
+      { url: `http://bastion-api:4024/v1/manual-evidence/${ME}/check-again`, method: 'POST', body: {} },
+    ]);
+  });
+
+  it('bastion_withdraw_manual_evidence is two-step and sends the confirm body once', async () => {
+    const store = memoryTokenStore();
+    const tool = await load(store);
+    const staged = parse(await tool('bastion_withdraw_manual_evidence').handler({ manual_evidence_id: ME } as never));
+    expect(staged.status).toBe('pending_confirmation');
+    expect(calls).toEqual([]);
+    expect(store.entries.get(staged.confirm_token)).toMatchObject({ action: 'bastion_withdraw_manual_evidence', resource_id: ME });
+
+    const wrong = (await tool('bastion_withdraw_manual_evidence').handler({ manual_evidence_id: ASSERTION, confirm_token: staged.confirm_token } as never)) as {
+      isError?: boolean;
+    };
+    expect(wrong.isError).toBe(true);
+    expect(calls).toEqual([]);
+
+    await tool('bastion_withdraw_manual_evidence').handler({ manual_evidence_id: ME, reason: 'Wrong export', confirm_token: staged.confirm_token } as never);
+    expect(calls).toEqual([
+      { url: `http://bastion-api:4024/v1/manual-evidence/${ME}/withdraw`, method: 'POST', body: { confirm: true, reason: 'Wrong export' } },
+    ]);
+    const again = (await tool('bastion_withdraw_manual_evidence').handler({ manual_evidence_id: ME, confirm_token: staged.confirm_token } as never)) as {
+      isError?: boolean;
+    };
+    expect(again.isError).toBe(true);
+    expect(calls).toHaveLength(1);
+  });
+
+  it('bastion_withdraw_manual_evidence fails closed without a confirm-token store', async () => {
+    const tool = await load(null);
+    const res = (await tool('bastion_withdraw_manual_evidence').handler({ manual_evidence_id: ME } as never)) as { isError?: boolean };
+    expect(res.isError).toBe(true);
+    expect(calls).toEqual([]);
+  });
+
+  it('feeds: list, records, create and update', async () => {
+    const tool = await load();
+    await tool('bastion_list_feeds').handler({} as never);
+    await tool('bastion_list_feed_records').handler({ feed_id: FEED, limit: 10, before: '2026-11-20T00:00:00Z' } as never);
+    await tool('bastion_create_feed').handler({ feed: { feed_key: 'crew-roster', label: 'Crew roster export' } } as never);
+    await tool('bastion_update_feed').handler({ feed_id: FEED, changes: { status: 'paused' } } as never);
+    expect(calls.map((c) => `${c.method} ${c.url}`)).toEqual([
+      'GET http://bastion-api:4024/v1/feeds',
+      `GET http://bastion-api:4024/v1/feeds/${FEED}/records?limit=10&before=2026-11-20T00%3A00%3A00Z`,
+      'POST http://bastion-api:4024/v1/feeds',
+      `PATCH http://bastion-api:4024/v1/feeds/${FEED}`,
+    ]);
+    expect(calls[2]!.body).toEqual({ feed_key: 'crew-roster', label: 'Crew roster export' });
+    expect(calls[3]!.body).toEqual({ status: 'paused' });
+    const feed = tool('bastion_create_feed').input.feed as { safeParse: (v: unknown) => { success: boolean } };
+    expect(feed.safeParse({ feed_key: 'x', label: 'y' }).success).toBe(false);
+    expect(feed.safeParse({ feed_key: 'events', label: 'E', source_kind: 'bolt_event' }).success).toBe(false);
+  });
+
+  it('bastion_coverage_summary reads the summary by default and the map on request', async () => {
+    const tool = await load();
+    await tool('bastion_coverage_summary').handler({} as never);
+    await tool('bastion_coverage_summary').handler({ mode: 'map', framework_id: FW } as never);
+    expect(calls.map((c) => `${c.method} ${c.url}`)).toEqual([
+      'GET http://bastion-api:4024/v1/summary',
+      `GET http://bastion-api:4024/v1/coverage?framework_id=${FW}`,
+    ]);
+  });
+
+  it('has no tool for uploading, reviewing, redacting, downloading or feed keys (sanctioned skips)', async () => {
+    await load();
+    const names = captured.map((c) => c.name).join(' ');
+    expect(names).not.toMatch(/upload|supersede|review|redact|download|feed_key|push/);
   });
 });
