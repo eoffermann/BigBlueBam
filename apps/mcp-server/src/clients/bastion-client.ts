@@ -47,6 +47,11 @@ export interface BastionResult<T = unknown> {
 
 export type BastionFetch = (input: string, init: RequestInit) => Promise<Response>;
 
+/** The person an agent reads for (#217); narrows, never widens. */
+export interface Asker {
+  asker_user_id: string;
+}
+
 export function createBastionClient(bastionApiUrl: string, api: ApiClient, fetchImpl: BastionFetch = fetch) {
   const baseUrl = bastionApiUrl.replace(/\/$/, '');
 
@@ -117,8 +122,11 @@ export function createBastionClient(bastionApiUrl: string, api: ApiClient, fetch
       request('GET', `/ledger/seals${qs({ cursor: q.cursor, limit: q.limit !== undefined ? String(q.limit) : undefined })}`),
     listRestores: (q: Partial<BastionRestoreListQuery> = {}) =>
       request('GET', `/ledger/restores${qs({ cursor: q.cursor, limit: q.limit !== undefined ? String(q.limit) : undefined })}`),
-    // Manual evidence, feeds, coverage (M5: rows 33, 34, 36, 37, 39, check-again, 42, 49, 50, 94)
-    listManualEvidence: (q: Partial<BastionManualEvidenceListQuery>) =>
+    // Manual evidence, feeds, coverage (M5: rows 33, 34, 36, 37, check-again, 42, 49, 50, 94).
+    // The detail-bearing reads carry asker_user_id (#217): bastion-api answers with the
+    // intersection of the bearer's and the asker's permissions. Withdrawal (row 39) has no
+    // client method: it is a destructive human act with no tool (spec 2.8).
+    listManualEvidence: (q: Partial<BastionManualEvidenceListQuery> & Asker) =>
       request(
         'GET',
         `/manual-evidence${qs({
@@ -128,19 +136,21 @@ export function createBastionClient(bastionApiUrl: string, api: ApiClient, fetch
           control_id: q.control_id,
           stuck: q.stuck === undefined ? undefined : String(q.stuck),
           limit: q.limit === undefined ? undefined : String(q.limit),
+          asker_user_id: q.asker_user_id,
         })}`,
       ),
-    getManualEvidence: (id: string) => request('GET', `/manual-evidence/${id}`),
+    getManualEvidence: (id: string, a: Asker) => request('GET', `/manual-evidence/${id}${qs({ asker_user_id: a.asker_user_id })}`),
     linkManualEvidence: (id: string, body: BastionManualEvidenceLink) => request('POST', `/manual-evidence/${id}/links`, body),
     unlinkManualEvidence: (id: string, assertionId: string) => request('DELETE', `/manual-evidence/${id}/links/${assertionId}`),
-    withdrawManualEvidence: (id: string, reason?: string | null) =>
-      request('POST', `/manual-evidence/${id}/withdraw`, reason ? { confirm: true, reason } : { confirm: true }),
     checkEvidenceScanAgain: (id: string) => request('POST', `/manual-evidence/${id}/check-again`, {}),
     listFeeds: () => request('GET', '/feeds'),
-    listFeedRecords: (feedId: string, q: Partial<BastionFeedRecordListQuery>) =>
-      request('GET', `/feeds/${feedId}/records${qs({ limit: q.limit === undefined ? undefined : String(q.limit), before: q.before })}`),
-    getSummary: (q: BastionCoverageQuery) => request('GET', `/summary${qs({ framework_id: q.framework_id })}`),
-    getCoverage: (q: BastionCoverageQuery) => request('GET', `/coverage${qs({ framework_id: q.framework_id })}`),
+    listFeedRecords: (feedId: string, q: Partial<BastionFeedRecordListQuery> & Asker) =>
+      request(
+        'GET',
+        `/feeds/${feedId}/records${qs({ limit: q.limit === undefined ? undefined : String(q.limit), before: q.before, asker_user_id: q.asker_user_id })}`,
+      ),
+    getSummary: (q: BastionCoverageQuery & Asker) => request('GET', `/summary${qs({ framework_id: q.framework_id, asker_user_id: q.asker_user_id })}`),
+    getCoverage: (q: BastionCoverageQuery & Asker) => request('GET', `/coverage${qs({ framework_id: q.framework_id, asker_user_id: q.asker_user_id })}`),
 
     // ── #196 parity: admin and setup writes plus the floored room reads ─────────
     // (grouped here so milestone appends above merge cleanly)

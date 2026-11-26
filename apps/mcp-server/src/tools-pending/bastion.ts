@@ -103,7 +103,7 @@ export function registerBastionTools(
 ): void {
   const client = createBastionClient(bastionApiUrl, api, fetchImpl);
   registerBastionAdminTools(server, client, confirmTokenStore);
-  registerBastionEvidenceTools(server, client, confirmTokenStore);
+  registerBastionEvidenceTools(server, client);
 
   // ── 1. bastion_list_frameworks (rows 1, 2, 4, 7) ───────────────────────────
   registerTool(server, {
@@ -620,34 +620,39 @@ export function registerBastionAdminTools(
  *     data (41): "auth: session required (spec 2.8, #136)"; a person vouches for these;
  *   - downloading the file (35): multipart/binary;
  *   - listing, minting and revoking feed keys (45-47): auth/credentials;
- *   - the machine push itself (48): public-inbound, authenticated by its own per-feed key.
- * Withdrawing evidence is destructive and goes through a two-step confirm token.
+ *   - the machine push itself (48): public-inbound, authenticated by its own per-feed key;
+ *   - withdrawing evidence (39): a destructive human act, "auth: session required (spec 2.8,
+ *     #136)"; the route requires a session and refuses impersonation (#217).
+ *
+ * Detail-bearing reads (the locker, feed records, readiness and the map) REQUIRE asker_user_id
+ * (#217, spec 5.4): bastion-api answers with the intersection of the bearer's and the asker's
+ * permissions, including bastion.evidence.read_restricted and bastion.feed.read, so an agent
+ * posting into a shared surface never shows a person more than they may see. Narrows, never widens.
  * ════════════════════════════════════════════════════════════════════════════ */
 
 export const BASTION_EVIDENCE_TOOL_NAMES = [
   'bastion_list_manual_evidence',
   'bastion_link_manual_evidence',
   'bastion_unlink_manual_evidence',
-  'bastion_withdraw_manual_evidence',
   'bastion_check_evidence_scan_again',
   'bastion_list_feeds',
   'bastion_list_feed_records',
   'bastion_coverage_summary',
 ] as const;
 
-export const BASTION_WITHDRAW_EVIDENCE_ACTION = 'bastion_withdraw_manual_evidence';
+const askerUserId = z
+  .string()
+  .uuid()
+  .describe('The person this answer is for (required). Results are narrowed to what both you and they may see.');
 
-export function registerBastionEvidenceTools(
-  server: McpServer,
-  client: BastionClient,
-  confirmTokenStore: ConfirmTokenStore | undefined,
-): void {
+export function registerBastionEvidenceTools(server: McpServer, client: BastionClient): void {
   // ── E1. bastion_list_manual_evidence (rows 33, 34) ─────────────────────────
   registerTool(server, {
     name: 'bastion_list_manual_evidence',
     description:
-      'Uploaded evidence and written statements (the Evidence locker). Without manual_evidence_id: a list, newest first, filtered by status (pending_scan, active, superseded, withdrawn, blocked), kind (file or attestation_statement), a check (assertion_id), a control (control_id), or stuck=true for uploads waiting more than a day for a virus scan, plus counts (GET /manual-evidence). With manual_evidence_id: one item with its linked checks and their review state (GET /manual-evidence/:id). Each item shows its owner, who uploaded it, its period, when it expires (days_left), and whether it was virus-scanned. Restricted items are masked, or not found, unless the caller may read restricted evidence. Read-only.',
+      'Uploaded evidence and written statements (the Evidence locker). Without manual_evidence_id: a list, newest first, filtered by status (pending_scan, active, superseded, withdrawn, blocked), kind (file or attestation_statement), a check (assertion_id), a control (control_id), or stuck=true for uploads waiting more than a day for a virus scan, plus counts (GET /manual-evidence). With manual_evidence_id: one item with its linked checks and their review state (GET /manual-evidence/:id). Each item shows its owner, who uploaded it, its period, when it expires (days_left), and whether it was virus-scanned. Restricted items are masked, or not found, unless both the caller and the asker may read restricted evidence. Read-only.',
     input: {
+      asker_user_id: askerUserId,
       manual_evidence_id: z.string().uuid().optional(),
       status: BastionManualEvidenceStatus.optional(),
       kind: BastionManualEvidenceKind.optional(),
@@ -657,8 +662,10 @@ export function registerBastionEvidenceTools(
       limit: z.number().int().min(1).max(200).optional(),
     },
     returns: z.record(z.unknown()),
-    handler: async ({ manual_evidence_id, ...q }) => {
-      const r = manual_evidence_id ? await client.getManualEvidence(manual_evidence_id) : await client.listManualEvidence(q);
+    handler: async ({ manual_evidence_id, asker_user_id, ...q }) => {
+      const r = manual_evidence_id
+        ? await client.getManualEvidence(manual_evidence_id, { asker_user_id })
+        : await client.listManualEvidence({ ...q, asker_user_id });
       return r.ok ? ok(r.data) : err(manual_evidence_id ? 'reading evidence' : 'listing evidence', r.data);
     },
   });
@@ -695,58 +702,7 @@ export function registerBastionEvidenceTools(
     },
   });
 
-  // ── E4. bastion_withdraw_manual_evidence (row 39; CONFIRM two-step) ────────
-  registerTool(server, {
-    name: 'bastion_withdraw_manual_evidence',
-    description:
-      'Withdraw uploaded evidence so it no longer proves anything (POST /manual-evidence/:id/withdraw). DESTRUCTIVE: the withdrawal is recorded in the evidence ledger and every linked control is checked again, so a control it proved may drop to "Can\'t prove yet". Two-step confirm: call once WITHOUT confirm_token to stage a token, then again WITH the returned confirm_token (same manual_evidence_id) within 5 minutes. Needs bastion.evidence.withdraw.',
-    input: {
-      manual_evidence_id: z.string().uuid(),
-      reason: z.string().trim().max(2000).optional(),
-      confirm_token: z.string().optional().describe('Token from the staging call. Required to withdraw.'),
-    },
-    returns: z.record(z.unknown()),
-    handler: async ({ manual_evidence_id, reason, confirm_token }) => {
-      if (!confirmTokenStore) {
-        return err('withdrawing evidence', {
-          code: 'CONFIRMATION_UNAVAILABLE',
-          message: 'Withdrawing needs a confirmation step, which is not available on this server.',
-        });
-      }
-      if (!confirm_token) {
-        const token = randomBytes(16).toString('hex');
-        await confirmTokenStore.set(token, {
-          action: BASTION_WITHDRAW_EVIDENCE_ACTION,
-          resource_id: manual_evidence_id,
-          ttlMs: BASTION_CONFIRM_TTL_MS,
-        });
-        return ok({
-          status: 'pending_confirmation',
-          message: `Withdrawing stops this evidence counting and re-checks every control it proves. Re-call bastion_withdraw_manual_evidence with this confirm_token to proceed. Token expires in ${Math.floor(
-            BASTION_CONFIRM_TTL_MS / 1000,
-          )} seconds.`,
-          action: BASTION_WITHDRAW_EVIDENCE_ACTION,
-          resource_id: manual_evidence_id,
-          confirm_token: token,
-        });
-      }
-      const pending = await confirmTokenStore.get(confirm_token);
-      if (!pending || pending.action !== BASTION_WITHDRAW_EVIDENCE_ACTION || pending.resource_id !== manual_evidence_id) {
-        return {
-          content: [
-            {
-              type: 'text' as const,
-              text: 'Invalid or expired confirm_token for this withdrawal. Re-call bastion_withdraw_manual_evidence without a token to stage a new one.',
-            },
-          ],
-          isError: true as const,
-        };
-      }
-      await confirmTokenStore.delete(confirm_token);
-      const r = await client.withdrawManualEvidence(manual_evidence_id, reason ?? null);
-      return r.ok ? ok(r.data) : err('withdrawing evidence', r.data);
-    },
-  });
+  // (Row 39, withdraw: no tool. A destructive human act, spec 2.8, #217.)
 
   // ── E5. bastion_check_evidence_scan_again (POST /manual-evidence/:id/check-again) ─
   registerTool(server, {
@@ -778,15 +734,16 @@ export function registerBastionEvidenceTools(
   registerTool(server, {
     name: 'bastion_list_feed_records',
     description:
-      'Records one feed received, newest first (GET /feeds/:id/records): idempotency key, when it happened and was received, its payload hash and ledger position, and its subject unless redacted. Page with before = next_cursor while has_more is true. Read-only; needs bastion.feed.read.',
+      'Records one feed received, newest first (GET /feeds/:id/records): idempotency key, when it happened and was received, its payload hash and ledger position, and its subject unless redacted. Page with before = next_cursor while has_more is true. Read-only; both the caller and the asker need bastion.feed.read.',
     input: {
+      asker_user_id: askerUserId,
       feed_id: z.string().uuid(),
       limit: z.number().int().min(1).max(200).optional(),
       before: z.string().datetime({ offset: true }).optional(),
     },
     returns: z.record(z.unknown()),
-    handler: async ({ feed_id, limit, before }) => {
-      const r = await client.listFeedRecords(feed_id, { limit, before });
+    handler: async ({ feed_id, limit, before, asker_user_id }) => {
+      const r = await client.listFeedRecords(feed_id, { limit, before, asker_user_id });
       return r.ok ? ok(r.data) : err('listing feed records', r.data);
     },
   });
@@ -795,14 +752,16 @@ export function registerBastionEvidenceTools(
   registerTool(server, {
     name: 'bastion_coverage_summary',
     description:
-      'Readiness in one framework view (or all adopted frameworks). mode "summary" (default, GET /summary): the four numbers kept separate (Proven by the suite, Proven by evidence you provided, Not met with its "risk accepted" sub-count, Can\'t prove yet) plus "Not set up yet" and the denominator sentence ("41 of 64 controls checked; 23 not set up yet"), days to the nearest audit, banners, the top open gaps and evidence expiring soon. mode "map" (GET /coverage): every control with where its proof comes from (suite checks, feeds, uploaded files, self-attested statements), its state in plain words and when uploaded proof expires. Not-applicable controls are listed separately. Read-only.',
+      'Readiness in one framework view (or all adopted frameworks). mode "summary" (default, GET /summary): the four numbers kept separate (Proven by the suite, Proven by evidence you provided, Not met with its "risk accepted" sub-count, Can\'t prove yet) plus "Not set up yet" and the denominator sentence ("41 of 64 controls checked; 23 not set up yet"), days to the nearest audit, banners, the top open gaps and evidence expiring soon. mode "map" (GET /coverage): every control with where its proof comes from (suite checks, feeds, uploaded files, self-attested statements), its state in plain words and when uploaded proof expires. Not-applicable controls are listed separately. Read-only; both the caller and the asker need bastion.control.read.',
     input: {
+      asker_user_id: askerUserId,
       mode: z.enum(['summary', 'map']).optional().describe('Default "summary".'),
       framework_id: z.string().uuid().optional(),
     },
     returns: z.record(z.unknown()),
-    handler: async ({ mode, framework_id }) => {
-      const r = mode === 'map' ? await client.getCoverage({ framework_id }) : await client.getSummary({ framework_id });
+    handler: async ({ mode, framework_id, asker_user_id }) => {
+      const r =
+        mode === 'map' ? await client.getCoverage({ framework_id, asker_user_id }) : await client.getSummary({ framework_id, asker_user_id });
       return r.ok ? ok(r.data) : err(mode === 'map' ? 'reading the evidence map' : 'reading readiness', r.data);
     },
   });

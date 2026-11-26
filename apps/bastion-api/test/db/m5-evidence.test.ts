@@ -5,7 +5,7 @@ import { runEvaluationSlice } from '../../src/engine/evaluator.js';
 import type { EngineDeps } from '../../src/engine/context.js';
 import type { QueuedRun } from '../../src/engine/evidence-store.js';
 import type { BinAccessDeps } from '../../src/lib/bin-asset-access.js';
-import { ForbiddenError, RateLimitedError } from '../../src/lib/errors.js';
+import { ForbiddenError, NotFoundError, RateLimitedError } from '../../src/lib/errors.js';
 import { coverageMap, readinessSummary } from '../../src/services/coverage.service.js';
 import type { EvidenceDeps } from '../../src/services/evidence-deps.js';
 import { evidenceExpiry, evidenceIngest } from '../../src/services/evidence-engines.js';
@@ -19,11 +19,14 @@ import {
   revokeFeedKey,
 } from '../../src/services/feeds.service.js';
 import {
+  checkScanAgain,
   createManualEvidence,
   getManualEvidence,
   linkManualEvidence,
   redactPersonalData,
   reviewManualEvidence,
+  supersedeManualEvidence,
+  unlinkManualEvidence,
   withdrawManualEvidence,
 } from '../../src/services/manual-evidence.service.js';
 import type { Viewer } from '../../src/services/types.js';
@@ -209,8 +212,8 @@ describe.skipIf(!DATABASE_URL)('M5 manual evidence, personal data, feeds and the
     expect((await sql`SELECT count(*)::int AS n FROM bastion_outbox WHERE organization_id = ${o.org} AND payload->>'event_type' = 'evidence.uploaded'`)[0]!.n).toBe(1);
 
     // Four humans: the uploader may not accept their own upload.
-    await expect(reviewManualEvidence(d, viewer(o, professor), id, o.assertions.manual, { verdict: 'accepted' })).rejects.toBeInstanceOf(ForbiddenError);
-    await reviewManualEvidence(d, viewer(o, o.owner, 'owner'), id, o.assertions.manual, { verdict: 'accepted' });
+    await expect(reviewManualEvidence(d, viewer(o, professor), id, o.assertions.manual, { verdict: 'accepted' }, true)).rejects.toBeInstanceOf(ForbiddenError);
+    await reviewManualEvidence(d, viewer(o, o.owner, 'owner'), id, o.assertions.manual, { verdict: 'accepted' }, true);
     expect(runs).toHaveLength(1);
     await drive(engine, o.org, runs);
     const passed = (await sql`SELECT status, coverage_kind FROM bastion_controls WHERE id = ${o.controls.manual}`)[0]!;
@@ -266,7 +269,7 @@ describe.skipIf(!DATABASE_URL)('M5 manual evidence, personal data, feeds and the
       })
     ).data as Record<string, unknown>;
     expect(created.trust_label).toBe('Self-attested');
-    const reviewed = (await reviewManualEvidence(d, viewer(o, mary), created.id as string, o.assertions.statement, { verdict: 'accepted' })).data as {
+    const reviewed = (await reviewManualEvidence(d, viewer(o, mary), created.id as string, o.assertions.statement, { verdict: 'accepted' }, true)).data as {
       links: Array<{ small_team_self_review: boolean }>;
     };
     expect(reviewed.links[0]?.small_team_self_review).toBe(true);
@@ -340,10 +343,43 @@ describe.skipIf(!DATABASE_URL)('M5 manual evidence, personal data, feeds and the
     const owner = viewer(o, o.owner, 'owner');
     expect((await redactPersonalData(d, owner, await pdOf(first), 'request')).data.bytes_deleted).toBe(false);
     expect(bucket.objects.has(objs[0]!.object_key as string)).toBe(true);
-    await withdrawManualEvidence(d, owner, second, 'replaced');
+    await withdrawManualEvidence(d, owner, second, 'replaced', true);
     expect((await sql`SELECT count(*)::int AS n FROM bastion_ledger_entries WHERE organization_id = ${o.org} AND entry_kind = 'withdrawal'`)[0]!.n).toBe(1);
     expect((await redactPersonalData(d, owner, await pdOf(second), 'request')).data.bytes_deleted).toBe(true);
     expect(bucket.objects.has(objs[0]!.object_key as string)).toBe(false);
+  });
+
+  it('a failed bucket delete at redaction reports pending, and evidence-ingest retries it until it lands (#212)', async () => {
+    const o = await seed(sql, 'redactfail', 3);
+    orgs.push(o.org);
+    const engine = makeDeps(sql);
+    const bucket = engine.storage as FakeBucket;
+    const bin: FakeBin = { assets: new Map(), versions: new Map(), bucket: fakeBucket() };
+    const d = evidenceDepsFor(engine, bin, []);
+    const f = await putBinFile(bin, o.org, 'hr export with personal data');
+    const id = ((await createManualEvidence(d, viewer(o, o.others[0]!), fileBody(o, f.asset, { assertion_ids: [] }))).data as Record<string, unknown>).id as string;
+    const key = (await sql`SELECT object_key FROM bastion_evidence_objects WHERE organization_id = ${o.org}`)[0]!.object_key as string;
+    const pdId = (await sql`SELECT id FROM bastion_personal_data WHERE organization_id = ${o.org} AND holder_id = ${id}`)[0]!.id as string;
+
+    const realDelete = bucket.delete.bind(bucket);
+    bucket.delete = async () => {
+      throw new Error('bucket unavailable (test)');
+    };
+    const red = (await redactPersonalData(d, viewer(o, o.owner, 'owner'), pdId, 'erasure request')).data;
+    expect(red.bytes_deleted).toBe(false);
+    expect(red.bytes_delete_pending).toBe(true);
+    expect(bucket.objects.has(key)).toBe(true);
+    const event = (await sql`SELECT payload FROM bastion_outbox WHERE organization_id = ${o.org} AND payload->>'event_type' = 'evidence.redacted'`)[0]!;
+    expect(JSON.stringify(event.payload)).toContain('"bytes_deleted":false');
+    expect((await sql`SELECT count(*)::int AS n FROM bastion_object_intents WHERE object_key = ${key}`)[0]!.n).toBe(1);
+
+    // Still failing: the engine keeps the intent.
+    expect((await evidenceIngest(d, { organization_id: o.org })).redacted_bytes_pending).toBe(1);
+    bucket.delete = realDelete;
+    expect((await evidenceIngest(d, { organization_id: o.org })).redacted_bytes_deleted).toBe(1);
+    expect(bucket.objects.has(key)).toBe(false);
+    expect((await sql`SELECT count(*)::int AS n FROM bastion_object_intents WHERE object_key = ${key}`)[0]!.n).toBe(0);
+    expect((await evidenceIngest(d, { organization_id: o.org })).redacted_bytes_deleted).toBe(0);
   });
 
   it('linking checks the manual check belongs to the org; the expiry engine notifies once', async () => {
@@ -355,9 +391,9 @@ describe.skipIf(!DATABASE_URL)('M5 manual evidence, personal data, feeds and the
     const d = evidenceDepsFor(engine, bin, runs);
     const f = await putBinFile(bin, o.org, 'expiring bytes');
     const id = ((await createManualEvidence(d, viewer(o, o.others[0]!), fileBody(o, f.asset, { assertion_ids: [] }))).data as Record<string, unknown>).id as string;
-    await expect(linkManualEvidence(d, viewer(o, o.owner), id, crypto.randomUUID())).rejects.toThrow();
-    await linkManualEvidence(d, viewer(o, o.owner), id, o.assertions.manual);
-    await reviewManualEvidence(d, viewer(o, o.owner, 'owner'), id, o.assertions.manual, { verdict: 'accepted' });
+    await expect(linkManualEvidence(d, viewer(o, o.owner), id, crypto.randomUUID(), true)).rejects.toThrow();
+    await linkManualEvidence(d, viewer(o, o.owner), id, o.assertions.manual, true);
+    await reviewManualEvidence(d, viewer(o, o.owner, 'owner'), id, o.assertions.manual, { verdict: 'accepted' }, true);
     // Drive the review's control run: while it is still queued, a second control run is (correctly)
     // not created, because the live one picks the change up.
     await drive(engine, o.org, runs);
@@ -370,6 +406,50 @@ describe.skipIf(!DATABASE_URL)('M5 manual evidence, personal data, feeds and the
     expect((await evidenceExpiry(d2, { organization_id: o.org })).expired_notified).toBe(1);
     expect(runs).toHaveLength(1);
     expect((await evidenceExpiry(d2, { organization_id: o.org })).expired_notified).toBe(0);
+  });
+
+  it('restricted evidence is not found by link, unlink, review, withdraw, check-again or supersede without read_restricted (#209)', async () => {
+    const o = await seed(sql, 'restricted', 3);
+    orgs.push(o.org);
+    const engine = makeDeps(sql);
+    const bin: FakeBin = { assets: new Map(), versions: new Map(), bucket: fakeBucket() };
+    const d = evidenceDepsFor(engine, bin, []);
+    const uploader = viewer(o, o.others[0]!);
+    const member = viewer(o, o.others[1]!);
+    const secretTitle = 'Pen test findings: admin panel open';
+    const f = await putBinFile(bin, o.org, 'pen test bytes');
+    const id = ((await createManualEvidence(d, uploader, fileBody(o, f.asset, { title: secretTitle, sensitivity: 'restricted', assertion_ids: [] }))).data as Record<
+      string,
+      unknown
+    >).id as string;
+    const pending = await putBinFile(bin, o.org, 'pending restricted bytes', 'pending');
+    const pendingId = ((await createManualEvidence(d, uploader, fileBody(o, pending.asset, { title: secretTitle, sensitivity: 'restricted', assertion_ids: [] })))
+      .data as Record<string, unknown>).id as string;
+
+    const attempts: Array<() => Promise<unknown>> = [
+      () => linkManualEvidence(d, member, id, o.assertions.manual, false),
+      () => unlinkManualEvidence(d, member, id, o.assertions.manual, false),
+      () => reviewManualEvidence(d, member, id, o.assertions.manual, { verdict: 'accepted' }, false),
+      () => withdrawManualEvidence(d, member, id, 'nope', false),
+      () => checkScanAgain(d, member, pendingId, false),
+      () => supersedeManualEvidence(d, member, id, fileBody(o, f.asset, { title: 'Replacement', assertion_ids: [] }), false),
+    ];
+    for (const attempt of attempts) {
+      const err = await attempt().then(
+        (v) => v,
+        (e: unknown) => e,
+      );
+      expect(err).toBeInstanceOf(NotFoundError);
+      expect(JSON.stringify(err)).not.toContain(secretTitle);
+    }
+    // Nothing moved: no link, still active, never superseded.
+    expect((await sql`SELECT count(*)::int AS n FROM bastion_manual_evidence_links WHERE organization_id = ${o.org} AND manual_evidence_id = ${id}`)[0]!.n).toBe(0);
+    expect((await sql`SELECT status FROM bastion_manual_evidence WHERE id = ${id}`)[0]!.status).toBe('active');
+
+    // With read_restricted, link works and the item comes back in full.
+    const linked = (await linkManualEvidence(d, viewer(o, o.owner, 'owner'), id, o.assertions.manual, true)).data as Record<string, unknown>;
+    expect(linked.title).toBe(secretTitle);
+    expect(linked.masked).toBe(false);
   });
 
   it('feeds: resolver, push, idempotency, wrong feed, quota 429, rotation grace and revoke', async () => {

@@ -12,7 +12,7 @@ import { handled, idParam, notFound, validationError, viewerOf } from '../lib/ht
 import { evidenceDeps } from '../services/evidence-runtime.js';
 import * as manual from '../services/manual-evidence.service.js';
 
-// Spec 5.1 rows 32-41 (M5). Vouching routes (create, supersede, link review, redaction) require a
+// Spec 5.1 rows 32-41 (M5). Vouching routes (create, supersede, link review, withdraw, redaction) require a
 // cookie session and refuse impersonation (spec 2.8, #136): a person attests to what they upload
 // and to what they accept. Redaction is owner-only in the service and confirm-gated in the body.
 export default async function manualEvidenceRoutes(fastify: FastifyInstance) {
@@ -36,7 +36,11 @@ export default async function manualEvidenceRoutes(fastify: FastifyInstance) {
   );
 
   // Row 33.
-  fastify.get('/manual-evidence', { preHandler: [requireAuth, can('bastion.evidence.read')] }, async (request, reply) => {
+  // Detail-bearing reads take `asker_user_id` (#217): the asker must hold the permission too, and
+  // `restricted()` (bastionCan) narrows read_restricted to the intersection.
+  const asker = (p: string) => fastify.requireAskerCan(p);
+
+  fastify.get('/manual-evidence', { preHandler: [requireAuth, can('bastion.evidence.read'), asker('bastion.evidence.read')] }, async (request, reply) => {
     const raw = request.query as Record<string, string | undefined>;
     const parsed = bastionManualEvidenceListQuerySchema.safeParse({
       status: raw.status || undefined,
@@ -52,7 +56,7 @@ export default async function manualEvidenceRoutes(fastify: FastifyInstance) {
   });
 
   // Row 34.
-  fastify.get('/manual-evidence/:id', { preHandler: [requireAuth, can('bastion.evidence.read')] }, async (request, reply) => {
+  fastify.get('/manual-evidence/:id', { preHandler: [requireAuth, can('bastion.evidence.read'), asker('bastion.evidence.read')] }, async (request, reply) => {
     const id = idParam(request);
     if (!id) return notFound(request, reply);
     const canRestricted = await restricted(request);
@@ -77,7 +81,8 @@ export default async function manualEvidenceRoutes(fastify: FastifyInstance) {
     if (!id) return notFound(request, reply);
     const parsed = bastionManualEvidenceLinkSchema.safeParse(request.body ?? {});
     if (!parsed.success) return validationError(request, reply, parsed.error);
-    return handled(request, reply, () => manual.linkManualEvidence(deps(), viewerOf(request), id, parsed.data.assertion_id));
+    const canRestricted = await restricted(request);
+    return handled(request, reply, () => manual.linkManualEvidence(deps(), viewerOf(request), id, parsed.data.assertion_id, canRestricted));
   });
 
   // Row 37.
@@ -85,7 +90,8 @@ export default async function manualEvidenceRoutes(fastify: FastifyInstance) {
     const id = idParam(request);
     const assertionId = idParam(request, 'assertion_id');
     if (!id || !assertionId) return notFound(request, reply);
-    return handled(request, reply, () => manual.unlinkManualEvidence(deps(), viewerOf(request), id, assertionId));
+    const canRestricted = await restricted(request);
+    return handled(request, reply, () => manual.unlinkManualEvidence(deps(), viewerOf(request), id, assertionId, canRestricted));
   });
 
   // Row 38: a second person vouches for the evidence.
@@ -98,18 +104,25 @@ export default async function manualEvidenceRoutes(fastify: FastifyInstance) {
       if (!id || !assertionId) return notFound(request, reply);
       const parsed = bastionManualEvidenceReviewSchema.safeParse(request.body ?? {});
       if (!parsed.success) return validationError(request, reply, parsed.error);
-      return handled(request, reply, () => manual.reviewManualEvidence(deps(), viewerOf(request), id, assertionId, parsed.data));
+      const canRestricted = await restricted(request);
+      return handled(request, reply, () => manual.reviewManualEvidence(deps(), viewerOf(request), id, assertionId, parsed.data, canRestricted));
     },
   );
 
-  // Row 39 (confirm).
-  fastify.post('/manual-evidence/:id/withdraw', { preHandler: [requireAuth, can('bastion.evidence.withdraw')] }, async (request, reply) => {
-    const id = idParam(request);
-    if (!id) return notFound(request, reply);
-    const parsed = bastionManualEvidenceWithdrawSchema.safeParse(request.body ?? {});
-    if (!parsed.success) return validationError(request, reply, parsed.error);
-    return handled(request, reply, () => manual.withdrawManualEvidence(deps(), viewerOf(request), id, parsed.data.reason ?? null));
-  });
+  // Row 39 (confirm): a destructive human act (spec 2.8, #217). Session-only and never
+  // impersonated, so neither an agent tool nor a human's API key can withdraw evidence.
+  fastify.post(
+    '/manual-evidence/:id/withdraw',
+    { preHandler: [requireAuth, requireSession, rejectWhenImpersonating, can('bastion.evidence.withdraw')] },
+    async (request, reply) => {
+      const id = idParam(request);
+      if (!id) return notFound(request, reply);
+      const parsed = bastionManualEvidenceWithdrawSchema.safeParse(request.body ?? {});
+      if (!parsed.success) return validationError(request, reply, parsed.error);
+      const canRestricted = await restricted(request);
+      return handled(request, reply, () => manual.withdrawManualEvidence(deps(), viewerOf(request), id, parsed.data.reason ?? null, canRestricted));
+    },
+  );
 
   // Row 40: a newer copy replaces this one (a person attests again).
   fastify.post(
@@ -120,8 +133,9 @@ export default async function manualEvidenceRoutes(fastify: FastifyInstance) {
       if (!id) return notFound(request, reply);
       const parsed = bastionManualEvidenceCreateSchema.safeParse(request.body ?? {});
       if (!parsed.success) return validationError(request, reply, parsed.error);
+      const canRestricted = await restricted(request);
       return handled(request, reply, async () => {
-        const out = await manual.supersedeManualEvidence(deps(), viewerOf(request), id, parsed.data);
+        const out = await manual.supersedeManualEvidence(deps(), viewerOf(request), id, parsed.data, canRestricted);
         reply.status(201);
         return out;
       });
@@ -132,7 +146,8 @@ export default async function manualEvidenceRoutes(fastify: FastifyInstance) {
   fastify.post('/manual-evidence/:id/check-again', { preHandler: [requireAuth, can('bastion.evidence.upload')] }, async (request, reply) => {
     const id = idParam(request);
     if (!id) return notFound(request, reply);
-    return handled(request, reply, () => manual.checkScanAgain(deps(), viewerOf(request), id));
+    const canRestricted = await restricted(request);
+    return handled(request, reply, () => manual.checkScanAgain(deps(), viewerOf(request), id, canRestricted));
   });
 
   // Row 41: owner-only (service), confirm-gated, session-only, never impersonated.

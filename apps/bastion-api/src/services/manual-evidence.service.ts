@@ -229,14 +229,21 @@ async function insertItem(
   return { id, duplicate_key: duplicateKey, runs };
 }
 
-async function createOrSupersede(d: EvidenceDeps, viewer: Viewer, body: BastionManualEvidenceCreate, supersedeId: string | null) {
+async function createOrSupersede(
+  d: EvidenceDeps,
+  viewer: Viewer,
+  body: BastionManualEvidenceCreate,
+  supersedeId: string | null,
+  canRestricted: boolean,
+) {
   const engine = d.engine;
   const orgId = viewer.org_id;
   let supersedes: { id: string; links: Array<{ assertion_id: string; control_id: string }> } | null = null;
   if (supersedeId) {
     supersedes = await orgTx(engine.sql, orgId, async (tx) => {
-      const old = (await tx`SELECT id, status FROM bastion_manual_evidence WHERE organization_id = ${orgId} AND id = ${supersedeId}`)[0];
-      if (!old) throw new NotFoundError('We could not find that evidence.');
+      const old = (await tx`SELECT id, status, sensitivity FROM bastion_manual_evidence WHERE organization_id = ${orgId} AND id = ${supersedeId}`)[0];
+      // Nobody replaces (and takes the links of) restricted evidence they may not read (#209).
+      if (!old || (old.sensitivity === 'restricted' && !canRestricted)) throw new NotFoundError('We could not find that evidence.');
       if (old.status !== 'active') throw new ConflictError('Only evidence that is in use can be replaced by a newer copy.', 'NOT_ACTIVE');
       const links = await tx`
         SELECT l.assertion_id, a.control_id FROM bastion_manual_evidence_links l
@@ -257,17 +264,19 @@ async function createOrSupersede(d: EvidenceDeps, viewer: Viewer, body: BastionM
   await dropDuplicate(engine, orgId, result.duplicate_key);
   if (prepared.status === 'pending_scan') await d.enqueueIngest(orgId, result.id).catch(() => undefined);
   await afterCommit(d, result.runs);
+  // The new item holds only what this caller just sent (its links start pending, with no review
+  // notes), so they get it back in full even when they marked it restricted.
   return getManualEvidence(d, viewer, result.id, true);
 }
 
 /** POST /manual-evidence (row 32). */
 export function createManualEvidence(d: EvidenceDeps, viewer: Viewer, body: BastionManualEvidenceCreate) {
-  return createOrSupersede(d, viewer, body, null);
+  return createOrSupersede(d, viewer, body, null, false);
 }
 
 /** POST /manual-evidence/:id/supersede (row 40). */
-export function supersedeManualEvidence(d: EvidenceDeps, viewer: Viewer, id: string, body: BastionManualEvidenceCreate) {
-  return createOrSupersede(d, viewer, body, id);
+export function supersedeManualEvidence(d: EvidenceDeps, viewer: Viewer, id: string, body: BastionManualEvidenceCreate, canRestricted: boolean) {
+  return createOrSupersede(d, viewer, body, id, canRestricted);
 }
 
 // ── Reads ───────────────────────────────────────────────────────────────────────────────
@@ -419,17 +428,23 @@ export async function openManualEvidenceDownload(d: EvidenceDeps, viewer: Viewer
 
 // ── Links and reviews ───────────────────────────────────────────────────────────────────
 
-async function loadItem(tx: Tx, orgId: string, id: string) {
-  const r = (await tx`SELECT id, status, uploaded_by, kind FROM bastion_manual_evidence WHERE organization_id = ${orgId} AND id = ${id} FOR UPDATE`)[0];
-  if (!r) throw new NotFoundError('We could not find that evidence.');
+/**
+ * Lock one item. A restricted item is "not found" to a caller without read_restricted (#209), so
+ * every mutation behaves like GET /manual-evidence/:id: nobody acts on, or reads back, evidence
+ * they may not see. Pass `canRestricted: true` only for system callers (redaction is owner-only).
+ */
+async function loadItem(tx: Tx, orgId: string, id: string, canRestricted: boolean) {
+  const r = (await tx`SELECT id, status, uploaded_by, kind, sensitivity FROM bastion_manual_evidence
+                       WHERE organization_id = ${orgId} AND id = ${id} FOR UPDATE`)[0];
+  if (!r || (r.sensitivity === 'restricted' && !canRestricted)) throw new NotFoundError('We could not find that evidence.');
   return r;
 }
 
 /** POST /manual-evidence/:id/links (row 36). */
-export async function linkManualEvidence(d: EvidenceDeps, viewer: Viewer, id: string, assertionId: string) {
+export async function linkManualEvidence(d: EvidenceDeps, viewer: Viewer, id: string, assertionId: string, canRestricted: boolean) {
   const now = d.engine.now();
   await orgTx(d.engine.sql, viewer.org_id, async (tx) => {
-    const item = await loadItem(tx, viewer.org_id, id);
+    const item = await loadItem(tx, viewer.org_id, id, canRestricted);
     if (item.status === 'withdrawn' || item.status === 'superseded') {
       throw new ConflictError('This evidence is no longer in use, so it cannot prove anything new.', 'NOT_ACTIVE');
     }
@@ -449,14 +464,14 @@ export async function linkManualEvidence(d: EvidenceDeps, viewer: Viewer, id: st
     }
     await auditRaw(tx, viewer, 'manual_evidence.link', { type: 'manual_evidence', id }, { assertion_id: assertionId, control_id: a?.control_id });
   });
-  return getManualEvidence(d, viewer, id, true);
+  return getManualEvidence(d, viewer, id, canRestricted);
 }
 
 /** DELETE /manual-evidence/:id/links/:assertion_id (row 37). The control is re-evaluated. */
-export async function unlinkManualEvidence(d: EvidenceDeps, viewer: Viewer, id: string, assertionId: string) {
+export async function unlinkManualEvidence(d: EvidenceDeps, viewer: Viewer, id: string, assertionId: string, canRestricted: boolean) {
   const now = d.engine.now();
   const runs = await orgTx(d.engine.sql, viewer.org_id, async (tx) => {
-    await loadItem(tx, viewer.org_id, id);
+    await loadItem(tx, viewer.org_id, id, canRestricted);
     const rows = await tx`
       UPDATE bastion_manual_evidence_links l SET unlinked_at = ${now}
         FROM bastion_assertions a
@@ -485,10 +500,12 @@ export async function reviewManualEvidence(
   id: string,
   assertionId: string,
   body: { verdict: 'accepted' | 'shows_exception'; note?: string | null },
+  canRestricted: boolean,
 ) {
   const now = d.engine.now();
   const runs = await orgTx(d.engine.sql, viewer.org_id, async (tx) => {
-    const item = await loadItem(tx, viewer.org_id, id);
+    // A reviewer who may not read a restricted item cannot vouch for it (#209).
+    const item = await loadItem(tx, viewer.org_id, id, canRestricted);
     if (item.status !== 'active') {
       throw new ConflictError(
         item.status === 'pending_scan'
@@ -522,20 +539,20 @@ export async function reviewManualEvidence(
     return queueControlRuns(tx, viewer.org_id, [String(rows[0].control_id)], now, viewer.id, 'manual');
   });
   await afterCommit(d, runs);
-  return getManualEvidence(d, viewer, id, true);
+  return getManualEvidence(d, viewer, id, canRestricted);
 }
 
 // ── Withdraw and redact ─────────────────────────────────────────────────────────────────
 
 /** POST /manual-evidence/:id/withdraw (row 39, confirm). */
-export async function withdrawManualEvidence(d: EvidenceDeps, viewer: Viewer, id: string, reason: string | null) {
+export async function withdrawManualEvidence(d: EvidenceDeps, viewer: Viewer, id: string, reason: string | null, canRestricted: boolean) {
   const engine = d.engine;
   const now = engine.now();
   const highest = await beginLedgerBatch(engine, viewer.org_id);
   let runs: QueuedRun[];
   try {
     runs = await orgTx(engine.sql, viewer.org_id, async (tx) => {
-      const item = await loadItem(tx, viewer.org_id, id);
+      const item = await loadItem(tx, viewer.org_id, id, canRestricted);
       if (item.status === 'withdrawn') throw new ConflictError('This evidence was already withdrawn.', 'ALREADY_WITHDRAWN');
       const wasRecorded = item.status === 'active' || item.status === 'superseded';
       const controls = await controlsLinkedTo(tx, viewer.org_id, id);
@@ -588,7 +605,8 @@ export async function redactPersonalData(d: EvidenceDeps, viewer: Viewer, pdId: 
       let runs: QueuedRun[] = [];
       let deleteKey: string | null = null;
       if (holderKind === 'manual_evidence') {
-        const item = await loadItem(tx, viewer.org_id, holderId);
+        // Owner-only (checked above): owners always hold read_restricted (spec 5.5 floor).
+        const item = await loadItem(tx, viewer.org_id, holderId, true);
         const controls = await controlsLinkedTo(tx, viewer.org_id, holderId);
         if (item.status !== 'withdrawn') {
           await tx`UPDATE bastion_manual_evidence
@@ -608,6 +626,10 @@ export async function redactPersonalData(d: EvidenceDeps, viewer: Viewer, pdId: 
             await tx`UPDATE bastion_evidence_objects SET bytes_redacted_at = ${now}
                       WHERE organization_id = ${viewer.org_id} AND content_sha256 = ${sha}`;
             deleteKey = String(obj.object_key);
+            // The durable "these bytes still have to go" marker (#212): removed only once the bucket
+            // delete succeeds; until then the evidence-ingest engine retries it.
+            await tx`INSERT INTO bastion_object_intents (organization_id, object_key) VALUES (${viewer.org_id}, ${deleteKey})
+                     ON CONFLICT (object_key) DO NOTHING`;
           }
         }
         runs = await queueControlRuns(tx, viewer.org_id, controls, now, viewer.id, 'manual');
@@ -616,24 +638,26 @@ export async function redactPersonalData(d: EvidenceDeps, viewer: Viewer, pdId: 
         highest,
         now,
       });
-      await enqueueBastionEvent(
-        'evidence.redacted',
-        { personal_data_id: pdId, holder_kind: holderKind, holder_id: holderId, bytes_deleted: deleteKey !== null },
-        tx,
-        { orgId: viewer.org_id, idempotencyKey: `evidence.redacted:${pdId}`, actorId: viewer.id, actorType: 'user' },
-      );
       await auditRaw(tx, viewer, 'personal_data.redact', { type: 'personal_data', id: pdId }, { holder_kind: holderKind, holder_id: holderId, reason });
       return { runs, deleteKey, holder_kind: holderKind, holder_id: holderId };
     });
   } catch (err) {
     throw mapAppendError(err);
   }
-  if (out.deleteKey && engine.storage) {
-    try {
-      await withStorageTimeout('delete', engine.storage.delete(out.deleteKey), engine.putTimeoutMs);
-    } catch (err) {
-      engine.log.warn({ organization_id: viewer.org_id, err: (err as Error).message }, 'bastion-redact: bytes not deleted yet; the object sweep retries');
-    }
+  // Report only what actually happened (#212): deleted, or still pending a retry.
+  const bytesDeleted = out.deleteKey ? await deleteRedactedBytes(engine, viewer.org_id, out.deleteKey) : false;
+  const bytesDeletePending = out.deleteKey !== null && !bytesDeleted;
+  try {
+    await orgTx(engine.sql, viewer.org_id, (tx) =>
+      enqueueBastionEvent(
+        'evidence.redacted',
+        { personal_data_id: pdId, holder_kind: out.holder_kind, holder_id: out.holder_id, bytes_deleted: bytesDeleted, bytes_delete_pending: bytesDeletePending },
+        tx,
+        { orgId: viewer.org_id, idempotencyKey: `evidence.redacted:${pdId}`, actorId: viewer.id, actorType: 'user' },
+      ),
+    );
+  } catch (err) {
+    engine.log.warn({ organization_id: viewer.org_id, err: (err as Error).message }, 'bastion-redact: evidence.redacted event not queued');
   }
   await afterCommit(d, out.runs);
   return {
@@ -642,10 +666,46 @@ export async function redactPersonalData(d: EvidenceDeps, viewer: Viewer, pdId: 
       holder_kind: out.holder_kind,
       holder_id: out.holder_id,
       redacted: true,
-      bytes_deleted: out.deleteKey !== null,
+      bytes_deleted: bytesDeleted,
+      bytes_delete_pending: bytesDeletePending,
       reevaluating_controls: out.runs.length,
     },
   };
+}
+
+/**
+ * Delete one redacted object's bytes, then its intent row. True only when the bucket delete
+ * succeeded. A failure leaves the intent for the evidence-ingest engine to retry (#212).
+ */
+export async function deleteRedactedBytes(engine: EvidenceDeps['engine'], orgId: string, key: string): Promise<boolean> {
+  if (!engine.storage) return false;
+  try {
+    await withStorageTimeout('delete', engine.storage.delete(key), engine.putTimeoutMs);
+  } catch (err) {
+    engine.log.warn({ organization_id: orgId, err: (err as Error).message }, 'bastion-redact: bytes not deleted yet; evidence-ingest retries');
+    return false;
+  }
+  await orgTx(engine.sql, orgId, (tx) => tx`DELETE FROM bastion_object_intents WHERE organization_id = ${orgId} AND object_key = ${key}`).catch(
+    (err: Error) => engine.log.warn({ organization_id: orgId, err: err.message }, 'bastion-redact: intent row not cleared; the next retry clears it'),
+  );
+  return true;
+}
+
+/**
+ * The redacted-bytes retry (#212): every redacted object whose intent row is still open had its
+ * bucket delete fail. Retry each; the intent goes only when the delete succeeds.
+ */
+export async function retryRedactedDeletes(engine: EvidenceDeps['engine'], only?: string): Promise<{ deleted: number; still_pending: number }> {
+  const rows = await engine.sql`
+    SELECT o.organization_id, o.object_key FROM bastion_evidence_objects o
+      JOIN bastion_object_intents i ON i.object_key = o.object_key AND i.organization_id = o.organization_id
+     WHERE o.bytes_redacted_at IS NOT NULL ${only ? engine.sql`AND o.organization_id = ${only}` : engine.sql``}
+     ORDER BY i.created_at LIMIT 200`;
+  let deleted = 0;
+  for (const r of rows) {
+    if (await deleteRedactedBytes(engine, String(r.organization_id), String(r.object_key))) deleted += 1;
+  }
+  return { deleted, still_pending: rows.length - deleted };
 }
 
 // ── Pending scans (the evidence-ingest engine and Check again) ───────────────────────────
@@ -735,17 +795,17 @@ export async function retryPendingScan(
 }
 
 /** POST /manual-evidence/:id/check-again: the review-queue "Check again" (immediate retry). */
-export async function checkScanAgain(d: EvidenceDeps, viewer: Viewer, id: string) {
+export async function checkScanAgain(d: EvidenceDeps, viewer: Viewer, id: string, canRestricted: boolean) {
   const exists = await orgTx(d.engine.sql, viewer.org_id, async (tx) => {
-    const r = (await tx`SELECT status FROM bastion_manual_evidence WHERE organization_id = ${viewer.org_id} AND id = ${id}`)[0];
-    if (!r) throw new NotFoundError('We could not find that evidence.');
+    const r = (await tx`SELECT status, sensitivity FROM bastion_manual_evidence WHERE organization_id = ${viewer.org_id} AND id = ${id}`)[0];
+    if (!r || (r.sensitivity === 'restricted' && !canRestricted)) throw new NotFoundError('We could not find that evidence.');
     if (r.status !== 'pending_scan') throw new ConflictError('This evidence is not waiting for a virus scan.', 'NOT_PENDING_SCAN');
     await auditRaw(tx, viewer, 'manual_evidence.check_again', { type: 'manual_evidence', id });
     return true;
   });
   if (!exists) throw new NotFoundError('We could not find that evidence.');
   const outcome = await retryPendingScan(d, viewer.org_id, id, { force: true });
-  const item = await getManualEvidence(d, viewer, id, true);
+  const item = await getManualEvidence(d, viewer, id, canRestricted);
   return { data: { ...item.data, check_result: outcome.result } };
 }
 

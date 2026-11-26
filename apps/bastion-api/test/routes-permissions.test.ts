@@ -48,6 +48,8 @@ const INTEGRITY: Record<string, string> = {
   'POST /manual-evidence': "can('bastion.evidence.upload')",
   'POST /manual-evidence/:id/supersede': "can('bastion.evidence.upload')",
   'POST /manual-evidence/:id/links/:assertion_id/review': "can('bastion.evidence.review')",
+  // Withdrawal is a destructive human act with no tool (spec 2.8, #217).
+  'POST /manual-evidence/:id/withdraw': "can('bastion.evidence.withdraw')",
   'POST /personal-data/:id/redact': "can('bastion.evidence.redact')",
 };
 
@@ -58,7 +60,6 @@ const AGENT_REACHABLE = [
   'GET /manual-evidence/:id',
   'POST /manual-evidence/:id/links',
   'DELETE /manual-evidence/:id/links/:assertion_id',
-  'POST /manual-evidence/:id/withdraw',
   'POST /manual-evidence/:id/check-again',
   'GET /feeds',
   'POST /feeds',
@@ -121,6 +122,17 @@ describe('bastion-api route gates', () => {
     expect(src).toContain('authenticateFeedPush(');
     expect(src.indexOf('authenticateFeedPush(')).toBeLessThan(src.indexOf('bastionFeedBatchSchema.safeParse'));
     expect(src).not.toMatch(/import[^;]*requireAuth|requireCan\(/);
+  });
+
+  it('the feed push keeps a per-IP limit and authenticates before the body is parsed (#214)', () => {
+    const src = readFileSync(join(ROUTES, FEED_INGEST_FILE), 'utf8');
+    expect(src).not.toMatch(/rateLimit:\s*false/);
+    expect(src).toMatch(/rateLimit:\s*\{\s*max:\s*BASTION_FEED_PUSHES_PER_IP_MINUTE/);
+    // onRequest runs before Fastify reads the body; the key check lives there.
+    expect(src).toMatch(/onRequest:\s*authenticate\b/);
+    expect(src).toContain('FEED_AUTH_FAIL_PREFIX');
+    // The Redis counters go through the fail-open helper, never a bare incr (#225).
+    expect(src).not.toMatch(/redis\.incr\(/);
   });
 
   it('every internal route checks the internal secret first', () => {

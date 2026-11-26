@@ -18,14 +18,17 @@ export default async function coverageRoutes(fastify: FastifyInstance) {
   };
 
   // Row 50.
-  fastify.get('/coverage', { preHandler: [requireAuth, can('bastion.control.read')] }, async (request, reply) => {
+  // Both take `asker_user_id` (#217): the person an agent reads for must hold control.read too.
+  const asker = (p: string) => fastify.requireAskerCan(p);
+
+  fastify.get('/coverage', { preHandler: [requireAuth, can('bastion.control.read'), asker('bastion.control.read')] }, async (request, reply) => {
     const parsed = query(request.query);
     if (!parsed.success) return validationError(request, reply, parsed.error);
     return handled(request, reply, () => coverageMap(deps(), viewerOf(request), parsed.data.framework_id));
   });
 
   // Row 94.
-  fastify.get('/summary', { preHandler: [requireAuth, can('bastion.control.read')] }, async (request, reply) => {
+  fastify.get('/summary', { preHandler: [requireAuth, can('bastion.control.read'), asker('bastion.control.read')] }, async (request, reply) => {
     const parsed = query(request.query);
     if (!parsed.success) return validationError(request, reply, parsed.error);
     const bucket = getBucketCheckStatus();

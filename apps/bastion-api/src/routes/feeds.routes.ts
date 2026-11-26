@@ -70,7 +70,8 @@ export default async function feedRoutes(fastify: FastifyInstance) {
   });
 
   // Row 49.
-  fastify.get('/feeds/:id/records', { preHandler: [requireAuth, can('bastion.feed.read')] }, async (request, reply) => {
+  // `asker_user_id` (#217): record subjects are personal data; the asker must hold feed.read too.
+  fastify.get('/feeds/:id/records', { preHandler: [requireAuth, can('bastion.feed.read'), fastify.requireAskerCan('bastion.feed.read')] }, async (request, reply) => {
     const id = idParam(request);
     if (!id) return notFound(request, reply);
     const raw = request.query as Record<string, string | undefined>;

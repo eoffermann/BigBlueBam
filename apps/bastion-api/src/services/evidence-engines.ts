@@ -4,7 +4,8 @@
 //
 //   evidence-ingest  (event + */10)  retries `pending_scan` uploads whose next attempt is due (5 min
 //                    doubling to 6 h, then once a day after 24 h), and turns pending Bolt-event inbox
-//                    rows into feed records for Bolt-event feeds.
+//                    rows into feed records for Bolt-event feeds, and retries the bucket delete of
+//                    redacted bytes whose delete failed at redaction time (#212).
 //   evidence-expiry  (10 6 * * *)    evidence inside the warning window publishes evidence.expiring
 //                    once per item; expired evidence publishes evidence.expired once per item and
 //                    re-evaluates the controls it is linked to. Exception expiry joins at M6.
@@ -15,7 +16,7 @@ import { daysLeft } from '../engine/manual.js';
 import { enqueueBastionEvent } from '../engine/outbox.js';
 import type { EvidenceDeps } from './evidence-deps.js';
 import { ingestBoltEventFeeds } from './feeds.service.js';
-import { retryPendingScan, type ScanRetryOutcome } from './manual-evidence.service.js';
+import { retryPendingScan, retryRedactedDeletes, type ScanRetryOutcome } from './manual-evidence.service.js';
 
 const DAY_MS = 86_400_000;
 const INGEST_BUDGET_MS = 20_000;
@@ -71,6 +72,16 @@ export async function evidenceIngest(d: EvidenceDeps, opts: { organization_id?: 
       engine.log.warn({ organization_id: orgId, err: (err as Error).message }, 'bastion-evidence-ingest: Bolt-event feed records not written; next run retries');
     }
   }
+  // Redacted bytes whose bucket delete failed at redaction time (#212): retried until confirmed.
+  let redacted = { deleted: 0, still_pending: 0 };
+  try {
+    redacted = await retryRedactedDeletes(engine, opts.organization_id);
+    if (redacted.deleted + redacted.still_pending > 0) {
+      engine.log.info(redacted, `bastion-evidence-ingest: redacted files deleted ${redacted.deleted}, still pending ${redacted.still_pending}`);
+    }
+  } catch (err) {
+    engine.log.warn({ err: (err as Error).message }, 'bastion-evidence-ingest: redacted-file delete retry failed; next run retries');
+  }
   const summary = {
     scans_checked: outcomes.filter((o) => o.result !== 'skipped').length,
     copied: outcomes.filter((o) => o.result === 'copied').length,
@@ -79,6 +90,8 @@ export async function evidenceIngest(d: EvidenceDeps, opts: { organization_id?: 
     feed_records: recorded,
     feed_duplicates: duplicates,
     feed_quota_blocked: quotaBlocked,
+    redacted_bytes_deleted: redacted.deleted,
+    redacted_bytes_pending: redacted.still_pending,
     elapsed_ms: Date.now() - started,
   };
   engine.log.info(summary, `bastion-evidence-ingest: copied ${summary.copied}, still pending ${summary.still_pending}, blocked ${summary.blocked}, feed records ${recorded}`);
