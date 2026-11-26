@@ -38,7 +38,10 @@ export default async function webhookRoutes(fastify: FastifyInstance) {
 
   fastify.post<{ Params: { id: string } }>(
     '/projects/:id/webhooks',
-    { preHandler: [requireAuth, fastify.requireCan('bam.project_webhook.create'), requireScope('read_write')] },
+    // requireProjectAccess() matches the GET sibling above (API-5, #246):
+    // without it any authenticated user could register a webhook on another
+    // org's project, because requireCan is advisory in the default posture.
+    { preHandler: [requireAuth, requireProjectAccess(), fastify.requireCan('bam.project_webhook.create'), requireScope('read_write')] },
     async (request, reply) => {
       const schema = z.object({
         url: z.string().url(),

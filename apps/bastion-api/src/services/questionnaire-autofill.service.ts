@@ -37,11 +37,12 @@ import {
   tsQueryTerms,
 } from '../library/questionnaire-draft.js';
 import type { SliceLock } from './compile-ai.service.js';
-import { resolveLlmProviderId } from './compile-ai.service.js';
+import { COMPILE_SLICE_LOCK_MS, resolveLlmProviderId, takeSliceLock } from './compile-ai.service.js';
 
 export const AUTOFILL_HEARTBEAT_EVERY_MS = 20_000;
 export const AUTOFILL_PERMIT_RETRY_MS = 2_000;
-export const AUTOFILL_SLICE_LOCK_MS = 240_000;
+/** Outlives the longest slice: the start cutoff plus one call at the longest allowed deadline (#257). */
+export const AUTOFILL_SLICE_LOCK_MS = COMPILE_SLICE_LOCK_MS;
 export const DEFAULT_MAX_LLM_CALLS_PER_QUESTIONNAIRE = 1200;
 const DEFAULT_FLOORS = { high: 0.8, medium: 0.55 };
 
@@ -346,6 +347,13 @@ interface QRow {
   owner_user_id: string | null;
   created_by: string | null;
   asker: string | null;
+  slice_token: string | null;
+}
+
+/** One slice's ownership of the questionnaire row: the worker's claimant AND this slice's token (#242). */
+interface QFence {
+  claimant: string;
+  token: string;
 }
 
 const active = new Map<string, Promise<void>>();
@@ -366,7 +374,7 @@ export async function drainAutofillSlices(timeoutMs: number): Promise<number> {
 }
 
 const SELECT_Q = (tx: Tx, orgId: string, id: string) => tx`
-  SELECT id, organization_id, title, status, claimed_by, heartbeat_at, row_count, rows_done, high_count, medium_count, low_count,
+  SELECT id, organization_id, title, status, claimed_by, heartbeat_at, slice_token, row_count, rows_done, high_count, medium_count, low_count,
          resume_count, owner_user_id, created_by, column_map->>'autofill_requested_by' AS asker
     FROM bastion_questionnaires WHERE organization_id = ${orgId} AND id = ${id}`;
 
@@ -401,31 +409,60 @@ export async function autofillSlice(d: AutofillDeps, body: { organization_id: st
   if (q.status !== 'answering') return sliceView(q, false);
   if (active.has(id)) return sliceView(q, true);
 
+  // Same two layers as the compile (#242): the Redis pre-check (an error means "Postgres fences
+  // alone", never "acquired"), then the slice_token claim that every slice write is fenced on.
+  const lockKey = `q:${id}`;
+  const lockToken = await takeSliceLock(d.sliceLock, lockKey, AUTOFILL_SLICE_LOCK_MS, d.engine.log);
+  if (lockToken === null) return sliceView(q, true);
+  const releaseLock = async () => {
+    if (lockToken !== 'unavailable') await d.sliceLock.release(lockKey, lockToken).catch(() => undefined);
+  };
+
   const now = d.engine.now();
   const takeoverBefore = new Date(now.getTime() - d.engine.leaseMs);
-  const claimed = await orgTx(d.engine.sql, orgId, (tx) => tx`
-    UPDATE bastion_questionnaires SET claimed_by = ${claimant}, heartbeat_at = ${now}
-     WHERE organization_id = ${orgId} AND id = ${id} AND status = 'answering'
-       AND (claimed_by IS NULL OR claimed_by = ${claimant} OR heartbeat_at IS NULL OR heartbeat_at < ${takeoverBefore})
-    RETURNING id`);
+  let claimed: readonly Record<string, unknown>[];
+  try {
+    claimed = await orgTx(d.engine.sql, orgId, (tx) => tx`
+      UPDATE bastion_questionnaires SET claimed_by = ${claimant}, heartbeat_at = ${now}, slice_token = gen_random_uuid()
+       WHERE organization_id = ${orgId} AND id = ${id} AND status = 'answering'
+         AND (claimed_by IS NULL OR claimed_by = ${claimant} OR heartbeat_at IS NULL OR heartbeat_at < ${takeoverBefore})
+         AND (slice_token IS NULL OR heartbeat_at IS NULL OR heartbeat_at < ${takeoverBefore})
+      RETURNING id, slice_token`);
+  } catch (err) {
+    await releaseLock();
+    throw err;
+  }
   if (!claimed[0]) {
+    await releaseLock();
     const cur = await readQ(d, orgId, id);
     if (!cur) throw new RunNotFoundError();
     if (cur.status !== 'answering') return sliceView(cur, false);
+    if (cur.claimed_by === claimant && cur.slice_token) return sliceView(cur, true);
     const stale = !cur.heartbeat_at || now.getTime() - new Date(cur.heartbeat_at).getTime() > STALE_HEARTBEAT_MS;
     throw new RunLeaseHeldError(cur.claimed_by, stale);
   }
+  const fence: QFence = { claimant, token: String(claimed[0].slice_token) };
   const mine = (await readQ(d, orgId, id)) as QRow;
-  if (!(await d.sliceLock.acquire(`q:${id}`, AUTOFILL_SLICE_LOCK_MS).catch(() => true))) return sliceView(mine, true);
 
-  const slice = runSlice(d, mine, claimant)
-    .catch((err) => {
-      d.engine.log.error({ questionnaire_id: id, err: (err as Error).message }, 'bastion-autofill: slice failed');
+  const slice = runSlice(d, mine, fence)
+    .catch(async (err) => {
+      if (err instanceof ClaimLostError) {
+        d.engine.log.info({ questionnaire_id: id }, 'bastion-autofill: slice stopped; another slice owns the questionnaire now');
+        return;
+      }
+      // Same bound as the compile (#241): a slice that throws gives the questionnaire back with
+      // resume_count + 1, and at MAX_RESUMES the undrafted rows go to review as "Needs an expert",
+      // instead of the next poll re-driving (and re-paying for) the same failing row forever.
+      await releaseQ(d, mine, fence).catch(() => undefined);
+      d.engine.log.error({ questionnaire_id: id, err: (err as Error).message }, 'bastion-autofill: slice failed; the questionnaire was released (sent to review after repeated failures)');
     })
     .finally(async () => {
       active.delete(id);
       waitingState.delete(id);
-      await d.sliceLock.release(`q:${id}`).catch(() => undefined);
+      await orgTx(d.engine.sql, orgId, (tx) => tx`
+        UPDATE bastion_questionnaires SET slice_token = NULL
+         WHERE organization_id = ${orgId} AND id = ${id} AND slice_token = ${fence.token}`).catch(() => undefined);
+      await releaseLock();
     });
   active.set(id, slice);
   if (!d.background) {
@@ -443,10 +480,10 @@ class ClaimLostError extends Error {
   }
 }
 
-async function heartbeat(d: AutofillDeps, q: QRow, claimant: string): Promise<void> {
+async function heartbeat(d: AutofillDeps, q: QRow, f: QFence): Promise<void> {
   const r = await orgTx(d.engine.sql, q.organization_id, (tx) => tx`
     UPDATE bastion_questionnaires SET heartbeat_at = ${d.engine.now()}
-     WHERE id = ${q.id} AND organization_id = ${q.organization_id} AND claimed_by = ${claimant} AND status = 'answering'
+     WHERE id = ${q.id} AND organization_id = ${q.organization_id} AND claimed_by = ${f.claimant} AND slice_token = ${f.token} AND status = 'answering'
     RETURNING id`);
   if (!r[0]) throw new ClaimLostError();
 }
@@ -465,11 +502,11 @@ async function recount(tx: Tx, orgId: string, id: string) {
 }
 
 /** Give the questionnaire back (SIGTERM): queued again, or after MAX_RESUMES the rest marked and sent to review. */
-async function releaseQ(d: AutofillDeps, q: QRow, claimant: string): Promise<void> {
+async function releaseQ(d: AutofillDeps, q: QRow, f: QFence): Promise<void> {
   await orgTx(d.engine.sql, q.organization_id, async (tx) => {
     const r = await tx`
-      UPDATE bastion_questionnaires SET claimed_by = NULL, heartbeat_at = NULL, resume_count = resume_count + 1
-       WHERE id = ${q.id} AND organization_id = ${q.organization_id} AND claimed_by = ${claimant} AND status = 'answering'
+      UPDATE bastion_questionnaires SET claimed_by = NULL, heartbeat_at = NULL, slice_token = NULL, resume_count = resume_count + 1
+       WHERE id = ${q.id} AND organization_id = ${q.organization_id} AND claimed_by = ${f.claimant} AND slice_token = ${f.token} AND status = 'answering'
       RETURNING resume_count`;
     if (r[0] && Number(r[0].resume_count) >= MAX_RESUMES) await parkQuestionnaire(tx, q.organization_id, q.id);
   });
@@ -484,12 +521,12 @@ export async function parkQuestionnaire(tx: Tx, orgId: string, id: string): Prom
   const n = await recount(tx, orgId, id);
   await tx`
     UPDATE bastion_questionnaires
-       SET status = 'in_review', claimed_by = NULL, heartbeat_at = NULL, rows_done = ${n.done}, row_count = ${n.total},
+       SET status = 'in_review', claimed_by = NULL, heartbeat_at = NULL, slice_token = NULL, rows_done = ${n.done}, row_count = ${n.total},
            high_count = ${n.high}, medium_count = ${n.medium}, low_count = ${n.low}
      WHERE organization_id = ${orgId} AND id = ${id} AND status = 'answering'`;
 }
 
-async function runSlice(d: AutofillDeps, q: QRow, claimant: string): Promise<void> {
+async function runSlice(d: AutofillDeps, q: QRow, f: QFence): Promise<void> {
   const sliceStart = Date.now();
   const cutoff = d.sliceCutoffMs ?? LLM_SLICE_START_CUTOFF_MS;
   const orgId = q.organization_id;
@@ -509,7 +546,7 @@ async function runSlice(d: AutofillDeps, q: QRow, claimant: string): Promise<voi
   let processed = 0;
   for (const it of items) {
     if (stopping || d.shuttingDown?.()) {
-      await releaseQ(d, q, claimant);
+      await releaseQ(d, q, f);
       d.engine.log.info({ questionnaire_id: q.id }, 'bastion-autofill: shutting down; the questionnaire was released and will resume');
       return;
     }
@@ -524,13 +561,13 @@ async function runSlice(d: AutofillDeps, q: QRow, claimant: string): Promise<voi
     if (ctx.providerId && done < ctx.maxCalls && cands.length > 0) {
       const messages = buildDraftMessages({ question, section: (it.section as string | null) ?? null, answer_kind: answerKind, candidates: cands });
       const out = await askAi(d, orgId, ctx.providerId, messages, sliceStart, cutoff, {
-        heartbeat: () => heartbeat(d, q, claimant),
+        heartbeat: () => heartbeat(d, q, f),
         onWaiting: (w) => waitingState.set(q.id, w),
         log: d.engine.log,
       });
       if (out.kind === 'out_of_time') {
         if (stopping || d.shuttingDown?.()) {
-          await releaseQ(d, q, claimant);
+          await releaseQ(d, q, f);
           return;
         }
         break;
@@ -552,7 +589,7 @@ async function runSlice(d: AutofillDeps, q: QRow, claimant: string): Promise<voi
         UPDATE bastion_questionnaires
            SET rows_done = ${n.done}, high_count = ${n.high}, medium_count = ${n.medium}, low_count = ${n.low},
                injection_suspected = injection_suspected OR ${suspect}, heartbeat_at = ${d.engine.now()}
-         WHERE id = ${q.id} AND organization_id = ${orgId} AND claimed_by = ${claimant} AND status = 'answering'
+         WHERE id = ${q.id} AND organization_id = ${orgId} AND claimed_by = ${f.claimant} AND slice_token = ${f.token} AND status = 'answering'
         RETURNING id`;
       if (!upd[0]) throw new ClaimLostError();
       return n;
@@ -570,18 +607,18 @@ async function runSlice(d: AutofillDeps, q: QRow, claimant: string): Promise<voi
     d.engine.log.info({ questionnaire_id: q.id }, `bastion-autofill: slice ended at ${done}/${total}; the worker starts the next one`);
     return;
   }
-  await finish(d, q, claimant);
+  await finish(d, q, f);
 }
 
-async function finish(d: AutofillDeps, q: QRow, claimant: string): Promise<void> {
+async function finish(d: AutofillDeps, q: QRow, f: QFence): Promise<void> {
   const orgId = q.organization_id;
   const n = await orgTx(d.engine.sql, orgId, async (tx) => {
     const counts = await recount(tx, orgId, q.id);
     const r = await tx`
       UPDATE bastion_questionnaires
-         SET status = 'in_review', claimed_by = NULL, heartbeat_at = NULL, rows_done = ${counts.done}, row_count = ${counts.total},
+         SET status = 'in_review', claimed_by = NULL, heartbeat_at = NULL, slice_token = NULL, rows_done = ${counts.done}, row_count = ${counts.total},
              high_count = ${counts.high}, medium_count = ${counts.medium}, low_count = ${counts.low}
-       WHERE id = ${q.id} AND organization_id = ${orgId} AND claimed_by = ${claimant} AND status = 'answering'
+       WHERE id = ${q.id} AND organization_id = ${orgId} AND claimed_by = ${f.claimant} AND slice_token = ${f.token} AND status = 'answering'
       RETURNING id`;
     if (!r[0]) throw new ClaimLostError();
     const actor = q.asker ?? q.created_by;
@@ -616,7 +653,7 @@ export async function orphanedQuestionnaires(engine: EngineDeps, olderThan: Date
 /** Claims whose heartbeat outlived the lease: released (resume_count + 1); at MAX_RESUMES, parked to review. */
 export async function reapQuestionnaires(engine: EngineDeps, cutoff: Date, organizationId?: string) {
   const released = await engine.sql`
-    UPDATE bastion_questionnaires SET claimed_by = NULL, heartbeat_at = NULL, resume_count = resume_count + 1
+    UPDATE bastion_questionnaires SET claimed_by = NULL, heartbeat_at = NULL, slice_token = NULL, resume_count = resume_count + 1
      WHERE status = 'answering' AND claimed_by IS NOT NULL AND (heartbeat_at IS NULL OR heartbeat_at < ${cutoff})
        ${organizationId ? engine.sql`AND organization_id = ${organizationId}` : engine.sql``}
     RETURNING id, organization_id, resume_count`;

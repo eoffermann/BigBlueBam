@@ -8,6 +8,7 @@ import {
   timestamp,
   jsonb,
   index,
+  uniqueIndex,
   customType,
 } from 'drizzle-orm/pg-core';
 import { users, organizations, projects } from './bbb-refs.js';
@@ -40,7 +41,8 @@ export const beaconEntries = pgTable(
   'beacon_entries',
   {
     id: uuid('id').primaryKey().defaultRandom(),
-    slug: varchar('slug', { length: 256 }).unique().notNull(),
+    // Unique per org, not globally: see beacon_entries_org_slug_key below (#246).
+    slug: varchar('slug', { length: 256 }).notNull(),
     title: varchar('title', { length: 512 }).notNull(),
     summary: text('summary'),
     body_markdown: text('body_markdown').notNull(),
@@ -84,5 +86,7 @@ export const beaconEntries = pgTable(
       table.status,
     ),
     index('idx_beacon_entries_slug').on(table.slug),
+    // 0289_beacon_slug_org_scoped_unique.sql: a slug is a per-tenant natural key.
+    uniqueIndex('beacon_entries_org_slug_key').on(table.organization_id, table.slug),
   ],
 );

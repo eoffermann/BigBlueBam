@@ -118,19 +118,20 @@ export async function listWidgets(orgId: string, dashboardId?: string) {
 // Get widget
 // ---------------------------------------------------------------------------
 
-export async function getWidget(id: string, orgId?: string) {
-  const query = db
+/**
+ * `orgId` is required and always applied (BNC-1, #246). It used to be optional,
+ * and executeWidgetQuery/refreshWidgetQuery omitted it, so any user could run
+ * any org's widget by id. bench_widgets has no org column; this join through
+ * bench_dashboards is a widget's only tenant boundary.
+ */
+export async function getWidget(id: string, orgId: string) {
+  const [row] = await db
     .select({ widget: benchWidgets })
     .from(benchWidgets)
     .innerJoin(benchDashboards, eq(benchWidgets.dashboard_id, benchDashboards.id))
-    .where(
-      orgId
-        ? and(eq(benchWidgets.id, id), eq(benchDashboards.organization_id, orgId))
-        : eq(benchWidgets.id, id),
-    )
+    .where(and(eq(benchWidgets.id, id), eq(benchDashboards.organization_id, orgId)))
     .limit(1);
 
-  const [row] = await query;
   if (!row) throw notFound('Widget not found');
   return row.widget;
 }
@@ -139,9 +140,9 @@ export async function getWidget(id: string, orgId?: string) {
 // Update widget
 // ---------------------------------------------------------------------------
 
-export async function updateWidget(id: string, input: UpdateWidgetInput, orgId?: string) {
-  // Verify widget belongs to caller's org before updating
-  if (orgId) await getWidget(id, orgId);
+export async function updateWidget(id: string, input: UpdateWidgetInput, orgId: string) {
+  // Verify widget belongs to caller's org before updating (required, #246).
+  await getWidget(id, orgId);
   if (input.data_source && input.entity) {
     const source = getDataSource(input.data_source, input.entity);
     if (!source) throw badRequest(`Unknown data source: ${input.data_source}.${input.entity}`);
@@ -167,7 +168,7 @@ export async function updateWidget(id: string, input: UpdateWidgetInput, orgId?:
 
   // Invalidate cached query result when widget config changes
   if (cacheService) {
-    await cacheService.invalidate(id);
+    await cacheService.invalidate(id, orgId);
   }
 
   return updated;
@@ -177,15 +178,18 @@ export async function updateWidget(id: string, input: UpdateWidgetInput, orgId?:
 // Delete widget
 // ---------------------------------------------------------------------------
 
-export async function deleteWidget(id: string, orgId?: string) {
-  // Verify widget belongs to caller's org before deleting
-  if (orgId) await getWidget(id, orgId);
+export async function deleteWidget(id: string, orgId: string) {
+  // Verify widget belongs to caller's org before deleting (required, #246).
+  await getWidget(id, orgId);
   const [deleted] = await db
     .delete(benchWidgets)
     .where(eq(benchWidgets.id, id))
     .returning({ id: benchWidgets.id });
 
   if (!deleted) throw notFound('Widget not found');
+  if (cacheService) {
+    await cacheService.invalidate(id, orgId);
+  }
   return deleted;
 }
 
@@ -198,7 +202,7 @@ export async function executeWidgetQuery(
   orgId: string,
   dateRangeOverride?: queryService.DateRange,
 ) {
-  const widget = await getWidget(id);
+  const widget = await getWidget(id, orgId);
 
   const baseConfig = widget.query_config as QueryConfig;
   // A per-request date range (from the dashboard date-range picker) overrides
@@ -213,7 +217,7 @@ export async function executeWidgetQuery(
 
   // Check cache first (only when running the widget's own saved configuration)
   if (cacheService && !hasOverride) {
-    const cached = await cacheService.get(id);
+    const cached = await cacheService.get(id, orgId);
     if (cached) {
       return { ...(cached as Record<string, unknown>), cached: true };
     }
@@ -229,7 +233,7 @@ export async function executeWidgetQuery(
   // Store in cache using the widget's configured TTL (only the un-overridden run)
   if (cacheService && !hasOverride) {
     const ttl = widget.cache_ttl_seconds ?? undefined;
-    await cacheService.set(id, result, ttl);
+    await cacheService.set(id, orgId, result, ttl);
   }
 
   return result;
@@ -240,11 +244,12 @@ export async function executeWidgetQuery(
 // ---------------------------------------------------------------------------
 
 export async function refreshWidgetQuery(id: string, orgId: string) {
+  // Resolve org-scoped before touching the cache (#246).
+  const widget = await getWidget(id, orgId);
   if (cacheService) {
-    await cacheService.invalidate(id);
+    await cacheService.invalidate(id, orgId);
   }
   // Re-execute without cache
-  const widget = await getWidget(id);
   const result = await queryService.executeQuery(
     widget.data_source,
     widget.entity,
@@ -254,7 +259,7 @@ export async function refreshWidgetQuery(id: string, orgId: string) {
   // Re-populate cache
   if (cacheService) {
     const ttl = widget.cache_ttl_seconds ?? undefined;
-    await cacheService.set(id, result, ttl);
+    await cacheService.set(id, orgId, result, ttl);
   }
   return result;
 }

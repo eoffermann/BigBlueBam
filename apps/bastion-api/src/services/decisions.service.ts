@@ -14,6 +14,7 @@
 import { BASTION_SMALL_TEAM_HUMANS } from '@bigbluebam/shared';
 import { ForbiddenError } from '../lib/errors.js';
 import { type EngineDeps, orgTx, type Tx } from '../engine/context.js';
+import { lockOrgGapRank } from '../engine/gaps.js';
 import { accessTypeOf } from '../lib/ref-labels.js';
 import type { Viewer } from './types.js';
 
@@ -131,6 +132,8 @@ export interface ReconcileSummary {
   exceptions_expired: number;
   exceptions_decision_rejected: number;
   inbox_marked_done: number;
+  /** Orgs whose reconcile failed this run (logged; retried next run). */
+  orgs_failed: number;
 }
 
 export async function proposalReconcile(deps: EngineDeps, opts: { organization_id?: string } = {}): Promise<ReconcileSummary> {
@@ -144,10 +147,41 @@ export async function proposalReconcile(deps: EngineDeps, opts: { organization_i
       ) o ${opts.organization_id ? deps.sql`WHERE organization_id = ${opts.organization_id}` : deps.sql``}`
   ).map((r) => String(r.organization_id));
   deps.log.info({ orgs: orgs.length }, `bastion-proposal-reconcile: checking ${orgs.length} org(s) with waiting decisions`);
-  const s: ReconcileSummary = { orgs: orgs.length, fixes_expired: 0, fixes_decision_rejected: 0, exceptions_expired: 0, exceptions_decision_rejected: 0, inbox_marked_done: 0 };
+  const s: ReconcileSummary = { orgs: orgs.length, fixes_expired: 0, fixes_decision_rejected: 0, exceptions_expired: 0, exceptions_decision_rejected: 0, inbox_marked_done: 0, orgs_failed: 0 };
 
   for (const orgId of orgs) {
-    const r = await orgTx(deps.sql, orgId, async (tx) => {
+    let r: { fe: number; fr: number; ee: number; er: number; inbox: number };
+    try {
+      r = await reconcileOrg(deps, orgId, now);
+    } catch (err) {
+      // One org's failure (a deadlock, a lock timeout) never skips the orgs after it (#255); the
+      // next run retries this one.
+      s.orgs_failed += 1;
+      deps.log.error({ organization_id: orgId, err: (err as Error).message }, 'bastion-proposal-reconcile: this org failed; the next run retries it');
+      continue;
+    }
+    s.fixes_expired += r.fe;
+    s.fixes_decision_rejected += r.fr;
+    s.exceptions_expired += r.ee;
+    s.exceptions_decision_rejected += r.er;
+    s.inbox_marked_done += r.inbox;
+    if (r.fr + r.er > 0) {
+      deps.log.error(
+        { organization_id: orgId, fixes: r.fr, exceptions: r.er },
+        'bastion-proposal-reconcile: a Bastion proposal was decided outside Bastion; Bastion ignored that decision (decision_rejected)',
+      );
+    }
+  }
+  deps.log.info(s, 'bastion-proposal-reconcile: complete');
+  return s;
+}
+
+async function reconcileOrg(deps: EngineDeps, orgId: string, now: Date) {
+    return orgTx(deps.sql, orgId, async (tx) => {
+      // The gap-rank lock FIRST (#255), the order every gap writer uses: this transaction reopens
+      // gaps and row-locks exceptions, and exception approval holds an exception row lock while it
+      // re-ranks every gap, so without the shared lock the two deadlocked (40P01).
+      await lockOrgGapRank(tx, orgId);
       const out = { fe: 0, fr: 0, ee: 0, er: 0, inbox: 0 };
       const fixes = await tx`
         SELECT d.id, d.gap_id, p.status AS p_status, p.expires_at AS p_expires, p.decided_by
@@ -197,18 +231,4 @@ export async function proposalReconcile(deps: EngineDeps, opts: { organization_i
       out.inbox = done.length;
       return out;
     });
-    s.fixes_expired += r.fe;
-    s.fixes_decision_rejected += r.fr;
-    s.exceptions_expired += r.ee;
-    s.exceptions_decision_rejected += r.er;
-    s.inbox_marked_done += r.inbox;
-    if (r.fr + r.er > 0) {
-      deps.log.error(
-        { organization_id: orgId, fixes: r.fr, exceptions: r.er },
-        'bastion-proposal-reconcile: a Bastion proposal was decided outside Bastion; Bastion ignored that decision (decision_rejected)',
-      );
-    }
-  }
-  deps.log.info(s, 'bastion-proposal-reconcile: complete');
-  return s;
 }

@@ -403,6 +403,9 @@ describe('bastion-evaluate-tick and engine jobs', () => {
     const out = (await rank(job({}), silent)) as { ranked: number; complete: boolean };
     expect(post).toHaveBeenCalledTimes(3);
     expect(post.mock.calls.every((c) => c[0] === '/v1/internal/engines/gap-rank')).toBe(true);
+    // Every call of the pass carries the job id as its pass id (#256), so the engine never resumes
+    // a cursor some other pass left behind.
+    expect(post.mock.calls.every((c) => (c[1] as { pass_id?: string }).pass_id === 'j1')).toBe(true);
     expect(out).toEqual({ ranked: 7, complete: true });
     // An engine that reports no `complete` is called once.
     const once = vi.fn().mockResolvedValue({ ok: true, status: 200, data: { data: { pruned: 1 } } });

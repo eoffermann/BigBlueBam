@@ -2,6 +2,7 @@
 // imports (env validation, pool creation) run before any statement in this file.
 import 'dotenv/config';
 import Fastify from 'fastify';
+import { LLM_CLIENT_GRACE_MS } from '@bigbluebam/shared';
 import cors from '@fastify/cors';
 import cookie from '@fastify/cookie';
 import rateLimit from '@fastify/rate-limit';
@@ -169,8 +170,9 @@ for (const signal of signals) {
       markAutofillShuttingDown();
       await fastify.close();
       const [draining, drafting] = await Promise.all([
-        drainCompileSlices(env.BASTION_LLM_TIMEOUT_MS + 5_000),
-        drainAutofillSlices(env.BASTION_LLM_TIMEOUT_MS + 5_000),
+        // A call ends at most LLM_CLIENT_GRACE_MS past its deadline (lib/llm-client.ts, #257).
+        drainCompileSlices(env.BASTION_LLM_TIMEOUT_MS + LLM_CLIENT_GRACE_MS),
+        drainAutofillSlices(env.BASTION_LLM_TIMEOUT_MS + LLM_CLIENT_GRACE_MS),
       ]);
       if (draining > 0) fastify.log.info(`released ${draining} AI compile slice(s) for the worker to resume`);
       if (drafting > 0) fastify.log.info(`released ${drafting} questionnaire autofill slice(s) for the worker to resume`);

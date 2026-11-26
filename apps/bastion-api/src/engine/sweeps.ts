@@ -6,6 +6,7 @@ import { BASTION_DAY_MS, type BastionEvaluateTickResult, type BastionTickRun } f
 import { compareEpochSeq, signSeal, verifyChain, verifySeal, type LedgerRow, type SealPayload } from '../lib/ledger-canonical.js';
 import { MAX_RESUMES, ORPHAN_REQUEUE_AFTER_MS } from './budgets.js';
 import { type EngineDeps, localClock, orgTx, sqlstateOf, utcDate } from './context.js';
+import { claimNoticeOnce } from './notice-markers.js';
 import { enqueueBastionEvent, enqueueOutbox } from './outbox.js';
 import { checkLedgerIdentity, sealObjectKey, type SealIdentity, StorageUnavailableError, writeRestoreObject } from './restore.js';
 import { loadReadinessNumbers } from './numbers.js';
@@ -286,6 +287,9 @@ export async function ledgerVerify(deps: EngineDeps, keys: Map<string, string>, 
         if (!ok) badSeals += 1;
       }
       for (const p of problems) {
+        // A chain break persists: re-verified every pass, and the outbox key alone was pruned after
+        // 30 days, re-raising the same break monthly (#243). Durable marker, once per break.
+        if (!(await claimNoticeOnce(tx, org.organization_id, `evidence.integrity_failed:chain:${p.seq}:${p.problem}`, deps.now()))) continue;
         await enqueueBastionEvent('evidence.integrity_failed', { seq: p.seq, cause: p.problem }, tx, {
           orgId: org.organization_id,
           idempotencyKey: `evidence.integrity_failed:chain:${org.organization_id}:${p.seq}:${p.problem}`,
@@ -327,6 +331,9 @@ export async function evaluationMissed(deps: EngineDeps, opts: { organization_id
       const since = last ?? (adopted?.at ? new Date(adopted.at as string) : null);
       if (!since || now.getTime() - since.getTime() <= MISSED_AFTER_MS) return;
       const stamp = last ? last.toISOString() : 'never';
+      // One notice per missed period, however long the outage lasts: a durable marker, because
+      // the outbox key was pruned after 30 days and re-fired the same miss monthly (#243).
+      if (!(await claimNoticeOnce(tx, org.organization_id, `evaluation_missed:${stamp}`, now))) return;
       const inserted = await enqueueBastionEvent(
         'evaluation.missed',
         { last_completed_at: last ? last.toISOString() : null, hours_since: Math.floor((now.getTime() - since.getTime()) / 3_600_000) },

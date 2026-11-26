@@ -3,6 +3,35 @@
 // policy.attested fix draft. No env or database import, so the unit tests and the fix drafting
 // can use it without booting the service.
 
+/**
+ * The linked Beacon article's state (#244), as bastion_probe_policy_attested_v2 reports it. Only
+ * `current` can be read and acknowledged; for the rest nobody is due, nobody is nudged, and the
+ * owner is told why.
+ */
+export type ArticleState = 'current' | 'missing' | 'retired' | 'expired';
+
+/** What the owner is told when the article cannot be acknowledged. */
+export const ARTICLE_PROBLEM: Record<Exclude<ArticleState, 'current'>, string> = {
+  missing: 'This Beacon article no longer exists, so nobody can read or acknowledge it. Link a current article or retire this policy.',
+  retired:
+    'This article is retired or archived in Beacon, so nobody is asked to read it and acknowledgements are paused. Restore it in Beacon, link a current article, or retire this policy.',
+  expired: 'This article is past its review date in Beacon, so acknowledgements are paused until its owner reviews it in Beacon.',
+};
+
+/** The article state from a loaded row (the same rule as the v2 probe). */
+export function articleStateOf(p: { entry_status: string | null; version: number | null; expires_at: string | Date | null }, asOf: Date): ArticleState {
+  if (p.entry_status === null || p.version === null) return 'missing';
+  if (p.entry_status === 'Retired' || p.entry_status === 'Archived') return 'retired';
+  if (p.entry_status === 'Expired' || (p.expires_at !== null && new Date(p.expires_at).getTime() < asOf.getTime())) return 'expired';
+  return 'current';
+}
+
+/** A probe summary's article_state; anything unknown reads as current (v1 snapshots). */
+export function articleStateFromSummary(summary: Record<string, unknown> | null | undefined): ArticleState {
+  const s = summary?.article_state;
+  return s === 'missing' || s === 'retired' || s === 'expired' ? s : 'current';
+}
+
 /** can_access(asker, entity_type, entity_id), fail closed. */
 export type PolicyCanAccess = (askerUserId: string, entityType: string, entityId: string) => Promise<boolean>;
 

@@ -100,7 +100,7 @@ function PolicyItem({ p }: { p: PolicyRow }) {
         </button>
         {p.status === 'active' && (
           <div className="flex gap-2 shrink-0">
-            {canRequest && p.not_attested_count > 0 && (
+            {canRequest && p.not_attested_count > 0 && (p.article_state ?? 'current') === 'current' && (
               <button type="button" className={primary} disabled={ask.isPending} onClick={() => ask.mutate(p.id)}>
                 Ask people to read it
               </button>
@@ -113,6 +113,11 @@ function PolicyItem({ p }: { p: PolicyRow }) {
           </div>
         )}
       </div>
+      {p.article_problem && (
+        <p className="text-xs text-red-700 bg-red-50 dark:bg-red-950/30 rounded px-2 py-1" data-testid="article-problem">
+          {p.article_problem}
+        </p>
+      )}
       {p.sharing_problem && <p className="text-xs text-amber-700 bg-amber-50 dark:bg-amber-950/30 rounded px-2 py-1">{p.sharing_problem}</p>}
       {ask.data && <p className="text-xs text-green-700">Asked {ask.data.data.nudged} {ask.data.data.nudged === 1 ? 'person' : 'people'} to read it.</p>}
       {(ask.error || update.error) && <p className="text-xs text-red-600">{friendlyError(ask.error ?? update.error)}</p>}

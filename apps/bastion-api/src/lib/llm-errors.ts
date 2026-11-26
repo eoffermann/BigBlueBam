@@ -20,6 +20,20 @@ export class LlmError extends Error {
   }
 }
 
+/**
+ * The call ran past its deadline (#257): the proxy's 504 UPSTREAM_TIMEOUT, or the client's own
+ * abort. Still an LlmError (every caller falls back the same way), but counted apart, because the
+ * knob is BASTION_LLM_TIMEOUT_MS (or a smaller BASTION_LLM_MAX_TOKENS), not a broken provider.
+ */
+export class LlmTimeoutError extends LlmError {
+  timeoutMs: number;
+  constructor(timeoutMs: number, status: number | null) {
+    super(`the AI call took longer than ${Math.round(timeoutMs / 1000)} s`, status);
+    this.name = 'LlmTimeoutError';
+    this.timeoutMs = timeoutMs;
+  }
+}
+
 export interface LlmMessage {
   role: 'system' | 'user' | 'assistant';
   content: string;

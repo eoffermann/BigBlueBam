@@ -1,8 +1,10 @@
 // LLM fairness: leased permits (spec 7.3), copied from admitLlmCall in
 // apps/api/src/routes/internal-llm.routes.ts. Two Redis sorted sets of random tokens scored by
 // admit time: `bastion:llm:svc` (3 at once across bastion-api) and `bastion:llm:org:<org>` (1 per
-// org). On every admit, tokens older than the hold window (90 s, above BASTION_LLM_TIMEOUT_MS) are
-// purged, so a crashed caller cannot hold a slot; the caller releases (ZREM) in `finally`.
+// org). On every admit, tokens older than the hold window are purged, so a crashed caller cannot
+// hold a slot; the caller releases (ZREM) in `finally`. The hold window is DERIVED from the call
+// deadline (llmHoldWindowMs(BASTION_LLM_TIMEOUT_MS), #257): a fixed 90 s let a permit expire under
+// a call still running once the deadline was raised past it, breaking the org limit of 1.
 //
 // Fails OPEN when Redis is down, as the proxy does: a Redis outage must never stop a compile, and
 // the proxy's own per-service cap still applies behind this one.
@@ -11,8 +13,10 @@
 // a minute and one org about 3-6, so a 400-call compile takes 1-2 hours.
 
 import { randomUUID } from 'node:crypto';
+import { LLM_CALL_TIMEOUT_DEFAULT_MS, llmHoldWindowMs } from '@bigbluebam/shared';
 
-export const LLM_PERMIT_HOLD_MS = 90_000;
+/** The hold window at the default deadline; production passes holdMs for the configured one. */
+export const LLM_PERMIT_HOLD_MS = llmHoldWindowMs(LLM_CALL_TIMEOUT_DEFAULT_MS);
 export const LLM_PERMITS_SERVICE = 3;
 export const LLM_PERMITS_PER_ORG = 1;
 

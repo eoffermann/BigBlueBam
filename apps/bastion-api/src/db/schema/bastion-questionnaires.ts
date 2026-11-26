@@ -30,6 +30,7 @@ export const bastionQuestionnaires = pgTable(
     owner_user_id: uuid('owner_user_id').references(() => users.id, { onDelete: 'set null' }),
     claimed_by: varchar('claimed_by', { length: 128 }),
     heartbeat_at: timestamp('heartbeat_at', { withTimezone: true }),
+    slice_token: uuid('slice_token'),
     approved_by: uuid('approved_by').references(() => users.id, { onDelete: 'set null' }),
     approved_at: timestamp('approved_at', { withTimezone: true }),
     created_by: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
