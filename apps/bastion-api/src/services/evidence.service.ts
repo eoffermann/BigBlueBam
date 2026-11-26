@@ -25,6 +25,7 @@ import { bucketRestoreRecords, refreshSeals, highestSeal, writeRestoreObject } f
 import { probeDefinition } from '../probes/definitions.js';
 import type { BastionProbeResult } from '@bigbluebam/shared';
 import { auditRaw } from '../lib/audit-raw.js';
+import { type CitedRef, labelRefs, labelsFor } from '../lib/ref-labels.js';
 import { isAdminViewer, type Viewer } from './types.js';
 
 
@@ -148,7 +149,21 @@ export async function listControlEvidence(deps: EngineDeps, viewer: Viewer, cont
     );
     const detail = await detailAllowed(tx, viewer, controlId);
     const page = pageOf(rows, q.limit, (r) => encodeIdCursor(r.id as string));
-    return { ...page, data: page.data.map((r) => present(r as Record<string, unknown>, detail)) };
+    // Named chips for detail viewers (spec 6.2): "PR #42 in rescue-radio-firmware: ...".
+    const allRefs = detail ? page.data.flatMap((r) => ((r as Record<string, unknown>).cited_refs as CitedRef[] | null) ?? []) : [];
+    const names = detail ? await labelRefs(tx, viewer.org_id, allRefs) : new Map<string, string>();
+    return {
+      ...page,
+      data: page.data.map((r) => {
+        const shaped = present(r as Record<string, unknown>, detail);
+        const refs = detail ? (((r as Record<string, unknown>).cited_refs as CitedRef[] | null) ?? []) : [];
+        return {
+          ...shaped,
+          cited_labels: labelsFor(refs, names),
+          cited_items: refs.map((ref) => ({ ...ref, label: names.get(`${ref.entity_type}:${ref.entity_id}`) ?? null })),
+        };
+      }),
+    };
   });
 }
 

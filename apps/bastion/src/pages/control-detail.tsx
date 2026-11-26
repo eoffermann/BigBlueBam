@@ -55,7 +55,9 @@ function AcceptRiskForm({ controlId, onDone }: { controlId: string; onDone: () =
   const [until, setUntil] = useState(plusDays(30));
   const checks = (control.data?.data.assertions ?? []).filter((a) => a.review_status === 'confirmed');
   const failing = (evidence.data?.data ?? []).filter((s) => s.outcome === 'fail');
-  const items = failing.flatMap((s) => s.cited_refs.map((r) => ({ ...r, assertion_id: s.assertion_id })));
+  const items = failing.flatMap((s) =>
+    (s.cited_items ?? s.cited_refs.map((r) => ({ ...r, label: null }))).map((r) => ({ ...r, assertion_id: s.assertion_id })),
+  );
   const uniqueItems = items.filter((r, i) => items.findIndex((x) => x.entity_id === r.entity_id) === i);
   const max = scope === 'entity' ? 365 : 90;
 
@@ -100,7 +102,7 @@ function AcceptRiskForm({ controlId, onDone }: { controlId: string; onDone: () =
             <option value="">Pick the item</option>
             {uniqueItems.map((r, i) => (
               <option key={r.entity_id} value={String(i)}>
-                {`Failing ${ENTITY_WORDS[r.entity_type] ?? 'item'} ${i + 1}`}
+                {r.label ?? `Failing ${ENTITY_WORDS[r.entity_type] ?? 'item'} ${i + 1}`}
               </option>
             ))}
           </select>
@@ -262,6 +264,15 @@ export function ControlDetailPage({ controlId, onNavigate }: { controlId: string
               <li key={s.id} className="py-2 text-sm">
                 <span className="font-medium">{OUTCOME_WORDS[s.outcome]}</span> · {formatDate(s.created_at)} · {statementOf(s.assertion_id)}
                 {s.explanation && <p className="text-xs text-zinc-600 dark:text-zinc-400">{s.explanation}</p>}
+                {(s.cited_labels?.length ?? 0) > 0 && (
+                  <div className="mt-1 flex flex-wrap gap-1" data-testid="cited-chips">
+                    {s.cited_labels!.map((l) => (
+                      <span key={l} className="rounded-full bg-zinc-100 dark:bg-zinc-800 px-2 py-0.5 text-xs">
+                        {l}
+                      </span>
+                    ))}
+                  </div>
+                )}
               </li>
             ))}
           </ul>
