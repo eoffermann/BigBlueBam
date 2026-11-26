@@ -29,6 +29,15 @@ Each milestone lands as small commits, is pushed, and is followed by the post-co
   - [ ] #129 app counts hand-coded in README and introduction.md; add an app-count check keyed to the generated catalog; build the docs.tsx app lists from the catalog
   - [ ] #131 migrate runner: self-transacting migrations (0078, 0156-0159) break per-file atomicity; fix in the runner and add a `lint:migrations` rule (files themselves are immutable)
   - [ ] #132 Biome warnings (~4,400) with no ratchet; add a per-package warning budget that fails CI on increase, then apply safe `--fix` reductions
+  - [ ] #133 and #138 the remaining hand-written copies of the Bolt source list (Bolt SPA, MCP bolt tools, generated tool schemas) derive from `BOLT_SOURCES`
+  - [ ] #134 Bill invoice PDF links 404; authorized bill-api download route
+  - [ ] #135 deploy vitest suite wired into CI
+- [ ] **Follow-ups from the M0 review (before M1)**
+  - [ ] #136 human-only deciding must require a session login, not just a human key owner (also applied to Bastion's vouching routes, spec 2.8)
+  - [ ] #137 `syncNew` stranded variable after a partial failure; redeploy any service whose variable is present but whose last deploy predates it, or write and redeploy per service
+  - [ ] #139 a failed Railway variable read must fail closed instead of minting a divergent stable secret
+  - [ ] #141 lazy-expiry UPDATE in the proposals decide route guarded on `status = 'pending'`
+  - [ ] #142 the four legacy `/files/*` prefixes move to app-owned authorized download routes; drop `bill/receipts/` from the allowlist now
 - [ ] **M1 - Scaffold and infrastructure (direct URL only, no Launchpad)**
   - [ ] `apps/bastion-api` from the bursar-api skeleton; Dockerfile copies and builds `packages/storage` and `packages/permissions`; service-health, logging, permissions plugin, auth with `rejectWhenImpersonating`, `BASTION_TRUST_PROXY_HOPS`
   - [ ] Own bucket (`BASTION_S3_BUCKET`) with boot put/stat/delete check and a plain error

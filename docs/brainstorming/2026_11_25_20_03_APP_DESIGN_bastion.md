@@ -367,6 +367,13 @@ comment "Accepted risk expired on {date}". It also publishes `exception.expired`
   attest, manual-evidence create and supersede, link review, assertion confirm and reject, both
   decide routes, questionnaire approve, auditor-room create, revoke and unlock, redaction, and
   restore acknowledgement. Every other write records `impersonator_id`.
+- **Vouching needs a session, not an API key** (issue #136, found in the M0 security review).
+  `users.kind` on an API-key request is the key owner's kind, so a human's `bbam_` key used by
+  an MCP-connected agent passes a bare `kind === 'human'` check. Every vouching route listed
+  above, and both decide routes, additionally require a cookie session (reject with 403
+  `SESSION_REQUIRED` when the request authenticated by API key), and the platform decide route
+  applies the same rule when `require_human_decider` is true. The auth method is recorded with
+  the decision.
 - **Visibility preflight** on every citation, at write and at read.
 - **Closed probe menu**, probe SQL in hardened definer functions (section 3.1).
 - **Internal routes unreachable from outside**: `location ~ ^/bastion/api/v1/internal/ { return 404; }`.
@@ -1456,7 +1463,7 @@ Written in the same transaction as the row they describe, `ON CONFLICT DO NOTHIN
 | --- | --- | --- |
 | **#124** | `packages/shared/src/bolt-sources.ts` `BOLT_SOURCES`; the ingest `z.enum`, `TRIGGER_SOURCES`, `TriggerSourceV1`, and the Drizzle pgEnum derive from it; migration `0260`; `check-bolt-catalog.mjs` fails when a catalog source is missing from `BOLT_SOURCES`; **a `db-drift.yml` step asserts `SELECT unnest(enum_range(NULL::bolt_trigger_source))` equals `BOLT_SOURCES`**, naming missing values | M0 |
 | **#125** | `AbortSignal.timeout(5000)` in `publishBoltEvent` | M0 |
-| **#123** | `/files/*` serves only `avatars/` | M0 |
+| **#123** | `/files/*` serves an explicit allowlist: `avatars/` plus the four legacy prefixes still used by live features (`uploads/`, `banter/uploads/`, `helpdesk/`, `bill/receipts/`) with `Cache-Control: private, no-store`; every org-prefixed key, including all Bastion objects, returns 404. Moving the four legacy prefixes to app-owned authorized routes is tracked in #142 (amended during M0) | M0 |
 | **#126** | `syncNew` propagates to existing services **only hints marked `propagate: true`** (initially the `*_API_INTERNAL_URL` and `*_API_URL` computed hints), never overwrites a present variable, prints the planned diff in CI, and upserts with `skipDeploys` then one redeploy per service | M0 |
 | **#127** | the five missing apps in the `index.html` no-cache regex | M0 |
 | **#128** | migration `0261`; the Drizzle schema `apps/api/src/db/schema/agent-proposals.ts` gains the five columns (`decided_by_kind` reuses `actorTypeEnum`) so `db:check` stays green; `proposals.routes.ts` sets `decided_by`, `decided_by_kind`, `decided_impersonator_id`, enforces `require_human_decider`, returns 409 `DECIDE_IN_APP` for `owning_app` | M0 |
@@ -1840,7 +1847,7 @@ from M11.
 
 | M | Scope | Done when |
 | --- | --- | --- |
-| **M0** | **Platform prerequisites, fixing the fact:** #124 (shared `BOLT_SOURCES`, `0260` with the explicit list, catalog check, `db-drift` enum check); #125; #123; #126 scoped (`propagate: true`, no overwrite, diff, `skipDeploys`); #127; **#128** (`0261`, decide route, 409 `DECIDE_IN_APP`); Railway generator handles `set $var host:port` and the resolver; stable-secret class in `generateSecrets()` | Bursar and Bastion events ingest 2xx; enum check green; `/files/<non-avatar>` 404; `syncNew` dry-run shows only `propagate` additions; a generic decide of an `owning_app` proposal returns 409 and other decides record `decided_by_kind`; generator unit test green; `pnpm db:check` (0 drift, including the `agent_proposals` and `platform_backups` Drizzle updates) and `pnpm lint:migrations` green for `0260` and `0261` |
+| **M0** | **Platform prerequisites, fixing the fact:** #124 (shared `BOLT_SOURCES`, `0260` with the explicit list, catalog check, `db-drift` enum check); #125; #123; #126 scoped (`propagate: true`, no overwrite, diff, `skipDeploys`); #127; **#128** (`0261`, decide route, 409 `DECIDE_IN_APP`); Railway generator handles `set $var host:port` and the resolver; stable-secret class in `generateSecrets()` | Bursar and Bastion events ingest 2xx; enum check green; `/files/<org-prefixed key>` 404 (allowlist per the #123 row); `syncNew` dry-run shows only `propagate` additions; a generic decide of an `owning_app` proposal returns 409 and other decides record `decided_by_kind`; generator unit test green; `pnpm db:check` (0 drift, including the `agent_proposals` and `platform_backups` Drizzle updates) and `pnpm lint:migrations` green for `0260` and `0261` |
 | **M1** | Scaffold, own bucket with boot check, `BASTION_TRUST_PROXY_HOPS`, compose (`:-` secrets, refusal messages), worker env, nginx with runtime resolver and internal deny, generated Railway conf, catalog + hints, SPA by direct URL | `/bastion/` serves; health 200; internal path 404 through nginx; the two Railway grep gates; stopping bastion-api leaves other apps up; `check:env-hints` green; a fresh `.env` without the keys gives the plain refusal, not a suite abort; the `syncNew` dry-run adds `BASTION_S3_BUCKET` and `BASTION_API_INTERNAL_URL` to the existing worker |
 | **M2** | Migrations 0262-0269, Drizzle, RLS loop, hardened probe and resolver functions; GitHub change | `db:check` 0 drift; definer-function assertion green; `ping` stores `subscribed_events` |
 | **M3** | Library, crosswalk, per-requirement applicability, setup wizard, deterministic compile, seeder started | SOC 2 then ISO share controls; SoA completeness test green |
