@@ -139,18 +139,18 @@ describe('listKeyResults', () => {
     const kr1 = makeKeyResult({ id: 'kr-1', sort_order: 0 });
     const kr2 = makeKeyResult({ id: 'kr-2', sort_order: 1 });
 
-    mockSelect.mockReturnValue(chainable([kr1, kr2]));
+    mockSelect.mockReturnValue(chainable([{ kr: kr1 }, { kr: kr2 }]));
 
-    const result = await listKeyResults(GOAL_ID);
+    const result = await listKeyResults(GOAL_ID, ORG_ID);
 
-    expect(result.data).toHaveLength(2);
+    expect(result.data).toEqual([kr1, kr2]);
     expect(mockSelect).toHaveBeenCalled();
   });
 
   it('should return empty list when goal has no key results', async () => {
     mockSelect.mockReturnValue(chainable([]));
 
-    const result = await listKeyResults(GOAL_ID);
+    const result = await listKeyResults(GOAL_ID, ORG_ID);
 
     expect(result.data).toEqual([]);
   });
