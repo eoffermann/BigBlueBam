@@ -51,11 +51,14 @@ export async function recordUploadGrant(storageKey: string, orgId: string, uploa
   `);
 }
 
+/** Anything that can run raw SQL: the pool (`db`) or a transaction handle. */
+export type SqlExecutor = Pick<typeof db, 'execute'>;
+
 /** The channel of the oldest attachment row for each key (its original posting). */
-export async function originalChannels(keys: string[]): Promise<Map<string, string>> {
+export async function originalChannels(keys: string[], executor: SqlExecutor = db): Promise<Map<string, string>> {
   const out = new Map<string, string>();
   if (keys.length === 0) return out;
-  const res = await db.execute(sql`
+  const res = await executor.execute(sql`
     SELECT DISTINCT ON (a.storage_key) a.storage_key, m.channel_id
     FROM banter_message_attachments a
     JOIN banter_messages m ON m.id = a.message_id
@@ -70,26 +73,31 @@ export async function originalChannelForKey(key: string): Promise<string | null>
   return (await originalChannels([key])).get(key) ?? null;
 }
 
-export type ClaimResult =
-  | { ok: true; release: () => Promise<void> }
-  | { ok: false; rejected: string[] };
+export type ClaimResult = { ok: true } | { ok: false; rejected: string[] };
 
 /**
  * Claim `keys` for a message `userId` is posting in `channelId` (org `orgId`).
- * On success the poster's grants for those keys are consumed; call release() if
- * the message is not created after all, to give them back. On failure nothing is
- * consumed and `rejected` lists the keys the poster may not attach.
+ *
+ * Issue #168: run this on the SAME transaction (`tx`) that inserts the message and
+ * its attachment rows. The grant DELETE then commits only together with those
+ * rows: any failure, a crash, or a dropped connection before commit rolls the
+ * claim back, so there is no compensating release() to forget or lose. On a
+ * rejection the caller must abort (roll back) the transaction, which restores any
+ * grant this call consumed; `rejected` lists the keys the poster may not attach.
  */
-export async function claimAttachmentKeys(params: {
-  keys: string[];
-  orgId: string;
-  userId: string;
-  channelId: string;
-}): Promise<ClaimResult> {
+export async function claimAttachmentKeys(
+  params: {
+    keys: string[];
+    orgId: string;
+    userId: string;
+    channelId: string;
+  },
+  tx: SqlExecutor,
+): Promise<ClaimResult> {
   const keys = [...new Set(params.keys)];
-  if (keys.length === 0) return { ok: true, release: async () => {} };
+  if (keys.length === 0) return { ok: true };
 
-  const claimedRes = await db.execute(sql`
+  const claimedRes = await tx.execute(sql`
     DELETE FROM banter_upload_grants
     WHERE storage_key IN (${sql.join(keys.map((k) => sql`${k}`), sql`, `)})
       AND org_id = ${params.orgId}
@@ -97,29 +105,13 @@ export async function claimAttachmentKeys(params: {
       AND expires_at > now()
     RETURNING storage_key, org_id, uploader_id, created_at, expires_at
   `);
-  const claimed = rowsOf(claimedRes);
-  const claimedKeys = new Set(claimed.map((r) => String(r.storage_key)));
-
-  const iso = (v: unknown) => (v instanceof Date ? v.toISOString() : String(v));
-  const release = async () => {
-    for (const r of claimed) {
-      await db.execute(sql`
-        INSERT INTO banter_upload_grants (storage_key, org_id, uploader_id, created_at, expires_at)
-        VALUES (${String(r.storage_key)}, ${String(r.org_id)}, ${String(r.uploader_id)},
-                ${iso(r.created_at)}::timestamptz, ${iso(r.expires_at)}::timestamptz)
-        ON CONFLICT (storage_key) DO NOTHING
-      `);
-    }
-  };
+  const claimedKeys = new Set(rowsOf(claimedRes).map((r) => String(r.storage_key)));
 
   const unclaimed = keys.filter((k) => !claimedKeys.has(k));
   if (unclaimed.length > 0) {
-    const origins = await originalChannels(unclaimed);
+    const origins = await originalChannels(unclaimed, tx);
     const rejected = unclaimed.filter((k) => origins.get(k) !== params.channelId);
-    if (rejected.length > 0) {
-      await release();
-      return { ok: false, rejected };
-    }
+    if (rejected.length > 0) return { ok: false, rejected };
   }
-  return { ok: true, release };
+  return { ok: true };
 }

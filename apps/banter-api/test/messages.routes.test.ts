@@ -11,7 +11,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import Fastify, { type FastifyInstance } from 'fastify';
 
 const { mockDb } = vi.hoisted(() => ({
-  mockDb: { select: vi.fn(), update: vi.fn(), insert: vi.fn(), delete: vi.fn() },
+  mockDb: { select: vi.fn(), update: vi.fn(), insert: vi.fn(), delete: vi.fn(), transaction: vi.fn() },
 }));
 
 vi.mock('../src/db/index.js', () => ({ db: mockDb, connection: { end: vi.fn() } }));
@@ -245,6 +245,7 @@ describe('malformed :id is rejected with 400 (not a 500 from Postgres 22P02)', (
     const app = await buildApp();
     const key = 'banter/uploads/4f1c-board-minutes.pdf';
     claimAttachmentKeys.mockResolvedValueOnce({ ok: false, rejected: [key] });
+    const tx = makeTx();
     selWhereLimit([{ id: CH, org_id: ORG, quiet_hours_policy: null }]); // channel lookup
     const res = await app.inject({
       method: 'POST',
@@ -255,9 +256,115 @@ describe('malformed :id is rejected with 400 (not a 500 from Postgres 22P02)', (
     expect(res.statusCode).toBe(400);
     expect(res.json().error.code).toBe('ATTACHMENT_NOT_ALLOWED');
     expect(res.json().error.details[0].key).toBe(key);
-    expect(claimAttachmentKeys).toHaveBeenCalledWith({ keys: [key], orgId: ORG, userId: USER, channelId: CH });
+    // The claim runs on the post transaction (issue #168), and the rejection
+    // aborts it, which rolls back any grant the claim consumed.
+    expect(claimAttachmentKeys).toHaveBeenCalledWith({ keys: [key], orgId: ORG, userId: USER, channelId: CH }, tx.handle);
+    expect(tx.outcome).toBe('rolled_back');
     // Nothing is written: no message, no attachment row.
     expect(mockDb.insert).not.toHaveBeenCalled();
+    expect(tx.handle.insert).not.toHaveBeenCalled();
+    await app.close();
+  });
+});
+
+/**
+ * A stand-in for db.transaction: runs the callback with a distinct tx handle and
+ * records whether it committed (callback resolved) or rolled back (threw). Writes
+ * that land on `mockDb` instead of the handle would be outside the transaction.
+ */
+function makeTx(opts: { failAttachmentInsert?: boolean; failChannelUpdate?: boolean } = {}) {
+  const state: { outcome: 'none' | 'committed' | 'rolled_back'; handle: any } = { outcome: 'none', handle: null };
+  let insertCall = 0;
+  state.handle = {
+    execute: vi.fn(async () => []),
+    insert: vi.fn(() => {
+      const n = insertCall++;
+      return {
+        values: () => ({
+          returning: async () => {
+            if (n === 0) return [{ ...msgRow(M1).message, attachment_count: 0 }];
+            if (opts.failAttachmentInsert) throw new Error('connection terminated');
+            return [{ id: 'att-1', filename: 'x.pdf', content_type: 'application/pdf', size_bytes: 1 }];
+          },
+        }),
+      };
+    }),
+    update: vi.fn(() => ({
+      set: (v: Record<string, unknown>) => ({
+        where: async () => {
+          if (opts.failChannelUpdate && 'message_count' in v) throw new Error('deadlock detected');
+        },
+      }),
+    })),
+  };
+  mockDb.transaction.mockImplementationOnce(async (cb: (tx: unknown) => Promise<unknown>) => {
+    try {
+      const r = await cb(state.handle);
+      state.outcome = 'committed';
+      return r;
+    } catch (err) {
+      state.outcome = 'rolled_back';
+      throw err;
+    }
+  });
+  return state;
+}
+
+describe('POST message is one transaction: grant claim + message + attachments (issue #168)', () => {
+  const key = 'banter/uploads/0d1e-minutes.pdf';
+  const payload = { content: 'minutes', attachments: [{ key, filename: 'x.pdf', content_type: 'application/pdf', size_bytes: 1 }] };
+
+  beforeEach(async () => {
+    claimAttachmentKeys.mockReset();
+    mockDb.insert.mockReset();
+    mockDb.transaction.mockReset();
+    const rt = await import('../src/services/realtime.js');
+    (rt.broadcastToChannel as any).mockClear();
+  });
+
+  it('an attachment insert failure after the message insert rolls everything back and broadcasts nothing', async () => {
+    claimAttachmentKeys.mockResolvedValueOnce({ ok: true });
+    const tx = makeTx({ failAttachmentInsert: true });
+    selWhereLimit([{ id: CH, org_id: ORG, quiet_hours_policy: null }]);
+    const app = await buildApp();
+    const res = await app.inject({ method: 'POST', url: `/v1/channels/${CH}/messages`, headers: auth, payload });
+    expect(res.statusCode).toBe(500);
+    // Claim, message insert and attachment insert all ran on the tx handle, and
+    // the transaction rolled back: the grant DELETE and the message row are undone
+    // together, so the retry is not refused and leaves no stray text-only copy.
+    expect(claimAttachmentKeys.mock.calls[0]![1]).toBe(tx.handle);
+    expect(tx.handle.insert).toHaveBeenCalledTimes(2);
+    expect(tx.outcome).toBe('rolled_back');
+    expect(mockDb.insert).not.toHaveBeenCalled();
+    const rt = await import('../src/services/realtime.js');
+    expect(rt.broadcastToChannel).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it('a denormalization failure also rolls back the message and its attachments', async () => {
+    claimAttachmentKeys.mockResolvedValueOnce({ ok: true });
+    const tx = makeTx({ failChannelUpdate: true });
+    selWhereLimit([{ id: CH, org_id: ORG, quiet_hours_policy: null }]);
+    const app = await buildApp();
+    const res = await app.inject({ method: 'POST', url: `/v1/channels/${CH}/messages`, headers: auth, payload });
+    expect(res.statusCode).toBe(500);
+    expect(tx.outcome).toBe('rolled_back');
+    expect(mockDb.update).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it('the success path commits once, stamps attachment_count inside it, then broadcasts', async () => {
+    claimAttachmentKeys.mockResolvedValueOnce({ ok: true });
+    const tx = makeTx();
+    selWhereLimit([{ id: CH, org_id: ORG, quiet_hours_policy: null }]);
+    const app = await buildApp();
+    const res = await app.inject({ method: 'POST', url: `/v1/channels/${CH}/messages`, headers: auth, payload });
+    expect(res.statusCode).toBe(201);
+    expect(tx.outcome).toBe('committed');
+    expect(tx.handle.update).toHaveBeenCalledTimes(2); // attachment_count + channel denormalization
+    expect(mockDb.insert).not.toHaveBeenCalled();
+    const rt = await import('../src/services/realtime.js');
+    expect(rt.broadcastToChannel).toHaveBeenCalledOnce();
     await app.close();
   });
 });

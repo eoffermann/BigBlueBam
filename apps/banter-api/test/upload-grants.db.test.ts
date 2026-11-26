@@ -13,6 +13,7 @@
 import { describe, it, expect, vi, beforeAll, afterAll } from 'vitest';
 import postgres from 'postgres';
 import { randomUUID } from 'node:crypto';
+import { sql as sqlTag } from 'drizzle-orm';
 
 const DATABASE_URL = process.env.DATABASE_URL;
 
@@ -70,6 +71,24 @@ describe.skipIf(!DATABASE_URL)('banter upload grants (issue #156, real DB)', () 
     await dbMod?.connection.end({ timeout: 5 });
   });
 
+  /**
+   * Claim the way message.routes does (issue #168): on a transaction that commits
+   * on success and rolls back on a rejection.
+   */
+  async function claim(params: { keys: string[]; orgId: string; userId: string; channelId: string }) {
+    const ROLLBACK = new Error('rollback');
+    let out: Awaited<ReturnType<typeof lib.claimAttachmentKeys>> | undefined;
+    try {
+      await dbMod.db.transaction(async (tx) => {
+        out = await lib.claimAttachmentKeys(params, tx);
+        if (!out.ok) throw ROLLBACK;
+      });
+    } catch (err) {
+      if (err !== ROLLBACK) throw err;
+    }
+    return out!;
+  }
+
   /** Post a message with one attachment row the way message.routes does after a successful claim. */
   async function attach(channelId: string, authorId: string, key: string) {
     const [m] = await sql<{ id: string }[]>`
@@ -83,23 +102,23 @@ describe.skipIf(!DATABASE_URL)('banter upload grants (issue #156, real DB)', () 
     const key = `banter/uploads/${randomUUID()}-minutes.pdf`;
     await lib.recordUploadGrant(key, ORG_A, BOB);
 
-    const first = await lib.claimAttachmentKeys({ keys: [key], orgId: ORG_A, userId: BOB, channelId: EXEC });
+    const first = await claim({ keys: [key], orgId: ORG_A, userId: BOB, channelId: EXEC });
     expect(first.ok).toBe(true);
     await attach(EXEC, BOB, key);
 
     // The grant is consumed: the same key cannot be claimed again for another channel.
-    const again = await lib.claimAttachmentKeys({ keys: [key], orgId: ORG_A, userId: BOB, channelId: GENERAL });
+    const again = await claim({ keys: [key], orgId: ORG_A, userId: BOB, channelId: GENERAL });
     expect(again).toEqual({ ok: false, rejected: [key] });
   });
 
   it('refuses the re-attach attack: a key first posted in #exec cannot be attached in #general', async () => {
     const key = `banter/uploads/${randomUUID()}-board-minutes.pdf`;
     await lib.recordUploadGrant(key, ORG_A, BOB);
-    expect((await lib.claimAttachmentKeys({ keys: [key], orgId: ORG_A, userId: BOB, channelId: EXEC })).ok).toBe(true);
+    expect((await claim({ keys: [key], orgId: ORG_A, userId: BOB, channelId: EXEC })).ok).toBe(true);
     await attach(EXEC, BOB, key);
 
     // Alice (removed from #exec) tries to re-share the key in #general.
-    const res = await lib.claimAttachmentKeys({ keys: [key], orgId: ORG_A, userId: ALICE, channelId: GENERAL });
+    const res = await claim({ keys: [key], orgId: ORG_A, userId: ALICE, channelId: GENERAL });
     expect(res).toEqual({ ok: false, rejected: [key] });
     // And the download route's rule pins the key to #exec.
     expect(await lib.originalChannelForKey(key)).toBe(EXEC);
@@ -108,7 +127,7 @@ describe.skipIf(!DATABASE_URL)('banter upload grants (issue #156, real DB)', () 
   it('refuses a key across orgs, even with the grant still unconsumed', async () => {
     const key = `banter/uploads/${randomUUID()}-plan.pdf`;
     await lib.recordUploadGrant(key, ORG_A, BOB);
-    const res = await lib.claimAttachmentKeys({ keys: [key], orgId: ORG_B, userId: MALLORY, channelId: B_CHAN });
+    const res = await claim({ keys: [key], orgId: ORG_B, userId: MALLORY, channelId: B_CHAN });
     expect(res).toEqual({ ok: false, rejected: [key] });
     // Bob's grant was not touched by the failed attempt.
     const left = await sql`SELECT 1 FROM banter_upload_grants WHERE storage_key = ${key}`;
@@ -118,15 +137,15 @@ describe.skipIf(!DATABASE_URL)('banter upload grants (issue #156, real DB)', () 
   it("refuses another user's unposted upload in the same org", async () => {
     const key = `banter/uploads/${randomUUID()}-draft.pdf`;
     await lib.recordUploadGrant(key, ORG_A, BOB);
-    const res = await lib.claimAttachmentKeys({ keys: [key], orgId: ORG_A, userId: ALICE, channelId: GENERAL });
+    const res = await claim({ keys: [key], orgId: ORG_A, userId: ALICE, channelId: GENERAL });
     expect(res.ok).toBe(false);
   });
 
   it('allows a legacy key (no grant) only in the channel it was originally attached in', async () => {
     const key = `banter/uploads/${randomUUID()}-legacy.png`;
     await attach(GENERAL, BOB, key); // posted before grants existed
-    expect((await lib.claimAttachmentKeys({ keys: [key], orgId: ORG_A, userId: ALICE, channelId: GENERAL })).ok).toBe(true);
-    expect((await lib.claimAttachmentKeys({ keys: [key], orgId: ORG_A, userId: ALICE, channelId: EXEC })).ok).toBe(false);
+    expect((await claim({ keys: [key], orgId: ORG_A, userId: ALICE, channelId: GENERAL })).ok).toBe(true);
+    expect((await claim({ keys: [key], orgId: ORG_A, userId: ALICE, channelId: EXEC })).ok).toBe(false);
   });
 
   it('a failed claim gives back the grants it consumed for the other keys', async () => {
@@ -134,19 +153,45 @@ describe.skipIf(!DATABASE_URL)('banter upload grants (issue #156, real DB)', () 
     const stolen = `banter/uploads/${randomUUID()}-stolen.pdf`;
     await lib.recordUploadGrant(mine, ORG_A, ALICE);
     await attach(EXEC, BOB, stolen);
-    const res = await lib.claimAttachmentKeys({ keys: [mine, stolen], orgId: ORG_A, userId: ALICE, channelId: GENERAL });
+    const res = await claim({ keys: [mine, stolen], orgId: ORG_A, userId: ALICE, channelId: GENERAL });
     expect(res).toEqual({ ok: false, rejected: [stolen] });
     expect(await sql`SELECT 1 FROM banter_upload_grants WHERE storage_key = ${mine}`).toHaveLength(1);
     // So Alice can still post her own file.
-    expect((await lib.claimAttachmentKeys({ keys: [mine], orgId: ORG_A, userId: ALICE, channelId: GENERAL })).ok).toBe(true);
+    expect((await claim({ keys: [mine], orgId: ORG_A, userId: ALICE, channelId: GENERAL })).ok).toBe(true);
   });
 
-  it('release() restores the grant when the message could not be written', async () => {
+  it('a failure after the message insert rolls back the claim AND the message (issue #168)', async () => {
     const key = `banter/uploads/${randomUUID()}-retry.pdf`;
     await lib.recordUploadGrant(key, ORG_A, ALICE);
-    const res = await lib.claimAttachmentKeys({ keys: [key], orgId: ORG_A, userId: ALICE, channelId: GENERAL });
-    expect(res.ok).toBe(true);
-    if (res.ok) await res.release();
-    expect((await lib.claimAttachmentKeys({ keys: [key], orgId: ORG_A, userId: ALICE, channelId: GENERAL })).ok).toBe(true);
+    const marker = `crash-${randomUUID()}`;
+    await expect(
+      dbMod.db.transaction(async (tx) => {
+        expect((await lib.claimAttachmentKeys({ keys: [key], orgId: ORG_A, userId: ALICE, channelId: GENERAL }, tx)).ok).toBe(true);
+        await tx.execute(sqlTag`INSERT INTO banter_messages (channel_id, author_id, content) VALUES (${GENERAL}, ${ALICE}, ${marker})`);
+        // The attachment insert (or the process) dies here.
+        throw new Error('connection terminated');
+      }),
+    ).rejects.toThrow('connection terminated');
+    // The grant is back and no orphan text-only message was left behind.
+    expect(await sql`SELECT 1 FROM banter_upload_grants WHERE storage_key = ${key}`).toHaveLength(1);
+    expect(await sql`SELECT 1 FROM banter_messages WHERE content = ${marker}`).toHaveLength(0);
+    // So the client's retry succeeds.
+    expect((await claim({ keys: [key], orgId: ORG_A, userId: ALICE, channelId: GENERAL })).ok).toBe(true);
+  });
+
+  it('a claim on a transaction that never commits is not visible to other connections', async () => {
+    const key = `banter/uploads/${randomUUID()}-inflight.pdf`;
+    await lib.recordUploadGrant(key, ORG_A, ALICE);
+    let seenMidway = -1;
+    await expect(
+      dbMod.db.transaction(async (tx) => {
+        await lib.claimAttachmentKeys({ keys: [key], orgId: ORG_A, userId: ALICE, channelId: GENERAL }, tx);
+        // Another connection still sees the grant until commit.
+        seenMidway = (await sql`SELECT 1 FROM banter_upload_grants WHERE storage_key = ${key}`).length;
+        throw new Error('pod killed');
+      }),
+    ).rejects.toThrow('pod killed');
+    expect(seenMidway).toBe(1);
+    expect(await sql`SELECT 1 FROM banter_upload_grants WHERE storage_key = ${key}`).toHaveLength(1);
   });
 });

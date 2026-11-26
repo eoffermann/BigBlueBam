@@ -44,6 +44,13 @@ import {
 import { enqueueFeedFanin } from '../services/feed-queue.js';
 import { BANTER_UPLOAD_PREFIX, attachmentDownloadUrl } from '../lib/attachment-download.js';
 import { claimAttachmentKeys } from '../lib/upload-grants.js';
+
+/** Thrown inside the post transaction to roll the grant claim back (issue #168). */
+class AttachmentNotAllowed extends Error {
+  constructor(public readonly rejected: string[]) {
+    super('attachment not allowed');
+  }
+}
 import { RELATIONSHIP_FLAGS, type FeedDirectRecipient } from '@bigbluebam/shared';
 
 // Attachment descriptors handed back by POST /v1/files/upload. There is no
@@ -545,53 +552,14 @@ export default async function messageRoutes(fastify: FastifyInstance) {
       // (its grant is consumed here), or already originally attached in THIS
       // channel. Anything else is a key the poster saw somewhere and may not
       // re-share; refuse before anything is written.
-      let claim: Extract<Awaited<ReturnType<typeof claimAttachmentKeys>>, { ok: true }> | null = null;
-      if (body.attachments && body.attachments.length > 0) {
-        const result = await claimAttachmentKeys({
-          keys: body.attachments.map((a) => a.key),
-          orgId: user.org_id,
-          userId: user.id,
-          channelId: id,
-        });
-        if (!result.ok) {
-          return reply.status(400).send({
-            error: {
-              code: 'ATTACHMENT_NOT_ALLOWED',
-              message:
-                'One or more attachments were not uploaded by you for this message. Upload the file again and attach the new upload.',
-              details: result.rejected.map((key) => ({ field: 'attachments', issue: 'not_your_upload', key })),
-              request_id: request.id,
-            },
-          });
-        }
-        claim = result;
-      }
-
+      //
+      // Issue #168: the grant claim, the message row, its attachment rows, the
+      // attachment_count stamp and the channel/thread denormalization are ONE
+      // transaction. A failure (or a crash, or a dropped connection) anywhere
+      // before commit rolls every one of them back, grants included, so a retry
+      // finds the grants intact and no stray text-only message is left behind.
+      // The broadcast and notification fan-out stay after commit.
       let message: typeof banterMessages.$inferSelect | undefined;
-      try {
-        [message] = await db
-          .insert(banterMessages)
-          .values({
-            channel_id: id,
-            author_id: user.id,
-            thread_parent_id: body.thread_parent_id ?? null,
-            content: sanitizedContent,
-            content_plain: contentPlain,
-            content_format: body.content_format,
-            metadata: body.metadata ?? {},
-            edit_permission: body.edit_permission ?? 'own',
-          })
-          .returning();
-      } catch (err) {
-        // No message was created: give the consumed upload grants back.
-        await claim?.release().catch(() => {});
-        throw err;
-      }
-
-      // Persist any uploaded attachments now that we have the message id.
-      // Each descriptor came from POST /v1/files/upload (storage key +
-      // metadata). We insert one banter_message_attachments row per file and
-      // stamp attachment_count so list/read endpoints can surface them.
       let createdAttachments: Array<{
         id: string;
         filename: string;
@@ -599,68 +567,110 @@ export default async function messageRoutes(fastify: FastifyInstance) {
         size: number;
         url: string;
       }> = [];
-      if (message && body.attachments && body.attachments.length > 0) {
-        const messageId = message.id;
-        const attachments = body.attachments;
-        const inserted = await db
-          .insert(banterMessageAttachments)
-          .values(
-            attachments.map((a) => ({
-              message_id: messageId,
-              uploader_id: user.id,
+      try {
+        await db.transaction(async (tx) => {
+          if (body.attachments && body.attachments.length > 0) {
+            const result = await claimAttachmentKeys(
+              {
+                keys: body.attachments.map((a) => a.key),
+                orgId: user.org_id,
+                userId: user.id,
+                channelId: id,
+              },
+              tx,
+            );
+            if (!result.ok) throw new AttachmentNotAllowed(result.rejected);
+          }
+
+          [message] = await tx
+            .insert(banterMessages)
+            .values({
+              channel_id: id,
+              author_id: user.id,
+              thread_parent_id: body.thread_parent_id ?? null,
+              content: sanitizedContent,
+              content_plain: contentPlain,
+              content_format: body.content_format,
+              metadata: body.metadata ?? {},
+              edit_permission: body.edit_permission ?? 'own',
+            })
+            .returning();
+
+          // Persist any uploaded attachments now that we have the message id.
+          // Each descriptor came from POST /v1/files/upload (storage key +
+          // metadata). We insert one banter_message_attachments row per file and
+          // stamp attachment_count so list/read endpoints can surface them.
+          if (message && body.attachments && body.attachments.length > 0) {
+            const messageId = message.id;
+            const inserted = await tx
+              .insert(banterMessageAttachments)
+              .values(
+                body.attachments.map((a) => ({
+                  message_id: messageId,
+                  uploader_id: user.id,
+                  filename: a.filename,
+                  content_type: a.content_type,
+                  size_bytes: a.size_bytes,
+                  storage_key: a.key,
+                  thumbnail_key: a.thumbnail_key ?? null,
+                })),
+              )
+              .returning();
+
+            await tx
+              .update(banterMessages)
+              .set({ attachment_count: inserted.length })
+              .where(eq(banterMessages.id, messageId));
+
+            createdAttachments = inserted.map((a) => ({
+              id: a.id,
               filename: a.filename,
-              content_type: a.content_type,
-              size_bytes: a.size_bytes,
-              storage_key: a.key,
-              thumbnail_key: a.thumbnail_key ?? null,
-            })),
-          )
-          .returning()
-          .catch(async (err: unknown) => {
-            // The attachments were not recorded: give the upload grants back.
-            await claim?.release().catch(() => {});
-            throw err;
+              mime_type: a.content_type,
+              size: a.size_bytes,
+              url: attachmentDownloadUrl(id, a.id),
+            }));
+          }
+
+          // Update channel denormalized fields
+          await tx
+            .update(banterChannels)
+            .set({
+              last_message_at: new Date(),
+              last_message_preview: contentPlain.slice(0, 200),
+              message_count: sql`${banterChannels.message_count} + 1`,
+            })
+            .where(eq(banterChannels.id, id));
+
+          // If this is a thread reply, update the parent message
+          if (body.thread_parent_id) {
+            await tx
+              .update(banterMessages)
+              .set({
+                reply_count: sql`${banterMessages.reply_count} + 1`,
+                last_reply_at: new Date(),
+                reply_user_ids: sql`(
+                  SELECT array_agg(DISTINCT uid) FROM (
+                    SELECT unnest(reply_user_ids) AS uid FROM banter_messages WHERE id = ${body.thread_parent_id}
+                    UNION SELECT ${user.id}::uuid
+                  ) sub LIMIT 5
+                )`,
+              })
+              .where(eq(banterMessages.id, body.thread_parent_id));
+          }
+        });
+      } catch (err) {
+        if (err instanceof AttachmentNotAllowed) {
+          return reply.status(400).send({
+            error: {
+              code: 'ATTACHMENT_NOT_ALLOWED',
+              message:
+                'One or more attachments were not uploaded by you for this message. Upload the file again and attach the new upload.',
+              details: err.rejected.map((key) => ({ field: 'attachments', issue: 'not_your_upload', key })),
+              request_id: request.id,
+            },
           });
-
-        await db
-          .update(banterMessages)
-          .set({ attachment_count: inserted.length })
-          .where(eq(banterMessages.id, message.id));
-
-        createdAttachments = inserted.map((a) => ({
-          id: a.id,
-          filename: a.filename,
-          mime_type: a.content_type,
-          size: a.size_bytes,
-          url: attachmentDownloadUrl(id, a.id),
-        }));
-      }
-
-      // Update channel denormalized fields
-      await db
-        .update(banterChannels)
-        .set({
-          last_message_at: new Date(),
-          last_message_preview: contentPlain.slice(0, 200),
-          message_count: sql`${banterChannels.message_count} + 1`,
-        })
-        .where(eq(banterChannels.id, id));
-
-      // If this is a thread reply, update the parent message
-      if (body.thread_parent_id) {
-        await db
-          .update(banterMessages)
-          .set({
-            reply_count: sql`${banterMessages.reply_count} + 1`,
-            last_reply_at: new Date(),
-            reply_user_ids: sql`(
-              SELECT array_agg(DISTINCT uid) FROM (
-                SELECT unnest(reply_user_ids) AS uid FROM banter_messages WHERE id = ${body.thread_parent_id}
-                UNION SELECT ${user.id}::uuid
-              ) sub LIMIT 5
-            )`,
-          })
-          .where(eq(banterMessages.id, body.thread_parent_id));
+        }
+        throw err;
       }
 
       broadcastToChannel(id, {
