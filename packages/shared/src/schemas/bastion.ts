@@ -1262,9 +1262,10 @@ export const bastionExceptionProposeSchema = z
     control_id: z.string().uuid(),
     scope: BastionExceptionScope,
     assertion_id: z.string().uuid().nullable().optional(),
+    // An app entity (`bam.task`) or a probe's platform ref (`api_key`, `user`, `github_pr_event`).
     cited_entity_type: z
       .string()
-      .regex(/^[a-z]+\.[a-z_]+$/, 'Use an entity type like bam.api_key')
+      .regex(/^[a-z_]+(\.[a-z_]+)?$/, 'Use an entity type like api_key or bam.task')
       .max(48)
       .nullable()
       .optional(),

@@ -40,7 +40,15 @@ import {
   remediationSettings,
 } from '../engine/remediation.js';
 import type { CitedRef, ExceptionRow } from '../engine/status.js';
-import { activeHumanCount, anOrgAdmin, assertHumanDecider, type DecisionDeps, fileMirroredProposal, isSmallTeam } from './decisions.service.js';
+import {
+  activeHumanCount,
+  anOrgAdmin,
+  assertHumanDecider,
+  citationVisible,
+  type DecisionDeps,
+  fileMirroredProposal,
+  isSmallTeam,
+} from './decisions.service.js';
 import { beginLedgerBatch, mapAppendError } from './ledger-batch.js';
 import type { Viewer } from './types.js';
 
@@ -89,9 +97,29 @@ export async function getException(engine: EngineDeps, viewer: Viewer, id: strin
 /** POST /exceptions (row 60). */
 export async function proposeException(d: DecisionDeps, viewer: Viewer, body: BastionExceptionPropose) {
   const now = d.engine.now();
+  const owner = await orgTx(d.engine.sql, viewer.org_id, async (tx) => {
+    const c = (await tx`SELECT id, owner_user_id FROM bastion_controls WHERE organization_id = ${viewer.org_id} AND id = ${body.control_id}`)[0];
+    if (!c) throw new NotFoundError('We could not find that control.');
+    if (body.scope === 'entity') {
+      // The item must be one this control's checks actually cite (latest evidence), so an
+      // exception can only cover something Bastion found.
+      const cited = await tx`
+        SELECT 1 FROM bastion_assertions a
+          JOIN LATERAL (SELECT cited_refs FROM bastion_evidence_snapshots s
+                         WHERE s.organization_id = a.organization_id AND s.assertion_id = a.id
+                         ORDER BY s.created_at DESC LIMIT 1) s ON true
+         WHERE a.organization_id = ${viewer.org_id} AND a.control_id = ${body.control_id} AND a.review_status = 'confirmed'
+           AND s.cited_refs @> ${tx.json([{ entity_type: body.cited_entity_type, entity_id: body.cited_entity_id }] as never)}
+         LIMIT 1`;
+      if (cited.length === 0) {
+        throw new ValidationFailure("That item is not one this control's checks found.", 'NOT_A_CITED_ITEM', [{ field: 'cited_entity_id', issue: 'not_cited' }]);
+      }
+    }
+    return (c.owner_user_id as string | null) ?? null;
+  });
   if (body.scope === 'entity' && body.cited_entity_type && body.cited_entity_id) {
-    // The cited item passes can_access for the person asking (spec 2.4, 2.8).
-    if (!(await d.canAccess(viewer.id, body.cited_entity_type, body.cited_entity_id).catch(() => false))) {
+    // The cited item passes the visibility preflight for the person asking (spec 2.4, 2.8).
+    if (!(await citationVisible(d, viewer, { entity_type: body.cited_entity_type, entity_id: body.cited_entity_id }, owner))) {
       throw new ValidationFailure('You cannot see the item this exception would cover.', 'CITATION_NOT_VISIBLE', [{ field: 'cited_entity_id', issue: 'not_visible' }]);
     }
   }

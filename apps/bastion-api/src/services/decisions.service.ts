@@ -14,7 +14,7 @@
 import { BASTION_SMALL_TEAM_HUMANS } from '@bigbluebam/shared';
 import { ForbiddenError } from '../lib/errors.js';
 import { type EngineDeps, orgTx, type Tx } from '../engine/context.js';
-import type { Viewer } from './types.js';
+import { isAdminViewer, type Viewer } from './types.js';
 
 /** Seeded by migration 0274 (the Bastion System service user). */
 export const BASTION_SYSTEM_USER_ID = '00000000-0000-0000-0000-0000000000b5';
@@ -25,6 +25,17 @@ export type CanAccess = (askerUserId: string, entityType: string, entityId: stri
 export interface DecisionDeps {
   engine: EngineDeps;
   canAccess: CanAccess;
+}
+
+/**
+ * Whether a cited ref may be shown to this person (spec 2.4: citations pass can_access at write
+ * and at read). App entities (`<app>.<type>`, e.g. bam.task) go through can_access. Probe refs
+ * to platform rows (`api_key`, `user`, `github_pr_event`) have no can_access type: they follow
+ * the evidence detail rule instead (owners, admins and the control's owner, spec 3.1 explain()).
+ */
+export async function citationVisible(d: DecisionDeps, viewer: Viewer, ref: { entity_type: string; entity_id: string }, controlOwnerId: string | null): Promise<boolean> {
+  if (!ref.entity_type.includes('.')) return isAdminViewer(viewer) || (!!controlOwnerId && controlOwnerId === viewer.id);
+  return d.canAccess(viewer.id, ref.entity_type, ref.entity_id).catch(() => false);
 }
 
 export async function activeHumanCount(tx: Tx, orgId: string): Promise<number> {

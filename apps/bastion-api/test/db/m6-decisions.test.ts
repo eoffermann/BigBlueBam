@@ -140,7 +140,8 @@ describe.skipIf(!DATABASE_URL)('M6 gaps, fixes, exceptions and drift (live datab
     const deps = makeDeps(sql, { clock: c });
     const d: DecisionDeps = { engine: deps, canAccess: async () => true };
     const [control, assertion] = [s.controls[0]!, s.assertions[0]!];
-    const key = { entity_type: 'bam.api_key', entity_id: '0b5e0000-0000-4000-8000-00000000b001' };
+    // A probe's platform ref (keys.max_age cites `api_key` rows), as the real probes write it.
+    const key = { entity_type: 'api_key', entity_id: '0b5e0000-0000-4000-8000-00000000b001' };
     await evaluate(deps, s.org, control, assertion, 'fail', [key], new Date());
     await orgTx(sql, s.org, (tx) => rankOrgGaps(tx, s.org, deps.now()));
     expect((await listGaps(d, viewer(s.org, s.owner), { status: 'active', sort: 'risk', limit: 50 })).data.map((g) => g.gap_kind)).toContain('failing');
