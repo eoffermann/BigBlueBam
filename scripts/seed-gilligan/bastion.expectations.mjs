@@ -194,6 +194,14 @@ export const BASTION_SEED_EXPECTATIONS = {
   // autofilled. Story 7: the laptop-encryption row is "Needs an expert" ("We cannot currently prove
   // this", nothing proves laptops are encrypted), the Radio Relay row is "Check this" and names the
   // accepted exception, and Approve stays disabled until the "Needs an expert" rows are reviewed.
+  //
+  // Deterministic (#271): the seed drafts with use_ai false, so no live model decides these rows.
+  // Each story row reuses an answer approved for last season's Minnow charter-insurance review
+  // (libraryAnswer, seeded into the answer library citing controlKey); the bander's hard rules on
+  // that control give the band: device encryption is unprovable, so "We cannot currently prove
+  // this"; key rotation fails under an accepted exception, so "Check this" naming it. reasons are
+  // the band reason codes the rows must carry. BASTION_SEED_LIVE_AI=1 drafts with the AI instead
+  // and only warns on a mismatch.
   m8: {
     questionnaire: {
       title: 'Howell Industries Vendor Security Review',
@@ -201,17 +209,24 @@ export const BASTION_SEED_EXPECTATIONS = {
       fileName: 'howell-vendor-security-review.xlsx',
       sheet: 'Security Review',
       rows: 24,
+      useAi: false,
       encryption: {
         question: 'Are all company laptops encrypted at rest?',
         band: 'low',
         words: 'Needs an expert',
         answerStartsWith: 'We cannot currently prove this.',
+        controlKey: 'assets.device_encryption',
+        libraryAnswer: 'Yes. Every company laptop has full-disk encryption turned on.',
+        reasons: ['reused_answer', 'control_not_proven'],
       },
       radioRelay: {
         question: 'Do you replace API keys and service credentials at least once a year?',
         band: 'medium',
         words: 'Check this',
         mentions: 'Accepted exception',
+        controlKey: 'keys.rotation',
+        libraryAnswer: 'Yes. API keys and service credentials are replaced at least once a year.',
+        reasons: ['reused_answer', 'accepted_exception'],
       },
     },
   },

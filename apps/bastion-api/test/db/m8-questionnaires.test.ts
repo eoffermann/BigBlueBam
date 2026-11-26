@@ -438,6 +438,38 @@ describe.skipIf(!DATABASE_URL)('M8 questionnaires (live database)', () => {
     expect(again.filter((r) => r.band_reasons.some((x) => x.code === 'budget_exhausted')).length).toBeGreaterThanOrEqual(4);
   });
 
+  it('use_ai false drafts without the model: library reuse with the hard rules, deterministic (#271)', async () => {
+    const s = await setUp('no-ai');
+    await provider(s.org, s.owner);
+    const owner = viewer(s.org, s.owner);
+    const d = qdeps(s.engine);
+    // Answers approved before, citing the failing laptop control and the exception-covered key control.
+    const lib = [
+      ['Is laptop disk encryption in place?', 'Yes, every laptop is encrypted.', s.controls[1]!],
+      ['Are service keys rotated every year?', 'Yes, service keys are replaced yearly.', s.controls[2]!],
+    ] as const;
+    for (const [qt, at, c] of lib) {
+      await sql`INSERT INTO bastion_answer_library (organization_id, question_text, answer_text, yes_no, cited_refs, approved_by, approved_at)
+                VALUES (${s.org}, ${qt}, ${at}, true, ${sql.json([{ entity_type: 'bastion.control', entity_id: c }] as never)}, ${s.owner}, now())`;
+    }
+    const q = (await createQuestionnaire(d, owner, { title: 'No AI', source: { kind: 'pasted', text: PASTED, format: 'tsv' } })).data as unknown as { id: string };
+    await startAutofill(d, owner, q.id, { redraft: false, use_ai: false });
+    let calls = 0;
+    const counting: LlmChat = async (o) => {
+      calls += 1;
+      return yesModel(o);
+    };
+    await autofillSlice(adeps(s.engine, { llm: counting }), { organization_id: s.org, questionnaire_id: q.id, claimant: 'w1' });
+    expect(calls).toBe(0);
+    expect(await qState(q.id)).toMatchObject({ status: 'in_review', llm_calls_used: 0 });
+    const rows = await sql`SELECT question_text, confidence_band, draft_answer FROM bastion_questionnaire_items WHERE questionnaire_id = ${q.id}`;
+    const by = (n: string) => rows.find((r) => String(r.question_text).includes(n))!;
+    expect(by('laptop')).toMatchObject({ confidence_band: 'low' });
+    expect(String(by('laptop').draft_answer)).toMatch(/^We cannot currently prove this\./);
+    expect(by('service keys')).toMatchObject({ confidence_band: 'medium' });
+    expect(String(by('service keys').draft_answer)).toContain('Accepted exception');
+  });
+
   it('each autofill run emits its own questionnaire.drafted, even with the same counts (#267)', async () => {
     const s = await setUp('redraft-event');
     await provider(s.org, s.owner);

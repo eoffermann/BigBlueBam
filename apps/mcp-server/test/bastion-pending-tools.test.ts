@@ -706,7 +706,7 @@ describe('Bastion M8 tools (questionnaires and the answer library)', () => {
     ]);
     expect(calls[0]!.body).toEqual({ title: 'Howell', source: { kind: 'bin_asset', bin_asset_id: ASSET } });
     expect(calls[1]!.body).toEqual({ title: 'Pasted', source: { kind: 'pasted', text: 'Question\nDo you use MFA?', format: 'tsv' } });
-    expect(calls[2]!.body).toEqual({ redraft: false });
+    expect(calls[2]!.body).toEqual({ redraft: false, use_ai: true });
     expect(calls[4]!.body).toEqual({ question: 'Do you use MFA?', answer_kind: 'yes_no_text' });
   });
 

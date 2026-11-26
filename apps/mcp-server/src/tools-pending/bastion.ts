@@ -1218,10 +1218,11 @@ export function registerBastionQuestionnaireTools(server: McpServer, client: Bas
     input: {
       questionnaire_id: z.string().uuid(),
       redraft: z.boolean().optional(),
+      use_ai: z.boolean().optional().describe('false drafts without the AI: approved library answers (with the hard rules) or left for a person.'),
     },
     returns: z.record(z.unknown()),
-    handler: async ({ questionnaire_id, redraft }) => {
-      const r = await client.autofillQuestionnaire(questionnaire_id, { redraft: redraft ?? false });
+    handler: async ({ questionnaire_id, redraft, use_ai }) => {
+      const r = await client.autofillQuestionnaire(questionnaire_id, { redraft: redraft ?? false, use_ai: use_ai ?? true });
       return r.ok ? ok(r.data) : err('starting the drafting', r.data);
     },
   });

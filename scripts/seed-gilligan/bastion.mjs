@@ -38,6 +38,10 @@
  *     questionnaire with the guessed columns and autofilled; the laptop-encryption row is "Needs an
  *     expert" ("We cannot currently prove this") and the Radio Relay row is "Check this" naming the
  *     accepted exception. Nothing is approved: approving is a person's act (story 7).
+ *   - Deterministic (#271): drafted with use_ai false. The two story rows reuse answers approved
+ *     for last season's Minnow review (seeded into the answer library), so their bands come from
+ *     the hard rules on the cited controls, never from a live model. BASTION_SEED_LIVE_AI=1 drafts
+ *     with the AI and only warns when the model's rows differ.
  * Uploading and accepting are vouching acts too, so the Professor, Mary Ann and Skipper each sign
  * in for theirs.
  *
@@ -975,25 +979,76 @@ async function uploadBytesToBin(role, name, bytes, contentType) {
 
 /**
  * Drive the autofill engine directly when no worker picks the questionnaire up within 20 s (as the
- * M5 seed drives the evaluation). Each AI answer takes a few seconds; progress is logged.
+ * M5 seed drives the evaluation). #269: the engine is async-start and one POST runs ONE slice, which
+ * ends without releasing the claim. So once the seed has claimed the questionnaire it POSTs again on
+ * every poll, exactly like the worker's job (the engine answers slice_running while a slice is
+ * active and starts the next one otherwise); gating on `drafting_now` stalled after the first slice.
+ * Every poll logs the elapsed time and the slice state, so a stall shows as a stall.
  */
 async function driveAutofill(orgId, qid, total) {
   const secret = process.env.INTERNAL_SERVICE_SECRET;
   const started = Date.now();
+  let seedHoldsClaim = false;
   for (;;) {
     const q = must(await bastion('GET', `/questionnaires/${qid}`), 'GET questionnaire').data;
     if (q.status !== 'answering') return q;
+    const elapsed = Math.round((Date.now() - started) / 1000);
     if (Date.now() - started > 20 * 60_000) throw new Error('drafting the Howell questionnaire took more than 20 minutes');
-    if (secret && Date.now() - started > 20_000 && !q.drafting_now) {
-      await fetch(`${BASTION_INTERNAL}/engines/questionnaire-autofill`, {
+    let slice = 'waiting for the worker';
+    if (secret && (seedHoldsClaim || (Date.now() - started > 20_000 && !q.drafting_now))) {
+      const r = await fetch(`${BASTION_INTERNAL}/engines/questionnaire-autofill`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-Internal-Secret': secret },
         body: JSON.stringify({ organization_id: orgId, questionnaire_id: qid, claimant: 'seed:bastion' }),
-      }).catch(() => undefined);
-    }
-    log(`  drafting: ${q.rows_done}/${total} (high ${q.high_count}, medium ${q.medium_count}, low ${q.low_count}); each answer takes a few seconds...`);
+      }).catch(() => null);
+      if (r?.ok) {
+        seedHoldsClaim = true;
+        const s = (await r.json().catch(() => ({}))).data ?? {};
+        slice = s.done ? 'done' : s.slice_running ? `seed slice running${s.waiting ? ` (${s.waiting})` : ''}` : 'seed slice ended, next one starts on the next poll';
+      } else if (r?.status === 409) {
+        slice = 'a worker holds it';
+        seedHoldsClaim = false;
+      } else slice = `engine call failed (${r ? r.status : 'unreachable'})`;
+    } else if (q.drafting_now) slice = 'a worker is drafting';
+    log(`  drafting: ${q.rows_done}/${total} (high ${q.high_count}, medium ${q.medium_count}, low ${q.low_count}); ${elapsed} s elapsed; ${slice}`);
     await new Promise((r) => setTimeout(r, 10_000));
   }
+}
+
+/**
+ * #271: the two story rows reuse answers approved for an earlier review, so the seeded bands come
+ * from the bander's hard rules on the cited controls, not from a live model. Find-or-create, and a
+ * stale copy is marked current again (the seed's own evaluation may have staled it).
+ */
+async function seedAnswerLibrary(orgId) {
+  const m = EXP.m8.questionnaire;
+  const skipper = await userIdByEmail(EXP.actorEmail);
+  for (const row of [m.encryption, m.radioRelay]) {
+    const c = await controlByKey(row.controlKey);
+    await withDb(async (sql) => {
+      const have = await sql`SELECT id, stale FROM bastion_answer_library
+                              WHERE organization_id = ${orgId} AND retired_at IS NULL AND question_text = ${row.question} AND answer_text = ${row.libraryAnswer}`;
+      if (have[0]) {
+        if (have[0].stale) await sql`UPDATE bastion_answer_library SET stale = false, stale_reason = NULL WHERE id = ${have[0].id}`;
+        return;
+      }
+      await sql`INSERT INTO bastion_answer_library (organization_id, question_text, answer_text, yes_no, cited_refs, approved_by, approved_at)
+                VALUES (${orgId}, ${row.question}, ${row.libraryAnswer}, true, ${sql.json([{ entity_type: 'bastion.control', entity_id: c.id }])}, ${skipper}, now())`;
+    });
+  }
+  log('  answer library: the two answers approved for last season\'s Minnow review are in place');
+}
+
+const LIVE_AI = process.env.BASTION_SEED_LIVE_AI === '1';
+
+/** True when the seeded story rows read as the expectations say (band and the reason codes). */
+function storyRowsMatch(items) {
+  const m = EXP.m8.questionnaire;
+  return [m.encryption, m.radioRelay].every((row) => {
+    const it = items.find((i) => i.question_text === row.question);
+    const codes = (it?.band_reasons ?? []).map((r) => r.code);
+    return it && it.confidence_band === row.band && row.reasons.every((c) => codes.includes(c));
+  });
 }
 
 /** Howell's xlsx goes into Bin, becomes a questionnaire with the guessed columns, and is autofilled. */
@@ -1012,11 +1067,24 @@ async function seedQuestionnaire(orgId) {
     q = must(await bastion('POST', '/questionnaires', { title: m.title, requester_label: m.requester, source: { kind: 'bin_asset', bin_asset_id: assetId } }), 'add the questionnaire').data;
     log(`  added from Bin with ${q.row_count} questions (columns guessed)`);
   }
+  // #271: deterministic by default (no AI call); BASTION_SEED_LIVE_AI=1 drafts with the AI.
+  const useAi = LIVE_AI || m.useAi !== false;
+  log(`  drafting ${useAi ? 'with the AI (BASTION_SEED_LIVE_AI=1; each answer takes 10-20 s)' : 'without the AI (approved library answers and the hard rules; a few seconds)'}...`);
   if (q.status === 'mapping') {
-    must(await bastion('POST', `/questionnaires/${q.id}/autofill`, { redraft: false }), 'start drafting');
+    must(await bastion('POST', `/questionnaires/${q.id}/autofill`, { redraft: false, use_ai: useAi }), 'start drafting');
     q = await driveAutofill(orgId, q.id, m.rows);
   } else if (q.status === 'answering') {
     q = await driveAutofill(orgId, q.id, m.rows);
+  } else if (q.status === 'in_review' && !useAi) {
+    // A re-run over a questionnaire drafted another way (an older seed with the live AI): if the
+    // story rows do not read as expected and nobody has reviewed them, draft again deterministically.
+    const items = must(await bastion('GET', `/questionnaires/${q.id}/items`), 'GET items').data;
+    const reviewed = items.some((i) => i.review_status !== 'pending');
+    if (!storyRowsMatch(items) && !reviewed) {
+      log('  the drafted story rows do not match the expectations; drafting again without the AI');
+      must(await bastion('POST', `/questionnaires/${q.id}/autofill`, { redraft: true, use_ai: false }), 'draft again');
+      q = await driveAutofill(orgId, q.id, m.rows);
+    }
   }
   log(`  drafted: high ${q.high_count}, medium ${q.medium_count}, low ${q.low_count}`);
   return q;
@@ -1041,8 +1109,14 @@ async function verifyM8(q) {
     if (rr.confidence_band !== m.radioRelay.band) problems.push(`the Radio Relay row is ${rr.confidence_band}, expected ${m.radioRelay.band} (${JSON.stringify(rr.band_reasons)})`);
     if (!String(rr.draft_answer ?? '').includes(m.radioRelay.mentions)) problems.push(`the Radio Relay row does not name the exception: "${rr.draft_answer}"`);
   }
+  if (!storyRowsMatch(items.data)) problems.push(`the story rows do not carry the expected reasons (${[m.encryption, m.radioRelay].map((r) => r.reasons.join('+')).join(', ')})`);
   if (items.approval.can_approve) problems.push('Approve is available before the "Needs an expert" rows are reviewed');
   log(`M8: ${q.title}: ${items.approval.blocked_because.join('; ')}`);
+  if (problems.length && LIVE_AI) {
+    // A live model decides the rows: report, do not fail the seed (#271).
+    log(`  WARNING: with BASTION_SEED_LIVE_AI=1 the model's drafts differ from the expectations: ${problems.join('; ')}`);
+    return;
+  }
   if (problems.length) throw new Error(`seeded M8 rows do not match BASTION_SEED_EXPECTATIONS: ${problems.join('; ')}`);
 }
 
@@ -1085,6 +1159,8 @@ async function main() {
   await seedPolicy();
   await verifyM7();
   // M8: Howell's questionnaire, autofilled from what Bastion can prove (an AI answer per question).
+  // #271: the approved answers the story rows reuse, so their bands come from the hard rules.
+  await seedAnswerLibrary(orgId);
   await verifyM8(await seedQuestionnaire(orgId));
   log('Bastion seed done');
 }

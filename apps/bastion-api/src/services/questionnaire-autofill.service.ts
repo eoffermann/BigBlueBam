@@ -402,6 +402,8 @@ interface QRow {
   slice_token: string | null;
   /** Up by one on every start (#267): the drafted event's idempotency key is per run. */
   autofill_generation: number;
+  /** false: this run never calls the AI (the deterministic path, #271). */
+  autofill_use_ai: boolean;
   /** AI calls charged to this questionnaire across every run (#261); never reset by a redraft. */
   llm_calls_used: number;
   /** Consecutive transient AI failures (#260). */
@@ -434,7 +436,7 @@ export async function drainAutofillSlices(timeoutMs: number): Promise<number> {
 const SELECT_Q = (tx: Tx, orgId: string, id: string) => tx`
   SELECT id, organization_id, title, status, claimed_by, heartbeat_at, slice_token, row_count, rows_done, high_count, medium_count, low_count,
          resume_count, owner_user_id, created_by, column_map->>'autofill_requested_by' AS asker,
-         llm_calls_used, ai_failure_streak, autofill_generation
+         llm_calls_used, ai_failure_streak, autofill_generation, autofill_use_ai
     FROM bastion_questionnaires WHERE organization_id = ${orgId} AND id = ${id}`;
 
 async function readQ(d: AutofillDeps, orgId: string, id: string): Promise<QRow | null> {
@@ -671,7 +673,8 @@ async function runSlice(d: AutofillDeps, q: QRow, f: QFence): Promise<void> {
     let response: DraftResponse | null = null;
     let aiReason: BandReason | null = null;
     let aiReached = false;
-    if (ctx.providerId && cands.length > 0) {
+    // use_ai false (#271): no AI call; the bander still reuses library answers and applies the hard rules.
+    if (q.autofill_use_ai !== false && ctx.providerId && cands.length > 0) {
       const messages = buildDraftMessages({ question, section: (it.section as string | null) ?? null, answer_kind: answerKind, candidates: cands });
       const out = await askAi(d, orgId, ctx.providerId, messages, sliceStart, cutoff, {
         heartbeat: () => heartbeat(d, q, f),

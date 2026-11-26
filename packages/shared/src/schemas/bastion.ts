@@ -1751,10 +1751,16 @@ export const bastionQuestionnaireItemListQuerySchema = z
   .strict();
 export type BastionQuestionnaireItemListQuery = z.infer<typeof bastionQuestionnaireItemListQuerySchema>;
 
-/** POST /questionnaires/:id/autofill (row 76, 202). `redraft` drafts again every row nobody reviewed yet. */
+/**
+ * POST /questionnaires/:id/autofill (row 76, 202). `redraft` drafts again every row nobody reviewed
+ * yet. `use_ai: false` drafts without calling the AI (#271): each row reuses a strong approved
+ * answer from the library, with the hard rules applied to the controls it cites, or is left for a
+ * person. Deterministic, so the seed and its story tests do not depend on a live model.
+ */
 export const bastionQuestionnaireAutofillSchema = z
   .object({
     redraft: z.boolean().default(false),
+    use_ai: z.boolean().default(true),
   })
   .strict();
 export type BastionQuestionnaireAutofill = z.infer<typeof bastionQuestionnaireAutofillSchema>;
