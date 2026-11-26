@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { bastionManualEvidenceSpecSchema } from '@bigbluebam/shared';
 import { scanLabel } from '../src/lib/injection-prescan.js';
 import { planTailoredControl, type TailoredControlPlan } from '../src/library/compile-plan.js';
-import { llmMaxTokens } from '../src/library/llm-call-settings.js';
+import { llmDeadlineMs, llmMaxTokens } from '../src/library/llm-call-settings.js';
 import { probeEntry } from '../src/library/probe-catalog.js';
 import {
   buildTailoringMessages,
@@ -195,6 +195,7 @@ describe.runIf(process.env.BASTION_COMPILER_LIVE === '1')('compiler corpus gates
           messages,
           max_tokens: llmMaxTokens('compile', process.env),
           temperature: 0,
+          timeout_ms: llmDeadlineMs('compile', process.env),
           ...(process.env.BASTION_RECORD_MODEL_OVERRIDE ? { model: process.env.BASTION_RECORD_MODEL_OVERRIDE } : {}),
         }),
       });

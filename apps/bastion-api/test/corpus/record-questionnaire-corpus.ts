@@ -13,6 +13,7 @@ import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { buildDraftMessages, DRAFT_PROMPT_VERSION } from '../../src/library/questionnaire-draft.js';
 import { buildRewordMessages, REWORD_PROMPT_VERSION } from '../../src/library/fix-reword.js';
+import { LLM_CLIENT_GRACE_MS } from '@bigbluebam/shared';
 import { type BastionLlmCallKind, llmDeadlineMs, llmMaxTokens } from '../../src/library/llm-call-settings.js';
 import { CORPUS_QUESTIONS, corpusCandidates, REWORD_DRAFTS, type RecordedQuestionnaireCorpus } from './questionnaire-fixtures.js';
 
@@ -43,9 +44,10 @@ async function call(kind: BastionLlmCallKind, messages: unknown): Promise<{ cont
         messages,
         max_tokens: llmMaxTokens(kind, process.env),
         temperature: 0,
+        timeout_ms: llmDeadlineMs(kind, process.env),
         ...(process.env.BASTION_RECORD_MODEL_OVERRIDE ? { model: process.env.BASTION_RECORD_MODEL_OVERRIDE } : {}),
       }),
-      signal: AbortSignal.timeout(llmDeadlineMs(kind, process.env)),
+      signal: AbortSignal.timeout(llmDeadlineMs(kind, process.env) + LLM_CLIENT_GRACE_MS),
     });
     if (res.status === 429 && attempt < 10) {
       await new Promise((r) => setTimeout(r, 2000 * attempt));

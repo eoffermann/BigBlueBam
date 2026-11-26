@@ -216,8 +216,14 @@ describe.skipIf(!LIVE)('questionnaire corpus gates, live (optional)', () => {
       const res = await fetch(`${api}/internal/llm/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-Internal-Secret': process.env.INTERNAL_SERVICE_SECRET ?? '', 'X-Internal-Service': 'bastion' },
-        body: JSON.stringify({ provider_id: process.env.BASTION_RECORD_PROVIDER_ID, messages, max_tokens: llmMaxTokens('questionnaire_draft', process.env), temperature: 0 }),
-        signal: AbortSignal.timeout(llmDeadlineMs('questionnaire_draft', process.env)),
+        body: JSON.stringify({
+          provider_id: process.env.BASTION_RECORD_PROVIDER_ID,
+          messages,
+          max_tokens: llmMaxTokens('questionnaire_draft', process.env),
+          temperature: 0,
+          timeout_ms: llmDeadlineMs('questionnaire_draft', process.env),
+        }),
+        signal: AbortSignal.timeout(llmDeadlineMs('questionnaire_draft', process.env) + 5_000),
       });
       const body = (await res.json().catch(() => ({}))) as { data?: { content?: string; finish_reason?: string | null } };
       responses[q.id] = res.ok ? { content: body.data?.content ?? '', finish_reason: body.data?.finish_reason ?? null } : { error: String(res.status) };

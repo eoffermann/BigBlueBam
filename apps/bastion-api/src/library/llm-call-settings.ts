@@ -15,11 +15,14 @@
  * maxTokensEnv: the operator override for that kind (env.ts validates it with the bounds below;
  *   recorders and gates read it with llmMaxTokens()). A cut-off warning names this variable.
  * deadlineMs: how long Bastion waits for one call of that kind. compile and questionnaire_draft
- *   follow BASTION_LLM_TIMEOUT_MS (the internal proxy's own upstream deadline is 60 s, #257);
+ *   follow BASTION_LLM_TIMEOUT_MS, whose default and bounds are the suite-wide deadline fact in
+ *   @bigbluebam/shared (llm-deadline.ts, #257; the proxy applies the same value upstream);
  *   fix_reword is shorter because a person is waiting on the request.
  *
- * No imports: env.ts reads it.
+ * Imports only the shared deadline fact: env.ts reads this module.
  */
+
+import { LLM_CALL_TIMEOUT_DEFAULT_MS, llmCallDeadlineMs } from '@bigbluebam/shared';
 
 export type BastionLlmCallKind = 'compile' | 'questionnaire_draft' | 'fix_reword';
 
@@ -34,8 +37,13 @@ export const LLM_MAX_TOKENS_MIN = 256;
 export const LLM_MAX_TOKENS_MAX = 100_000;
 
 export const BASTION_LLM_CALLS: Readonly<Record<BastionLlmCallKind, BastionLlmCallSetting>> = {
-  compile: { maxTokensDefault: 8192, maxTokensEnv: 'BASTION_LLM_MAX_TOKENS', deadlineMs: 60_000, deadlineEnv: 'BASTION_LLM_TIMEOUT_MS' },
-  questionnaire_draft: { maxTokensDefault: 2048, maxTokensEnv: 'BASTION_QUESTIONNAIRE_MAX_TOKENS', deadlineMs: 60_000, deadlineEnv: 'BASTION_LLM_TIMEOUT_MS' },
+  compile: { maxTokensDefault: 8192, maxTokensEnv: 'BASTION_LLM_MAX_TOKENS', deadlineMs: LLM_CALL_TIMEOUT_DEFAULT_MS, deadlineEnv: 'BASTION_LLM_TIMEOUT_MS' },
+  questionnaire_draft: {
+    maxTokensDefault: 2048,
+    maxTokensEnv: 'BASTION_QUESTIONNAIRE_MAX_TOKENS',
+    deadlineMs: LLM_CALL_TIMEOUT_DEFAULT_MS,
+    deadlineEnv: 'BASTION_LLM_TIMEOUT_MS',
+  },
   fix_reword: { maxTokensDefault: 2048, maxTokensEnv: 'BASTION_REWORD_MAX_TOKENS', deadlineMs: 25_000, deadlineEnv: null },
 };
 
@@ -56,10 +64,13 @@ export function llmMaxTokens(kind: BastionLlmCallKind, source: Record<string, st
   return n;
 }
 
-/** How long one call of this kind may take, from its deadline variable (if any) or the default. */
+/**
+ * How long one call of this kind may take, from its deadline variable (if any) or the default,
+ * clamped exactly as the proxy clamps it (llmCallDeadlineMs).
+ */
 export function llmDeadlineMs(kind: BastionLlmCallKind, source: Record<string, string | undefined> = {}): number {
   const s = BASTION_LLM_CALLS[kind];
   const raw = s.deadlineEnv ? source[s.deadlineEnv] : undefined;
   const n = raw === undefined || raw === '' ? Number.NaN : Number(raw);
-  return Number.isInteger(n) && n > 0 ? n : s.deadlineMs;
+  return llmCallDeadlineMs(Number.isFinite(n) ? n : s.deadlineMs);
 }
