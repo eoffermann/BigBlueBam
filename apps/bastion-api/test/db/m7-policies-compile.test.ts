@@ -209,6 +209,36 @@ describe.skipIf(!DATABASE_URL)('M7 policies and version-pinned attestation (live
     await expect(createPolicy(d, owner, { beacon_entry_id: s.entry, audience: { kind: 'all' }, cadence_days: 365 })).rejects.toMatchObject({ code: 'POLICY_ALREADY_LINKED' });
   });
 
+  it('an article made private and renamed keeps its cached title and loses its Beacon dates in every list (#236)', async () => {
+    const s = await setUp('private');
+    const owner = viewer(s.org, s.owner);
+    const member = viewer(s.org, s.people[0]!);
+    const policyId = (await createPolicy(deps(), owner, { beacon_entry_id: s.entry, audience: { kind: 'all' }, cadence_days: 365 })).data.id;
+    // Shared and visible: the live title and dates.
+    const before = (await listPolicies(deps(), member, { status: 'active' })).data[0]!;
+    expect(before).toMatchObject({ title: 'Island Information Security Policy' });
+    expect(before.expires_at).not.toBeNull();
+
+    await sql`UPDATE beacon_entries SET visibility = 'Private', title = 'RIF plan: Ops team, Feb 1' WHERE id = ${s.entry}`;
+    const listed = (await listPolicies(deps(), member, { status: 'active' })).data[0]!;
+    expect(listed.title).toBe('Island Information Security Policy');
+    expect(listed).toMatchObject({ expires_at: null, last_verified_at: null, beacon_status: null, days_to_expiry: null, shared_with_everyone: false });
+    const who = await listPolicyAttestations(deps(), member, policyId);
+    expect(who.data.policy.title).toBe('Island Information Security Policy');
+    const mine = (await myAttestations(deps(), member)).data[0]!;
+    expect(mine.title).toBe('Island Information Security Policy');
+    expect(JSON.stringify([listed, who.data.policy, mine])).not.toContain('RIF plan');
+
+    // Shared again, but can_access refuses this member (fail closed): still the cached title.
+    await sql`UPDATE beacon_entries SET visibility = 'Organization' WHERE id = ${s.entry}`;
+    const refused = (await listPolicies(deps(new Set([s.people[0]!])), member, { status: 'active' })).data[0]!;
+    expect(refused.title).toBe('Island Information Security Policy');
+    const failing = { ...deps(), canAccess: async () => Promise.reject(new Error('api down')) };
+    expect((await listPolicies(failing, member, { status: 'active' })).data[0]!.title).toBe('Island Information Security Policy');
+    // Shared and visible again: the live (renamed) title.
+    expect((await listPolicies(deps(), member, { status: 'active' })).data[0]!.title).toBe('RIF plan: Ops team, Feb 1');
+  });
+
   it('names the people who cannot open the policy, and nudges once per person, version and day', async () => {
     const s = await setUp('nudge');
     const blocked = new Set([s.people[1]!]);

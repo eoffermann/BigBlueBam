@@ -29,7 +29,7 @@ import { appendLedger } from '../engine/ledger.js';
 import { enqueueBastionEvent } from '../engine/outbox.js';
 import { queueControlRuns, type QueuedRun } from '../engine/evidence-store.js';
 import type { CanAccess } from './decisions.service.js';
-import { cannotOpen } from '../lib/policy-access.js';
+import { cannotOpen, entriesOpenTo } from '../lib/policy-access.js';
 import { beginLedgerBatch, mapAppendError } from './ledger-batch.js';
 import type { Viewer } from './types.js';
 
@@ -139,27 +139,45 @@ async function namesOf(tx: Tx, ids: string[]): Promise<Map<string, string>> {
   return new Map(rows.map((r) => [String(r.id), String(r.display_name)]));
 }
 
-function shapePolicy(p: PolicyRow, facts: PolicyFacts | null, now: Date) {
+/**
+ * The policies whose Beacon article this viewer may see live (#236): still shared with everyone
+ * AND can_access passes for the viewer (fail closed). For the rest, Bastion shows only what it
+ * cached while the article was shared: never a title or dates Beacon itself would refuse them.
+ */
+async function liveFor(d: PolicyDeps, viewer: Viewer, rows: PolicyRow[]): Promise<Set<string>> {
+  const shared = rows.filter((p) => sharedWithEveryone(p.visibility)).map((p) => p.beacon_entry_id);
+  return entriesOpenTo(d.canAccess, viewer.id, shared);
+}
+
+function isLive(p: PolicyRow, open: Set<string>): boolean {
+  return sharedWithEveryone(p.visibility) && open.has(p.beacon_entry_id);
+}
+
+function titleOf(p: PolicyRow, live: boolean): string {
+  return (live ? p.entry_title : null) ?? p.title_cache ?? 'Untitled policy';
+}
+
+function shapePolicy(p: PolicyRow, facts: PolicyFacts | null, now: Date, live: boolean) {
   const shared = sharedWithEveryone(p.visibility);
-  const expires = p.expires_at ? new Date(p.expires_at) : null;
+  const expires = live && p.expires_at ? new Date(p.expires_at) : null;
   const attested = facts ? facts.required_people - facts.not_attested_ids.length : 0;
   return {
     id: p.id,
     beacon_entry_id: p.beacon_entry_id,
-    title: p.entry_title ?? p.title_cache ?? 'Untitled policy',
+    title: titleOf(p, live),
     audience: p.audience,
     cadence_days: p.cadence_days,
     owner_user_id: p.owner_user_id,
     owner_name: p.owner_name,
     status: p.status,
-    beacon_status: p.entry_status,
+    beacon_status: live ? p.entry_status : null,
     visibility: p.visibility,
     shared_with_everyone: shared,
     sharing_problem: p.entry_status === null ? 'This Beacon article no longer exists.' : shared ? null : NOT_SHARED_MESSAGE,
     current_version: p.version,
-    expires_at: p.expires_at,
+    expires_at: live ? p.expires_at : null,
     days_to_expiry: expires ? Math.floor((expires.getTime() - now.getTime()) / DAY_MS) : null,
-    last_verified_at: p.last_verified_at,
+    last_verified_at: live ? p.last_verified_at : null,
     required_people: facts?.required_people ?? 0,
     attested_count: attested,
     not_attested_count: facts?.not_attested_ids.length ?? 0,
@@ -172,18 +190,21 @@ function shapePolicy(p: PolicyRow, facts: PolicyFacts | null, now: Date) {
 /** GET /policies (row 64). */
 export async function listPolicies(d: PolicyDeps, viewer: Viewer, q: BastionPolicyListQuery) {
   const now = d.engine.now();
-  return orgTx(d.engine.sql, viewer.org_id, async (tx) => {
+  const loaded = await orgTx(d.engine.sql, viewer.org_id, async (tx) => {
+    // Ordered after shaping, by the title this viewer sees (never by a live title they may not).
     const rows = (await tx.unsafe(
-      `SELECT ${POLICY_SELECT} ${POLICY_FROM} WHERE p.organization_id = $1 AND ($2::text = 'all' OR p.status = $2) ORDER BY coalesce(be.title, p.title_cache), p.created_at`,
+      `SELECT ${POLICY_SELECT} ${POLICY_FROM} WHERE p.organization_id = $1 AND ($2::text = 'all' OR p.status = $2) ORDER BY p.created_at`,
       [viewer.org_id, q.status],
     )) as unknown as PolicyRow[];
-    const data = [];
-    for (const p of rows) {
-      const facts = p.status === 'active' ? await policyFacts(tx, viewer.org_id, p.id, now) : null;
-      data.push(shapePolicy(p, facts, now));
-    }
-    return { data, next_cursor: null };
+    const out: Array<{ p: PolicyRow; facts: PolicyFacts | null }> = [];
+    for (const p of rows) out.push({ p, facts: p.status === 'active' ? await policyFacts(tx, viewer.org_id, p.id, now) : null });
+    return out;
   });
+  const open = await liveFor(d, viewer, loaded.map((r) => r.p));
+  const data = loaded
+    .map((r) => shapePolicy(r.p, r.facts, now, isLive(r.p, open)))
+    .sort((a, b) => a.title.localeCompare(b.title));
+  return { data, next_cursor: null };
 }
 
 async function assertMembers(tx: Tx, orgId: string, ids: string[], field: string): Promise<void> {
@@ -247,11 +268,12 @@ export async function createPolicy(d: PolicyDeps, viewer: Viewer, body: BastionP
 
 export async function getPolicy(d: PolicyDeps, viewer: Viewer, id: string) {
   const now = d.engine.now();
-  return orgTx(d.engine.sql, viewer.org_id, async (tx) => {
-    const p = await loadPolicy(tx, viewer.org_id, id);
-    const facts = p.status === 'active' ? await policyFacts(tx, viewer.org_id, id, now) : null;
-    return { data: shapePolicy(p, facts, now) };
+  const { p, facts } = await orgTx(d.engine.sql, viewer.org_id, async (tx) => {
+    const row = await loadPolicy(tx, viewer.org_id, id);
+    return { p: row, facts: row.status === 'active' ? await policyFacts(tx, viewer.org_id, id, now) : null };
   });
+  const open = await liveFor(d, viewer, [p]);
+  return { data: shapePolicy(p, facts, now, isLive(p, open)) };
 }
 
 /** PATCH /policies/:id (row 66). */
@@ -341,9 +363,10 @@ export async function listPolicyAttestations(d: PolicyDeps, viewer: Viewer, id: 
   const notAttested = r.facts?.not_attested_ids ?? [];
   const blocked = r.p.status === 'active' ? await cannotOpen(d.canAccess, r.p.beacon_entry_id, notAttested) : [];
   const blockedSet = new Set(blocked);
+  const open = await liveFor(d, viewer, [r.p]);
   return {
     data: {
-      policy: shapePolicy(r.p, r.facts, now),
+      policy: shapePolicy(r.p, r.facts, now, isLive(r.p, open)),
       attested: r.attested
         .filter((a) => !notAttested.includes(String(a.user_id)))
         .map((a) => ({ user_id: String(a.user_id), name: String(a.display_name), attested_at: a.attested_at as string })),
@@ -357,10 +380,14 @@ export async function listPolicyAttestations(d: PolicyDeps, viewer: Viewer, id: 
 /** GET /me/attestations (row 69): every active policy the caller must read, and where they stand. */
 export async function myAttestations(d: PolicyDeps, viewer: Viewer) {
   const now = d.engine.now();
-  return orgTx(d.engine.sql, viewer.org_id, async (tx) => {
-    const rows = (await tx.unsafe(`SELECT ${POLICY_SELECT} ${POLICY_FROM} WHERE p.organization_id = $1 AND p.status = 'active' ORDER BY coalesce(be.title, p.title_cache)`, [
+  const rows = await orgTx(d.engine.sql, viewer.org_id, async (tx) =>
+    (await tx.unsafe(`SELECT ${POLICY_SELECT} ${POLICY_FROM} WHERE p.organization_id = $1 AND p.status = 'active' ORDER BY p.created_at`, [
       viewer.org_id,
-    ])) as unknown as PolicyRow[];
+    ])) as unknown as PolicyRow[],
+  );
+  // The live title only where this person may open the article (#236).
+  const open = await liveFor(d, viewer, rows);
+  const out = await orgTx(d.engine.sql, viewer.org_id, async (tx) => {
     const data = [];
     for (const p of rows) {
       if (!(await isInAudience(tx, viewer.org_id, p, viewer.id))) continue;
@@ -373,7 +400,7 @@ export async function myAttestations(d: PolicyDeps, viewer: Viewer) {
       const nextDue = !due && last ? new Date(new Date(last.attested_at as string).getTime() + p.cadence_days * DAY_MS).toISOString() : null;
       data.push({
         policy_id: p.id,
-        title: p.entry_title ?? p.title_cache ?? 'Untitled policy',
+        title: titleOf(p, isLive(p, open)),
         current_version: p.version,
         shared_with_everyone: sharedWithEveryone(p.visibility),
         due,
@@ -383,8 +410,9 @@ export async function myAttestations(d: PolicyDeps, viewer: Viewer) {
         next_due_at: nextDue,
       });
     }
-    return { data };
+    return data;
   });
+  return { data: out.sort((a, b) => a.title.localeCompare(b.title)) };
 }
 
 /**

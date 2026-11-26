@@ -9,6 +9,23 @@ export type PolicyCanAccess = (askerUserId: string, entityType: string, entityId
 /** Parallel can_access calls when checking who can open an article. */
 export const CAN_ACCESS_CONCURRENCY = 8;
 
+/**
+ * Which of these Beacon articles one person may open (can_access, fail closed), in batches. The
+ * policy lists show an article's live title and Beacon dates only for these (#236).
+ */
+export async function entriesOpenTo(canAccess: PolicyCanAccess, userId: string, entryIds: readonly string[]): Promise<Set<string>> {
+  const unique = [...new Set(entryIds)];
+  const out = new Set<string>();
+  for (let i = 0; i < unique.length; i += CAN_ACCESS_CONCURRENCY) {
+    const batch = unique.slice(i, i + CAN_ACCESS_CONCURRENCY);
+    const ok = await Promise.all(batch.map((e) => canAccess(userId, 'beacon.entry', e).catch(() => false)));
+    batch.forEach((e, k) => {
+      if (ok[k]) out.add(e);
+    });
+  }
+  return out;
+}
+
 export async function cannotOpen(canAccess: PolicyCanAccess, entryId: string, userIds: readonly string[]): Promise<string[]> {
   const out: string[] = [];
   for (let i = 0; i < userIds.length; i += CAN_ACCESS_CONCURRENCY) {
