@@ -32,6 +32,7 @@ import { enqueueBastionEvent, enqueueOutbox } from '../engine/outbox.js';
 import { enqueueProposalClose, remediationSettings } from '../engine/remediation.js';
 import type { CitedRef } from '../engine/status.js';
 import { anOrgAdmin, assertHumanDecider, citationVisible, type DecisionDeps, fileMirroredProposal } from './decisions.service.js';
+import { cannotOpen } from '../lib/policy-access.js';
 import type { Viewer } from './types.js';
 
 const DAY_MS = 86_400_000;
@@ -260,6 +261,37 @@ async function draftFor(d: DecisionDeps, tx: Tx, viewer: Viewer, g: Record<strin
           title: `Add ${quoted.length === 1 ? quoted[0] : names} to what Bastion checks for "${control}"`.slice(0, 512),
           body_markdown: `Bastion found ${unlisted.length} item${one ? '' : 's'} that ${one ? 'is' : 'are'} connected but not on the list it checks for "${control}": ${names}.${suspectNote}\n\nApproving files an updated list for one-click confirmation in the review queue.`,
           payload: { add_members: unlisted.slice(0, 200), assertion_id: g.assertion_id },
+        };
+      }
+      if (g.probe_key === 'policy.attested' && g.assertion_id) {
+        // Spec 3.6 (M7): people who cannot open the article cannot acknowledge it. can_access per
+        // person still due; those refused are the cited "N people can't open this policy".
+        const pin = (await tx`
+          SELECT p.id, p.beacon_entry_id FROM bastion_assertions a
+            JOIN bastion_policies p ON p.organization_id = a.organization_id AND p.id::text = a.params->>'policy_id'
+           WHERE a.organization_id = ${viewer.org_id} AND a.id = ${g.assertion_id as string}`)[0];
+        const due = ((latest?.cited_refs as CitedRef[] | null) ?? []).filter((r) => r.entity_type === 'user').map((r) => r.entity_id);
+        const blocked = pin ? await cannotOpen(d.canAccess, String(pin.beacon_entry_id), due) : [];
+        const blockedSet = new Set(blocked);
+        const rest = due.length - blocked.length;
+        const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
+        return {
+          ...base,
+          cited_refs: cited.filter((r) => blockedSet.has(r.entity_id)).concat(cited.filter((r) => !blockedSet.has(r.entity_id))),
+          title: (blocked.length > 0
+            ? `${plural(blocked.length, "person can't", "people can't")} open the policy for "${control}"`
+            : `${plural(rest, 'person has', 'people have')} not acknowledged the policy for "${control}"`
+          ).slice(0, 512),
+          body_markdown: [
+            blocked.length > 0
+              ? `${plural(blocked.length, "person can't", "people can't")} open this policy in Beacon, so they cannot read or acknowledge it. In Beacon, share the article with everyone in the organization (visibility: Organization).`
+              : null,
+            rest > 0 ? `${plural(rest, 'other person has', 'other people have')} not acknowledged the current version yet. On the Policies page, use "Ask people to read it".` : null,
+            'The next check after they acknowledge it proves it.',
+          ]
+            .filter(Boolean)
+            .join('\n\n'),
+          payload: { probe_key: 'policy.attested', policy_id: pin ? String(pin.id) : null, cannot_open_count: blocked.length, not_acknowledged_count: due.length },
         };
       }
       return {

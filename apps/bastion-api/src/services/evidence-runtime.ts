@@ -10,6 +10,8 @@ import { enqueueEvaluationRun, enqueueEvidenceIngest } from '../lib/queue.js';
 import { createBinStorage } from '../lib/storage.js';
 import { binLookups, type EvidenceDeps } from './evidence-deps.js';
 import type { DecisionDeps } from './decisions.service.js';
+import type { PolicyDeps } from './policies.service.js';
+import { pinPolicyChecks } from './policy-pins.js';
 
 let binStorage: ReturnType<typeof createBinStorage> | undefined;
 
@@ -39,6 +41,18 @@ export function evidenceDeps(log: FastifyBaseLogger, redis: Redis): EvidenceDeps
 /** M6: what the gap, fix and exception services need (spec 2.4, 2.6). */
 export function decisionDeps(log: FastifyBaseLogger, redis: Redis): DecisionDeps {
   return { engine: engineDeps(log, redis), canAccess };
+}
+
+/** M7: what the policy and attestation services need (spec 3.6). */
+export function policyDeps(log: FastifyBaseLogger, redis: Redis): PolicyDeps {
+  return {
+    engine: engineDeps(log, redis),
+    canAccess,
+    enqueueRuns: async (runs) => {
+      for (const r of runs) await enqueueEvaluationRun(r);
+    },
+    pinChecks: (viewer, controlId, policyId) => pinPolicyChecks(engineDeps(log, redis).sql, viewer, controlId, policyId),
+  };
 }
 
 /** BASTION_BACKUP_S3_* set (spec 9.7): drives the "off-site backup not configured" banner. */

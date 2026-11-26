@@ -512,8 +512,18 @@ export type BastionFrameworkUpdate = z.infer<typeof bastionFrameworkUpdateSchema
 export const bastionArchiveFrameworkSchema = z.object({ confirm: z.literal(true) }).strict();
 export type BastionArchiveFramework = z.infer<typeof bastionArchiveFrameworkSchema>;
 
-/** POST /frameworks/:id/compile. M3 runs the deterministic compile only (spec 2.1 step 5). */
-export const bastionCompileFrameworkSchema = z.object({}).strict();
+/**
+ * POST /frameworks/:id/compile. Same contract since M3: 202 with the run. M7: when an AI provider
+ * resolves for the org and `use_ai` is not false, the run is queued and the worker drives the
+ * LLM-tailored compile (spec 2.1 step 2, 7.3); otherwise the deterministic compile (step 5) runs
+ * in the request and the 202 carries the finished run. Poll GET /frameworks/:id/compile-runs.
+ */
+export const bastionCompileFrameworkSchema = z
+  .object({
+    /** false forces the library's suggestions verbatim (the deterministic fallback). Default true. */
+    use_ai: z.boolean().optional(),
+  })
+  .strict();
 export type BastionCompileFramework = z.infer<typeof bastionCompileFrameworkSchema>;
 
 /** GET /frameworks/:id/compile-runs: newest first, cursor-paginated (next_cursor + has_more). */
@@ -828,6 +838,9 @@ export const BASTION_ENGINE_NAMES = [
   // M6
   'gap-rank',
   'proposal-reconcile',
+  // M7
+  'compile',
+  'attestation-nudge',
 ] as const;
 export const BastionEngineName = z.enum(BASTION_ENGINE_NAMES);
 export type BastionEngineName = z.infer<typeof BastionEngineName>;
@@ -960,8 +973,20 @@ export const bastionTickRunSchema = z.object({
 });
 export type BastionTickRun = z.infer<typeof bastionTickRunSchema>;
 
-/** 200 `data` of POST /internal/engines/evaluate-tick. */
-export const bastionEvaluateTickResultSchema = z.object({ runs: z.array(bastionTickRunSchema) });
+/** One queued LLM compile run the tick asks the worker to drive (M7; the orphan rule of spec 7). */
+export const bastionTickCompileRunSchema = z.object({
+  organization_id: z.string().uuid(),
+  run_id: z.string().uuid(),
+  resume_count: z.number().int().nonnegative(),
+  generation: z.number().int().nonnegative(),
+});
+export type BastionTickCompileRun = z.infer<typeof bastionTickCompileRunSchema>;
+
+/** 200 `data` of POST /internal/engines/evaluate-tick. `compile_runs` joined at M7. */
+export const bastionEvaluateTickResultSchema = z.object({
+  runs: z.array(bastionTickRunSchema),
+  compile_runs: z.array(bastionTickCompileRunSchema).default([]),
+});
 export type BastionEvaluateTickResult = z.infer<typeof bastionEvaluateTickResultSchema>;
 
 /**
@@ -1408,3 +1433,112 @@ export const bastionProposalCloseResultSchema = z.object({
   already_closed: z.boolean(),
 });
 export type BastionProposalCloseResult = z.infer<typeof bastionProposalCloseResultSchema>;
+
+/* ------------------------------------------------------------------ */
+/*  M7: the LLM-tailored compile on the worker; policies, attestation */
+/* ------------------------------------------------------------------ */
+
+/** M7 (spec 7): the LLM-tailored compile (event) and the daily attestation nudge. */
+export const BASTION_COMPILE_QUEUE = 'bastion-compile';
+export const BASTION_ATTESTATION_NUDGE_QUEUE = 'bastion-attestation-nudge';
+
+/** One LLM compile run to drive (spec 7.3). Same handover rule as evaluate-run (issue #201). */
+export interface BastionCompileJobData {
+  organization_id: string;
+  run_id: string;
+  resume_count: number;
+  claimant?: string;
+}
+
+/** The jobId for a bastion-compile job (BullMQ forbids ':'; see bastionEvaluateRunJobId). */
+export function bastionCompileJobId(runId: string, resumeCount: number, generation = 0): string {
+  return generation > 0 ? `compile-${runId}-r${resumeCount}-g${generation}` : `compile-${runId}-r${resumeCount}`;
+}
+
+/** Body of the compile engine: start (or report on) one async LLM slice of one run. */
+export const bastionCompileEngineSchema = z
+  .object({
+    organization_id: z.string().uuid(),
+    run_id: z.string().uuid(),
+    claimant: z.string().min(1).max(128),
+  })
+  .strict();
+export type BastionCompileEngine = z.infer<typeof bastionCompileEngineSchema>;
+
+/**
+ * 200 `data` of POST /internal/engines/compile. Slices are async-start (spec 7.3): the call
+ * starts a slice in bastion-api (or reports on the one running) and answers at once; the worker
+ * polls every 15 s. `released` means bastion-api is shutting down and gave the run back (queued,
+ * resume_count + 1); the tick re-enqueues it.
+ */
+export const bastionCompileSliceSchema = z.object({
+  done: z.boolean(),
+  status: BastionRunStatus,
+  controls_done: z.number().int().nonnegative(),
+  controls_total: z.number().int().nonnegative(),
+  assertions_proposed: z.number().int().nonnegative(),
+  assertions_dropped: z.number().int().nonnegative(),
+  llm_calls_used: z.number().int().nonnegative(),
+  /** Controls given the library's suggestions instead of the AI's (no answer, error, budget). */
+  fallback_controls: z.number().int().nonnegative(),
+  slice_running: z.boolean(),
+  released: z.boolean().optional(),
+  waiting: z.enum(['ai_slot', 'ai_throttled']).nullable().optional(),
+});
+export type BastionCompileSlice = z.infer<typeof bastionCompileSliceSchema>;
+
+/** POST /policies (row 65): link a Beacon article as a policy people read and acknowledge. */
+export const bastionPolicyCreateSchema = z
+  .object({
+    beacon_entry_id: z.string().uuid(),
+    audience: bastionPolicyAudienceSchema.default({ kind: 'all' }),
+    cadence_days: z.number().int().min(1).max(1095).default(365),
+    owner_user_id: z.string().uuid().nullable().optional(),
+    /**
+     * Optional: the control this policy proves. Bastion proposes the two policy checks (read and
+     * acknowledged; kept current) on it, pinned to this policy, for a person to confirm.
+     */
+    control_id: z.string().uuid().optional(),
+  })
+  .strict();
+export type BastionPolicyCreate = z.infer<typeof bastionPolicyCreateSchema>;
+
+/** PATCH /policies/:id (row 66). Retiring keeps every attestation (they are immutable). */
+export const bastionPolicyUpdateSchema = z
+  .object({
+    audience: bastionPolicyAudienceSchema.optional(),
+    cadence_days: z.number().int().min(1).max(1095).optional(),
+    owner_user_id: z.string().uuid().nullable().optional(),
+    status: BastionPolicyStatus.optional(),
+  })
+  .strict()
+  .refine((b) => Object.keys(b).length > 0, { message: 'Nothing to change' });
+export type BastionPolicyUpdate = z.infer<typeof bastionPolicyUpdateSchema>;
+
+/** GET /policies (row 64). */
+export const bastionPolicyListQuerySchema = z
+  .object({
+    status: z.enum(['active', 'retired', 'all']).default('active'),
+  })
+  .strict();
+export type BastionPolicyListQuery = z.infer<typeof bastionPolicyListQuerySchema>;
+
+/**
+ * POST /policies/:id/attest (row 70). The reader sends back the version and hash Bastion served
+ * (GET /policies/:id/body); a mismatch means the policy changed while they read it (409).
+ */
+export const bastionAttestSchema = z
+  .object({
+    beacon_version: z.number().int().min(1),
+    body_sha256: z.string().regex(/^[0-9a-f]{64}$/, 'A SHA-256 in lowercase hex'),
+  })
+  .strict();
+export type BastionAttest = z.infer<typeof bastionAttestSchema>;
+
+/** POST /policies/:id/request-attestations (row 71): nudge everyone (or the named people) still due. */
+export const bastionRequestAttestationsSchema = z
+  .object({
+    user_ids: z.array(z.string().uuid()).min(1).max(500).optional(),
+  })
+  .strict();
+export type BastionRequestAttestations = z.infer<typeof bastionRequestAttestationsSchema>;

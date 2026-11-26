@@ -342,10 +342,14 @@ import {
   BASTION_EVIDENCE_EXPIRY_QUEUE,
   BASTION_GAP_RANK_QUEUE,
   BASTION_PROPOSAL_RECONCILE_QUEUE,
+  BASTION_COMPILE_QUEUE,
+  BASTION_ATTESTATION_NUDGE_QUEUE,
+  type BastionCompileJobData,
   type BastionEvaluateRunJobData,
   type BastionSweepJobData,
 } from '@bigbluebam/shared';
 import { processBastionEvaluateRunJob } from './jobs/bastion-evaluate-run.job.js';
+import { processBastionCompileJob } from './jobs/bastion-compile.job.js';
 import { makeBastionEngineJob, processBastionEvaluateTickJob } from './jobs/bastion-engines.job.js';
 import { postBastion } from './jobs/bastion-shared.js';
 
@@ -2730,10 +2734,26 @@ function registerBastionSweep(
     .catch((err) => logger.error({ err }, `Failed to register ${queue} scheduler`));
 }
 
+// M7: the AI-tailored compile (event; produced by bastion-api and re-enqueued by the tick). The
+// job only polls; bastion-api's leased permits (3 service-wide, 1 per org) bound the AI calls.
+const bastionCompileQueue = makeQueue<BastionCompileJobData>(BASTION_COMPILE_QUEUE);
+const bastionCompileWorker = new Worker<BastionCompileJobData>(
+  BASTION_COMPILE_QUEUE,
+  async (job) => {
+    await processBastionCompileJob(job, logger, { post: postBastion, queue: bastionCompileQueue });
+  },
+  { ...connection, concurrency: 2 },
+);
+bastionCompileWorker.on('completed', (job) => { logger.info({ jobId: job.id, queue: BASTION_COMPILE_QUEUE }, 'Job completed'); });
+bastionCompileWorker.on('failed', (job, err) => {
+  logger.error({ jobId: job?.id, queue: BASTION_COMPILE_QUEUE, err }, 'Job failed');
+  void recordWorkerError({ queueName: BASTION_COMPILE_QUEUE, jobId: job?.id, jobName: job?.name, err: err as Error });
+});
+
 const bastionEngineDeps = { post: postBastion, recordError: bastionRecordError };
 registerBastionSweep(
   BASTION_EVALUATE_TICK_QUEUE,
-  (job, l) => processBastionEvaluateTickJob(job, l, { ...bastionEngineDeps, queue: bastionEvaluateRunQueue }),
+  (job, l) => processBastionEvaluateTickJob(job, l, { ...bastionEngineDeps, queue: bastionEvaluateRunQueue, compileQueue: bastionCompileQueue }),
   { id: 'bastion-evaluate-tick-5min', pattern: '*/5 * * * *' },
 );
 registerBastionSweep(BASTION_OUTBOX_DRAIN_QUEUE, makeBastionEngineJob('outbox-drain', bastionEngineDeps), { id: 'bastion-outbox-drain-1min', pattern: '* * * * *' });
@@ -2751,6 +2771,8 @@ registerBastionSweep(BASTION_EVIDENCE_EXPIRY_QUEUE, makeBastionEngineJob('eviden
 // reconcile that re-reads agent_proposals (never the pruned inbox rows).
 registerBastionSweep(BASTION_GAP_RANK_QUEUE, makeBastionEngineJob('gap-rank', bastionEngineDeps), { id: 'bastion-gap-rank-daily', pattern: '30 6 * * *' });
 registerBastionSweep(BASTION_PROPOSAL_RECONCILE_QUEUE, makeBastionEngineJob('proposal-reconcile', bastionEngineDeps), { id: 'bastion-proposal-reconcile-15min', pattern: '*/15 * * * *' });
+// M7: one attestation.overdue per person still due on a policy, once per cadence period.
+registerBastionSweep(BASTION_ATTESTATION_NUDGE_QUEUE, makeBastionEngineJob('attestation-nudge', bastionEngineDeps), { id: 'bastion-attestation-nudge-daily', pattern: '0 14 * * *' });
 // END Bastion jobs (src/lib/bastion-jobs.test.ts scans up to this line).
 
 // §1 Wave 5 banter subs — pattern-match consumer.

@@ -33,6 +33,8 @@ import feedRoutes from './routes/feeds.routes.js';
 import feedIngestRoutes from './routes/feed-ingest.routes.js';
 import coverageRoutes from './routes/coverage.routes.js';
 import decisionRoutes from './routes/decisions.routes.js';
+import policyRoutes from './routes/policies.routes.js';
+import { drainCompileSlices, markCompileShuttingDown } from './services/compile-ai.service.js';
 import { engineDeps } from './engine/runtime.js';
 import { checkLedgerIdentity } from './engine/restore.js';
 import { closeBastionQueues } from './lib/queue.js';
@@ -128,6 +130,8 @@ await fastify.register(
     await v1.register(coverageRoutes);
     // M6: gaps, fix drafts, exceptions and drift (both decide routes are session-only).
     await v1.register(decisionRoutes);
+    // M7: policies and attestation (attest is session-only).
+    await v1.register(policyRoutes);
     await v1.register(internalRoutes);
   },
   { prefix: '/v1' },
@@ -146,7 +150,12 @@ for (const signal of signals) {
       // fastify.close() lets in-flight requests finish: an evaluation slice is bounded at about
       // 28 s and compose allows 75 s (stop_grace_period), so a slice is never cut mid-write; the
       // claim stays with the worker's claimant, which re-drives the run on its next poll.
+      // M7 (spec 7.3): LLM compile slices stop starting calls now; each lets its current call
+      // finish (at most BASTION_LLM_TIMEOUT_MS) and releases its run (queued, resume_count + 1).
+      markCompileShuttingDown();
       await fastify.close();
+      const draining = await drainCompileSlices(env.BASTION_LLM_TIMEOUT_MS + 5_000);
+      if (draining > 0) fastify.log.info(`released ${draining} AI compile slice(s) for the worker to resume`);
       await closeBastionQueues();
       for (const c of allConnections()) await c.end();
     } finally {

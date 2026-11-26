@@ -33,6 +33,8 @@ export interface PlannedAssertion {
   predicate: Record<string, unknown>;
   manual_evidence_spec: BastionManualEvidenceSpec | null;
   plain_statement: string;
+  /** `library` (verbatim suggestion) or `compiler` (AI-tailored, validated). Default library. */
+  proposed_by?: 'library' | 'compiler';
 }
 
 export interface DroppedSuggestion {
@@ -110,40 +112,125 @@ function signatureOf(a: { kind: string; probe_key: string | null; manual_title: 
   return a.kind === 'probe' ? `probe:${a.probe_key}` : `${a.kind}:${(a.manual_title ?? '').toLowerCase()}`;
 }
 
+export interface ControlPlan {
+  planned: PlannedAssertion[];
+  dropped: DroppedSuggestion[];
+  skipped_existing: number;
+}
+
+function liveSignatures(existing: readonly ExistingAssertionSignature[]): Set<string> {
+  return new Set(existing.filter((e) => LIVE.has(e.review_status)).map((e) => `${e.control_key}|${signatureOf(e)}`));
+}
+
+/**
+ * Plan one control from a set of suggestions (the library's, or the AI's after tailoring). Every
+ * suggestion goes through the same validator; anything already live on the control is skipped.
+ */
+export function planControl(
+  key: string,
+  suggestions: { probes: readonly ProbeSuggestion[]; manual: readonly ManualSuggestion[] },
+  existing: readonly ExistingAssertionSignature[],
+  populations: ConnectedPopulations,
+  proposedBy: 'library' | 'compiler' = 'library',
+): ControlPlan {
+  const live = liveSignatures(existing);
+  const out: ControlPlan = { planned: [], dropped: [], skipped_existing: 0 };
+  const seen = new Set<string>();
+  for (const s of suggestions.probes) {
+    const sig = `${key}|probe:${s.probe_key}`;
+    if (live.has(sig) || seen.has(sig)) {
+      out.skipped_existing += 1;
+      continue;
+    }
+    const v = validateProbeSuggestion(s, populations);
+    if (!v.ok) out.dropped.push({ control_key: key, what: `probe ${s.probe_key}`, reason: v.reason });
+    else {
+      seen.add(sig);
+      out.planned.push({ control_key: key, ...v.value, proposed_by: proposedBy });
+    }
+  }
+  for (const s of suggestions.manual) {
+    const title = typeof s.spec?.title === 'string' ? s.spec.title : '';
+    const sig = `${key}|manual:${title.toLowerCase()}`;
+    if (live.has(sig) || seen.has(sig)) {
+      out.skipped_existing += 1;
+      continue;
+    }
+    const v = validateManualSuggestion(s);
+    if (!v.ok) out.dropped.push({ control_key: key, what: `manual ${title}`, reason: v.reason });
+    else {
+      seen.add(sig);
+      out.planned.push({ control_key: key, ...v.value, proposed_by: proposedBy });
+    }
+  }
+  return out;
+}
+
+/** The library's suggestions for one control (custom controls have none). */
+export function librarySuggestions(key: string): { probes: ProbeSuggestion[]; manual: ManualSuggestion[] } {
+  const lib = libraryControl(key);
+  return { probes: lib ? [...lib.suggested_assertions] : [], manual: lib ? [...lib.suggested_manual_evidence] : [] };
+}
+
+export interface TailoredControlPlan extends ControlPlan {
+  /** The AI's per-requirement "not applicable" suggestions (a person decides them in Setup). */
+  not_applicable: Array<{ ref_code: string; reason: string }>;
+  /** True when the library's suggestions were used because the AI gave nothing usable. */
+  used_fallback: boolean;
+}
+
+/**
+ * Plan one control from the AI's validated suggestions, falling back to the library verbatim
+ * (spec 2.1 step 5) when nothing the AI said survives validation and it claimed no requirement is
+ * out of scope. So every control ends with a check, an evidence request or a not-applicable
+ * suggestion (the compiler coverage gate, spec 11.3), or already had them.
+ */
+export function planTailoredControl(
+  key: string,
+  tailored: { probes: readonly ProbeSuggestion[]; manual: readonly ManualSuggestion[]; not_applicable: ReadonlyArray<{ ref_code: string; reason: string }>; dropped: readonly DroppedSuggestion[] } | null,
+  existing: readonly ExistingAssertionSignature[],
+  populations: ConnectedPopulations,
+  fallbackReason: string | null = null,
+): TailoredControlPlan {
+  if (tailored) {
+    const ai = planControl(key, tailored, existing, populations, 'compiler');
+    const dropped = [...tailored.dropped, ...ai.dropped];
+    if (ai.planned.length > 0 || ai.skipped_existing > 0 || tailored.not_applicable.length > 0) {
+      return { ...ai, dropped, not_applicable: [...tailored.not_applicable], used_fallback: false };
+    }
+    const lib = planControl(key, librarySuggestions(key), existing, populations, 'library');
+    return {
+      ...lib,
+      dropped: [...dropped, ...lib.dropped, { control_key: key, what: 'AI suggestions', reason: 'nothing usable came back, so the library suggestions were proposed' }],
+      not_applicable: [],
+      used_fallback: true,
+    };
+  }
+  const lib = planControl(key, librarySuggestions(key), existing, populations, 'library');
+  return {
+    ...lib,
+    dropped: fallbackReason ? [...lib.dropped, { control_key: key, what: 'AI suggestions', reason: fallbackReason }] : lib.dropped,
+    not_applicable: [],
+    used_fallback: true,
+  };
+}
+
 export function planCompile(
   controlKeys: readonly string[],
   existing: readonly ExistingAssertionSignature[],
   populations: ConnectedPopulations,
   overrides?: { probe?: (key: string) => ProbeSuggestion[] | undefined },
 ): CompilePlan {
-  const live = new Set(
-    existing.filter((e) => LIVE.has(e.review_status)).map((e) => `${e.control_key}|${signatureOf(e)}`),
-  );
   const planned: PlannedAssertion[] = [];
   const dropped: DroppedSuggestion[] = [];
   let skipped = 0;
   for (const key of controlKeys) {
-    const lib = libraryControl(key);
-    if (!lib) continue; // custom controls have no library suggestions
-    const probes = overrides?.probe?.(key) ?? lib.suggested_assertions;
-    for (const s of probes) {
-      if (live.has(`${key}|probe:${s.probe_key}`)) {
-        skipped += 1;
-        continue;
-      }
-      const v = validateProbeSuggestion(s, populations);
-      if (!v.ok) dropped.push({ control_key: key, what: `probe ${s.probe_key}`, reason: v.reason });
-      else planned.push({ control_key: key, ...v.value });
-    }
-    for (const s of lib.suggested_manual_evidence) {
-      if (live.has(`${key}|manual:${s.spec.title.toLowerCase()}`)) {
-        skipped += 1;
-        continue;
-      }
-      const v = validateManualSuggestion(s);
-      if (!v.ok) dropped.push({ control_key: key, what: `manual ${s.spec.title}`, reason: v.reason });
-      else planned.push({ control_key: key, ...v.value });
-    }
+    if (!libraryControl(key)) continue; // custom controls have no library suggestions
+    const lib = librarySuggestions(key);
+    const p = planControl(key, { probes: overrides?.probe?.(key) ?? lib.probes, manual: lib.manual }, existing, populations, 'library');
+    planned.push(...p.planned);
+    dropped.push(...p.dropped);
+    skipped += p.skipped_existing;
   }
   return { planned, dropped, skipped_existing: skipped, controls_total: controlKeys.length };
 }

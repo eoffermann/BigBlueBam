@@ -218,10 +218,17 @@ const IMPLS: Record<BastionProbeKey, Impl> = {
       if (typeof sinceVerified !== 'number' || sinceVerified > 365) return FAIL;
       return PASS;
     },
-    explain: (r) =>
-      bool(r.summary, 'found')
-        ? `The policy is ${str(r.summary, 'status') ?? 'unknown'} and shared with ${str(r.summary, 'visibility') ?? 'nobody'}; last reviewed ${r.summary.days_since_verified ?? 'never'} days ago.`
-        : 'No policy is linked to this check yet.',
+    // Spec 3.6 (M7): cites Beacon's own expires_at, so "kept current" means what Beacon says.
+    explain: (r) => {
+      if (!bool(r.summary, 'found')) return 'No policy is linked to this check yet.';
+      const expires = str(r.summary, 'expires_at');
+      const toExpiry = r.summary.days_to_expiry;
+      const expiry = expires
+        ? ` Beacon has it expiring on ${expires.slice(0, 10)}${typeof toExpiry === 'number' ? (toExpiry < 0 ? ` (${-toExpiry} days ago)` : ` (in ${toExpiry} days)`) : ''}.`
+        : '';
+      const since = r.summary.days_since_verified;
+      return `The policy is ${str(r.summary, 'status') ?? 'unknown'} and shared with ${str(r.summary, 'visibility') ?? 'nobody'}; last reviewed ${typeof since === 'number' ? `${since} days ago` : 'never'}.${expiry}`;
+    },
   },
   'platform.superuser_access': {
     preconditions: none,

@@ -12,6 +12,7 @@ import { handled, idParam, notFound, validationError, viewerOf } from '../lib/ht
 import { publicProbeCatalog } from '../library/index.js';
 import * as frameworks from '../services/frameworks.service.js';
 import * as compile from '../services/compile.service.js';
+import { startCompile } from '../services/compile-runtime.js';
 
 // Spec 5.1 rows 1-10 and 21, plus the bulk applicability route the Setup wizard uses. Every
 // route runs requireCan with a spec 5.5 identifier (enforcement is the hardcoded fail-closed
@@ -108,14 +109,15 @@ export default async function frameworkRoutes(fastify: FastifyInstance) {
     },
   );
 
-  // Row 9: deterministic compile (202 + the run).
+  // Row 9: 202 + the run. M7: the AI-tailored compile is queued for the worker when a provider
+  // resolves (status `queued`, poll row 10); else the deterministic compile finishes inline.
   fastify.post('/frameworks/:id/compile', { preHandler: [requireAuth, can('bastion.framework.compile')] }, async (request, reply) => {
     const id = idParam(request);
     if (!id) return notFound(request, reply);
     const parsed = bastionCompileFrameworkSchema.safeParse(request.body ?? {});
     if (!parsed.success) return validationError(request, reply, parsed.error);
     return handled(request, reply, async () => {
-      const result = await compile.compileFramework(viewerOf(request), id, request.log);
+      const result = await startCompile(fastify.log, fastify.redis, viewerOf(request), id, parsed.data, request.log);
       reply.status(202);
       return result;
     });
