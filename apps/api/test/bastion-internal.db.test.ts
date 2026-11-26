@@ -91,13 +91,37 @@ run('bastion internal service (real Postgres)', () => {
     const [c] = await sql`SELECT body, author_id FROM comments WHERE task_id = ${created.task_id}`;
     expect(c!.body).toBe('Drifted again on 2026-11-26: failed');
 
-    // A retried delivery of the same row never posts the comment twice.
+    // A retried delivery of the same row (its response was lost) answers the first outcome and
+    // never posts the comment twice (#228).
     const retry = await upsertBastionTask(
       { ...base, comment: 'Drifted again on 2026-11-26: failed', idempotency_key: 'drift:2:bam_task_upsert' },
       database,
     );
-    expect(retry).toMatchObject({ outcome: 'updated', comment_posted: false });
+    expect(retry).toMatchObject({ task_id: created.task_id, outcome: 'reopened', comment_posted: false });
     expect(await commentCount(created.task_id)).toBe(1);
+  });
+
+  it('a retried create answers created and posts no "Drifted again" comment (#228)', async () => {
+    const ctl = '0b0b0b0b-0000-4000-8000-000000000002';
+    const input = {
+      org_id: org,
+      project_id: project,
+      control_id: ctl,
+      external_id: `bastion:control:${ctl}`,
+      title: 'Fix: MFA is on for everyone',
+      comment: 'Drifted again on 2026-11-26: the check failed.',
+      idempotency_key: 'drift:create-retry:bam_task_upsert',
+    };
+    const first = await upsertBastionTask(input, database);
+    expect(first).toMatchObject({ outcome: 'created', comment_posted: false });
+    const retry = await upsertBastionTask(input, database);
+    expect(retry).toMatchObject({ task_id: first.task_id, outcome: 'created', comment_posted: false });
+    expect(await commentCount(first.task_id)).toBe(0);
+
+    // A new drift (a new key) on the open task is a real update with its comment.
+    const next = await upsertBastionTask({ ...input, idempotency_key: 'drift:create-retry-2:bam_task_upsert' }, database);
+    expect(next).toMatchObject({ outcome: 'updated', comment_posted: true });
+    expect(await commentCount(first.task_id)).toBe(1);
   });
 
   it('comments by external_id are posted once across a forced retry; no task answers no_task', async () => {

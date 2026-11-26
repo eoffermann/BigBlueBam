@@ -137,6 +137,25 @@ async function postCommentOnce(tx: Tx, task: { id: string; project_id: string },
   return { comment_id: c.id, posted: true };
 }
 
+/**
+ * The outcome an earlier delivery with this idempotency key already produced on this task, or
+ * null. created beats reopened beats updated (a commented update is the only 'updated' marker).
+ */
+async function priorOutcome(tx: Tx, taskId: string, idempotencyKey: string): Promise<BastionBamTaskUpsertResult['outcome'] | null> {
+  const [row] = rows<{ action: string }>(
+    await tx.execute(sql`
+      SELECT action FROM activity_log
+       WHERE task_id = ${taskId} AND details->>'idempotency_key' = ${idempotencyKey}
+         AND action IN ('task.created_from_bastion', 'task.reopened_from_bastion', 'comment.created_from_bastion')
+       ORDER BY CASE action WHEN 'task.created_from_bastion' THEN 0 WHEN 'task.reopened_from_bastion' THEN 1 ELSE 2 END
+       LIMIT 1`),
+  );
+  if (!row) return null;
+  if (row.action === 'task.created_from_bastion') return 'created';
+  if (row.action === 'task.reopened_from_bastion') return 'reopened';
+  return 'updated';
+}
+
 async function memberOrNull(tx: Tx, orgId: string, userId: string | null | undefined): Promise<string | null> {
   if (!userId) return null;
   const [m] = rows<{ user_id: string }>(
@@ -183,6 +202,12 @@ export async function upsertBastionTask(input: BastionBamTaskUpsert, database: B
         ON CONFLICT DO NOTHING`);
       return { task_id: t.id, human_id: humanId, outcome: 'created', comment_posted: false };
     }
+
+    // A retry of a delivery that already committed (its response was lost) answers the first
+    // outcome and writes nothing (#228): every leg records the idempotency key in activity_log,
+    // and we still hold the external_id lock, so the marker is current.
+    const prior = await priorOutcome(tx, existing.id, input.idempotency_key);
+    if (prior) return { task_id: existing.id, human_id: existing.human_id, outcome: prior, comment_posted: false };
 
     let outcome: BastionBamTaskUpsertResult['outcome'] = 'updated';
     if (existing.is_terminal) {
