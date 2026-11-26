@@ -3,8 +3,8 @@
  *
  * Issue #145: receipts are stored through @bigbluebam/storage with the
  * configured S3_* bucket and credentials (lib/receipt-storage.ts) under
- * bill/receipts/<expense-id> (issue #157; earlier receipts at
- * bill/receipts/<expense-id><ext> are still read), and served only by the authorized
+ * bill/receipts/v2/<expense-id>/<version> (issues #169, #182; the older layouts
+ * listed in receipt-storage.ts are still read), and served only by the authorized
  * GET /v1/expenses/:id/receipt route. The expense row's receipt_url is that
  * route's path, never a /files/... URL.
  */

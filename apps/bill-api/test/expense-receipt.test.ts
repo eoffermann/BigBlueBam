@@ -117,7 +117,30 @@ vi.mock('../src/plugins/auth.js', () => ({
 }));
 
 // ---- in-memory storage driver ----
+// Issue #182: the store behaves like MinIO (the compose default), which keeps a
+// filesystem-shaped namespace: a key cannot be written under a path that is
+// already an object (XMinioParentIsObject), and an object cannot be written
+// where a prefix of other objects already exists (XMinioObjectExistsAsDirectory).
+// A plain string-keyed map accepts both, which is how #182 shipped unseen.
 const objects = new Map<string, { body: Buffer; contentType: string }>();
+function assertMinioNamespace(key: string): void {
+  const parts = key.split('/');
+  for (let i = 1; i < parts.length; i++) {
+    const parent = parts.slice(0, i).join('/');
+    if (objects.has(parent)) {
+      throw Object.assign(new Error('Object-prefix is already an object, please choose a different object-prefix name.'), {
+        code: 'XMinioParentIsObject',
+      });
+    }
+  }
+  for (const existing of objects.keys()) {
+    if (existing.startsWith(`${key}/`)) {
+      throw Object.assign(new Error('Object name already exists as a directory.'), {
+        code: 'XMinioObjectExistsAsDirectory',
+      });
+    }
+  }
+}
 const putsUnderLock: boolean[] = [];
 let stallPut = false;
 const memDriver = {
@@ -130,6 +153,7 @@ const memDriver = {
     if (stallPut) await new Promise(() => {});
     // A real S3 put takes time; yield so overlapping uploads interleave (#157).
     await new Promise((r) => setTimeout(r, 5));
+    assertMinioNamespace(key);
     objects.set(key, { body, contentType: opts?.contentType ?? 'application/octet-stream' });
     return { key, size: body.length, integrity: 'etag' };
   }),
@@ -220,7 +244,7 @@ describe('expense receipts (issue #145)', () => {
     expect(up.json().data.receipt_url).toBe(`/bill/api/v1/expenses/${EXPENSE_A}/receipt`);
     // Issue #169: a versioned key of its own, recorded on the row.
     const key = rows.get(EXPENSE_A)!.receipt_storage_key as string;
-    expect(key).toMatch(new RegExp(`^bill/receipts/${EXPENSE_A}/[0-9a-f-]{36}$`));
+    expect(key).toMatch(new RegExp(`^bill/receipts/v2/${EXPENSE_A}/[0-9a-f-]{36}$`));
     expect([...objects.keys()]).toEqual([key]);
     expect(rows.get(EXPENSE_A)!.receipt_url).toBe(`/bill/api/v1/expenses/${EXPENSE_A}/receipt`);
 
@@ -328,8 +352,61 @@ describe('expense receipts (issue #145)', () => {
     objects.set(`bill/receipts/${EXPENSE_A}`, { body: PNG, contentType: 'image/png' });
     Object.assign(rows.get(EXPENSE_A)!, { receipt_filename: 'old.png', receipt_uploaded_at: new Date() });
     expect((await download(EXPENSE_A)).rawPayload.equals(PNG)).toBe(true);
-    await upload(EXPENSE_A, 'new.pdf', Buffer.from('%PDF-1.7'), 'application/pdf');
+    const up = await upload(EXPENSE_A, 'new.pdf', Buffer.from('%PDF-1.7'), 'application/pdf');
+    // Issue #182: on MinIO the new key must not sit under the #157 object.
+    expect(up.statusCode).toBe(200);
     expect([...objects.keys()]).toEqual([rows.get(EXPENSE_A)!.receipt_storage_key]);
+    expect((await download(EXPENSE_A)).rawPayload.toString()).toBe('%PDF-1.7');
+  });
+});
+
+describe('receipt keys never nest across layouts (issue #182)', () => {
+  it('the fake store rejects a write under an existing object, as MinIO does', async () => {
+    objects.set(`bill/receipts/${EXPENSE_A}`, { body: PNG, contentType: 'image/png' });
+    await expect(memDriver.put(`bill/receipts/${EXPENSE_A}/x`, PNG)).rejects.toMatchObject({
+      code: 'XMinioParentIsObject',
+    });
+  });
+
+  it('a #157-era receipt is replaced, and the legacy object is deleted only after the row swap commits', async () => {
+    const legacyKey = `bill/receipts/${EXPENSE_A}`;
+    objects.set(legacyKey, { body: PNG, contentType: 'image/png' });
+    Object.assign(rows.get(EXPENSE_A)!, { receipt_filename: 'old.png', receipt_uploaded_at: new Date() });
+    let rowAtLegacyDelete: unknown = 'not deleted';
+    (memDriver.delete as ReturnType<typeof vi.fn>).mockImplementation(async (key: string) => {
+      if (key === legacyKey) rowAtLegacyDelete = rows.get(EXPENSE_A)!.receipt_storage_key;
+      objects.delete(key);
+    });
+    const up = await upload(EXPENSE_A, 'new.pdf', Buffer.from('%PDF-1.7'), 'application/pdf');
+    expect(up.statusCode).toBe(200);
+    const current = rows.get(EXPENSE_A)!.receipt_storage_key as string;
+    expect(rowAtLegacyDelete).toBe(current);
+    expect(objects.has(legacyKey)).toBe(false);
+    expect((await download(EXPENSE_A)).rawPayload.toString()).toBe('%PDF-1.7');
+  });
+
+  it('a row naming a first-#169-shape key (bill/receipts/<id>/<v>) still downloads and is replaced', async () => {
+    const oldKey = `bill/receipts/${EXPENSE_A}/0f0e0d0c-0000-4000-8000-000000000001`;
+    objects.set(oldKey, { body: PNG, contentType: 'image/png' });
+    Object.assign(rows.get(EXPENSE_A)!, {
+      receipt_filename: 'old.png',
+      receipt_uploaded_at: new Date(),
+      receipt_storage_key: oldKey,
+    });
+    expect((await download(EXPENSE_A)).rawPayload.equals(PNG)).toBe(true);
+    const up = await upload(EXPENSE_A, 'new.pdf', Buffer.from('%PDF-1.7'), 'application/pdf');
+    expect(up.statusCode).toBe(200);
+    const current = rows.get(EXPENSE_A)!.receipt_storage_key as string;
+    expect(current.startsWith(`bill/receipts/v2/${EXPENSE_A}/`)).toBe(true);
+    expect([...objects.keys()]).toEqual([current]);
+  });
+
+  it('a v2 key for another expense is never read', async () => {
+    const other = `bill/receipts/v2/${EXPENSE_B}/x`;
+    objects.set(other, { body: PNG, contentType: 'image/png' });
+    Object.assign(rows.get(EXPENSE_A)!, { receipt_filename: 'r.png', receipt_uploaded_at: new Date(), receipt_storage_key: other });
+    expect((await download(EXPENSE_A)).statusCode).toBe(404);
+    expect(memDriver.getStream).not.toHaveBeenCalled();
   });
 });
 
