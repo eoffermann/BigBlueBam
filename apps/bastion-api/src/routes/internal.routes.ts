@@ -1,6 +1,7 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import {
   BastionEngineName,
+  type BastionRunClaimedError,
   bastionConsumesEvent,
   bastionEvaluateRunEngineSchema,
   bastionInternalEventSchema,
@@ -47,7 +48,18 @@ export default async function internalRoutes(fastify: FastifyInstance) {
       } catch (err) {
         if (err instanceof RunNotFoundError) return send(request, reply, 404, 'NOT_FOUND', err.message);
         if (err instanceof RunLeaseHeldError) {
-          return send(request, reply, 409, 'RUN_CLAIMED', err.message, { claimed_by: err.claimedBy, heartbeat_stale: err.heartbeatStale });
+          // Built to the shared contract the worker parses (issue #205).
+          const body: BastionRunClaimedError = {
+            error: {
+              code: 'RUN_CLAIMED',
+              message: err.message,
+              details: [],
+              request_id: request.id,
+              claimed_by: err.claimedBy,
+              heartbeat_stale: err.heartbeatStale,
+            },
+          };
+          return reply.status(409).send(body);
         }
         throw err;
       }

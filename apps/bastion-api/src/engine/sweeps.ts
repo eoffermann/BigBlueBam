@@ -2,6 +2,7 @@
 // time, each org in its own transaction(s), so no single org's conflict can abort the batch
 // (spec 7.3, #187). Every one logs a start line and per-org progress through deps.log.
 
+import type { BastionEvaluateTickResult, BastionTickRun } from '@bigbluebam/shared';
 import { compareEpochSeq, signSeal, verifyChain, verifySeal, type LedgerRow, type SealPayload } from '../lib/ledger-canonical.js';
 import { MAX_RESUMES, ORPHAN_REQUEUE_AFTER_MS } from './budgets.js';
 import { type EngineDeps, localClock, orgTx, sqlstateOf, utcDate } from './context.js';
@@ -31,14 +32,8 @@ async function bastionOrgs(deps: EngineDeps, only?: string): Promise<OrgRow[]> {
 
 // ── evaluate-tick ────────────────────────────────────────────────────────────────────────
 
-export interface RunToEnqueue {
-  organization_id: string;
-  run_id: string;
-  resume_count: number;
-  /** >0 for the orphan re-enqueue, so it is never deduplicated against an older job id. */
-  generation: number;
-  why: 'nightly_created' | 'nightly_resumed' | 'orphan_requeue';
-}
+/** The shared response contract the worker parses (issue #205). */
+export type RunToEnqueue = BastionTickRun;
 
 /** Is the nightly slot for this org due at `now`? Pure; tested. */
 export function nightlyDue(now: Date, org: Pick<OrgRow, 'timezone' | 'evaluation_hour_local' | 'evaluation_minute_offset'>) {
@@ -100,7 +95,8 @@ export async function evaluateTick(deps: EngineDeps, opts: { organization_id?: s
     out.push({ organization_id: r.organization_id as string, run_id: r.id as string, resume_count: Number(r.resume_count), generation, why: 'orphan_requeue' });
   }
   deps.log.info({ enqueue: out.length }, `bastion-evaluate-tick: ${out.length} runs to drive`);
-  return { runs: out };
+  const result: BastionEvaluateTickResult = { runs: out };
+  return result;
 }
 
 // ── run-reaper ───────────────────────────────────────────────────────────────────────────

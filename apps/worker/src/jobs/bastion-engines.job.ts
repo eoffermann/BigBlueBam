@@ -11,12 +11,13 @@ import type { Job, Queue } from 'bullmq';
 import type { Logger } from 'pino';
 import {
   bastionEvaluateRunJobId,
+  bastionEvaluateTickResultSchema,
   type BastionEngineName,
   type BastionEvaluateRunJobData,
   type BastionSweepJobData,
 } from '@bigbluebam/shared';
 import { SCHEDULED_JOB_RETENTION } from '../lib/job-retention.js';
-import { bodyData, postBastion } from './bastion-shared.js';
+import { bodyData, parseContract, postBastion } from './bastion-shared.js';
 
 export interface EngineJobDeps {
   post: typeof postBastion;
@@ -40,14 +41,6 @@ export function makeBastionEngineJob(engine: Exclude<BastionEngineName, 'evaluat
   };
 }
 
-interface TickRun {
-  organization_id: string;
-  run_id: string;
-  resume_count: number;
-  generation: number;
-  why: string;
-}
-
 /** evaluate-tick: ask the engine which runs to drive, then enqueue each one. */
 export async function processBastionEvaluateTickJob(
   job: Job<BastionSweepJobData>,
@@ -58,7 +51,10 @@ export async function processBastionEvaluateTickJob(
   logger.info({ jobId: job.id }, 'bastion-evaluate-tick: checking for due, resumable and orphaned runs');
   const res = await deps.post('/v1/internal/engines/evaluate-tick', job.data?.organization_id ? { organization_id: job.data.organization_id } : {});
   if (!res.ok) throw new Error(`bastion-evaluate-tick: engine returned ${res.status}`);
-  const runs = bodyData<{ runs: TickRun[] }>(res)?.runs ?? [];
+  // Parsed against the shared contract: a renamed resume_count / generation must fail here, not
+  // build a job id like `<run>-rundefined` that silently breaks BullMQ dedup (issue #205).
+  const raw = bodyData<unknown>(res);
+  const runs = raw === undefined ? [] : parseContract(bastionEvaluateTickResultSchema, raw, 'evaluate-tick result').runs;
   for (const [i, r] of runs.entries()) {
     await deps.queue.add(
       'run',

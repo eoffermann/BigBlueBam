@@ -910,3 +910,58 @@ export interface BastionSweepJobData {
 export function bastionEvaluateRunJobId(runId: string, resumeCount: number, generation = 0): string {
   return generation > 0 ? `${runId}-r${resumeCount}-g${generation}` : `${runId}-r${resumeCount}`;
 }
+
+/*
+ * Engine RESPONSE contracts (issue #205). bastion-api's engines route builds these and the
+ * worker safeParses them, so a rename on either side fails loudly instead of type-checking
+ * against a hand-copied interface (e.g. a job id built from `resume_count: undefined`).
+ */
+
+/** 200 `data` of POST /internal/engines/evaluate-run: one slice of one run. */
+export const bastionEvaluateRunSliceSchema = z.object({
+  done: z.boolean(),
+  status: BastionRunStatus,
+  partial_reason: z.string().nullable().optional(),
+  assertions_done: z.number().int().nonnegative(),
+  assertions_total: z.number().int().nonnegative(),
+  controls_done: z.number().int().nonnegative(),
+  controls_total: z.number().int().nonnegative(),
+  pass: z.number().int().nonnegative(),
+  fail: z.number().int().nonnegative(),
+  unprovable: z.number().int().nonnegative(),
+  slice_ms: z.number().nonnegative(),
+  /** Set when the slice stopped on a transient wait; the worker backs off before the next one. */
+  waiting: z.enum(['storage', 'ledger_lock']).optional(),
+});
+export type BastionEvaluateRunSlice = z.infer<typeof bastionEvaluateRunSliceSchema>;
+
+/** One run the evaluate-tick engine asks the worker to drive. */
+export const bastionTickRunSchema = z.object({
+  organization_id: z.string().uuid(),
+  run_id: z.string().uuid(),
+  resume_count: z.number().int().nonnegative(),
+  /** > 0 for the orphan re-enqueue, so it is never deduplicated against an older job id. */
+  generation: z.number().int().nonnegative(),
+  why: z.enum(['nightly_created', 'nightly_resumed', 'orphan_requeue']),
+});
+export type BastionTickRun = z.infer<typeof bastionTickRunSchema>;
+
+/** 200 `data` of POST /internal/engines/evaluate-tick. */
+export const bastionEvaluateTickResultSchema = z.object({ runs: z.array(bastionTickRunSchema) });
+export type BastionEvaluateTickResult = z.infer<typeof bastionEvaluateTickResultSchema>;
+
+/**
+ * 409 body of evaluate-run when another claimant holds the run. `heartbeat_stale: true` tells
+ * the worker to wait 30 s and retry (that claim will be taken over at the lease, spec 7).
+ */
+export const bastionRunClaimedErrorSchema = z.object({
+  error: z.object({
+    code: z.literal('RUN_CLAIMED'),
+    message: z.string(),
+    details: z.array(z.unknown()),
+    request_id: z.string(),
+    claimed_by: z.string().nullable(),
+    heartbeat_stale: z.boolean(),
+  }),
+});
+export type BastionRunClaimedError = z.infer<typeof bastionRunClaimedErrorSchema>;

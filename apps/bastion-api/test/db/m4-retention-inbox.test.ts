@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import Fastify, { type FastifyInstance } from 'fastify';
 import postgres from 'postgres';
+import { bastionRunClaimedErrorSchema } from '@bigbluebam/shared';
 import { retention, RETENTION_DEAD_OUTBOX_DAYS, RETENTION_UNCONSUMED_INBOX_DAYS } from '../../src/engine/sweeps.js';
 import { clock, DATABASE_URL, makeDeps, seedOrg, wipeOrg } from './engine-harness.js';
 
@@ -87,6 +88,23 @@ describe.skipIf(!DATABASE_URL)('M4 retention and inbox gating (live database, #2
     expect(keptInbox).toEqual(['pending-young', 'processing-old']);
     const keptOutbox = (await sql`SELECT idempotency_key AS k FROM bastion_outbox WHERE organization_id = ${s.org} ORDER BY 1`).map((r) => r.k);
     expect(keptOutbox).toEqual(['dead-young', 'pending-old']);
+  });
+
+  it('the evaluate-run 409 body matches the shared contract the worker parses (#205)', async () => {
+    const s = await seedOrg(sql, 'claimed');
+    orgs.push(s.org);
+    const [run] = await sql`INSERT INTO bastion_evaluation_runs (organization_id, trigger, scope, as_of, status, claimed_by, heartbeat_at)
+                            VALUES (${s.org}, 'manual', 'all', now(), 'running', 'worker:other', now()) RETURNING id`;
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/internal/engines/evaluate-run',
+      headers: { 'x-internal-secret': SECRET },
+      payload: { organization_id: s.org, run_id: run!.id, claimant: 'worker:me' },
+    });
+    expect(res.statusCode).toBe(409);
+    const parsed = bastionRunClaimedErrorSchema.safeParse(res.json());
+    expect(parsed.success).toBe(true);
+    expect(parsed.success && parsed.data.error).toMatchObject({ claimed_by: 'worker:other', heartbeat_stale: false });
   });
 
   it('the inbox stores a bastion.* proposal decision for a set-up org, and drops other apps\' decisions and orgs without Bastion', async () => {

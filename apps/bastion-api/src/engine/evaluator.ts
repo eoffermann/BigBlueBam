@@ -16,7 +16,7 @@
 // and the run stays resumable; a detected restore ends the run `partial` / `restore_pending`.
 
 import { randomUUID } from 'node:crypto';
-import type { BastionProbeResult } from '@bigbluebam/shared';
+import type { BastionEvaluateRunSlice, BastionProbeResult } from '@bigbluebam/shared';
 import { withStorageTimeout } from '@bigbluebam/storage';
 import { canonicalJson, sha256Hex } from '../lib/ledger-canonical.js';
 import { decide, probeDefinition, probeWindow } from '../probes/definitions.js';
@@ -62,20 +62,8 @@ export interface RunRow {
   started_by: string | null;
 }
 
-export interface SliceResult {
-  done: boolean;
-  status: string;
-  partial_reason?: string | null;
-  assertions_done: number;
-  assertions_total: number;
-  controls_done: number;
-  controls_total: number;
-  pass: number;
-  fail: number;
-  unprovable: number;
-  slice_ms: number;
-  waiting?: 'storage' | 'ledger_lock';
-}
+/** The shared response contract the worker parses (issue #205). */
+export type SliceResult = BastionEvaluateRunSlice;
 
 interface PlannedAssertion {
   id: string;

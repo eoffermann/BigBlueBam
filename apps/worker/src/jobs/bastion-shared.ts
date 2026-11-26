@@ -52,3 +52,27 @@ export async function postBastion(
 export function bodyData<T>(res: BastionPostResult): T | undefined {
   return (res.data as { data?: T } | undefined)?.data;
 }
+
+/** Thrown when bastion-api's response does not match the shared contract (issue #205). */
+export class BastionContractError extends Error {
+  constructor(what: string, issues: string) {
+    super(`bastion-api ${what} does not match the shared contract (@bigbluebam/shared schemas/bastion.ts): ${issues}`);
+    this.name = 'BastionContractError';
+  }
+}
+
+/**
+ * Parse a bastion-api response body against its shared Zod contract. A mismatch (a field renamed
+ * on one side) throws a BastionContractError naming the fields, so it fails loudly in the job
+ * log instead of quietly driving the queue with undefined values.
+ */
+export function parseContract<T>(
+  schema: { safeParse: (v: unknown) => { success: true; data: T } | { success: false; error: { issues: Array<{ path: Array<string | number>; message: string }> } } },
+  value: unknown,
+  what: string,
+): T {
+  const parsed = schema.safeParse(value);
+  if (parsed.success) return parsed.data;
+  const issues = parsed.error.issues.map((i) => `${i.path.join('.') || '(root)'}: ${i.message}`).join('; ');
+  throw new BastionContractError(what, issues);
+}

@@ -25,9 +25,14 @@
  */
 import type { Job, Queue } from 'bullmq';
 import type { Logger } from 'pino';
-import { bastionEvaluateRunJobId, type BastionEvaluateRunJobData } from '@bigbluebam/shared';
+import {
+  bastionEvaluateRunJobId,
+  bastionEvaluateRunSliceSchema,
+  bastionRunClaimedErrorSchema,
+  type BastionEvaluateRunJobData,
+} from '@bigbluebam/shared';
 import { SCHEDULED_JOB_RETENTION } from '../lib/job-retention.js';
-import { bodyData, postBastion } from './bastion-shared.js';
+import { bodyData, parseContract, postBastion } from './bastion-shared.js';
 
 export const EVALUATE_POLL_INTERVAL_MS = 10_000;
 export const EVALUATE_MAX_POLLS = 540;
@@ -39,21 +44,6 @@ export const TRANSIENT_WAIT_MS = 10_000;
 /** The claimant a job drives under: inherited on a handover, else derived from the job id. */
 export function evaluateRunClaimant(job: Pick<Job<BastionEvaluateRunJobData>, 'id' | 'data'>): string {
   return job.data.claimant ?? `worker:${job.id ?? job.data.run_id}`;
-}
-
-interface Slice {
-  done: boolean;
-  status: string;
-  partial_reason?: string | null;
-  assertions_done: number;
-  assertions_total: number;
-  controls_done: number;
-  controls_total: number;
-  pass: number;
-  fail: number;
-  unprovable: number;
-  slice_ms: number;
-  waiting?: string;
 }
 
 export interface EvaluateRunDeps {
@@ -112,7 +102,7 @@ export async function processBastionEvaluateRunJob(
       return 'ended';
     }
     if (res.status === 409) {
-      const stale = (res.data as { error?: { heartbeat_stale?: boolean } } | undefined)?.error?.heartbeat_stale === true;
+      const stale = parseContract(bastionRunClaimedErrorSchema, res.data, 'evaluate-run 409 body').error.heartbeat_stale;
       if (stale) {
         logger.info({ run_id }, 'bastion-evaluate: another claim has a stale heartbeat; waiting 30 s before retrying');
         await sleep(STALE_CLAIM_WAIT_MS);
@@ -122,7 +112,8 @@ export async function processBastionEvaluateRunJob(
       return 'ended';
     }
     if (!res.ok) throw new Error(`bastion-evaluate: evaluate-run returned ${res.status}`);
-    const s = bodyData<Slice>(res);
+    const raw = bodyData<unknown>(res);
+    const s = raw === undefined ? undefined : parseContract(bastionEvaluateRunSliceSchema, raw, 'evaluate-run slice');
     if (s) {
       logger.info(
         { run_id, poll, status: s.status, waiting: s.waiting, partial_reason: s.partial_reason },

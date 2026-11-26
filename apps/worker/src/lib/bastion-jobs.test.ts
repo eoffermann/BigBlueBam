@@ -117,14 +117,30 @@ describe('bastion-evaluate-run loop', () => {
   });
 
   it('a 409 on a stale claim waits 30 s and retries; a live 409 ends the attempt', async () => {
-    const stale = { ok: false, status: 409, data: { error: { heartbeat_stale: true } } };
-    const live = { ok: false, status: 409, data: { error: { heartbeat_stale: false } } };
+    const claimed = (heartbeat_stale: boolean) => ({
+      ok: false,
+      status: 409,
+      data: { error: { code: 'RUN_CLAIMED', message: 'held', details: [], request_id: 'req-1', claimed_by: 'worker:x', heartbeat_stale } },
+    });
+    const stale = claimed(true);
+    const live = claimed(false);
     const sleep = vi.fn().mockResolvedValue(undefined);
     const post = vi.fn().mockResolvedValueOnce(stale).mockResolvedValueOnce(ok(slice(true)));
     expect(await processBastionEvaluateRunJob(job({ organization_id: 'o', run_id: 'r', resume_count: 0 }), silent, { post, sleep, queue: { add: vi.fn() } })).toBe('done');
     expect(sleep).toHaveBeenCalledWith(30_000);
     const post2 = vi.fn().mockResolvedValueOnce(live);
     expect(await processBastionEvaluateRunJob(job({ organization_id: 'o', run_id: 'r', resume_count: 0 }), silent, { post: post2, sleep, queue: { add: vi.fn() } })).toBe('ended');
+  });
+
+  it('a slice or 409 body that drifts from the shared contract fails loudly (#205)', async () => {
+    const renamed = vi.fn().mockResolvedValue({ ok: false, status: 409, data: { error: { code: 'RUN_CLAIMED', heartbeatStale: true } } });
+    await expect(
+      processBastionEvaluateRunJob(job({ organization_id: 'o', run_id: 'r', resume_count: 0 }), silent, { post: renamed, sleep: async () => {}, queue: { add: vi.fn() } }),
+    ).rejects.toThrow(/409 body does not match the shared contract/);
+    const badSlice = vi.fn().mockResolvedValue(ok({ ...slice(false), waiting: 'coffee' }));
+    await expect(
+      processBastionEvaluateRunJob(job({ organization_id: 'o', run_id: 'r', resume_count: 0 }), silent, { post: badSlice, sleep: async () => {}, queue: { add: vi.fn() } }),
+    ).rejects.toThrow(/slice does not match the shared contract.*waiting/);
   });
 
   it('after the poll cap it re-enqueues itself under a new job id with retention', async () => {
@@ -179,15 +195,30 @@ describe('bastion-evaluate-run loop', () => {
 });
 
 describe('bastion-evaluate-tick and engine jobs', () => {
+  const ORG = '00000000-0000-4000-8000-000000000205';
+  const R1 = '00000000-0000-4000-8000-0000000002a1';
+  const R2 = '00000000-0000-4000-8000-0000000002a2';
+
+  it('a tick result that drifts from the shared contract fails loudly, enqueueing nothing (#205)', async () => {
+    const post = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      data: { data: { runs: [{ organization_id: ORG, run_id: R1, resumeCount: 0, generation: 0, why: 'nightly_created' }] } },
+    });
+    const add = vi.fn();
+    await expect(processBastionEvaluateTickJob(job({}), silent, { post, queue: { add } })).rejects.toThrow(/shared contract.*resume_count/);
+    expect(add).not.toHaveBeenCalled();
+  });
+
   it('enqueues each run the tick returns with its own job id', async () => {
     const post = vi.fn().mockResolvedValue({
       ok: true,
       status: 200,
-      data: { data: { runs: [{ organization_id: 'o', run_id: 'r1', resume_count: 0, generation: 0, why: 'nightly_created' }, { organization_id: 'o', run_id: 'r2', resume_count: 1, generation: 7, why: 'orphan_requeue' }] } },
+      data: { data: { runs: [{ organization_id: ORG, run_id: R1, resume_count: 0, generation: 0, why: 'nightly_created' }, { organization_id: ORG, run_id: R2, resume_count: 1, generation: 7, why: 'orphan_requeue' }] } },
     });
     const add = vi.fn();
     expect(await processBastionEvaluateTickJob(job({}), silent, { post, queue: { add } })).toBe(2);
-    expect(add.mock.calls.map((c) => c[2].jobId)).toEqual(['r1-r0', 'r2-r1-g7']);
+    expect(add.mock.calls.map((c) => c[2].jobId)).toEqual([`${R1}-r0`, `${R2}-r1-g7`]);
     expect(post).toHaveBeenCalledWith('/v1/internal/engines/evaluate-tick', {});
   });
 

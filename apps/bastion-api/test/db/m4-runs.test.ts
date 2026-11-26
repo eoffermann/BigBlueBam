@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import postgres from 'postgres';
+import { bastionEvaluateRunSliceSchema, bastionEvaluateTickResultSchema } from '@bigbluebam/shared';
 import type { EngineDeps } from '../../src/engine/context.js';
 import { runEvaluationSlice } from '../../src/engine/evaluator.js';
 import { drainOutbox, enqueueOutbox, OUTBOX_MAX_ATTEMPTS, type Deliverer } from '../../src/engine/outbox.js';
@@ -133,6 +134,9 @@ describe.skipIf(!DATABASE_URL)('M4 evaluation runs and the outbox (live database
     };
     const first = await runEvaluationSlice(makeDeps(sql, { clock: c, bucket: slow }), { organization_id: s.org, run_id: runId, claimant: 'worker:j1' });
     expect(first).toMatchObject({ done: false, assertions_done: 1 });
+    // The real engine output is exactly what the worker parses (#205).
+    expect(bastionEvaluateTickResultSchema.safeParse(t0).success).toBe(true);
+    expect(bastionEvaluateRunSliceSchema.safeParse(first).success).toBe(true);
 
     // A job under a DIFFERENT claimant (the old per-job-id behavior) is refused, not stale.
     await expect(runEvaluationSlice(deps, { organization_id: s.org, run_id: runId, claimant: 'worker:r-r0-g99' })).rejects.toMatchObject({
