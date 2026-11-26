@@ -43,7 +43,7 @@ afterEach(() => {
 
 describe('Bastion job registration rules (spec 7)', () => {
   // The block runs to the last Bastion scheduler (M5's evidence-expiry).
-  const bastionBlock = WORKER.slice(WORKER.indexOf('function registerBastionSweep'), WORKER.indexOf('bastion-evidence-expiry-daily') + 40);
+  const bastionBlock = WORKER.slice(WORKER.indexOf('function registerBastionSweep'), WORKER.indexOf('// END Bastion jobs'));
 
   it('registerBastionSweep wraps every scheduler in withRetention with tz UTC', () => {
     const schedulers = calls(bastionBlock, '.upsertJobScheduler(');
@@ -111,8 +111,10 @@ describe('bastion-evaluate-run loop', () => {
     const add = vi.fn();
     const r = await processBastionEvaluateRunJob(job({ organization_id: 'o', run_id: 'r', resume_count: 1 }), silent, { post, sleep, queue: { add } });
     expect(r).toBe('done');
-    expect(post).toHaveBeenCalledTimes(3);
+    // Three slices, then the gaps are re-ranked for the org (spec 7: gap-rank after each run).
+    expect(post).toHaveBeenCalledTimes(4);
     expect(post.mock.calls[0]![1]).toEqual({ organization_id: 'o', run_id: 'r', claimant: 'worker:j1' });
+    expect(post.mock.calls[3]).toEqual(['/v1/internal/engines/gap-rank', { organization_id: 'o' }]);
     expect(sleep).toHaveBeenCalledTimes(1);
     expect(add).not.toHaveBeenCalled();
   });
@@ -177,8 +179,11 @@ describe('bastion-evaluate-run loop', () => {
       .mockResolvedValueOnce(ok(slice(true)));
     const sleep = vi.fn().mockResolvedValue(undefined);
     expect(await processBastionEvaluateRunJob(job({ organization_id: 'o', run_id: 'r', resume_count: 0 }), silent, { post, sleep, queue: { add: vi.fn() } })).toBe('done');
-    expect(post).toHaveBeenCalledTimes(3);
-    expect(new Set(post.mock.calls.map((c) => (c[1] as { claimant: string }).claimant))).toEqual(new Set(['worker:j1']));
+    // Three evaluate-run calls plus the post-run gap-rank call.
+    expect(post).toHaveBeenCalledTimes(4);
+    const runCalls = post.mock.calls.filter((c) => c[0] === '/v1/internal/engines/evaluate-run');
+    expect(runCalls).toHaveLength(3);
+    expect(new Set(runCalls.map((c) => (c[1] as { claimant: string }).claimant))).toEqual(new Set(['worker:j1']));
     expect(sleep).toHaveBeenCalledTimes(2);
   });
 

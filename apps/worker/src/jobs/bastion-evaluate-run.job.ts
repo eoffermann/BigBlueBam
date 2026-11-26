@@ -119,7 +119,17 @@ export async function processBastionEvaluateRunJob(
         { run_id, poll, status: s.status, waiting: s.waiting, partial_reason: s.partial_reason },
         `bastion-evaluate: run ${run_id} controls ${s.controls_done}/${s.controls_total} assertions ${s.assertions_done}/${s.assertions_total} (pass ${s.pass}, fail ${s.fail}, unprovable ${s.unprovable}) slice_ms=${s.slice_ms} elapsed_ms=${Date.now() - started} resume=${resume_count}`,
       );
-      if (s.done) return 'done';
+      if (s.done) {
+        // Spec 7: bastion-gap-rank runs after each run (and daily). Best effort; the daily
+        // schedule is the floor, so a failure here only delays the ranking.
+        try {
+          const gr = await deps.post('/v1/internal/engines/gap-rank', { organization_id });
+          logger.info({ run_id, status: gr.status }, 'bastion-evaluate: gaps re-ranked after the run');
+        } catch (err) {
+          logger.warn({ run_id, err: (err as Error).message }, 'bastion-evaluate: gap ranking after the run failed; the daily ranking will catch up');
+        }
+        return 'done';
+      }
       // A full slice returns immediately for the next one; a waiting slice backs off.
       if (s.waiting) await sleep(EVALUATE_POLL_INTERVAL_MS);
     } else {
