@@ -22,6 +22,7 @@ import * as crossSvc from '../services/cross-product.service.js';
 import { broadcastToDiagram } from '../lib/broadcast.js';
 import { ForbiddenError, NotFoundError, ValidationError } from '../lib/errors.js';
 import { env } from '../env.js';
+import { caller } from '../lib/caller.js';
 
 function mapErr(err: unknown, requestId: string) {
   if (err instanceof NotFoundError) {
@@ -69,7 +70,7 @@ export default async function crossProductRoutes(fastify: FastifyInstance) {
       const orgId = request.user!.org_id;
       const userId = request.user!.id;
       try {
-        await diagramSvc.assertCanEdit(orgId, userId, request.params.id);
+        await diagramSvc.assertCanEdit(orgId, caller(request), request.params.id);
         const plan = await diagramSvc.planPromoteGraph(orgId, request.params.id, body);
         publishBoltEvent(
           'diagram.promoted_to_tasks',
@@ -104,7 +105,7 @@ export default async function crossProductRoutes(fastify: FastifyInstance) {
       try {
         const result = await crossSvc.generateDiagramFromBam({
           org_id: orgId,
-          user_id: userId,
+          actor: caller(request),
           project_id: body.project_id,
           name: body.name,
           description: body.description,

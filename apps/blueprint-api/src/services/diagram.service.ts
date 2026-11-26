@@ -15,6 +15,8 @@ import {
   blueprintComments,
   blueprintStars,
   tasksStub,
+  projects,
+  projectMemberships,
 } from '../db/schema/index.js';
 import { inArray } from 'drizzle-orm';
 import { ForbiddenError, NotFoundError } from '../lib/errors.js';
@@ -29,7 +31,8 @@ export interface ListDiagramsFilter {
   include_archived?: boolean;
 }
 
-export async function listDiagrams(orgId: string, userId: string, filter: ListDiagramsFilter) {
+export async function listDiagrams(orgId: string, actor: DiagramActor, filter: ListDiagramsFilter) {
+  const userId = actor.id;
   const whereParts = [eq(blueprintDiagrams.org_id, orgId)];
   if (!filter.include_archived) {
     whereParts.push(eq(blueprintDiagrams.is_archived, false));
@@ -40,7 +43,7 @@ export async function listDiagrams(orgId: string, userId: string, filter: ListDi
   if (filter.diagram_type) {
     whereParts.push(eq(blueprintDiagrams.diagram_type, filter.diagram_type));
   }
-  const rows = await db
+  let rows = await db
     .select()
     .from(blueprintDiagrams)
     .where(and(...whereParts))
@@ -53,20 +56,31 @@ export async function listDiagrams(orgId: string, userId: string, filter: ListDi
       .from(blueprintStars)
       .where(eq(blueprintStars.user_id, filter.starred_by));
     const starred = new Set(stars.map((s) => s.diagram_id));
-    return rows.filter((r) => starred.has(r.id));
+    // Narrow to starred, then fall through to the visibility filter (#180): a
+    // star outlives the access that allowed it, so it is never a read grant.
+    rows = rows.filter((r) => starred.has(r.id));
   }
 
-  // Drop diagrams the caller cannot see: private + not creator + not collaborator.
+  // Drop diagrams the caller cannot see, by the same rule as assertCanRead:
+  // creator or collaborator always; otherwise organization visibility, or
+  // project visibility on a project the caller can see (#181).
   if (rows.length === 0) return rows;
-  const privateIds = rows.filter((r) => r.visibility === 'private').map((r) => r.id);
-  if (privateIds.length === 0) return rows;
-  const collabs = await db
-    .select({ diagram_id: blueprintCollaborators.diagram_id })
-    .from(blueprintCollaborators)
-    .where(eq(blueprintCollaborators.user_id, userId));
+  const openByVisibility = (r: DiagramRow, projectIds: Set<string> | null) =>
+    r.visibility === 'organization' ||
+    (r.visibility === 'project' && (!r.project_id || projectIds === null || projectIds.has(r.project_id)));
+  if (rows.every((r) => r.visibility === 'organization' || (r.visibility === 'project' && !r.project_id))) {
+    return rows;
+  }
+  const [collabs, projectIds] = await Promise.all([
+    db
+      .select({ diagram_id: blueprintCollaborators.diagram_id })
+      .from(blueprintCollaborators)
+      .where(eq(blueprintCollaborators.user_id, userId)),
+    projectIdsVisibleTo(actor),
+  ]);
   const collabSet = new Set(collabs.map((c) => c.diagram_id));
   return rows.filter(
-    (r) => r.visibility !== 'private' || r.created_by === userId || collabSet.has(r.id),
+    (r) => r.created_by === userId || collabSet.has(r.id) || openByVisibility(r, projectIds),
   );
 }
 
@@ -515,55 +529,97 @@ export async function planPromoteGraph(
 }
 
 // ─── Visibility check used by every per-diagram route ───────────────────
-
-export async function assertCanRead(orgId: string, userId: string, diagramId: string) {
-  const diagram = await getDiagram(orgId, diagramId);
-  if (diagram.visibility === 'organization' || diagram.visibility === 'project') {
-    return diagram;
-  }
-  // private — must be creator or explicit collaborator
-  if (diagram.created_by === userId) return diagram;
-  const [collab] = await db
-    .select({ id: blueprintCollaborators.id })
-    .from(blueprintCollaborators)
-    .where(
-      and(
-        eq(blueprintCollaborators.diagram_id, diagramId),
-        eq(blueprintCollaborators.user_id, userId),
-      ),
-    )
-    .limit(1);
-  if (!collab) throw new ForbiddenError('You do not have access to this diagram');
-  return diagram;
-}
-
-export async function assertCanEdit(orgId: string, userId: string, diagramId: string) {
-  const diagram = await assertCanRead(orgId, userId, diagramId);
-  // Currently the visibility roles do not gate edit vs view at the diagram
-  // level; per-diagram collaborator roles do. Future work: refine this.
-  if (diagram.visibility === 'private' && diagram.created_by !== userId) {
-    const [collab] = await db
-      .select({ role: blueprintCollaborators.role })
-      .from(blueprintCollaborators)
-      .where(
-        and(
-          eq(blueprintCollaborators.diagram_id, diagramId),
-          eq(blueprintCollaborators.user_id, userId),
-        ),
-      )
-      .limit(1);
-    if (!collab || collab.role === 'viewer' || collab.role === 'commenter') {
-      throw new ForbiddenError('You do not have edit access to this diagram');
-    }
-  }
-  return diagram;
-}
+//
+// Who may see a diagram (issues #167, #181):
+//   - its creator, and any explicit collaborator (role decides edit/comment);
+//   - `organization`: every org member;
+//   - `project` with a project_id: whoever may see that Bam project
+//     (canSeeBamProject, the platform rule from preflightBamProject);
+//   - `project` with no project_id: every org member (nothing narrower to apply);
+//   - `private` (or anything else): nobody beyond creator and collaborators.
 
 /** The caller, as the per-diagram ACL needs it. `role` is the org legacy role. */
 export interface DiagramActor {
   id: string;
   role?: string | null;
   is_superuser?: boolean;
+}
+
+/**
+ * Whether `actor` may see Bam project `projectId` (issue #181). Mirrors
+ * preflightBamProject in apps/api/src/services/visibility.service.ts: the
+ * project must be in the caller's org, and the caller must be an org
+ * owner/admin or hold a project_memberships row. Blueprint's one encoding of
+ * that fact: generate-from-bam, the per-diagram ACL and the list filter all
+ * go through it (or, for the list, through projectIdsVisibleTo below).
+ */
+export async function canSeeBamProject(orgId: string, actor: DiagramActor, projectId: string): Promise<boolean> {
+  const [project] = await db
+    .select({ id: projects.id })
+    .from(projects)
+    .where(and(eq(projects.id, projectId), eq(projects.org_id, orgId)))
+    .limit(1);
+  if (!project) return false;
+  if (isOrgAdmin(actor)) return true;
+  const [membership] = await db
+    .select({ id: projectMemberships.id })
+    .from(projectMemberships)
+    .where(and(eq(projectMemberships.project_id, projectId), eq(projectMemberships.user_id, actor.id)))
+    .limit(1);
+  return membership !== undefined;
+}
+
+export async function assertCanSeeBamProject(orgId: string, actor: DiagramActor, projectId: string) {
+  if (!(await canSeeBamProject(orgId, actor, projectId))) {
+    throw new ForbiddenError('Project not found in this org, or you do not have access.');
+  }
+}
+
+/** The set form of canSeeBamProject for list filtering; null means every project. */
+async function projectIdsVisibleTo(actor: DiagramActor): Promise<Set<string> | null> {
+  if (isOrgAdmin(actor)) return null;
+  const rows = await db
+    .select({ project_id: projectMemberships.project_id })
+    .from(projectMemberships)
+    .where(eq(projectMemberships.user_id, actor.id));
+  return new Set(rows.map((r) => r.project_id));
+}
+
+/** True when the diagram's visibility alone admits the caller (no collaborator grant needed). */
+async function visibilityAdmits(orgId: string, actor: DiagramActor, diagram: DiagramRow): Promise<boolean> {
+  if (diagram.visibility === 'organization') return true;
+  if (diagram.visibility === 'project') {
+    return diagram.project_id ? canSeeBamProject(orgId, actor, diagram.project_id) : true;
+  }
+  return false;
+}
+
+/**
+ * Resolve how the caller reaches a diagram: 'open' (creator or visibility) or
+ * their collaborator role, or null for no access at all.
+ */
+async function accessTo(orgId: string, actor: DiagramActor, diagram: DiagramRow): Promise<'open' | string | null> {
+  if (diagram.created_by === actor.id) return 'open';
+  if (await visibilityAdmits(orgId, actor, diagram)) return 'open';
+  return collaboratorRole(diagram.id, actor.id);
+}
+
+export async function assertCanRead(orgId: string, actor: DiagramActor, diagramId: string) {
+  const diagram = await getDiagram(orgId, diagramId);
+  if ((await accessTo(orgId, actor, diagram)) === null) {
+    throw new ForbiddenError('You do not have access to this diagram');
+  }
+  return diagram;
+}
+
+export async function assertCanEdit(orgId: string, actor: DiagramActor, diagramId: string) {
+  const diagram = await getDiagram(orgId, diagramId);
+  const access = await accessTo(orgId, actor, diagram);
+  if (access === null) throw new ForbiddenError('You do not have access to this diagram');
+  if (access !== 'open' && access !== 'owner' && access !== 'editor') {
+    throw new ForbiddenError('You do not have edit access to this diagram');
+  }
+  return diagram;
 }
 
 async function collaboratorRole(diagramId: string, userId: string): Promise<string | null> {
@@ -584,14 +640,11 @@ async function collaboratorRole(diagramId: string, userId: string): Promise<stri
  * Comment access (issue #167): read access, and on a private diagram any
  * collaborator role except `viewer` (so `commenter` can comment).
  */
-export async function assertCanComment(orgId: string, userId: string, diagramId: string) {
-  const diagram = await assertCanRead(orgId, userId, diagramId);
-  if (diagram.visibility === 'private' && diagram.created_by !== userId) {
-    const role = await collaboratorRole(diagramId, userId);
-    if (!role || role === 'viewer') {
-      throw new ForbiddenError('You do not have comment access to this diagram');
-    }
-  }
+export async function assertCanComment(orgId: string, actor: DiagramActor, diagramId: string) {
+  const diagram = await getDiagram(orgId, diagramId);
+  const access = await accessTo(orgId, actor, diagram);
+  if (access === null) throw new ForbiddenError('You do not have access to this diagram');
+  if (access === 'viewer') throw new ForbiddenError('You do not have comment access to this diagram');
   return diagram;
 }
 

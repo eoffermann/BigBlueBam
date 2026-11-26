@@ -2,6 +2,7 @@ export {
   organizations,
   users,
   projects,
+  projectMemberships,
   sessions,
   apiKeys,
   organizationMemberships,

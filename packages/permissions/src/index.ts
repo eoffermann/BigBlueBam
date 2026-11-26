@@ -235,6 +235,8 @@ export interface HttpPermissionsPluginOptions {
    * per-client margin with no legacy role gate behind it (issue #89).
    */
   onUnknown?: 'allow' | 'deny';
+  /** Resolver round-trip budget in ms; see HttpResolverOptions.timeoutMs (issue #183). */
+  timeoutMs?: number;
 }
 
 export interface HttpResolverOptions {
@@ -244,6 +246,22 @@ export interface HttpResolverOptions {
   internalSecret: string;
   /** Test seam; defaults to the global fetch. */
   fetchImpl?: typeof fetch;
+  /**
+   * Budget for one resolver round trip (request plus response body), in ms
+   * (issue #183). Past it the decision is 'unknown', which each caller maps
+   * through its own onUnknown (fail closed under 'deny'). Defaults to
+   * BBB_PERMISSIONS_RESOLVER_TIMEOUT_MS when set, else 3000.
+   */
+  timeoutMs?: number;
+}
+
+/** Default resolver budget when neither the option nor the env var is set. */
+export const DEFAULT_RESOLVER_TIMEOUT_MS = 3000;
+
+function resolverTimeoutMs(opts: HttpResolverOptions): number {
+  if (opts.timeoutMs !== undefined && opts.timeoutMs > 0) return opts.timeoutMs;
+  const fromEnv = Number(process.env.BBB_PERMISSIONS_RESOLVER_TIMEOUT_MS);
+  return Number.isFinite(fromEnv) && fromEnv > 0 ? fromEnv : DEFAULT_RESOLVER_TIMEOUT_MS;
 }
 
 /**
@@ -252,7 +270,13 @@ export interface HttpResolverOptions {
  * requireCan and non-HTTP surfaces (the Bureau WebSocket hub, issue #166) both
  * call it, so a REST route and its realtime twin cannot disagree on how a
  * decision is fetched. 'unknown' means no usable answer (non-2xx, malformed
- * body, or a thrown fetch); each caller decides what unknown means for it.
+ * body, a thrown fetch, or no answer within the timeout); each caller decides
+ * what unknown means for it.
+ *
+ * Issue #183: the round trip is bounded. Without a deadline, an api that
+ * accepts the connection but never answers held the caller for undici's
+ * defaults (minutes). The abort signal cancels the request, and the race below
+ * settles even if a fetch implementation ignores the signal.
  */
 export async function resolveViaHttp(
   opts: HttpResolverOptions,
@@ -261,7 +285,19 @@ export async function resolveViaHttp(
   scope: { org_id: string | null; project_id: string | null },
   logger?: { warn: (obj: object, msg: string) => void },
 ): Promise<'allow' | 'deny' | 'unknown'> {
-  try {
+  const timeoutMs = resolverTimeoutMs(opts);
+  const controller = new AbortController();
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const deadline = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => {
+      const err = new Error(`permissions resolver did not answer within ${timeoutMs} ms`);
+      err.name = 'TimeoutError';
+      controller.abort(err);
+      reject(err);
+    }, timeoutMs);
+    timer.unref?.();
+  });
+  const roundTrip = (async (): Promise<'allow' | 'deny' | 'unknown'> => {
     const res = await (opts.fetchImpl ?? fetch)(
       opts.apiInternalUrl.replace(/\/$/, '') + '/internal/permissions/dual-read',
       {
@@ -276,6 +312,7 @@ export async function resolveViaHttp(
           agent_policy_decision: 'allow',
           scope,
         }),
+        signal: controller.signal,
       },
     );
     if (!res.ok) return 'unknown';
@@ -283,9 +320,16 @@ export async function resolveViaHttp(
     const d = json?.data?.decision;
     if (d === 'allow' || d === 'deny') return d;
     return 'unknown';
+  })();
+  // A late rejection from the abandoned round trip must not surface as unhandled.
+  roundTrip.catch(() => undefined);
+  try {
+    return await Promise.race([roundTrip, deadline]);
   } catch (err) {
-    logger?.warn({ err, permissionId }, 'permissions: resolver POST failed');
+    logger?.warn({ err, permissionId, timeout_ms: timeoutMs }, 'permissions: resolver POST failed');
     return 'unknown';
+  } finally {
+    clearTimeout(timer);
   }
 }
 
@@ -295,6 +339,8 @@ export interface HttpPermissionCheckerOptions extends HttpResolverOptions {
   onUnknown: 'allow' | 'deny';
   /** How long one decision is reused, per (user, org, permission). Default 30s. */
   cacheTtlMs?: number;
+  /** Most decisions kept; past it the least recently used entry is evicted. Default 5000. */
+  maxCacheEntries?: number;
   /** Test seam for the cache clock. */
   now?: () => number;
 }
@@ -306,11 +352,31 @@ export interface HttpPermissionCheckerOptions extends HttpResolverOptions {
  * so divergence is recorded), 'on' allows only an explicit allow (or unknown
  * under onUnknown: 'allow'). Decisions are memoized briefly so a chatty
  * socket does not POST to the api on every frame.
+ *
+ * Issue #183: concurrent misses for the same (user, org, permission) share one
+ * in-flight POST, so a stalled api sees one request per key rather than one per
+ * frame; and the cache evicts its least recently used entry at the size cap
+ * instead of dropping every cached decision at once.
  */
 export function createHttpPermissionChecker(opts: HttpPermissionCheckerOptions) {
   const ttl = opts.cacheTtlMs ?? 30_000;
+  const maxEntries = Math.max(1, opts.maxCacheEntries ?? 5000);
   const now = opts.now ?? Date.now;
+  // Map iteration order is insertion order; a hit is re-inserted, so the first
+  // key is always the least recently used one.
   const cache = new Map<string, { allowed: boolean; expires: number }>();
+  const inFlight = new Map<string, Promise<'allow' | 'deny' | 'unknown'>>();
+
+  function remember(key: string, allowed: boolean): void {
+    cache.delete(key);
+    cache.set(key, { allowed, expires: now() + ttl });
+    while (cache.size > maxEntries) {
+      const oldest = cache.keys().next().value as string | undefined;
+      if (oldest === undefined) break;
+      cache.delete(oldest);
+    }
+  }
+
   return async function check(
     caller: { user_id: string; org_id: string | null },
     permissionId: string,
@@ -319,21 +385,30 @@ export function createHttpPermissionChecker(opts: HttpPermissionCheckerOptions) 
     if (opts.mode === 'off') return true;
     const key = `${caller.user_id}|${caller.org_id ?? ''}|${permissionId}`;
     const hit = cache.get(key);
-    if (hit && hit.expires > now()) return hit.allowed;
-    const decision = await resolveViaHttp(
-      opts,
-      caller.user_id,
-      permissionId,
-      { org_id: caller.org_id, project_id: null },
-      logger,
-    );
+    if (hit) {
+      if (hit.expires > now()) {
+        cache.delete(key);
+        cache.set(key, hit);
+        return hit.allowed;
+      }
+      cache.delete(key);
+    }
+    let pending = inFlight.get(key);
+    if (!pending) {
+      pending = resolveViaHttp(
+        opts,
+        caller.user_id,
+        permissionId,
+        { org_id: caller.org_id, project_id: null },
+        logger,
+      ).finally(() => inFlight.delete(key));
+      inFlight.set(key, pending);
+    }
+    const decision = await pending;
     if (opts.mode === 'warn') return true;
     const allowed = decision === 'allow' || (decision === 'unknown' && opts.onUnknown === 'allow');
     // Do not pin a transient resolver failure for the whole TTL.
-    if (decision !== 'unknown') {
-      if (cache.size > 5000) cache.clear();
-      cache.set(key, { allowed, expires: now() + ttl });
-    }
+    if (decision !== 'unknown') remember(key, allowed);
     return allowed;
   };
 }

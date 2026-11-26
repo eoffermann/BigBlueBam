@@ -27,10 +27,12 @@ import {
 import { ForbiddenError, NotFoundError } from '../lib/errors.js';
 import { slugify } from '../lib/slug.js';
 import { applyLayout } from './layout.service.js';
+import { assertCanSeeBamProject, type DiagramActor } from './diagram.service.js';
 
 export interface GenerateFromBamInput {
   org_id: string;
-  user_id: string;
+  /** The caller; its id becomes created_by, its role feeds the project check. */
+  actor: DiagramActor;
   project_id: string;
   /** Optional name override; defaults to "<Project name> — tasks". */
   name?: string;
@@ -57,9 +59,11 @@ export interface GenerateFromBamResult {
 export async function generateDiagramFromBam(
   input: GenerateFromBamInput,
 ): Promise<GenerateFromBamResult> {
-  // 1. Verify the project belongs to the caller's org. The Bam project
-  //    visibility/ACL is enforced when the SPA fetches tasks separately;
-  //    here we just refuse cross-org reads as a defense in depth.
+  // 1. The caller must be able to see the Bam project (issue #181): in their
+  //    org, and an org owner/admin or a project member, the same rule the Bam
+  //    API applies. Every task title and description below would otherwise be
+  //    copied into a diagram the caller owns.
+  await assertCanSeeBamProject(input.org_id, input.actor, input.project_id);
   const [project] = await db
     .select()
     .from(projects)
@@ -143,7 +147,7 @@ export async function generateDiagramFromBam(
       .values({
         org_id: input.org_id,
         project_id: input.project_id,
-        created_by: input.user_id,
+        created_by: input.actor.id,
         name: baseName,
         slug: slugify(baseName),
         description: input.description ?? null,
