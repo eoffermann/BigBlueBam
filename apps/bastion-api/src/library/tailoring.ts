@@ -163,10 +163,15 @@ export function extractJsonObject(content: string): unknown {
   }
 }
 
-export type ParsedTailoring = { ok: true; value: TailoringResponse } | { ok: false; reason: string };
+export { COMPILE_MAX_TOKENS_DEFAULT } from './compile-budget.js';
+
+/** Why an answer was not used when the provider stopped at the budget (finish_reason 'length'). */
+export const CUT_OFF_REASON = 'the AI answer was cut off';
+
+export type ParsedTailoring = { ok: true; value: TailoringResponse } | { ok: false; reason: string; cut_off?: boolean };
 
 export function parseTailoringResponse(content: string, finishReason: string | null = null): ParsedTailoring {
-  if (finishReason === 'length') return { ok: false, reason: 'the AI answer was cut off' };
+  if (finishReason === 'length') return { ok: false, reason: CUT_OFF_REASON, cut_off: true };
   const raw = extractJsonObject(content);
   if (raw === undefined) return { ok: false, reason: 'the AI answer was not JSON' };
   const parsed = tailoringResponseSchema.safeParse(raw);

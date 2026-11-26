@@ -81,6 +81,13 @@ export default async function frameworkRoutes(fastify: FastifyInstance) {
     return handled(request, reply, () => frameworks.listRequirements(viewerOf(request), id));
   });
 
+  // The AI compile's "this requirement may not apply" suggestions, undecided ones only (#238).
+  fastify.get('/frameworks/:id/not-applicable-suggestions', { preHandler: [requireAuth, can('bastion.framework.read')] }, async (request, reply) => {
+    const id = idParam(request);
+    if (!id) return notFound(request, reply);
+    return handled(request, reply, () => frameworks.listNotApplicableSuggestions(viewerOf(request), id));
+  });
+
   // Bulk applicability (the Setup wizard's ISO step). Same permission as row 15.
   fastify.post('/frameworks/:id/applicability', { preHandler: [requireAuth, can('bastion.control.write')] }, async (request, reply) => {
     const id = idParam(request);

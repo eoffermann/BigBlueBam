@@ -403,6 +403,7 @@ with **R**, optional with `o`.
 | o | `LOG_LEVEL` | literal | `info` |  |
 | o | `BASTION_TRUST_PROXY_HOPS` | literal | `2` |  |
 | o | `BASTION_LLM_TIMEOUT_MS` | literal | `60000` |  |
+| o | `BASTION_LLM_MAX_TOKENS` | literal | `8192` |  |
 | o | `BASTION_ENGINE_TIMEOUT_MS` | literal | `30000` |  |
 | o | `BASTION_PROBE_TIMEOUT_MS` | literal | `8000` |  |
 | o | `BASTION_PUT_TIMEOUT_MS` | literal | `5000` |  |

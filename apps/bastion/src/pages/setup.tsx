@@ -12,6 +12,7 @@ import {
   useConfirmAssertion,
   useCreateComplianceProject,
   useDecideApplicability,
+  useNotApplicableSuggestions,
   useRejectAssertion,
   useRequirements,
   useRevisePopulation,
@@ -618,6 +619,86 @@ function IsoApplicability({ framework, canDecide }: { framework: FrameworkView; 
   );
 }
 
+/**
+ * The AI compile's "this requirement may not apply" suggestions (#238), for any framework. A
+ * suggestion is only a suggestion: the control keeps the library's checks until a person decides.
+ * "Does not apply" saves the person's own reason (pre-filled from the compiler's); "It applies"
+ * keeps it in scope. Either answer removes the suggestion.
+ */
+function NotApplicableSuggestions({ framework, canDecide }: { framework: FrameworkView; canDecide: boolean }) {
+  const s = useNotApplicableSuggestions(framework.id);
+  const decide = useDecideApplicability(framework.id);
+  const [reasons, setReasons] = useState<Record<string, string>>({});
+  const rows = s.data?.data ?? [];
+  if (rows.length === 0) return null;
+  return (
+    <div className="space-y-2 rounded-lg border border-amber-200 dark:border-amber-900 p-3" data-testid="na-suggestions">
+      <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
+        {framework.name}: the compiler thinks {rows.length === 1 ? 'this requirement' : 'these requirements'} may not apply to you
+      </p>
+      <p className="text-xs text-zinc-500">Nothing changes until someone decides. Until then, the usual checks stay in place.</p>
+      {!canDecide && <AskAnAdmin>An admin of your organization decides which requirements apply.</AskAnAdmin>}
+      <ul className="divide-y divide-zinc-200 dark:divide-zinc-800">
+        {rows.map((r) => {
+          const reason = reasons[r.ref_code] ?? r.suggested_reason;
+          return (
+            <li key={r.ref_code} className="py-2 space-y-1">
+              <p className="text-sm text-zinc-900 dark:text-zinc-100">
+                {r.ref_code} {r.title}
+              </p>
+              {r.controls.map((c) => (
+                <p key={c.control_key} className="text-xs text-zinc-600 dark:text-zinc-400">
+                  {c.control_title ?? 'A control'}: {c.reason}
+                </p>
+              ))}
+              {canDecide && (
+                <div className="flex flex-wrap items-center gap-2">
+                  <input
+                    aria-label={`Why ${r.ref_code} does not apply`}
+                    className="flex-1 min-w-[16rem] rounded-md border border-zinc-300 dark:border-zinc-700 bg-transparent px-2 py-1 text-sm"
+                    value={reason}
+                    onChange={(e) => setReasons((x) => ({ ...x, [r.ref_code]: e.target.value }))}
+                  />
+                  <button
+                    type="button"
+                    className={primary}
+                    disabled={!reason.trim() || decide.isPending}
+                    onClick={() =>
+                      decide.mutate({ decisions: [{ ref_code: r.ref_code, applicability: 'not_applicable', not_applicable_reason: reason.trim() }] })
+                    }
+                  >
+                    Does not apply
+                  </button>
+                  <button
+                    type="button"
+                    className={secondary}
+                    disabled={decide.isPending}
+                    onClick={() => decide.mutate({ decisions: [{ ref_code: r.ref_code, applicability: 'applicable' }] })}
+                  >
+                    It applies
+                  </button>
+                </div>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+      <ErrorLine err={decide.error} />
+    </div>
+  );
+}
+
+function SuggestionsStep({ setup, perms }: { setup: SetupState; perms: SetupPermissions }) {
+  if (setup.frameworks.length === 0) return null;
+  return (
+    <>
+      {setup.frameworks.map((f) => (
+        <NotApplicableSuggestions key={f.id} framework={f} canDecide={perms.controlWrite} />
+      ))}
+    </>
+  );
+}
+
 function ApplicabilityStep({ setup, perms }: { setup: SetupState; perms: SetupPermissions }) {
   const iso = setup.frameworks.filter((f) => f.is_iso);
   if (iso.length === 0) return null;
@@ -666,6 +747,7 @@ export function SetupPage() {
       <ProfileStep key={JSON.stringify(s.company_profile)} setup={s} perms={perms} />
       <ComplianceProjectStep setup={s} perms={perms} />
       <ReviewStep setup={s} perms={perms} />
+      <SuggestionsStep setup={s} perms={perms} />
       <ApplicabilityStep setup={s} perms={perms} />
     </div>
   );

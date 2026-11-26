@@ -4,6 +4,7 @@
 
 import type { FastifyBaseLogger } from 'fastify';
 import type { Redis } from 'ioredis';
+import { env } from '../env.js';
 import { orgTx } from '../engine/context.js';
 import { engineDeps } from '../engine/runtime.js';
 import { ConflictError, NotFoundError } from '../lib/errors.js';
@@ -34,6 +35,7 @@ export function compileAiDeps(log: FastifyBaseLogger, redis: Redis): CompileAiDe
     permits: createLlmPermits(redis, { log }),
     sliceLock: redisSliceLock(redis),
     background: true,
+    maxTokens: env.BASTION_LLM_MAX_TOKENS,
   };
 }
 

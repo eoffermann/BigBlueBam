@@ -1515,11 +1515,34 @@ export const bastionCompileSliceSchema = z.object({
   llm_calls_used: z.number().int().nonnegative(),
   /** Controls given the library's suggestions instead of the AI's (no answer, error, budget). */
   fallback_controls: z.number().int().nonnegative(),
+  /** Of fallback_controls: answers that stopped at max_tokens (finish_reason 'length', #237). */
+  cut_off_controls: z.number().int().nonnegative().optional(),
   slice_running: z.boolean(),
   released: z.boolean().optional(),
   waiting: z.enum(['ai_slot', 'ai_throttled']).nullable().optional(),
 });
 export type BastionCompileSlice = z.infer<typeof bastionCompileSliceSchema>;
+
+/**
+ * GET /frameworks/:id/not-applicable-suggestions (#238): the AI compile's "this requirement may
+ * not apply" suggestions (spec 2.1 step 2), for a person to decide in Setup. Only requirements
+ * nobody has decided yet are served; deciding one (either way) removes it.
+ */
+export const bastionNotApplicableSuggestionSchema = z.object({
+  ref_code: z.string(),
+  title: z.string(),
+  /** The first control's reason, offered as the starting text of the person's own reason. */
+  suggested_reason: z.string(),
+  controls: z.array(z.object({ control_key: z.string(), control_title: z.string().nullable(), reason: z.string() })),
+});
+export type BastionNotApplicableSuggestion = z.infer<typeof bastionNotApplicableSuggestionSchema>;
+
+export const bastionNotApplicableSuggestionsSchema = z.object({
+  data: z.array(bastionNotApplicableSuggestionSchema),
+  /** The compile run the suggestions came from (the newest one that made any), or null. */
+  compile_run_id: z.string().uuid().nullable(),
+});
+export type BastionNotApplicableSuggestions = z.infer<typeof bastionNotApplicableSuggestionsSchema>;
 
 /**
  * POST /policies (row 65): link a Beacon article as a policy people read and acknowledge. The article is named by its id, or by the slug in the link Beacon

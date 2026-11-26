@@ -108,6 +108,50 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+describe('Setup wizard: the compiler\'s not-applicable suggestions (#238)', () => {
+  const SUGGESTIONS = {
+    data: [
+      {
+        ref_code: 'A.5.2',
+        title: 'Security roles',
+        suggested_reason: 'Everyone on the island shares one role.',
+        controls: [{ control_key: 'governance.roles', control_title: 'Security roles are assigned', reason: 'Everyone on the island shares one role.' }],
+      },
+    ],
+    compile_run_id: '0b0b0b0b-0000-4000-8000-000000000001',
+  };
+
+  it('shows each suggestion with its reason, and "Does not apply" saves the (editable) reason', async () => {
+    mount(undefined, { routes: { 'GET /bastion/api/v1/frameworks/f-iso/not-applicable-suggestions': () => jsonResponse(200, SUGGESTIONS) } });
+    const box = await screen.findByTestId('na-suggestions');
+    expect(within(box).getByText(/the compiler thinks this requirement may not apply/)).toBeInTheDocument();
+    expect(within(box).getByText('Security roles are assigned: Everyone on the island shares one role.')).toBeInTheDocument();
+    const reason = within(box).getByLabelText('Why A.5.2 does not apply') as HTMLInputElement;
+    expect(reason.value).toBe('Everyone on the island shares one role.');
+    fireEvent.change(reason, { target: { value: 'Everyone on the island shares one role; the Skipper decides.' } });
+    fireEvent.click(within(box).getByRole('button', { name: 'Does not apply' }));
+    await waitFor(() => expect(posts.some((p) => p.path === '/bastion/api/v1/frameworks/f-iso/applicability')).toBe(true));
+    expect(posts.find((p) => p.path.endsWith('/applicability'))?.body).toEqual({
+      decisions: [{ ref_code: 'A.5.2', applicability: 'not_applicable', not_applicable_reason: 'Everyone on the island shares one role; the Skipper decides.' }],
+    });
+  });
+
+  it('"It applies" keeps the requirement in scope', async () => {
+    mount(undefined, { routes: { 'GET /bastion/api/v1/frameworks/f-iso/not-applicable-suggestions': () => jsonResponse(200, SUGGESTIONS) } });
+    const box = await screen.findByTestId('na-suggestions');
+    fireEvent.click(within(box).getByRole('button', { name: 'It applies' }));
+    await waitFor(() =>
+      expect(posts.find((p) => p.path.endsWith('/applicability'))?.body).toEqual({ decisions: [{ ref_code: 'A.5.2', applicability: 'applicable' }] }),
+    );
+  });
+
+  it('shows nothing when there are no suggestions', async () => {
+    mount(undefined, { routes: { 'GET /bastion/api/v1/frameworks/f-iso/not-applicable-suggestions': () => jsonResponse(200, { data: [], compile_run_id: null }) } });
+    await screen.findByTestId('check-a-pop');
+    expect(screen.queryByTestId('na-suggestions')).toBeNull();
+  });
+});
+
 describe('Setup wizard', () => {
   it('keeps Confirm off on a population check until "This is the complete list" is ticked', async () => {
     mount();

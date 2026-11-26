@@ -4,6 +4,7 @@ import type {
   BastionCompanyProfile,
   BastionExceptionPropose,
   BastionManualEvidenceCreate,
+  BastionNotApplicableSuggestions,
   BastionTemplateKey,
 } from '@bigbluebam/shared';
 import {
@@ -61,6 +62,15 @@ export function useRequirements(frameworkId: string | undefined) {
   return useQuery({
     queryKey: key('requirements', frameworkId),
     queryFn: () => api.get<RequirementsResponse>(`/frameworks/${frameworkId}/requirements`),
+    enabled: !!frameworkId,
+  });
+}
+
+/** The AI compile's "may not apply" suggestions for undecided requirements (#238). */
+export function useNotApplicableSuggestions(frameworkId: string | undefined) {
+  return useQuery({
+    queryKey: key('not-applicable-suggestions', frameworkId),
+    queryFn: () => api.get<BastionNotApplicableSuggestions>(`/frameworks/${frameworkId}/not-applicable-suggestions`),
     enabled: !!frameworkId,
   });
 }

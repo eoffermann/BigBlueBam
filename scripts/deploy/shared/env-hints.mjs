@@ -320,6 +320,8 @@ export const ENV_HINTS = {
   // bastion-api SIGTERM drain, so an in-flight LLM call can finish (spec 7.3).
   RAILWAY_DEPLOYMENT_DRAINING_SECONDS: { kind: 'literal', value: '75' },
   BASTION_LLM_TIMEOUT_MS: { kind: 'literal', value: '60000' },
+  // The compile call's output budget (#237); reasoning models need room to think before answering.
+  BASTION_LLM_MAX_TOKENS: { kind: 'literal', value: '8192' },
   BASTION_ENGINE_TIMEOUT_MS: { kind: 'literal', value: '30000' },
   BASTION_PROBE_TIMEOUT_MS: { kind: 'literal', value: '8000' },
   BASTION_PUT_TIMEOUT_MS: { kind: 'literal', value: '5000' },

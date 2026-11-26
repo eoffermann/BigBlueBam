@@ -53,6 +53,6 @@ export function corpusControls(): CorpusControl[] {
 }
 
 export interface RecordedCorpus {
-  meta: { recorded_at: string; prompt_version: number; model: string; provider_type: string; note: string };
+  meta: { recorded_at: string; prompt_version: number; model: string; provider_type: string; note: string; max_tokens?: number };
   responses: Record<string, { content: string; finish_reason: string | null } | { error: string }>;
 }

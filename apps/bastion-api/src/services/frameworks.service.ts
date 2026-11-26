@@ -1,16 +1,19 @@
 // Frameworks: adopt a built-in template, list, edit, archive, the requirement list with its
 // applicability decisions, and the Statement of Applicability (spec 2.1, rows 1-8 of 5.1).
 
-import { and, eq, inArray, isNull, ne } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNull, ne } from 'drizzle-orm';
 import type {
   BastionAdoptFramework,
   BastionBulkApplicability,
   BastionFrameworkUpdate,
+  BastionNotApplicableSuggestion,
+  BastionNotApplicableSuggestions,
 } from '@bigbluebam/shared';
 import { runInOrgScope } from '../plugins/rls.js';
 import type { DbTx } from '../db/index.js';
 import {
   bastionAssertions,
+  bastionCompileRuns,
   bastionControlRequirements,
   bastionControls,
   bastionFrameworks,
@@ -319,6 +322,47 @@ export async function listRequirements(viewer: Viewer, id: string) {
     const soa = template.is_iso ? soaCompleteness(template, await soaLinks(tx, viewer.org_id, id)) : null;
     return { data, framework: { id: f.id, name: f.name, is_iso: template.is_iso }, statement_of_applicability: soa };
   });
+}
+
+/** How many recent compile runs to look through for the newest one with suggestions. */
+const SUGGESTION_RUNS = 5;
+
+/**
+ * GET /frameworks/:id/not-applicable-suggestions (#238). The AI compile records "this requirement
+ * may not apply" suggestions on its run (drop_reasons.not_applicable); this serves the newest
+ * run's, grouped by requirement, for requirements nobody has decided yet. Deciding one in Setup
+ * (POST /frameworks/:id/applicability, either way) is what removes it.
+ */
+export async function listNotApplicableSuggestions(viewer: Viewer, id: string): Promise<BastionNotApplicableSuggestions> {
+  const reqs = await listRequirements(viewer, id);
+  const undecided = new Map(reqs.data.filter((r) => r.applicability === 'undecided').map((r) => [r.ref_code, r]));
+  const runs = await runInOrgScope(viewer.org_id, async (tx) =>
+    tx
+      .select({ id: bastionCompileRuns.id, drop_reasons: bastionCompileRuns.drop_reasons })
+      .from(bastionCompileRuns)
+      .where(and(eq(bastionCompileRuns.organization_id, viewer.org_id), eq(bastionCompileRuns.framework_id, id)))
+      .orderBy(desc(bastionCompileRuns.created_at), desc(bastionCompileRuns.id))
+      .limit(SUGGESTION_RUNS),
+  );
+  const entriesOf = (raw: unknown) => {
+    const list = (raw as { not_applicable?: unknown } | null)?.not_applicable;
+    return Array.isArray(list)
+      ? list.filter((n): n is { control_key: string; ref_code: string; reason: string } =>
+          !!n && typeof n.control_key === 'string' && typeof n.ref_code === 'string' && typeof n.reason === 'string')
+      : [];
+  };
+  const run = runs.find((r) => entriesOf(r.drop_reasons).length > 0);
+  if (!run) return { data: [], compile_run_id: null };
+  const byRef = new Map<string, BastionNotApplicableSuggestion>();
+  for (const n of entriesOf(run.drop_reasons)) {
+    const req = undecided.get(n.ref_code);
+    if (!req) continue; // decided already, or not a requirement of this framework
+    const title = req.links.find((l) => l.control_key === n.control_key)?.control_title ?? null;
+    const cur = byRef.get(n.ref_code);
+    if (cur) cur.controls.push({ control_key: n.control_key, control_title: title, reason: n.reason });
+    else byRef.set(n.ref_code, { ref_code: n.ref_code, title: req.title, suggested_reason: n.reason, controls: [{ control_key: n.control_key, control_title: title, reason: n.reason }] });
+  }
+  return { data: [...byRef.values()].sort((a, b) => a.ref_code.localeCompare(b.ref_code)), compile_run_id: run.id };
 }
 
 /**

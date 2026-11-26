@@ -34,7 +34,13 @@ import {
 } from '../library/compile-plan.js';
 import { libraryControl } from '../library/controls.js';
 import { derivedApplicability } from '../library/setup-state.js';
-import { buildTailoringMessages, parseTailoringResponse, TAILORING_PROMPT_VERSION, tailoredSuggestions } from '../library/tailoring.js';
+import {
+  buildTailoringMessages,
+  COMPILE_MAX_TOKENS_DEFAULT,
+  parseTailoringResponse,
+  TAILORING_PROMPT_VERSION,
+  tailoredSuggestions,
+} from '../library/tailoring.js';
 
 export const COMPILE_HEARTBEAT_EVERY_MS = 20_000;
 export const COMPILE_PERMIT_RETRY_MS = 2_000;
@@ -60,6 +66,8 @@ export interface CompileAiDeps {
   /** True once SIGTERM arrived: stop starting calls and release the run. */
   shuttingDown?: () => boolean;
   sliceCutoffMs?: number;
+  /** The compile call's max_tokens (env BASTION_LLM_MAX_TOKENS; COMPILE_MAX_TOKENS_DEFAULT). */
+  maxTokens?: number;
 }
 
 /** What the run row carries in drop_reasons while it runs (and after). */
@@ -71,6 +79,8 @@ export interface CompileProgress {
   skipped_existing: number;
   done_keys: string[];
   fallback_keys: string[];
+  /** Of fallback_keys: the controls whose AI answer stopped at max_tokens (#237), counted apart. */
+  cut_off_keys: string[];
   not_applicable: Array<{ control_key: string; ref_code: string; reason: string }>;
   withheld_labels: number;
 }
@@ -85,6 +95,7 @@ function progressOf(raw: unknown, providerId: string | null): CompileProgress {
     skipped_existing: Number(p.skipped_existing ?? 0),
     done_keys: Array.isArray(p.done_keys) ? p.done_keys : [],
     fallback_keys: Array.isArray(p.fallback_keys) ? p.fallback_keys : [],
+    cut_off_keys: Array.isArray(p.cut_off_keys) ? p.cut_off_keys : [],
     not_applicable: Array.isArray(p.not_applicable) ? p.not_applicable : [],
     withheld_labels: Number(p.withheld_labels ?? 0),
   };
@@ -188,6 +199,7 @@ function sliceView(run: RunRow, running: boolean, extra: Partial<BastionCompileS
     assertions_dropped: Number(run.assertions_dropped),
     llm_calls_used: Number(run.llm_calls_used),
     fallback_controls: p.fallback_keys.length,
+    cut_off_controls: p.cut_off_keys.length,
     slice_running: running,
     waiting: waitingState.get(run.id) ?? null,
     ...extra,
@@ -347,7 +359,7 @@ async function askAi(
     }
     waitingState.set(run.id, null);
     try {
-      const res = await d.llm({ providerId, messages: messages.messages, maxTokens: 2048 });
+      const res = await d.llm({ providerId, messages: messages.messages, maxTokens: d.maxTokens ?? COMPILE_MAX_TOKENS_DEFAULT });
       return { kind: 'answer', content: res.content, finish_reason: res.finish_reason, withheld: messages.withheld_labels };
     } catch (err) {
       if (err instanceof LlmThrottledError) {
@@ -409,6 +421,7 @@ async function runSlice(d: CompileAiDeps, run: RunRow, claimant: string): Promis
     let tailored: Parameters<typeof planTailoredControl>[1] = null;
     let fallbackReason: string | null = null;
     let withheld = 0;
+    let cutOff = false;
     if (!lib) fallbackReason = null;
     else if (!providerId) fallbackReason = 'no AI provider is set up, so the library suggestions were proposed';
     else if (calls >= ctx.maxCalls) fallbackReason = `the AI call budget for this run (${ctx.maxCalls}) was used up, so the library suggestions were proposed`;
@@ -428,7 +441,13 @@ async function runSlice(d: CompileAiDeps, run: RunRow, claimant: string): Promis
         withheld = outcome.withheld;
         const parsed = parseTailoringResponse(outcome.content, outcome.finish_reason);
         if (parsed.ok) tailored = tailoredSuggestions(c.control_key, parsed.value, { requirements: c.requirements, connected: populations, control: lib });
-        else fallbackReason = `${parsed.reason}, so the library suggestions were proposed`;
+        else {
+          fallbackReason = `${parsed.reason}, so the library suggestions were proposed`;
+          // Counted apart (#237): a run full of cut-off answers means the budget is too small for
+          // the model, not that the provider is broken.
+          cutOff = parsed.cut_off === true;
+          if (cutOff) d.engine.log.warn({ run_id: run.id, control_key: c.control_key }, 'bastion-compile: the AI answer stopped at max_tokens (finish_reason length); raise BASTION_LLM_MAX_TOKENS if this repeats');
+        }
       }
     }
 
@@ -460,6 +479,7 @@ async function runSlice(d: CompileAiDeps, run: RunRow, claimant: string): Promis
         skipped_existing: progress.skipped_existing + plan.skipped_existing,
         done_keys: [...progress.done_keys, c.control_key],
         fallback_keys: plan.used_fallback ? [...progress.fallback_keys, c.control_key] : progress.fallback_keys,
+        cut_off_keys: cutOff ? [...progress.cut_off_keys, c.control_key] : progress.cut_off_keys,
         not_applicable: [...progress.not_applicable, ...plan.not_applicable.map((n) => ({ control_key: c.control_key, ...n }))],
         withheld_labels: progress.withheld_labels + withheld,
       };

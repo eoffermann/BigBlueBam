@@ -95,6 +95,7 @@ function err(label: string, data: unknown) {
 
 export const BASTION_PENDING_TOOL_NAMES = [
   'bastion_list_frameworks',
+  'bastion_not_applicable_suggestions',
   'bastion_compile_framework',
   'bastion_list_controls',
   'bastion_control_status',
@@ -150,6 +151,19 @@ export function registerBastionTools(
         frameworks: (list.data as { data?: unknown }).data ?? [],
         templates: (templates.data as { data?: unknown }).data ?? [],
       });
+    },
+  });
+
+  // ── 1b. bastion_not_applicable_suggestions (#238) ──────────────────────────
+  registerTool(server, {
+    name: 'bastion_not_applicable_suggestions',
+    description:
+      'The AI compile\'s "this requirement may not apply" suggestions for a framework (GET /frameworks/:id/not-applicable-suggestions): each undecided requirement the compiler thinks may not apply, with the controls that said so and their reasons. A suggestion is not a decision: the control still gets the library\'s checks until a person decides the requirement in Setup (or through POST /frameworks/:id/applicability). Decided requirements are not listed. Read-only; needs bastion.framework.read.',
+    input: { framework_id: z.string().uuid() },
+    returns: z.record(z.unknown()),
+    handler: async ({ framework_id }) => {
+      const r = await client.listNotApplicableSuggestions(framework_id);
+      return r.ok ? ok(r.data) : err('listing not-applicable suggestions', r.data);
     },
   });
 

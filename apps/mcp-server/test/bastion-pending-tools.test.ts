@@ -73,8 +73,8 @@ describe('Bastion pending tools stay out of the registered surface until M11', (
   it('every handler goes through registerTool (agent policies apply once registered)', () => {
     // 14 milestone handlers (M3 + M4) + 9 #196 parity handlers + M5 (7 evidence + 2 feed admin;
     // withdrawal has no tool, #217) + M6 (9 gap, fix, exception and drift handlers) + M7 (6 policy
-    // handlers; attest has none).
-    expect((PENDING.match(/registerTool\(server, \{/g) ?? []).length).toBe(47);
+    // handlers; attest has none) + the not-applicable suggestions read (#238).
+    expect((PENDING.match(/registerTool\(server, \{/g) ?? []).length).toBe(48);
     expect(PENDING).not.toMatch(/server\.tool\(/);
   });
 });
@@ -93,6 +93,13 @@ describe('Bastion M3 tool handlers', () => {
         ...BASTION_POLICY_TOOL_NAMES,
       ].sort(),
     );
+  });
+
+  it('bastion_not_applicable_suggestions reads the framework\'s suggestions (#238)', async () => {
+    const tool = await load();
+    const FW = '77777777-7777-4777-8777-777777777777';
+    await tool('bastion_not_applicable_suggestions').handler({ framework_id: FW } as never);
+    expect(`${calls[0]!.method} ${calls[0]!.url}`).toBe(`GET http://bastion-api:4024/v1/frameworks/${FW}/not-applicable-suggestions`);
   });
 
   it('has no tool for a vouching act (confirm or reject a check): auth, session required (spec 2.8, #136)', async () => {

@@ -11,7 +11,7 @@
 
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { buildTailoringMessages, TAILORING_PROMPT_VERSION } from '../../src/library/tailoring.js';
+import { buildTailoringMessages, COMPILE_MAX_TOKENS_DEFAULT, TAILORING_PROMPT_VERSION } from '../../src/library/tailoring.js';
 import { CORPUS_CONNECTED, CORPUS_PROFILE, corpusControls, type RecordedCorpus } from './compiler-fixtures.js';
 
 const started = Date.now();
@@ -25,6 +25,8 @@ if (!api || !provider || !secret) {
   process.exit(1);
 }
 const CONCURRENCY = Number(process.env.BASTION_RECORD_CONCURRENCY ?? 3);
+// The same budget production uses (#237): env BASTION_LLM_MAX_TOKENS, else the one constant.
+const MAX_TOKENS = Number(process.env.BASTION_LLM_MAX_TOKENS ?? COMPILE_MAX_TOKENS_DEFAULT);
 
 async function call(messages: unknown): Promise<{ content: string; finish_reason: string | null }> {
   for (let attempt = 1; ; attempt++) {
@@ -36,7 +38,7 @@ async function call(messages: unknown): Promise<{ content: string; finish_reason
       body: JSON.stringify({
         provider_id: provider,
         messages,
-        max_tokens: 2048,
+        max_tokens: MAX_TOKENS,
         temperature: 0,
         ...(process.env.BASTION_RECORD_MODEL_OVERRIDE ? { model: process.env.BASTION_RECORD_MODEL_OVERRIDE } : {}),
       }),
@@ -48,20 +50,25 @@ async function call(messages: unknown): Promise<{ content: string; finish_reason
     }
     if (!res.ok) throw new Error(`proxy returned ${res.status}: ${(await res.text()).slice(0, 200)}`);
     const body = (await res.json()) as { data?: { content?: string; finish_reason?: string | null } };
-    // House style for committed files: no em or en dashes (normalizeAiText does the same at run time).
-    const content = (body.data?.content ?? '').replace(/\s*[\u2014\u2013]\s*/g, ', ');
-    return { content, finish_reason: body.data?.finish_reason ?? null };
+    // The raw model text (#237), so the replay runs normalizeAiText exactly as production does.
+    // Dashes are kept out of the committed file by escaping them when it is written (below).
+    return { content: body.data?.content ?? '', finish_reason: body.data?.finish_reason ?? null };
   }
 }
 
-const controls = corpusControls();
-log(`recording ${controls.length} controls through ${api} (concurrency ${CONCURRENCY}; each call 10-20 s)...`);
+// BASTION_RECORD_LIMIT=n records only the first n controls into compiler-recorded.smoke.json (a
+// rehearsal of the whole path before the full recording; never committed).
+const LIMIT = Number(process.env.BASTION_RECORD_LIMIT ?? 0);
+const controls = LIMIT > 0 ? corpusControls().slice(0, LIMIT) : corpusControls();
+const OUT_FILE = LIMIT > 0 ? 'compiler-recorded.smoke.json' : 'compiler-recorded.json';
+log(`recording ${controls.length} controls through ${api} (concurrency ${CONCURRENCY}, max_tokens ${MAX_TOKENS}; each call 10-60 s)...`);
 const out: RecordedCorpus = {
   meta: {
     recorded_at: new Date().toISOString(),
     prompt_version: TAILORING_PROMPT_VERSION,
     model: process.env.BASTION_RECORD_MODEL ?? 'unknown',
     provider_type: process.env.BASTION_RECORD_PROVIDER_TYPE ?? 'unknown',
+    max_tokens: MAX_TOKENS,
     note: 'Recorded live through apps/api POST /internal/llm/chat with the compile prompt; replayed by compiler-corpus.test.ts.',
   },
   responses: {},
@@ -81,10 +88,18 @@ async function worker() {
       out.responses[c.control.control_key] = { error: (err as Error).message };
     }
     done += 1;
-    log(`${done}/${controls.length} ${c.control.control_key} (${Date.now() - t} ms)`);
+    const r = out.responses[c.control.control_key];
+    const how = r && 'finish_reason' in r ? `finish ${r.finish_reason ?? 'null'}, ${r.content.length} chars` : 'error';
+    log(`${done}/${controls.length} ${c.control.control_key} (${Date.now() - t} ms, ${how})`);
   }
 }
 await Promise.all(Array.from({ length: CONCURRENCY }, worker));
 const sorted = Object.fromEntries(Object.entries(out.responses).sort(([a], [b]) => a.localeCompare(b)));
-writeFileSync(join(import.meta.dirname, 'compiler-recorded.json'), `${JSON.stringify({ ...out, responses: sorted }, null, 2)}\n`);
-log(`wrote compiler-recorded.json (${Object.keys(sorted).length} responses)`);
+// House style for committed files (no em or en dashes) without changing the recorded text: the
+// two characters are written as JSON \u escapes, which JSON.parse restores exactly.
+const json = JSON.stringify({ ...out, responses: sorted }, null, 2).replace(/—/g, '\\u2014').replace(/–/g, '\\u2013');
+writeFileSync(join(import.meta.dirname, OUT_FILE), `${json}\n`);
+const values = Object.values(sorted);
+const cut = values.filter((v) => 'finish_reason' in v && v.finish_reason === 'length').length;
+const failed = values.filter((v) => 'error' in v).length;
+log(`wrote ${OUT_FILE} (${values.length} responses; ${cut} cut off at max_tokens, ${failed} failed calls)`);

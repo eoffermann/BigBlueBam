@@ -5,7 +5,14 @@ import { bastionManualEvidenceSpecSchema } from '@bigbluebam/shared';
 import { scanLabel } from '../src/lib/injection-prescan.js';
 import { planTailoredControl, type TailoredControlPlan } from '../src/library/compile-plan.js';
 import { probeEntry } from '../src/library/probe-catalog.js';
-import { buildTailoringMessages, normalizeAiText, parseTailoringResponse, TAILORING_PROMPT_VERSION, tailoredSuggestions } from '../src/library/tailoring.js';
+import {
+  buildTailoringMessages,
+  COMPILE_MAX_TOKENS_DEFAULT,
+  normalizeAiText,
+  parseTailoringResponse,
+  TAILORING_PROMPT_VERSION,
+  tailoredSuggestions,
+} from '../src/library/tailoring.js';
 import { CORPUS_CONNECTED, CORPUS_PROFILE, corpusControls, type CorpusControl, type RecordedCorpus } from './corpus/compiler-fixtures.js';
 
 // The compiler corpus gates (spec 11.3), deterministic in CI: every SOC 2 and ISO 27001 control's
@@ -72,6 +79,26 @@ describe('compiler corpus: the recording', () => {
     expect(RECORDED.meta.prompt_version).toBe(TAILORING_PROMPT_VERSION);
   });
 
+  it('is not degraded: at most 10% of controls were cut off, failed, or fell back to the library (#237)', () => {
+    // The coverage gate must be met by the compiler, not by the library standing in for it. A
+    // recording made with too small a max_tokens (30 of 48 cut off at 2048) fails here.
+    const values = Object.entries(RECORDED.responses);
+    const cutOff = values.filter(([, r]) => 'finish_reason' in r && r.finish_reason === 'length').map(([k]) => k);
+    const failed = values.filter(([, r]) => 'error' in r).map(([k]) => k);
+    const fellBack = CONTROLS.filter((c) => replay(c, RECORDED.responses[c.control.control_key]).used_fallback).map((c) => c.control.control_key);
+    const limit = Math.floor(CONTROLS.length * 0.1);
+    expect(cutOff.length, `cut off at max_tokens: ${cutOff.join(', ')}`).toBeLessThanOrEqual(limit);
+    expect(failed.length, `failed calls: ${failed.join(', ')}`).toBeLessThanOrEqual(limit);
+    expect(fellBack.length, `library fallback: ${fellBack.join(', ')}`).toBeLessThanOrEqual(limit);
+    // Recorded with the budget production uses.
+    expect(RECORDED.meta.max_tokens).toBe(COMPILE_MAX_TOKENS_DEFAULT);
+  });
+
+  it('keeps the raw model text: dashes are escaped in the file, never rewritten (#237)', () => {
+    const text = readFileSync(join(dir, 'compiler-recorded.json'), 'utf8');
+    expect(text).not.toMatch(/[—–]/);
+  });
+
   it('every hostile fixture names a real corpus control', () => {
     const keys = new Set(CONTROLS.map((c) => c.control.control_key));
     for (const k of Object.keys(ADVERSARIAL.responses)) expect(keys.has(k), k).toBe(true);
@@ -97,9 +124,15 @@ for (const [name, source] of [
       expect(bad).toEqual([]);
     });
 
-    it('coverage: every control receives a check, an evidence request or a not-applicable suggestion', () => {
-      const empty = plans.filter(({ plan }) => plan.planned.length === 0 && plan.not_applicable.length === 0).map((p) => p.key);
+    it('coverage: every control receives a check or an evidence request a person will see (#238)', () => {
+      // A not-applicable suggestion alone is not coverage: it is a question for a person, and the
+      // control keeps the library's checks until they answer it.
+      const empty = plans.filter(({ plan }) => plan.planned.length === 0).map((p) => p.key);
       expect(empty).toEqual([]);
+      // Report where the coverage came from, so the library can never quietly stand in for the
+      // compiler (#237).
+      const compiler = plans.filter(({ plan }) => !plan.used_fallback).length;
+      console.log(`[compiler-corpus ${name}] coverage ${plans.length - empty.length}/${plans.length}: compiler ${compiler}, library fallback ${plans.length - compiler}`);
     });
 
     it('injection: nothing instruction-like reaches a proposal, and no dash breaks house style', () => {
@@ -159,7 +192,7 @@ describe.runIf(process.env.BASTION_COMPILER_LIVE === '1')('compiler corpus gates
         body: JSON.stringify({
           provider_id: process.env.BASTION_RECORD_PROVIDER_ID,
           messages,
-          max_tokens: 2048,
+          max_tokens: Number(process.env.BASTION_LLM_MAX_TOKENS ?? COMPILE_MAX_TOKENS_DEFAULT),
           temperature: 0,
           ...(process.env.BASTION_RECORD_MODEL_OVERRIDE ? { model: process.env.BASTION_RECORD_MODEL_OVERRIDE } : {}),
         }),
@@ -167,7 +200,7 @@ describe.runIf(process.env.BASTION_COMPILER_LIVE === '1')('compiler corpus gates
       const body = (await res.json()) as { data?: { content?: string; finish_reason?: string | null } };
       const plan = replay(c, res.ok ? { content: body.data?.content ?? '', finish_reason: body.data?.finish_reason ?? null } : { error: String(res.status) });
       expect(invalidities(plan), c.control.control_key).toEqual([]);
-      expect(plan.planned.length + plan.not_applicable.length, c.control.control_key).toBeGreaterThan(0);
+      expect(plan.planned.length, c.control.control_key).toBeGreaterThan(0);
     }
   });
 });

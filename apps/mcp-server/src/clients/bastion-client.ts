@@ -110,6 +110,7 @@ export function createBastionClient(bastionApiUrl: string, api: ApiClient, fetch
       request('GET', `/frameworks${qs({ include_archived: includeArchived ? 'true' : undefined })}`),
     getFramework: (id: string) => request('GET', `/frameworks/${id}`),
     listRequirements: (id: string) => request('GET', `/frameworks/${id}/requirements`),
+    listNotApplicableSuggestions: (id: string) => request('GET', `/frameworks/${id}/not-applicable-suggestions`),
     compileFramework: (id: string) => request('POST', `/frameworks/${id}/compile`, {}),
     listCompileRuns: (id: string) => request('GET', `/frameworks/${id}/compile-runs`),
     // Controls and assertions (rows 11, 13, 16, 17, 20, 21)

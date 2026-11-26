@@ -64,9 +64,9 @@ A tool/command "corresponds" to the endpoint(s) its handler calls. Sections are 
 | Bulwark | 29 | 17 | 12 | 0 |
 | Burn | 48 | 19 | 29 | 0 |
 | Bursar | 79 | 22 | 57 | 0 |
-| Bastion (tools pending registration at M11) | 79 | 59 | 20 | 2 |
+| Bastion (tools pending registration at M11) | 80 | 60 | 20 | 2 |
 | Cross-app platform | 46 | 32 | 14 | 6 |
-| **Total** | **1347** | **933** | **414** | **19** |
+| **Total** | **1348** | **934** | **414** | **19** |
 
 _Counts are summed from the per-section tables (each row's REST endpoint counted once even when several MCP tools share it). After the `feat/mcp-endpoint-parity` build the "with an MCP tool" total roughly doubled (≈334 → ≈690). Of the ~247 endpoints still tool-less, the large majority are now annotated `— _(skip: …)_` with a reason — auth/OAuth/session, public-inbound (forms/booking/portal/tracking), multipart/binary upload, binary export (PDF/SVG/CSV/.ics), raw credential/API-key admin, SuperUser/permission/account admin (Bam org/admin held to a deliberately conservative scope this pass), Yjs/scene/WebSocket realtime sync, internal/service-to-service routes, and slug/name resolvers done internally — plus the deferred Helpdesk `X-Agent-Key` agent routes. Some endpoints are shared by multiple MCP tools and many are internal / webhook / public-inbound (not user-facing), so treat the totals as close approximations of the surface size, not an exact public-API inventory. The remaining intentional gaps cluster in **Bam org/admin** (SuperUser & permissions admin, integrations, credentials — UI/CLI-only) and a few per-app binary/upload/realtime tails._
 
@@ -2215,6 +2215,7 @@ AI procurement leveling & spend-baseline monitor. 20 `bursar_*` tools (spec sect
 | `PATCH /v1/frameworks/:id` | `bastion_update_framework` | Rename, audit target date, period | — |
 | `POST /v1/frameworks/:id/archive` | `bastion_archive_framework` | Archive a framework (destructive: retires single-framework controls; the tool is two-step through a confirm token) | — |
 | `GET /v1/frameworks/:id/requirements` | `bastion_list_frameworks` | Every requirement with our plain summary, linked controls and applicability decision | Setup wizard ISO applicability step |
+| `GET /v1/frameworks/:id/not-applicable-suggestions` | `bastion_not_applicable_suggestions` | The AI compile's "may not apply" suggestions for requirements nobody has decided yet, with each control's reason (#238) | Setup "The compiler thinks these may not apply" (decide each) |
 | `POST /v1/frameworks/:id/applicability` | `bastion_decide_applicability` | Decide several requirements at once (every link of each ref code) | Setup wizard "Everything else applies", "Does not apply" |
 | `GET /v1/frameworks/:id/statement-of-applicability` | — _(skip: binary download, CSV)_ | `statement_of_applicability.csv` (ISO only; formula-neutralized; sandboxed download headers) | — (Sharing page, M9) |
 | `POST /v1/frameworks/:id/compile` | `bastion_compile_framework` | Compile (202 + run). With an AI provider (M7) the run is queued and the worker tailors each control from the closed probe menu through the internal LLM proxy, validated like the library's suggestions, with a per-control library fallback; with `use_ai: false` or no provider the deterministic compile finishes in the request. Everything lands as proposed | Setup wizard "Set up checks", "Use the library suggestions only" |

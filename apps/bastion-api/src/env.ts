@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { checkStableSecrets, formatStableSecretRefusal } from './boot/stable-secrets.js';
+import { COMPILE_MAX_TOKENS_DEFAULT } from './library/compile-budget.js';
 
 const emptyToUndefined = (v: unknown) => (v === '' ? undefined : v);
 
@@ -72,6 +73,8 @@ const envSchema = z.object({
 
   // Time budgets (spec 7.3).
   BASTION_LLM_TIMEOUT_MS: z.coerce.number().int().positive().default(60000),
+  // The compile call's output budget (#237). Reasoning models spend part of it before answering.
+  BASTION_LLM_MAX_TOKENS: z.coerce.number().int().min(256).max(100000).default(COMPILE_MAX_TOKENS_DEFAULT),
   BASTION_ENGINE_TIMEOUT_MS: z.coerce.number().int().positive().default(30000),
   BASTION_PROBE_TIMEOUT_MS: z.coerce.number().int().positive().default(8000),
   BASTION_PUT_TIMEOUT_MS: z.coerce.number().int().positive().default(5000),

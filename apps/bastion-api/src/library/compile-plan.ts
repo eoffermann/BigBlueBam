@@ -181,9 +181,10 @@ export interface TailoredControlPlan extends ControlPlan {
 
 /**
  * Plan one control from the AI's validated suggestions, falling back to the library verbatim
- * (spec 2.1 step 5) when nothing the AI said survives validation and it claimed no requirement is
- * out of scope. So every control ends with a check, an evidence request or a not-applicable
- * suggestion (the compiler coverage gate, spec 11.3), or already had them.
+ * (spec 2.1 step 5) when no check or evidence request the AI said survives validation, even if it
+ * suggested requirements that may not apply (#238: those are kept for a person to decide, and
+ * never on their own leave a control with nothing). So every control ends with a check or an
+ * evidence request (the compiler coverage gate, spec 11.3), or already had them.
  */
 export function planTailoredControl(
   key: string,
@@ -195,14 +196,20 @@ export function planTailoredControl(
   if (tailored) {
     const ai = planControl(key, tailored, existing, populations, 'compiler');
     const dropped = [...tailored.dropped, ...ai.dropped];
-    if (ai.planned.length > 0 || ai.skipped_existing > 0 || tailored.not_applicable.length > 0) {
+    if (ai.planned.length > 0 || ai.skipped_existing > 0) {
       return { ...ai, dropped, not_applicable: [...tailored.not_applicable], used_fallback: false };
     }
+    // Nothing usable to check or ask for. A "may not apply" suggestion is only a suggestion until
+    // a person decides it in Setup (#238), so the library's checks are still proposed, and the
+    // suggestions travel alongside for that person.
     const lib = planControl(key, librarySuggestions(key), existing, populations, 'library');
+    const why = tailored.not_applicable.length > 0
+      ? 'the AI only suggested requirements that may not apply, so the library suggestions were proposed until someone decides'
+      : 'nothing usable came back, so the library suggestions were proposed';
     return {
       ...lib,
-      dropped: [...dropped, ...lib.dropped, { control_key: key, what: 'AI suggestions', reason: 'nothing usable came back, so the library suggestions were proposed' }],
-      not_applicable: [],
+      dropped: [...dropped, ...lib.dropped, { control_key: key, what: 'AI suggestions', reason: why }],
+      not_applicable: [...tailored.not_applicable],
       used_fallback: true,
     };
   }

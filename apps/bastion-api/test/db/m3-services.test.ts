@@ -159,6 +159,30 @@ describe.skipIf(!DATABASE_URL)('Bastion M3 services (live database)', { timeout:
     expect(counts.set_up).toBe(1);
   });
 
+  it('#238: the AI compile\'s not-applicable suggestions are served for undecided requirements until a person decides', async () => {
+    const reqs = await s.frameworks.listRequirements(viewer, soc2Id);
+    const [a, b] = reqs.data.filter((r) => r.applicability === 'undecided' && r.links.length > 0);
+    const na = [
+      { control_key: a!.links[0]!.control_key, ref_code: a!.ref_code, reason: 'We have no physical office.' },
+      { control_key: b!.links[0]!.control_key, ref_code: b!.ref_code, reason: 'We do not build software.' },
+      { control_key: a!.links[0]!.control_key, ref_code: 'ZZ.9', reason: 'not a requirement of this framework' },
+    ];
+    const [run] = await sql`
+      INSERT INTO bastion_compile_runs (organization_id, framework_id, status, used_fallback, drop_reasons, started_by, completed_at)
+      VALUES (${ORG}, ${soc2Id}, 'succeeded', false, ${sql.json({ mode: 'ai', not_applicable: na } as never)}, ${USER}, now())
+      RETURNING id`;
+    const first = await s.frameworks.listNotApplicableSuggestions(viewer, soc2Id);
+    expect(first.compile_run_id).toBe(run!.id);
+    expect(first.data.map((x) => x.ref_code).sort()).toEqual([a!.ref_code, b!.ref_code].sort());
+    const sa = first.data.find((x) => x.ref_code === a!.ref_code)!;
+    expect(sa).toMatchObject({ suggested_reason: 'We have no physical office.', title: a!.title });
+    expect(sa.controls[0]!.control_title).toBe(a!.links[0]!.control_title);
+    // A person decides one (either way): it is no longer suggested.
+    await s.frameworks.decideApplicability(viewer, soc2Id, { decisions: [{ ref_code: a!.ref_code, applicability: 'applicable' }] });
+    const second = await s.frameworks.listNotApplicableSuggestions(viewer, soc2Id);
+    expect(second.data.map((x) => x.ref_code)).toEqual([b!.ref_code]);
+  });
+
   it('#193: a committed inline run with an old heartbeat is released and the next compile succeeds', async () => {
     const [stale] = await sql`
       INSERT INTO bastion_compile_runs (organization_id, framework_id, status, used_fallback, claimed_by, heartbeat_at, started_by, started_at)

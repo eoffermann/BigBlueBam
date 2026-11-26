@@ -134,7 +134,8 @@ describe('the tailoring prompt (spec 2.1 step 2, 2.8)', () => {
     expect(extractJsonObject('Sure!\n```json\n{"checks":[]}\n```')).toEqual({ checks: [] });
     expect(parseTailoringResponse('{"checks":[]}').ok).toBe(true);
     expect(parseTailoringResponse('no json here')).toEqual({ ok: false, reason: 'the AI answer was not JSON' });
-    expect(parseTailoringResponse('{"checks":[]}', 'length')).toEqual({ ok: false, reason: 'the AI answer was cut off' });
+    // Marked as cut off, so the compile counts it apart from other fallbacks (#237).
+    expect(parseTailoringResponse('{"checks":[]}', 'length')).toEqual({ ok: false, reason: 'the AI answer was cut off', cut_off: true });
     expect(parseTailoringResponse('{"checks":"yes"}').ok).toBe(false);
   });
 });
@@ -195,10 +196,19 @@ describe('the AI answer goes through the deterministic validator (spec 2.1 step 
         { ref_code: 'CC8.1', reason: 'We do not build software.' },
       ],
     });
-    expect(p.planned).toHaveLength(0);
+    expect(p.planned.every((x) => x.proposed_by === 'library')).toBe(true);
     expect(p.not_applicable).toEqual([{ ref_code: 'CC8.1', reason: 'We do not build software.' }]);
     expect(p.dropped.some((d) => /looked like an instruction/.test(d.reason))).toBe(true);
     expect(p.dropped.some((d) => /not one this control serves/.test(d.reason))).toBe(true);
+  });
+
+  it('a not-applicable-only answer keeps the library checks and the suggestion, for a person to decide (#238)', () => {
+    const p = plan({ checks: [], not_applicable: [{ ref_code: 'CC8.1', reason: 'We do not build software.' }] });
+    expect(p.used_fallback).toBe(true);
+    expect(p.planned.length).toBeGreaterThan(0);
+    expect(p.planned.every((x) => x.proposed_by === 'library')).toBe(true);
+    expect(p.not_applicable).toEqual([{ ref_code: 'CC8.1', reason: 'We do not build software.' }]);
+    expect(p.dropped.some((d) => /only suggested requirements that may not apply/.test(d.reason))).toBe(true);
   });
 
   it('falls back to the library verbatim when nothing usable comes back (and when there is no AI)', () => {
