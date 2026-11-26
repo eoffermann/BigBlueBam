@@ -1207,7 +1207,28 @@ Orchestrator direction for the fold-in: accept the scope trim (public trust page
 
 **Round 1 dispositions:** 43 accepted, 3 adapted, 0 rejected (per-finding lines in the spec's section 16). The adaptations: personal data moved to a separate editable table with only a keyed hash in the ledger, and auditor access logs pruned only through one guarded database function (security-9, best-practices-6); per-org LLM fairness through Redis semaphores in bastion-api rather than BullMQ grouping, which is a paid BullMQ Pro feature (infrastructure-8). After the fold-in the spec has 33 tables, 97 REST endpoints (34 with tools), 24 MCP tools, 48 permission actions, 23 Bolt events through an outbox, 19 worker jobs, migrations 0260-0268 plus the M10 permission files, and twelve milestones (M0 platform prerequisites through M11 Launchpad registration). Probes now run as reviewed database functions so RLS enforcement cannot hide rows from them.
 
-<!-- ROUND 2 -->
+### Round 2
+
+The same five reviewers re-reviewed the revision, first checking each of their own round-1 findings against the text (not the changelog), then hunting for new problems in what the fold-in added. Full findings: `2026_11_25_20_03_SPEC_REVIEW_bastion_round2.md`.
+
+Round-1 verification: 40 of 46 confirmed resolved in the text. Six were only partly resolved and carried forward: security-4 (proposal re-verification read a column that does not exist), best-practices-1 and -5, and infrastructure-2, -7, -8.
+
+| Focus | Blocker | Major | Minor |
+|---|---|---|---|
+| Design | 0 | 7 | 4 |
+| Stability | 0 | 7 | 7 |
+| Security | 1 | 2 | 10 |
+| Best practices | 1 | 4 | 5 |
+| Infrastructure | 1 | 6 | 5 |
+| **Total** | **3** | **26** | **31** |
+
+The blockers: proposal decisions cannot be verified as human because `agent_proposals` records no decider (security; platform gap filed as #128); publishing only through the outbox hides every Bastion event from the Bolt catalog check (best practices); the runtime-resolved nginx block passes through the Railway config generator unchanged, so every Bastion API call would 502 in production (infrastructure). Three reviewers independently found that restore detection compared the ledger against seals stored in the same database, so it could never fire. Two found that accepted exceptions were being counted as proof.
+
+Orchestrator direction for the fold-in: fix #128 at the platform level in M0 and also decide Bastion's status-changing proposals inside Bastion; give exceptions a distinct effective status that never counts as proven; store seals outside the database and never mark a restore benign automatically; send the off-site evidence mirror to a separately configured destination.
+
+**Round 2 dispositions:** of the 29 blockers and majors, 26 accepted and 3 adapted, none rejected; 29 minors folded in and 2 adapted, none deferred. The adaptations: secret hints marked stable with `<generate>` and a what-breaks note, compose uses `:-` and bastion-api refuses to start with a plain message (best-practices-3); #126 variable propagation is opt-in per hint and applied to every app's internal URL hints, never overwriting a set value (N6); the LLM permits copy the proxy's leased, fail-open pattern, and the throughput is restated at about 9 to 18 calls per minute (N7). The access-log purge guard was reworded: every service connects as the same database role, so "only the definer function can purge" was unenforceable; the two-year age rule is the stated guard, with a test. After round 2 the spec has 35 tables, 106 REST endpoints (34 with tools), 24 MCP tools, 50 permission actions, 24 Bolt events, 19 jobs, migrations 0260-0269 plus the M10 permission files. Milestone changes: M0 also carries #128, the Railway generator fix for runtime-resolved upstreams, the stable-secret class and the enum-vs-`BOLT_SOURCES` CI check; Bolt events register at M4 with the outbox; tool registration, docs catalog, published counts and the Launchpad entry ship together at M11.
+
+<!-- ROUND 3 -->
 
 ## Outcome
 
