@@ -325,8 +325,12 @@ async function askAi(
 ): Promise<AiOutcome> {
   const sleep = d.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
   let lastBeat = Date.now();
+  let first = true;
   for (;;) {
-    if (Date.now() - sliceStart > cutoff) return { kind: 'out_of_time' };
+    // The caller decided to start this control; only WAITING (for a permit, or after a 429) is
+    // bounded by the slice cutoff here, so every slice makes progress when a permit is free.
+    if (!first && Date.now() - sliceStart > cutoff) return { kind: 'out_of_time' };
+    first = false;
     if (stopping || d.shuttingDown?.()) return { kind: 'out_of_time' };
     const admission = await d.permits.tryAdmit(run.organization_id);
     if (!admission.admitted) {
@@ -387,6 +391,7 @@ async function runSlice(d: CompileAiDeps, run: RunRow, claimant: string): Promis
   }
 
   const done = new Set(progress.done_keys);
+  let processed = 0;
   for (const c of ctx.controls) {
     if (done.has(c.control_key)) continue;
     if (stopping || d.shuttingDown?.()) {
@@ -394,7 +399,9 @@ async function runSlice(d: CompileAiDeps, run: RunRow, claimant: string): Promis
       d.engine.log.info({ run_id: run.id }, 'bastion-compile: shutting down; the run was released and will resume');
       return;
     }
-    if (Date.now() - sliceStart > cutoff) break;
+    // Stop starting controls at the cutoff (spec 7.3), but always do at least one per slice.
+    if (processed > 0 && Date.now() - sliceStart > cutoff) break;
+    processed += 1;
     const lib = libraryControl(c.control_key);
 
     // Ask the AI (outside any transaction), unless there is no provider, no library entry to
