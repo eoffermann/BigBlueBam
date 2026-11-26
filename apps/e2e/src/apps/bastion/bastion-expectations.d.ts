@@ -26,6 +26,17 @@ interface BastionPolicyExpectation {
 
 interface BastionSeedExpectations {
   m7: { policy: BastionPolicyExpectation };
+  m8: {
+    questionnaire: {
+      title: string;
+      requester: string;
+      fileName: string;
+      sheet: string;
+      rows: number;
+      encryption: { question: string; band: 'low' | 'medium' | 'high'; words: string; answerStartsWith: string };
+      radioRelay: { question: string; band: 'low' | 'medium' | 'high'; words: string; mentions: string };
+    };
+  };
   org: { slug: string };
   actorEmail: string;
   frameworks: BastionFrameworkExpectation[];
