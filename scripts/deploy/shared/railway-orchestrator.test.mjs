@@ -18,6 +18,16 @@ import {
   getRequiredAppServices,
   getSelfHostedInfra,
 } from './services.mjs';
+import { ENV_HINTS } from './env-hints.mjs';
+
+// Every stable secret declared in env-hints (e.g. Bastion's four keys), as generateSecrets()
+// would supply them. Derived from the hints, not hand-listed, so a new app's stable secret
+// never breaks these fixtures again.
+const STABLE_SECRET_FIXTURES = Object.fromEntries(
+  Object.entries(ENV_HINTS)
+    .filter(([, h]) => h.kind === 'secret' && h.stable === true)
+    .map(([name]) => [name, `${name.toLowerCase()}-fixture`]),
+);
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -64,6 +74,7 @@ function makeOptions(overrides = {}) {
       LIVEKIT_API_KEY: 'lk-key',
       LIVEKIT_API_SECRET: 'lk-secret',
       BLIP_INGEST_PEPPER: 'blip-pepper',
+      ...STABLE_SECRET_FIXTURES,
     },
     publicUrl: 'https://example.up.railway.app',
     userIntegrations: {
@@ -116,6 +127,7 @@ function fullContext() {
       LIVEKIT_API_KEY: 'lk-key',
       LIVEKIT_API_SECRET: 'lk-secret',
       BLIP_INGEST_PEPPER: 'blip-pepper',
+      ...STABLE_SECRET_FIXTURES,
     },
     publicUrl: 'https://example.up.railway.app',
     userIntegrations: {

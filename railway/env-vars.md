@@ -192,6 +192,7 @@ with **R**, optional with `o`.
 | o | `BULWARK_API_INTERNAL_URL` | unknown | `<see app docs>` |  |
 | o | `BURN_API_INTERNAL_URL` | computed | `http://burn-api.railway.internal:8080` |  |
 | o | `BURSAR_API_INTERNAL_URL` | computed | `http://bursar-api.railway.internal:8080` |  |
+| o | `BASTION_API_INTERNAL_URL` | computed | `http://bastion-api.railway.internal:8080` |  |
 
 ### bearing-api
 
@@ -375,6 +376,40 @@ with **R**, optional with `o`.
 | o | `BURSAR_LLM_TIMEOUT_MS` | literal | `60000` |  |
 | o | `BURSAR_ENGINE_TIMEOUT_MS` | literal | `30000` |  |
 
+### bastion-api
+
+*Bastion API - continuous compliance controls, evidence, questionnaires*
+
+| R/o | Variable | Kind | Value | Note |
+|---|---|---|---|---|
+| **R** | `DATABASE_URL` | plugin | `${{Postgres.DATABASE_URL}}` | Reference the Railway Postgres plugin |
+| **R** | `REDIS_URL` | plugin | `${{Redis.REDIS_URL}}` | Reference the Railway Redis plugin |
+| **R** | `SESSION_SECRET` | secret | `<generate>` | openssl rand -hex 32 — must be IDENTICAL on every API service so they share sessions |
+| **R** | `INTERNAL_SERVICE_SECRET` | secret | `<generate>` | openssl rand -hex 32 — protects internal service-to-service calls (bolt-api event ingestion, MCP /tools/call). Validated min(32); use 64 hex chars. |
+| **R** | `BBB_API_INTERNAL_URL` | computed | `http://api.railway.internal:8080` |  |
+| **R** | `BOLT_API_INTERNAL_URL` | computed | `http://bolt-api.railway.internal:8080` |  |
+| **R** | `BASTION_S3_BUCKET` | literal | `bigbluebam-bastion` |  |
+| **R** | `BASTION_SEAL_SIGNING_KEY` | secret | `<generate>` | 64-hex Ed25519 seed (32 bytes), wrapped as PKCS8 at boot. MUST stay STABLE. Change it only through the documented rotation, which registers a new signing_key_id and keeps every old public key published; a silent change makes new seals unverifiable against the published keys. |
+| **R** | `BASTION_PD_HMAC_KEY` | secret | `<generate>` | 64-hex HMAC key for personal-data commitments. MUST stay STABLE: a new value makes every existing commitment report key_changed. Escrow it with the database backup. |
+| **R** | `BASTION_ROOM_IP_SALT` | secret | `<generate>` | 64-hex salt for auditor-room IP hashes. Changing it only splits old and new access-log hashes. |
+| **R** | `BASTION_FEED_KEY_PEPPER` | secret | `<generate>` | 64-hex pepper for feed-key HMACs. MUST stay STABLE: a new value invalidates every feed key. |
+| o | `DATABASE_READ_URL` | plugin | `${{Postgres.DATABASE_URL}}` | Same as DATABASE_URL unless you set up a read replica |
+| o | `S3_ENDPOINT` | computed | `http://minio.railway.internal:9000` |  |
+| o | `S3_ACCESS_KEY` | reference | `${{minio.MINIO_ROOT_USER}}` |  |
+| o | `S3_SECRET_KEY` | reference | `${{minio.MINIO_ROOT_PASSWORD}}` |  |
+| o | `S3_REGION` | literal | `us-east-1` |  |
+| o | `CORS_ORIGIN` | public | `<frontend-public-url>` |  |
+| o | `LOG_LEVEL` | literal | `info` |  |
+| o | `BASTION_TRUST_PROXY_HOPS` | literal | `2` |  |
+| o | `BASTION_LLM_TIMEOUT_MS` | literal | `60000` |  |
+| o | `BASTION_ENGINE_TIMEOUT_MS` | literal | `30000` |  |
+| o | `BASTION_PROBE_TIMEOUT_MS` | literal | `8000` |  |
+| o | `RAILWAY_DEPLOYMENT_DRAINING_SECONDS` | literal | `75` |  |
+| o | `BASTION_BACKUP_S3_ENDPOINT` | literal | `` |  |
+| o | `BASTION_BACKUP_S3_BUCKET` | literal | `` |  |
+| o | `BASTION_BACKUP_S3_ACCESS_KEY` | secret | `` | Off-site evidence backup; leave empty to disable (ops.backup_fresh then reports cannot prove). |
+| o | `BASTION_BACKUP_S3_SECRET_KEY` | secret | `` | As above. |
+
 ### book-api
 
 *Book API — calendar events, booking pages, meetings*
@@ -429,6 +464,10 @@ with **R**, optional with `o`.
 | o | `BURN_PRECHECK_TIMEOUT_MS` | literal | `800` |  |
 | o | `BURN_PRECHECK_BREAKER_THRESHOLD` | literal | `5` |  |
 | o | `BURN_PRECHECK_BREAKER_PROBE_MS` | literal | `30000` |  |
+| o | `S3_ENDPOINT` | computed | `http://minio.railway.internal:9000` |  |
+| o | `S3_ACCESS_KEY` | reference | `${{minio.MINIO_ROOT_USER}}` |  |
+| o | `S3_SECRET_KEY` | reference | `${{minio.MINIO_ROOT_PASSWORD}}` |  |
+| o | `S3_BUCKET` | literal | `bigbluebam-uploads` |  |
 
 ### blueprint-api
 
@@ -579,6 +618,7 @@ with **R**, optional with `o`.
 | o | `BULWARK_API_URL` | unknown | `<see app docs>` |  |
 | o | `BURN_API_URL` | computed | `http://burn-api.railway.internal:8080/v1` |  |
 | o | `BURSAR_API_URL` | computed | `http://bursar-api.railway.internal:8080/v1` |  |
+| o | `BASTION_API_URL` | computed | `http://bastion-api.railway.internal:8080/v1` |  |
 | o | `MCP_AUTH_REQUIRED` | literal | `true` | Recommended for production deployments |
 | o | `LOG_LEVEL` | literal | `info` |  |
 | o | `INTERNAL_SERVICE_SECRET` | secret | `<generate>` | openssl rand -hex 32 — protects internal service-to-service calls (bolt-api event ingestion, MCP /tools/call). Validated min(32); use 64 hex chars. |
@@ -615,6 +655,8 @@ with **R**, optional with `o`.
 | o | `BULWARK_API_INTERNAL_URL` | unknown | `<see app docs>` |  |
 | o | `BURN_API_INTERNAL_URL` | computed | `http://burn-api.railway.internal:8080` |  |
 | o | `BURSAR_API_INTERNAL_URL` | computed | `http://bursar-api.railway.internal:8080` |  |
+| o | `BASTION_API_INTERNAL_URL` | computed | `http://bastion-api.railway.internal:8080` |  |
+| o | `BASTION_S3_BUCKET` | literal | `bigbluebam-bastion` |  |
 | o | `LIVEKIT_TURN_CHECK_TARGET` | user | `<turn.your-domain:port>` | Set on the worker so the daily turn-cert-expiry watchdog can warn before the TURN cert lapses. Format: turn.example.com:<tls-port>. |
 
 ### voice-agent
@@ -687,8 +729,8 @@ _No environment variables required._
 These are the secrets and references that MUST be identical across
 several services. Set them once, then copy/reference everywhere.
 
-- `SESSION_SECRET` — api, helpdesk-api, banter-api, beacon-api, brief-api, bolt-api, bearing-api, board-api, bond-api, blast-api, bench-api, basis-api, braid-api, bulwark-api, burn-api, bursar-api, book-api, blank-api, bill-api, blueprint-api, bureau-api, bin-api, bay-api, blip-api
+- `SESSION_SECRET` — api, helpdesk-api, banter-api, beacon-api, brief-api, bolt-api, bearing-api, board-api, bond-api, blast-api, bench-api, basis-api, braid-api, bulwark-api, burn-api, bursar-api, bastion-api, book-api, blank-api, bill-api, blueprint-api, bureau-api, bin-api, bay-api, blip-api
 - `INTERNAL_HELPDESK_SECRET` — api, helpdesk-api
-- `INTERNAL_SERVICE_SECRET` — api, banter-api, beacon-api, brief-api, bolt-api, bearing-api, board-api, bond-api, blast-api, basis-api, braid-api, bulwark-api, burn-api, bursar-api, book-api, blank-api, bill-api, blueprint-api, bureau-api, bin-api, bay-api, blip-api, mcp-server, worker, livekit
+- `INTERNAL_SERVICE_SECRET` — api, banter-api, beacon-api, brief-api, bolt-api, bearing-api, board-api, bond-api, blast-api, basis-api, braid-api, bulwark-api, burn-api, bursar-api, bastion-api, book-api, blank-api, bill-api, blueprint-api, bureau-api, bin-api, bay-api, blip-api, mcp-server, worker, livekit
 - `LIVEKIT_API_KEY` — banter-api, board-api, bureau-api, livekit
 - `LIVEKIT_API_SECRET` — banter-api, board-api, bureau-api, livekit

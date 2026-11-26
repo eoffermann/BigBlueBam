@@ -307,6 +307,51 @@ export const ENV_HINTS = {
   // leveling and derivation engines proceed in bounded slices under a heartbeat lease, so a
   // multi-minute run is expected and this value must not be raised to try to cover it.
   BURSAR_ENGINE_TIMEOUT_MS: { kind: 'literal', value: '30000' },
+  // Bastion (spec 9.4). Same two-var URL shape as Bursar: the INTERNAL one is the bare origin
+  // (worker, bolt-api), the plain one carries /v1 (mcp-server client). Both propagate to the
+  // existing services through syncNew (issue #126), as does the bucket name.
+  BASTION_API_INTERNAL_URL: { kind: 'computed', value: internal('bastion-api'), propagate: true },
+  BASTION_API_URL: { kind: 'computed', value: `${internal('bastion-api')}/v1`, propagate: true },
+  BASTION_S3_BUCKET: { kind: 'literal', value: 'bigbluebam-bastion', propagate: true },
+  // bastion-api SIGTERM drain, so an in-flight LLM call can finish (spec 7.3).
+  RAILWAY_DEPLOYMENT_DRAINING_SECONDS: { kind: 'literal', value: '75' },
+  BASTION_LLM_TIMEOUT_MS: { kind: 'literal', value: '60000' },
+  BASTION_ENGINE_TIMEOUT_MS: { kind: 'literal', value: '30000' },
+  BASTION_PROBE_TIMEOUT_MS: { kind: 'literal', value: '8000' },
+  // Railway puts two proxies in front of bastion-api (the edge, then the frontend nginx).
+  BASTION_TRUST_PROXY_HOPS: { kind: 'literal', value: '2' },
+  BASTION_SEAL_SIGNING_KEY: {
+    kind: 'secret',
+    value: '<generate>',
+    stable: true,
+    note: '64-hex Ed25519 seed (32 bytes), wrapped as PKCS8 at boot. MUST stay STABLE. Change it only through the documented rotation, which registers a new signing_key_id and keeps every old public key published; a silent change makes new seals unverifiable against the published keys.',
+  },
+  BASTION_PD_HMAC_KEY: {
+    kind: 'secret',
+    value: '<generate>',
+    stable: true,
+    note: '64-hex HMAC key for personal-data commitments. MUST stay STABLE: a new value makes every existing commitment report key_changed. Escrow it with the database backup.',
+  },
+  BASTION_ROOM_IP_SALT: {
+    kind: 'secret',
+    value: '<generate>',
+    stable: true,
+    note: '64-hex salt for auditor-room IP hashes. Changing it only splits old and new access-log hashes.',
+  },
+  BASTION_FEED_KEY_PEPPER: {
+    kind: 'secret',
+    value: '<generate>',
+    stable: true,
+    note: '64-hex pepper for feed-key HMACs. MUST stay STABLE: a new value invalidates every feed key.',
+  },
+  BASTION_BACKUP_S3_ENDPOINT: { kind: 'literal', value: '' },
+  BASTION_BACKUP_S3_BUCKET: { kind: 'literal', value: '' },
+  BASTION_BACKUP_S3_ACCESS_KEY: {
+    kind: 'secret',
+    value: '',
+    note: 'Off-site evidence backup; leave empty to disable (ops.backup_fresh then reports cannot prove).',
+  },
+  BASTION_BACKUP_S3_SECRET_KEY: { kind: 'secret', value: '', note: 'As above.' },
   // The three bill-api-side spend-gate tunables (Burn spec 5.5.1). BURN_PRECHECK_TIMEOUT_MS
   // is the AUTHORITATIVE client deadline and must stay strictly ABOVE burn-api's own
   // precheck_budget_ms (CHECK-clamped to [100, 750]): a timeout budget stored in the

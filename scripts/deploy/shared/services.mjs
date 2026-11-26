@@ -157,7 +157,10 @@ export const APP_SERVICES = [
       // consuming route lands, which is the failure mode section 18.4 of the Bursar spec
       // exists to prevent: an unresolvable optional var is silently SKIPPED, so the
       // transport would simply be absent in production with nothing reporting it.
-      optional: ['CORS_ORIGIN', 'LOG_LEVEL', 'RATE_LIMIT_MAX', 'RATE_LIMIT_WINDOW_MS', 'INTERNAL_SERVICE_SECRET', 'BRAID_API_INTERNAL_URL', 'BULWARK_API_INTERNAL_URL', 'BURN_API_INTERNAL_URL', 'BURSAR_API_INTERNAL_URL'],
+      // BASTION_API_INTERNAL_URL: Bastion's outbox dispatch hook (spec 8, consumed from M4);
+      // set at M1 so the value already exists on Railway when the hook lands. bastion-api is
+      // NOT added to `needs` here: bastion-api already needs bolt-api.
+      optional: ['CORS_ORIGIN', 'LOG_LEVEL', 'RATE_LIMIT_MAX', 'RATE_LIMIT_WINDOW_MS', 'INTERNAL_SERVICE_SECRET', 'BRAID_API_INTERNAL_URL', 'BULWARK_API_INTERNAL_URL', 'BURN_API_INTERNAL_URL', 'BURSAR_API_INTERNAL_URL', 'BASTION_API_INTERNAL_URL'],
     },
   },
   {
@@ -391,6 +394,50 @@ export const APP_SERVICES = [
     },
   },
   {
+    name: 'bastion-api',
+    description: 'Bastion API - continuous compliance controls, evidence, questionnaires',
+    dockerfile: 'apps/bastion-api/Dockerfile',
+    port: 4024,
+    healthcheck: '/health',
+    start_command: 'node dist/server.js',
+    required: true,
+    // BBB_PERMISSIONS_ENFORCE deliberately ABSENT: hardcoded boot invariant (burn issue #83).
+    needs: ['postgres', 'redis', 'minio', 'api', 'bolt-api'],
+    public_paths: ['/bastion/api/'],
+    extra_watch_patterns: ['packages/storage/**', 'packages/permissions/**'],
+    // The env block is load-bearing: a missing one resolves to empty arrays and deploys with
+    // no DATABASE_URL. The four BASTION_* stable secrets live on this service ALONE (the
+    // worker gets neither the HMAC key nor the off-site backup credentials, spec 9.1).
+    env: {
+      required: [
+        'DATABASE_URL',
+        'REDIS_URL',
+        'SESSION_SECRET',
+        'INTERNAL_SERVICE_SECRET',
+        'BBB_API_INTERNAL_URL',
+        'BOLT_API_INTERNAL_URL',
+        'BASTION_S3_BUCKET',
+        'BASTION_SEAL_SIGNING_KEY',
+        'BASTION_PD_HMAC_KEY',
+        'BASTION_ROOM_IP_SALT',
+        'BASTION_FEED_KEY_PEPPER',
+      ],
+      optional: [
+        'DATABASE_READ_URL',
+        'S3_ENDPOINT', 'S3_ACCESS_KEY', 'S3_SECRET_KEY', 'S3_REGION',
+        'CORS_ORIGIN',
+        'LOG_LEVEL',
+        'BASTION_TRUST_PROXY_HOPS',
+        'BASTION_LLM_TIMEOUT_MS',
+        'BASTION_ENGINE_TIMEOUT_MS',
+        'BASTION_PROBE_TIMEOUT_MS',
+        'RAILWAY_DEPLOYMENT_DRAINING_SECONDS',
+        'BASTION_BACKUP_S3_ENDPOINT', 'BASTION_BACKUP_S3_BUCKET',
+        'BASTION_BACKUP_S3_ACCESS_KEY', 'BASTION_BACKUP_S3_SECRET_KEY',
+      ],
+    },
+  },
+  {
     name: 'book-api',
     description: 'Book API — calendar events, booking pages, meetings',
     dockerfile: 'apps/book-api/Dockerfile',
@@ -603,6 +650,8 @@ export const APP_SERVICES = [
         // BASIS_API_URL + BRAID_API_URL are present in docker-compose.yml but were
         // missing here (pre-existing gap, spec 9.5/IK2); BULWARK_API_URL is the new one.
         'BASIS_API_URL', 'BRAID_API_URL', 'BULWARK_API_URL', 'BURN_API_URL', 'BURSAR_API_URL',
+        // Bastion's client base (tools register at M11; the URL exists from M1).
+        'BASTION_API_URL',
         'MCP_AUTH_REQUIRED', 'LOG_LEVEL', 'INTERNAL_SERVICE_SECRET',
         'MCP_INTERNAL_API_TOKEN',
       ],
@@ -658,6 +707,10 @@ export const APP_SERVICES = [
         // nothing. Pre-existing gap, recorded and fixed here rather than left.
         // BURSAR_API_INTERNAL_URL is the same transport for Bursar's internal event inbox.
         'BURN_API_INTERNAL_URL', 'BURSAR_API_INTERNAL_URL',
+        // Bastion jobs call bastion-api's internal engines; the packet job reads Bastion's own
+        // bucket with the shared S3_* credentials. Only these two: the HMAC key and the
+        // off-site backup credentials stay on bastion-api (spec 9.4).
+        'BASTION_API_INTERNAL_URL', 'BASTION_S3_BUCKET',
         // Lets the daily turn-cert-expiry watchdog warn before the LiveKit
         // TURN cert lapses; no-op until set (format turn.example.com:port).
         'LIVEKIT_TURN_CHECK_TARGET',
@@ -718,10 +771,10 @@ export const APP_SERVICES = [
     needs: [
       'api', 'helpdesk-api', 'banter-api', 'beacon-api', 'brief-api',
       'bolt-api', 'bearing-api', 'board-api', 'bond-api', 'blast-api',
-      'bench-api', 'basis-api', 'braid-api', 'bulwark-api', 'burn-api', 'bursar-api', 'book-api', 'blank-api', 'bill-api', 'blueprint-api',
+      'bench-api', 'basis-api', 'braid-api', 'bulwark-api', 'burn-api', 'bursar-api', 'bastion-api', 'book-api', 'blank-api', 'bill-api', 'blueprint-api',
       'bureau-api', 'mcp-server', 'site',
     ],
-    public_paths: ['/', '/b3/', '/helpdesk/', '/banter/', '/beacon/', '/brief/', '/bolt/', '/bearing/', '/board/', '/bond/', '/blast/', '/bench/', '/basis/', '/braid/', '/bulwark/', '/burn/', '/bursar/', '/book/', '/blank/', '/bill/', '/blueprint/', '/bureau/', '/blip/', '/bin/', '/bay/'],
+    public_paths: ['/', '/b3/', '/helpdesk/', '/banter/', '/beacon/', '/brief/', '/bolt/', '/bearing/', '/board/', '/bond/', '/blast/', '/bench/', '/basis/', '/braid/', '/bulwark/', '/burn/', '/bursar/', '/bastion/', '/book/', '/blank/', '/bill/', '/blueprint/', '/bureau/', '/blip/', '/bin/', '/bay/'],
     env: { required: [], optional: ['HTTP_PORT', 'HTTPS_PORT'] },
   },
 ];
