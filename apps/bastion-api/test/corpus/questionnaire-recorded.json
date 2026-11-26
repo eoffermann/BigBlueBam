@@ -1,0 +1,171 @@
+{
+  "meta": {
+    "recorded_at": "2026-11-26T16:19:02.784Z",
+    "prompt_version": 1,
+    "source": "live",
+    "model": "glm-5.3-flash:cloud",
+    "note": "Recorded live through apps/api POST /internal/llm/chat with the questionnaire draft prompt; replayed by questionnaire-corpus.test.ts."
+  },
+  "responses": {
+    "q01": {
+      "content": "{\"answer\": \"Yes. Every employee account is required to use two-step sign-in (multi-factor authentication), and this control is proven in practice.\", \"yes_no\": true, \"cites\": [\"C1\", \"L1\"], \"confidence\": 0.95, \"unanswerable\": false}",
+      "finish_reason": "stop"
+    },
+    "q02": {
+      "content": "{\"answer\": \"\", \"yes_no\": null, \"cites\": [], \"confidence\": 0.9, \"unanswerable\": true}",
+      "finish_reason": "stop"
+    },
+    "q03": {
+      "content": "{\"answer\": \"No. Our control requiring every merged change to production code to have a second reviewer is currently not met, so we cannot attest that all code changes are peer reviewed before they reach production.\", \"yes_no\": false, \"cites\": [\"C1\"], \"confidence\": 0.85, \"unanswerable\": false}",
+      "finish_reason": "stop"
+    },
+    "q04": {
+      "content": "{\"answer\": \"No. Annual rotation of API keys and service credentials is currently a control that is not met, and the gap is covered by a risk accepted exception in effect until March 31, 2027.\", \"yes_no\": false, \"cites\": [\"C1\"], \"confidence\": 0.9, \"unanswerable\": false}",
+      "finish_reason": "stop"
+    },
+    "q05": {
+      "content": "{\"answer\": \"Yes, customer data is backed up nightly and a restore is tested every quarter, which has been proven through our control verification.\", \"yes_no\": true, \"cites\": [\"C1\"], \"confidence\": 0.97, \"unanswerable\": false}",
+      "finish_reason": "stop"
+    },
+    "q06": {
+      "content": "{\"answer\": \"No. The control that removes access when people leave is currently Not met, so we cannot confirm that departed employees lose keys and accounts promptly.\", \"yes_no\": false, \"cites\": [\"C1\"], \"confidence\": 0.75, \"unanswerable\": false}",
+      "finish_reason": "stop"
+    },
+    "q07": {
+      "content": "{\"answer\": \"Yes, security-relevant events are logged. Application logs are collected and kept for 90 days.\", \"yes_no\": true, \"cites\": [\"C1\"], \"confidence\": 0.95, \"unanswerable\": false}",
+      "finish_reason": "stop"
+    },
+    "q08": {
+      "content": "{\"answer\": \"Yes. We maintain a written information security policy, and all staff read and acknowledge it each year. This control is proven in our records.\", \"yes_no\": true, \"cites\": [\"C1\", \"P1\"], \"confidence\": 0.97, \"unanswerable\": false}",
+      "finish_reason": "stop"
+    },
+    "q09": {
+      "content": "{\"answer\": \"Yes. New staff pass a background check before they start.\", \"yes_no\": true, \"cites\": [\"C1\"], \"confidence\": 0.99, \"unanswerable\": false}",
+      "finish_reason": "stop"
+    },
+    "q10": {
+      "content": "{\"answer\": \"No. A control to review vendors, including review of critical vendors before award, is defined but its status is not set up yet, so we cannot currently attest to assessing the security of critical vendors.\", \"yes_no\": false, \"cites\": [\"C1\"], \"confidence\": 0.7, \"unanswerable\": false}",
+      "finish_reason": "stop"
+    },
+    "q11": {
+      "content": "{\"answer\": \"Yes. Two-step sign-in is proven for every staff account with a required second step, which includes administrators.\", \"yes_no\": true, \"cites\": [\"C1\"], \"confidence\": 0.9, \"unanswerable\": false}",
+      "finish_reason": "stop"
+    },
+    "q12": {
+      "content": "{\"answer\": \"We test restoring from backup quarterly; the database is backed up nightly and a restore is tested every quarter.\", \"yes_no\": null, \"cites\": [\"C1\"], \"confidence\": 0.98, \"unanswerable\": false}",
+      "finish_reason": "stop"
+    },
+    "q13": {
+      "content": "{\"answer\": \"We cannot provide a verified description of device-level data protection at this time, as the relevant control has not yet been proven.\", \"yes_no\": null, \"cites\": [], \"confidence\": 0.85, \"unanswerable\": true}",
+      "finish_reason": "stop"
+    },
+    "q14": {
+      "content": "{\"answer\": \"We are not able to confirm the status of API keys held by departed employees. The offboarding control that would demonstrate access and keys are removed when people leave is currently not met, so we cannot show that no departed employees retain API keys.\", \"yes_no\": null, \"cites\": [], \"confidence\": 0.9, \"unanswerable\": true}",
+      "finish_reason": "stop"
+    },
+    "q15": {
+      "content": "{\"answer\": \"Yes. Application logs are collected and kept for 90 days, which meets the 90-day retention requirement, and this control is proven.\", \"yes_no\": true, \"cites\": [\"C1\"], \"confidence\": 0.95, \"unanswerable\": false}",
+      "finish_reason": "stop"
+    },
+    "q16": {
+      "content": "{\"answer\": \"Yes. Our proven control requires everyone to read and acknowledge the Island Information Security Policy each year, so the policy is subject to an annual review cycle.\", \"yes_no\": true, \"cites\": [\"C1\"], \"confidence\": 0.75, \"unanswerable\": false}",
+      "finish_reason": "stop"
+    },
+    "q17": {
+      "content": "{\"answer\": \"No. Our control requiring a second reviewer on every merged change to production code is currently not met, so we cannot demonstrate that reviewers are required for main branch merges.\", \"yes_no\": false, \"cites\": [\"C1\"], \"confidence\": 0.8, \"unanswerable\": false}",
+      "finish_reason": "stop"
+    },
+    "q18": {
+      "content": "{\"answer\": \"No, not currently. The control for rotating service credentials is not met at this time, so the organization cannot demonstrate secure storage and rotation of these credentials. An exception has been accepted on this gap until 2027-03-31, and the intended requirement is that API keys and service credentials be replaced at least once a year.\", \"yes_no\": false, \"cites\": [\"C1\"], \"confidence\": 0.85, \"unanswerable\": false}",
+      "finish_reason": "stop"
+    },
+    "q19": {
+      "content": "{\"answer\": \"Yes. Every staff account signs in with a second step (two-step sign-in), so multi-factor authentication is required for remote access as well.\", \"yes_no\": true, \"cites\": [\"L1\", \"C1\"], \"confidence\": 0.9, \"unanswerable\": false}",
+      "finish_reason": "stop"
+    },
+    "q20": {
+      "content": "{\"answer\": \"Yes, all new staff complete a background check before they start, which occurs before they receive system access.\", \"yes_no\": true, \"cites\": [\"C1\"], \"confidence\": 0.95, \"unanswerable\": false}",
+      "finish_reason": "stop"
+    },
+    "q21": {
+      "content": "{\"answer\": \"We do not have any information available confirming a SOC 2 Type II attestation from an external auditor.\", \"yes_no\": null, \"cites\": [], \"confidence\": 0.9, \"unanswerable\": true}",
+      "finish_reason": "stop"
+    },
+    "q22": {
+      "content": "{\"answer\": \"The available documentation does not address data center tier certification; it only describes backup and restore practices, so we cannot confirm or deny Tier IV certification.\", \"yes_no\": null, \"cites\": [], \"confidence\": 0.9, \"unanswerable\": true}",
+      "finish_reason": "stop"
+    },
+    "q23": {
+      "content": "{\"answer\": \"We are unable to confirm whether the organization carries cyber insurance of at least five million dollars, as no records verifying cyber insurance coverage were available to support an answer to this question.\", \"yes_no\": null, \"cites\": [], \"confidence\": 0.9, \"unanswerable\": true}",
+      "finish_reason": "stop"
+    },
+    "q24": {
+      "content": "{\"answer\": \"We are unable to confirm from the information available whether annual penetration testing is performed by a third party.\", \"yes_no\": null, \"cites\": [], \"confidence\": 0.9, \"unanswerable\": true}",
+      "finish_reason": "stop"
+    },
+    "q25": {
+      "content": "{\"answer\": \"The available documentation does not address where customer data is stored, so we cannot confirm that it is kept solely within the European Union. Please provide details on hosting and data residency locations so this question can be answered.\", \"yes_no\": null, \"cites\": [], \"confidence\": 0.9, \"unanswerable\": true}",
+      "finish_reason": "stop"
+    },
+    "q26": {
+      "content": "",
+      "finish_reason": "length"
+    },
+    "q27": {
+      "content": "{\"answer\": \"We cannot provide a documented answer regarding annual secure coding training for developers, as we have no evidence supporting or refuting annual secure coding training for our developers at this time.\", \"yes_no\": null, \"cites\": [], \"confidence\": 0.95, \"unanswerable\": true}",
+      "finish_reason": "stop"
+    },
+    "q28": {
+      "content": "{\"answer\": \"\", \"yes_no\": null, \"cites\": [], \"confidence\": 0.0, \"unanswerable\": true}",
+      "finish_reason": "stop"
+    },
+    "q29": {
+      "content": "{\"answer\": \"We cannot confirm support for customer-managed encryption keys based on the documentation available to us; no approved evidence addresses this capability.\", \"yes_no\": null, \"cites\": [], \"confidence\": 0.9, \"unanswerable\": true}",
+      "finish_reason": "stop"
+    },
+    "q30": {
+      "content": "{\"answer\": \"\", \"yes_no\": null, \"cites\": [], \"confidence\": 0.9, \"unanswerable\": true}",
+      "finish_reason": "stop"
+    },
+    "q31": {
+      "content": "{\"answer\": \"Our records show an information security policy that employees are asked to read, but they do not show that the organization holds ISO 27001 certification, so we cannot confirm yes or no on certification.\", \"yes_no\": null, \"cites\": [], \"confidence\": 0.9, \"unanswerable\": true}",
+      "finish_reason": "stop"
+    },
+    "q32": {
+      "content": "{\"answer\": \"We do not currently have information available to confirm whether our offices are protected by badge access, so we are unable to answer this question at this time.\", \"yes_no\": null, \"cites\": [], \"confidence\": 0.9, \"unanswerable\": true}",
+      "finish_reason": "stop"
+    },
+    "q33": {
+      "content": "{\"answer\": \"Full disk encryption is our standard for company laptops, but this control is currently in a cannot-prove-yet state, meaning we do not yet have evidence to demonstrate it. We therefore cannot confirm compliance for this item at this time.\", \"yes_no\": null, \"cites\": [\"C1\"], \"confidence\": 0.9, \"unanswerable\": false}",
+      "finish_reason": "stop"
+    },
+    "q34": {
+      "content": "{\"answer\": \"No. Our control that every merged change to production code receives a second reviewer is currently recorded as not met, so we cannot confirm that code changes are consistently reviewed.\", \"yes_no\": false, \"cites\": [\"C1\"], \"confidence\": 0.85, \"unanswerable\": false}",
+      "finish_reason": "stop"
+    },
+    "q35": {
+      "content": "{\"answer\": \"No. While we have a policy requiring API keys and service credentials to be replaced at least once a year, this control is currently not met and is managed as an accepted risk exception until 2027-03-31.\", \"yes_no\": false, \"cites\": [\"C1\"], \"confidence\": 0.9, \"unanswerable\": false}",
+      "finish_reason": "stop"
+    },
+    "q36": {
+      "content": "{\"answer\": \"No. Our records show the offboarding control, which is supposed to remove keys and accounts when people leave, is currently not met, so we cannot confirm that departed staff lose access.\", \"yes_no\": false, \"cites\": [\"C1\"], \"confidence\": 0.9, \"unanswerable\": false}",
+      "finish_reason": "stop"
+    },
+    "q37": {
+      "content": "{\"answer\": \"Yes, multi-factor authentication is required. Every staff account must sign in with a second step, and this control has been proven.\", \"yes_no\": true, \"cites\": [\"C1\"], \"confidence\": 0.95, \"unanswerable\": false}",
+      "finish_reason": "stop"
+    },
+    "q38": {
+      "content": "{\"answer\": \"Yes. The database is backed up nightly and a restore is tested every quarter.\", \"yes_no\": true, \"cites\": [\"C1\"], \"confidence\": 0.95, \"unanswerable\": false}",
+      "finish_reason": "stop"
+    },
+    "q39": {
+      "content": "{\"answer\": \"No. The review of vendors, including pre-award review of critical vendors, has not been set up yet, so vendor assessment is not currently performed.\", \"yes_no\": false, \"cites\": [\"C1\"], \"confidence\": 0.75, \"unanswerable\": false}",
+      "finish_reason": "stop"
+    },
+    "q40": {
+      "content": "{\"answer\": \"Yes, we log security events. Application logs are collected and kept for 90 days.\", \"yes_no\": true, \"cites\": [\"C1\"], \"confidence\": 0.95, \"unanswerable\": false}",
+      "finish_reason": "stop"
+    }
+  }
+}

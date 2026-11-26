@@ -12,6 +12,11 @@ import { binLookups, type EvidenceDeps } from './evidence-deps.js';
 import type { DecisionDeps } from './decisions.service.js';
 import type { PolicyDeps } from './policies.service.js';
 import { pinPolicyChecks } from './policy-pins.js';
+import { orgTx } from '../engine/context.js';
+import { llmChat } from '../lib/llm-client.js';
+import { createLlmPermits } from '../lib/llm-permits.js';
+import { resolveLlmProviderId } from './compile-ai.service.js';
+import { createReworder } from './fix-reword.service.js';
 
 let binStorage: ReturnType<typeof createBinStorage> | undefined;
 
@@ -40,7 +45,18 @@ export function evidenceDeps(log: FastifyBaseLogger, redis: Redis): EvidenceDeps
 
 /** M6: what the gap, fix and exception services need (spec 2.4, 2.6). */
 export function decisionDeps(log: FastifyBaseLogger, redis: Redis): DecisionDeps {
-  return { engine: engineDeps(log, redis), canAccess };
+  const engine = engineDeps(log, redis);
+  return {
+    engine,
+    canAccess,
+    // M8 (spec 2.4): the AI may reword drafted fixes; the template's words stay on any failure.
+    reword: createReworder({
+      resolveProvider: (orgId) => orgTx(engine.sql, orgId, (tx) => resolveLlmProviderId(tx, orgId)),
+      permits: createLlmPermits(redis, { log }),
+      llm: llmChat,
+      log,
+    }),
+  };
 }
 
 /** M7: what the policy and attestation services need (spec 3.6). */
