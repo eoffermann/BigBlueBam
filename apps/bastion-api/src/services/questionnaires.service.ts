@@ -544,7 +544,8 @@ export async function approveQuestionnaire(d: QuestionnaireDeps, viewer: Viewer,
     await tx`UPDATE bastion_questionnaires SET status = 'approved', approved_by = ${viewer.id}, approved_at = ${now} WHERE id = ${id}`;
     await enqueueBastionEvent(
       'questionnaire.approved',
-      { questionnaire_id: id, title: row.title, approved_by: viewer.id, rows: Number(row.row_count), learned },
+      // #262: declared in the catalog; refs and counts only (spec 8.1), no customer-supplied title.
+      { questionnaire_id: id, approved_by: viewer.id, row_count: Number(row.row_count), learned },
       tx,
       { orgId: viewer.org_id, idempotencyKey: `questionnaire.approved:${id}`, actorId: viewer.id, actorType: 'user' },
     );

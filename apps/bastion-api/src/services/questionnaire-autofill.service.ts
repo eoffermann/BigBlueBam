@@ -780,7 +780,9 @@ async function finish(d: AutofillDeps, q: QRow, f: QFence): Promise<void> {
     // repeated across runs and the second run's event was silently dropped.
     const fresh = await enqueueBastionEvent(
       'questionnaire.drafted',
-      { questionnaire_id: q.id, title: q.title, rows: counts.total, high: counts.high, medium: counts.medium, low: counts.low },
+      // #262: the catalog's names; refs and counts only (spec 8.1). The customer-supplied title is
+      // deliberately left out of an org-wide event: a rule can read it by id.
+      { questionnaire_id: q.id, row_count: counts.total, high_count: counts.high, medium_count: counts.medium, low_count: counts.low },
       tx,
       { orgId, idempotencyKey: `questionnaire.drafted:${q.id}:g${Number(q.autofill_generation)}`, actorId: actor ?? undefined, actorType: actorKind === 'human' ? 'user' : 'agent' },
     );
