@@ -33,7 +33,7 @@ import { enqueueBastionEvent, enqueueOutbox } from '../engine/outbox.js';
 import { enqueueProposalClose, remediationSettings } from '../engine/remediation.js';
 import type { CitedRef } from '../engine/status.js';
 import { anOrgAdmin, assertHumanDecider, citationVisible, type DecisionDeps, fileMirroredProposal, visibleRefs } from './decisions.service.js';
-import { cannotOpen } from '../lib/policy-access.js';
+import { ARTICLE_PROBLEM, articleStateFromSummary, cannotOpen } from '../lib/policy-access.js';
 import { beaconEntryIdBySlug } from '../lib/beacon-slug.js';
 import type { Viewer } from './types.js';
 
@@ -272,6 +272,17 @@ async function draftFor(d: DecisionDeps, tx: Tx, viewer: Viewer, g: Record<strin
           SELECT p.id, p.beacon_entry_id FROM bastion_assertions a
             JOIN bastion_policies p ON p.organization_id = a.organization_id AND p.id::text = a.params->>'policy_id'
            WHERE a.organization_id = ${viewer.org_id} AND a.id = ${g.assertion_id as string}`)[0];
+        // #244: an article that is missing, retired or expired in Beacon is the problem to fix, not
+        // the people (nobody is due on it); the draft names the owner's action.
+        const article = articleStateFromSummary(latest?.summary as Record<string, unknown> | null);
+        if (article !== 'current') {
+          return {
+            ...base,
+            title: `The policy for "${control}" ${article === 'missing' ? 'no longer exists' : article === 'retired' ? 'is retired' : 'is past its review date'} in Beacon`.slice(0, 512),
+            body_markdown: `${ARTICLE_PROBLEM[article]}\n\nThe next check after that proves it.`,
+            payload: { probe_key: 'policy.attested', policy_id: pin ? String(pin.id) : null, article_state: article, cannot_open_count: 0, not_acknowledged_count: 0 },
+          };
+        }
         const due = ((latest?.cited_refs as CitedRef[] | null) ?? []).filter((r) => r.entity_type === 'user').map((r) => r.entity_id);
         const blocked = pin ? await cannotOpen(d.canAccess, String(pin.beacon_entry_id), due) : [];
         const blockedSet = new Set(blocked);

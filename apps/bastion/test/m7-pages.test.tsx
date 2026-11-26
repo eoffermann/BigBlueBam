@@ -133,6 +133,31 @@ describe('Policies', () => {
     expect(document.body.textContent).not.toMatch(/[0-9a-f]{8}-[0-9a-f]{4}-/);
   });
 
+  it('a policy whose Beacon article was retired tells the owner why and offers no Ask button (#244)', async () => {
+    fetchMock = routedFetch({
+      'GET /bastion/api/v1/policies': () =>
+        jsonResponse(200, {
+          data: [
+            {
+              ...POLICY,
+              beacon_status: 'Retired',
+              attestation_label: null,
+              not_attested_count: 0,
+              article_state: 'retired',
+              article_problem:
+                'This article is retired or archived in Beacon, so nobody is asked to read it and acknowledgements are paused. Restore it in Beacon, link a current article, or retire this policy.',
+            },
+          ],
+          next_cursor: null,
+        }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    wrap(<PoliciesPage />, OWNER);
+    expect(await screen.findByTestId('article-problem')).toHaveTextContent('retired or archived in Beacon');
+    expect(screen.queryByText('Ask people to read it')).toBeNull();
+    expect(screen.queryByText(/have read the current version/)).toBeNull();
+  });
+
   it('a viewer sees the list but no Link, Ask or Retire buttons', async () => {
     wrap(<PoliciesPage />, VIEWER);
     expect(await screen.findByText('5 of 7 have read the current version')).toBeInTheDocument();

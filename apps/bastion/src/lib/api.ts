@@ -185,6 +185,8 @@ export interface CompileRun {
 export type PolicyAudience = { kind: 'all' } | { kind: 'users'; user_ids: string[] };
 
 /** One linked Beacon article (shapePolicy in apps/bastion-api/src/services/policies.service.ts). */
+export type PolicyArticleState = 'current' | 'missing' | 'retired' | 'expired';
+
 export interface PolicyRow {
   id: string;
   beacon_entry_id: string;
@@ -206,6 +208,10 @@ export interface PolicyRow {
   attested_count: number;
   not_attested_count: number;
   attestation_label: string | null;
+  /** The linked Beacon article: only 'current' can be acknowledged (#244); null for a retired policy. */
+  article_state?: PolicyArticleState | null;
+  /** What the owner should do when the article is missing, retired or expired. */
+  article_problem?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -239,6 +245,8 @@ export interface MyAttestationRow {
   current_version: number | null;
   shared_with_everyone: boolean;
   due: boolean;
+  /** Whether the Beacon article can be read and acknowledged (#244). */
+  article_state?: PolicyArticleState;
   state_words: string;
   last_attested_version: number | null;
   last_attested_at: string | null;

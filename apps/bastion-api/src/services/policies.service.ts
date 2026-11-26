@@ -30,7 +30,7 @@ import { claimNoticeEvery } from '../engine/notice-markers.js';
 import { enqueueBastionEvent } from '../engine/outbox.js';
 import { queueControlRuns, type QueuedRun } from '../engine/evidence-store.js';
 import type { CanAccess } from './decisions.service.js';
-import { cannotOpen, entriesOpenTo } from '../lib/policy-access.js';
+import { ARTICLE_PROBLEM, type ArticleState, articleStateFromSummary, articleStateOf, cannotOpen, entriesOpenTo } from '../lib/policy-access.js';
 import { beginLedgerBatch, mapAppendError } from './ledger-batch.js';
 import { isUniqueViolation } from './shared.js';
 import type { Viewer } from './types.js';
@@ -106,11 +106,23 @@ export interface PolicyFacts {
   required_people: number;
   not_attested_ids: string[];
   cadence_days: number;
+  article_state: ArticleState;
 }
 
-/** The probe's own answer for "who must read it and who has not" (one fact, one place). */
+/** The typed refusal for reading or acknowledging a policy whose article is not current (#244). */
+export function articleRefusal(state: ArticleState): Error | null {
+  if (state === 'missing') return new NotFoundError('This Beacon article no longer exists.');
+  if (state === 'retired') return new ConflictError('This policy article is retired in Beacon, so it cannot be acknowledged.', 'POLICY_ARTICLE_RETIRED');
+  if (state === 'expired') return new ConflictError('This policy article is past its review date in Beacon, so it cannot be acknowledged until it is reviewed.', 'POLICY_ARTICLE_EXPIRED');
+  return null;
+}
+
+/**
+ * The probe's own answer for "who must read it and who has not" (one fact, one place). v2 (#244)
+ * also reports the article's state and leaves nobody due on an article that cannot be read.
+ */
 export async function policyFacts(tx: Tx, orgId: string, policyId: string, asOf: Date): Promise<PolicyFacts> {
-  const r = (await tx`SELECT bastion_probe_policy_attested_v1(${orgId}::uuid, ${asOf}, ${JSON.stringify({ policy_id: policyId })}::text::jsonb) AS f`)[0];
+  const r = (await tx`SELECT bastion_probe_policy_attested_v2(${orgId}::uuid, ${asOf}, ${JSON.stringify({ policy_id: policyId })}::text::jsonb) AS f`)[0];
   const f = (r?.f ?? {}) as { summary?: Record<string, unknown>; cited_refs?: Array<{ entity_id: string }> };
   const s = f.summary ?? {};
   return {
@@ -118,6 +130,7 @@ export async function policyFacts(tx: Tx, orgId: string, policyId: string, asOf:
     required_people: Number(s.required_people ?? 0),
     not_attested_ids: (f.cited_refs ?? []).map((c) => String(c.entity_id)),
     cadence_days: Number(s.cadence_days ?? 365),
+    article_state: articleStateFromSummary(s),
   };
 }
 
@@ -163,6 +176,8 @@ function shapePolicy(p: PolicyRow, facts: PolicyFacts | null, now: Date, live: b
   const shared = sharedWithEveryone(p.visibility);
   const expires = live && p.expires_at ? new Date(p.expires_at) : null;
   const attested = facts ? facts.required_people - facts.not_attested_ids.length : 0;
+  const state = facts?.article_state ?? null;
+  const readable = state === null || state === 'current';
   return {
     id: p.id,
     beacon_entry_id: p.beacon_entry_id,
@@ -175,7 +190,7 @@ function shapePolicy(p: PolicyRow, facts: PolicyFacts | null, now: Date, live: b
     beacon_status: live ? p.entry_status : null,
     visibility: p.visibility,
     shared_with_everyone: shared,
-    sharing_problem: p.entry_status === null ? 'This Beacon article no longer exists.' : shared ? null : NOT_SHARED_MESSAGE,
+    sharing_problem: p.entry_status === null ? null : shared ? null : NOT_SHARED_MESSAGE,
     current_version: p.version,
     expires_at: live ? p.expires_at : null,
     days_to_expiry: expires ? Math.floor((expires.getTime() - now.getTime()) / DAY_MS) : null,
@@ -183,7 +198,10 @@ function shapePolicy(p: PolicyRow, facts: PolicyFacts | null, now: Date, live: b
     required_people: facts?.required_people ?? 0,
     attested_count: attested,
     not_attested_count: facts?.not_attested_ids.length ?? 0,
-    attestation_label: facts ? `${attested} of ${facts.required_people} have read the current version` : null,
+    attestation_label: facts && readable ? `${attested} of ${facts.required_people} have read the current version` : null,
+    // #244: whether the linked article can be read and acknowledged at all, and what to do if not.
+    article_state: state,
+    article_problem: state && state !== 'current' ? ARTICLE_PROBLEM[state] : null,
     created_at: p.created_at,
     updated_at: p.updated_at,
   };
@@ -296,10 +314,16 @@ export async function updatePolicy(d: PolicyDeps, viewer: Viewer, id: string, bo
   return getPolicy(d, viewer, id);
 }
 
-/** The current version's frozen body (beacon_versions), re-checking that everyone may see it. */
-async function currentBody(tx: Tx, orgId: string, p: PolicyRow) {
+/**
+ * The current version's frozen body (beacon_versions), re-checking that everyone may see it AND
+ * that the article is still current in Beacon (#244): a retired, archived or expired article is
+ * refused with a typed 409, so nobody acknowledges a withdrawn document into the immutable ledger.
+ * attest calls this inside the transaction that writes the ledger entry.
+ */
+async function currentBody(tx: Tx, orgId: string, p: PolicyRow, asOf: Date) {
   if (p.status !== 'active') throw new ConflictError('This policy was retired.', 'POLICY_RETIRED');
-  if (p.entry_status === null || p.version === null) throw new NotFoundError('This Beacon article no longer exists.');
+  const refused = articleRefusal(articleStateOf(p, asOf));
+  if (refused) throw refused;
   if (!sharedWithEveryone(p.visibility)) throw new ConflictError(NOT_SHARED_MESSAGE, 'POLICY_NOT_SHARED');
   const v = (await tx`
     SELECT bv.version, bv.title, bv.body_markdown, bv.created_at FROM beacon_versions bv
@@ -318,7 +342,7 @@ export async function getPolicyBody(d: PolicyDeps, viewer: Viewer, id: string) {
     throw new ForbiddenError('You cannot open this policy in Beacon. Ask its owner to share it with everyone.', 'POLICY_NOT_READABLE');
   }
   return orgTx(d.engine.sql, viewer.org_id, async (tx) => {
-    const b = await currentBody(tx, viewer.org_id, p);
+    const b = await currentBody(tx, viewer.org_id, p, now);
     const mine = (await tx`
       SELECT attested_at FROM bastion_policy_attestations
        WHERE organization_id = ${viewer.org_id} AND policy_id = ${id} AND beacon_version = ${b.version} AND user_id = ${viewer.id}`)[0];
@@ -399,14 +423,22 @@ export async function myAttestations(d: PolicyDeps, viewer: Viewer) {
          WHERE organization_id = ${viewer.org_id} AND policy_id = ${p.id} AND user_id = ${viewer.id}
          ORDER BY attested_at DESC LIMIT 1`)[0];
       const due = facts.not_attested_ids.includes(viewer.id);
-      const nextDue = !due && last ? new Date(new Date(last.attested_at as string).getTime() + p.cadence_days * DAY_MS).toISOString() : null;
+      const paused = facts.article_state !== 'current';
+      const nextDue = !due && !paused && last ? new Date(new Date(last.attested_at as string).getTime() + p.cadence_days * DAY_MS).toISOString() : null;
       data.push({
         policy_id: p.id,
         title: titleOf(p, isLive(p, open)),
         current_version: p.version,
         shared_with_everyone: sharedWithEveryone(p.visibility),
         due,
-        state_words: due ? (last ? 'A new version or a new year: please read it again' : 'Please read and acknowledge') : 'Read and acknowledged',
+        article_state: facts.article_state,
+        state_words: paused
+          ? 'Nothing to do for now: this policy is being updated'
+          : due
+            ? last
+              ? 'A new version or a new year: please read it again'
+              : 'Please read and acknowledge'
+            : 'Read and acknowledged',
         last_attested_version: last ? Number(last.beacon_version) : null,
         last_attested_at: (last?.attested_at as string | undefined) ?? null,
         next_due_at: nextDue,
@@ -450,7 +482,7 @@ export async function attest(d: PolicyDeps, viewer: Viewer, id: string, body: Ba
       if (!(await isInAudience(tx, viewer.org_id, fresh, viewer.id))) {
         throw new ForbiddenError('This policy is not one you are asked to read.', 'NOT_IN_AUDIENCE');
       }
-      const b = await currentBody(tx, viewer.org_id, fresh);
+      const b = await currentBody(tx, viewer.org_id, fresh, now);
       if (b.version !== body.beacon_version || b.body_sha256 !== body.body_sha256) {
         throw new ConflictError('This policy changed while you were reading it. Read the new version, then acknowledge it.', 'POLICY_CHANGED');
       }
@@ -537,6 +569,8 @@ export async function requestAttestations(d: PolicyDeps, viewer: Viewer, id: str
     const p = await loadPolicy(tx, viewer.org_id, id);
     if (p.status !== 'active') throw new ConflictError('This policy was retired.', 'POLICY_RETIRED');
     const facts = await duePeople(tx, viewer.org_id, id, now);
+    // Never ask people to read an article that cannot be read (#244): the owner is told why instead.
+    if (facts.article_state !== 'current') throw new ConflictError(ARTICLE_PROBLEM[facts.article_state], `POLICY_ARTICLE_${facts.article_state.toUpperCase()}`);
     const only = body.user_ids;
     const targets = only ? facts.not_attested_ids.filter((u) => only.includes(u)) : facts.not_attested_ids;
     let nudged = 0;
@@ -561,6 +595,8 @@ export interface NudgeSummary {
   policies: number;
   due_people: number;
   nudged: number;
+  /** Active policies skipped because their Beacon article is missing, retired or expired (#244). */
+  unreadable_policies: number;
 }
 
 /**
@@ -579,14 +615,25 @@ export async function attestationNudge(engine: EngineDeps, opts: { organization_
         ${opts.organization_id ? engine.sql`AND organization_id = ${opts.organization_id}` : engine.sql``}`
   ).map((r) => String(r.organization_id));
   engine.log.info({ orgs: orgs.length }, `bastion-attestation-nudge: checking ${orgs.length} org(s) with policies`);
-  const s: NudgeSummary = { orgs: orgs.length, policies: 0, due_people: 0, nudged: 0 };
+  const s: NudgeSummary = { orgs: orgs.length, policies: 0, due_people: 0, nudged: 0, unreadable_policies: 0 };
   for (const orgId of orgs) {
     const r = await orgTx(engine.sql, orgId, async (tx) => {
       const policies = await tx`SELECT id, beacon_entry_id, cadence_days FROM bastion_policies WHERE organization_id = ${orgId} AND status = 'active'`;
       let due = 0;
       let nudged = 0;
+      let unreadable = 0;
       for (const p of policies) {
         const facts = await policyFacts(tx, orgId, String(p.id), now);
+        if (facts.article_state !== 'current') {
+          // The audience is never nudged about an article nobody can read (#244); the Policies page
+          // tells the owner (article_problem), and this log line says which policy was skipped.
+          unreadable += 1;
+          engine.log.warn(
+            { organization_id: orgId, policy_id: String(p.id), article_state: facts.article_state },
+            `bastion-attestation-nudge: policy skipped, its Beacon article is ${facts.article_state}`,
+          );
+          continue;
+        }
         due += facts.not_attested_ids.length;
         const everyMs = Number(p.cadence_days) * DAY_MS;
         for (const u of facts.not_attested_ids) {
@@ -604,12 +651,16 @@ export async function attestationNudge(engine: EngineDeps, opts: { organization_
             nudged += 1;
         }
       }
-      return { policies: policies.length, due, nudged };
+      return { policies: policies.length, due, nudged, unreadable };
     });
     s.policies += r.policies;
     s.due_people += r.due;
     s.nudged += r.nudged;
-    engine.log.info({ organization_id: orgId, ...r }, `bastion-attestation-nudge: ${r.policies} policies, ${r.due} people due, ${r.nudged} nudged`);
+    s.unreadable_policies += r.unreadable;
+    engine.log.info(
+      { organization_id: orgId, ...r },
+      `bastion-attestation-nudge: ${r.policies} policies, ${r.due} people due, ${r.nudged} nudged, ${r.unreadable} skipped (article missing, retired or expired)`,
+    );
   }
   return s;
 }
