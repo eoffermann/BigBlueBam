@@ -16,10 +16,10 @@ import type { ConfirmTokenStore } from '../lib/confirm-token-store.js';
 import { randomBytes } from 'node:crypto';
 // M5 evidence, feeds and coverage tools (registerBastionEvidenceTools at the very bottom).
 import {
-  BastionManualEvidenceKind,
-  BastionManualEvidenceStatus,
   bastionFeedCreateSchema,
+  bastionFeedRecordListQuerySchema,
   bastionFeedUpdateSchema,
+  bastionManualEvidenceListQuerySchema,
 } from '@bigbluebam/shared';
 import {
   BastionAuditorRequestStatus,
@@ -654,12 +654,9 @@ export function registerBastionEvidenceTools(server: McpServer, client: BastionC
     input: {
       asker_user_id: askerUserId,
       manual_evidence_id: z.string().uuid().optional(),
-      status: BastionManualEvidenceStatus.optional(),
-      kind: BastionManualEvidenceKind.optional(),
-      assertion_id: z.string().uuid().optional(),
-      control_id: z.string().uuid().optional(),
-      stuck: z.boolean().optional(),
-      limit: z.number().int().min(1).max(200).optional(),
+      // The route's own filters (#215): the tool and GET /manual-evidence validate alike.
+      ...bastionManualEvidenceListQuerySchema.shape,
+      limit: bastionManualEvidenceListQuerySchema.shape.limit.optional(),
     },
     returns: z.record(z.unknown()),
     handler: async ({ manual_evidence_id, asker_user_id, ...q }) => {
@@ -738,8 +735,9 @@ export function registerBastionEvidenceTools(server: McpServer, client: BastionC
     input: {
       asker_user_id: askerUserId,
       feed_id: z.string().uuid(),
-      limit: z.number().int().min(1).max(200).optional(),
-      before: z.string().datetime({ offset: true }).optional(),
+      // The route's own paging (#215).
+      limit: bastionFeedRecordListQuerySchema.shape.limit.optional(),
+      before: bastionFeedRecordListQuerySchema.shape.before,
     },
     returns: z.record(z.unknown()),
     handler: async ({ feed_id, limit, before, asker_user_id }) => {

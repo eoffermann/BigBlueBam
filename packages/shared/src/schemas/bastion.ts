@@ -993,6 +993,10 @@ export type BastionBinScanStatus = keyof typeof BASTION_BIN_SCAN_OUTCOME;
 
 /** A pending scan surfaces in the review queue after this long, then retries once a day. */
 export const BASTION_PENDING_SCAN_CAP_HOURS = 24;
+/** One day in milliseconds: the single day-length constant every Bastion consumer uses (#215). */
+export const BASTION_DAY_MS = 86_400_000;
+/** BASTION_PENDING_SCAN_CAP_HOURS in milliseconds: the "stuck scan" cutoff (locker, filter, banner). */
+export const BASTION_PENDING_SCAN_CAP_MS = BASTION_PENDING_SCAN_CAP_HOURS * 3_600_000;
 
 const manualCommon = {
   title: z.string().trim().min(1).max(512),
@@ -1035,7 +1039,8 @@ export const bastionManualEvidenceListQuerySchema = z
     kind: BastionManualEvidenceKind.optional(),
     assertion_id: z.string().uuid().optional(),
     control_id: z.string().uuid().optional(),
-    stuck: z.coerce.boolean().optional(),
+    // 'true' / 'false' (or a real boolean) only: z.coerce.boolean() turned 'false' into true (#215).
+    stuck: z.preprocess((v) => (v === 'true' ? true : v === 'false' ? false : v), z.boolean()).optional(),
     limit: z.coerce.number().int().min(1).max(200).default(100),
   })
   .strict();

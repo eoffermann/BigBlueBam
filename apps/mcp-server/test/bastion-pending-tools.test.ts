@@ -409,6 +409,23 @@ describe('Bastion M5 tools (manual evidence, feeds, coverage)', () => {
     expect(PENDING).not.toMatch(/withdrawManualEvidence/);
   });
 
+  it('the list tools reuse the routes\' shared query schemas, so stuck=false stays false (#215)', async () => {
+    const tool = await load();
+    const shared = await import('@bigbluebam/shared');
+    const list = tool('bastion_list_manual_evidence').input;
+    for (const k of ['status', 'kind', 'assertion_id', 'control_id', 'stuck'] as const) {
+      expect(list[k], k).toBe(shared.bastionManualEvidenceListQuerySchema.shape[k]);
+    }
+    const stuck = list.stuck as { safeParse: (v: unknown) => { success: boolean; data?: unknown } };
+    expect(stuck.safeParse('false')).toMatchObject({ success: true, data: false });
+    expect(stuck.safeParse(false)).toMatchObject({ success: true, data: false });
+    const limit = list.limit as { safeParse: (v: unknown) => { success: boolean } };
+    expect(limit.safeParse(201).success).toBe(false);
+    const records = tool('bastion_list_feed_records').input;
+    expect(records.before).toBe(shared.bastionFeedRecordListQuerySchema.shape.before);
+    expect((records.limit as { safeParse: (v: unknown) => { success: boolean } }).safeParse(0).success).toBe(false);
+  });
+
   it('the detail-bearing reads require asker_user_id (#217)', async () => {
     const tool = await load();
     for (const name of ['bastion_list_manual_evidence', 'bastion_list_feed_records', 'bastion_coverage_summary']) {

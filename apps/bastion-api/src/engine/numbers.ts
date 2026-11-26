@@ -3,7 +3,7 @@
 // readiness.weekly (M4), GET /summary, GET /coverage and the Readiness page (M5), so the numbers,
 // the Evidence map and the weekly event can never disagree.
 
-import type { BastionEffectiveState, BastionEvidenceSourceColumn, BastionUnprovableReason } from '@bigbluebam/shared';
+import type { BastionEffectiveState, BastionEvidenceSourceColumn, BastionReadinessNumbersOut, BastionUnprovableReason } from '@bigbluebam/shared';
 import type { Tx } from './context.js';
 import { type AssertionLatest, type CitedRef, coverageKindOf, effectiveStatus, type ExceptionRow } from './status.js';
 
@@ -15,16 +15,8 @@ export interface ControlForNumbers {
   confirmed_count: number;
 }
 
-export interface ReadinessNumbers {
-  proven_by_suite: number;
-  proven_by_evidence: number;
-  not_met: number;
-  risk_accepted: number;
-  cant_prove: number;
-  not_set_up: number;
-  checked: number;
-  total: number;
-}
+/** The shared shape (bastionReadinessNumbersSchema), so the API and the SPA cannot drift (#215). */
+export type ReadinessNumbers = BastionReadinessNumbersOut;
 
 export type NumbersBucket = 'proven_by_suite' | 'proven_by_evidence' | 'not_met' | 'cant_prove' | 'not_set_up';
 

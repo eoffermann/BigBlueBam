@@ -9,6 +9,8 @@
 //               manual_evidence_missing otherwise (nothing uploaded, pending review, pending scan,
 //               blocked, or it no longer covers the window).
 
+import { BASTION_DAY_MS } from '@bigbluebam/shared';
+
 export interface ManualItemForDecision {
   id: string;
   kind: 'file' | 'attestation_statement';
@@ -37,7 +39,7 @@ export interface ManualDecision {
   expires_at: Date | null;
 }
 
-const DAY_MS = 86_400_000;
+const DAY_MS = BASTION_DAY_MS;
 
 /** A valid review: by someone other than the uploader, or a labelled small-team self-review. */
 export function reviewCounts(item: Pick<ManualItemForDecision, 'uploaded_by' | 'reviewed_by' | 'small_team_self_review'>): boolean {

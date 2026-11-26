@@ -2,7 +2,7 @@
 // time, each org in its own transaction(s), so no single org's conflict can abort the batch
 // (spec 7.3, #187). Every one logs a start line and per-org progress through deps.log.
 
-import type { BastionEvaluateTickResult, BastionTickRun } from '@bigbluebam/shared';
+import { BASTION_DAY_MS, type BastionEvaluateTickResult, type BastionTickRun } from '@bigbluebam/shared';
 import { compareEpochSeq, signSeal, verifyChain, verifySeal, type LedgerRow, type SealPayload } from '../lib/ledger-canonical.js';
 import { MAX_RESUMES, ORPHAN_REQUEUE_AFTER_MS } from './budgets.js';
 import { type EngineDeps, localClock, orgTx, sqlstateOf, utcDate } from './context.js';
@@ -339,7 +339,7 @@ export async function weeklyReadiness(deps: EngineDeps, opts: { organization_id?
 
 // ── retention ────────────────────────────────────────────────────────────────────────────
 
-const DAY_MS = 86_400_000;
+const DAY_MS = BASTION_DAY_MS;
 /** Delivered / superseded outbox rows and finished inbox rows. */
 export const RETENTION_DONE_DAYS = 30;
 /**

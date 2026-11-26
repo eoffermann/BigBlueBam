@@ -1,4 +1,5 @@
 import { impersonateHeader } from '@bigbluebam/ui/impersonation-banner';
+import type { BastionEvidenceSourceColumn, BastionReadinessBanner, BastionReadinessNumbersOut } from '@bigbluebam/shared';
 
 // ---------------------------------------------------------------------------
 // Typed Bastion API client. bastion-api routes are mounted under /v1 and proxied
@@ -230,16 +231,9 @@ export interface ControlRow {
 /*  M5: Readiness, Evidence map, Evidence locker, feeds                */
 /* ------------------------------------------------------------------ */
 
-export interface ReadinessNumbers {
-  proven_by_suite: number;
-  proven_by_evidence: number;
-  not_met: number;
-  risk_accepted: number;
-  cant_prove: number;
-  not_set_up: number;
-  checked: number;
-  total: number;
-}
+/** The shared shapes (#215): the four numbers, banner codes and source columns come from @bigbluebam/shared. */
+export type ReadinessNumbers = BastionReadinessNumbersOut;
+type SourceColumns = Record<Exclude<BastionEvidenceSourceColumn, 'none'>, number>;
 
 export interface FrameworkOption {
   id: string;
@@ -258,7 +252,7 @@ export interface SummaryResponse {
     headline: string;
     not_met_label: string;
     not_applicable: Array<{ control_id: string; control_key: string; title: string }>;
-    banners: Array<{ code: string; message: string; count?: number }>;
+    banners: Array<{ code: BastionReadinessBanner; message: string; count?: number }>;
     top_gaps: Array<{ id: string; control_id: string; control_title: string; gap_kind: string; risk_score: number; fix_template: string | null; fix_cost: number | null }>;
     gaps_ranked: boolean;
     expiring_evidence: Array<{ id: string; title: string; owner_name: string | null; valid_until: string; days_left: number }>;
@@ -281,7 +275,7 @@ export interface CoverageRow {
   reason: string | null;
   reason_words: string | null;
   risk_accepted: boolean;
-  columns: { native: number; feed: number; manual_file: number; self_attested: number };
+  columns: SourceColumns;
   coverage_kind: string;
   manual_expires_at: string | null;
   manual_days_left: number | null;
@@ -290,7 +284,7 @@ export interface CoverageRow {
 
 export interface CoverageResponse {
   data: CoverageRow[];
-  totals: { native: number; feed: number; manual_file: number; self_attested: number; none: number };
+  totals: Record<BastionEvidenceSourceColumn, number>;
   numbers: ReadinessNumbers;
   headline: string;
   not_applicable: Array<{ control_id: string; control_key: string; title: string }>;

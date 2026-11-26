@@ -14,6 +14,8 @@
 // Every change that can move a control re-evaluates the linked controls (control-scope runs).
 
 import {
+  BASTION_DAY_MS as DAY_MS,
+  BASTION_PENDING_SCAN_CAP_MS,
   endOfDayInTz,
   localDateInTz,
   type BastionManualEvidenceCreate,
@@ -47,11 +49,10 @@ import type { EvidenceDeps } from './evidence-deps.js';
 import { beginLedgerBatch, mapAppendError } from './ledger-batch.js';
 import type { Viewer } from './types.js';
 
-const DAY_MS = 86_400_000;
 export const SMALL_TEAM_HUMANS = 3;
-/** Pending-scan retry schedule: 5 min doubling to 6 h; after 24 h, once a day (spec 3.3, 7). */
+/** Pending-scan retry schedule: 5 min doubling to 6 h; after the 24 h cap, once a day (spec 3.3, 7). */
 export function nextScanAttemptAt(createdAt: Date, attempts: number, now: Date): Date {
-  if (now.getTime() - createdAt.getTime() >= DAY_MS) return new Date(now.getTime() + DAY_MS);
+  if (now.getTime() - createdAt.getTime() >= BASTION_PENDING_SCAN_CAP_MS) return new Date(now.getTime() + DAY_MS);
   const delay = Math.min(5 * 60_000 * 2 ** Math.max(0, attempts), 6 * 3_600_000);
   return new Date(now.getTime() + delay);
 }
@@ -320,7 +321,7 @@ function shape(row: Record<string, unknown>, links: Array<Record<string, unknown
   const masked = restricted && !canRestricted;
   const validUntil = row.valid_until ? new Date(row.valid_until as string) : null;
   const created = new Date(row.created_at as string);
-  const stuck = row.status === 'pending_scan' && now.getTime() - created.getTime() >= DAY_MS;
+  const stuck = row.status === 'pending_scan' && now.getTime() - created.getTime() >= BASTION_PENDING_SCAN_CAP_MS;
   return {
     ...row,
     title: masked ? 'Restricted evidence' : row.title,
@@ -386,13 +387,13 @@ export async function listManualEvidence(d: EvidenceDeps, viewer: Viewer, q: Bas
                                               AND a.control_id = $5 AND l.unlinked_at IS NULL))
           AND ($6::boolean IS NOT TRUE OR (e.status = 'pending_scan' AND e.created_at <= $7::timestamptz))
         ORDER BY e.created_at DESC LIMIT $8`,
-      [viewer.org_id, q.status ?? null, q.kind ?? null, q.assertion_id ?? null, q.control_id ?? null, q.stuck ?? null, new Date(now.getTime() - DAY_MS), q.limit],
+      [viewer.org_id, q.status ?? null, q.kind ?? null, q.assertion_id ?? null, q.control_id ?? null, q.stuck ?? null, new Date(now.getTime() - BASTION_PENDING_SCAN_CAP_MS), q.limit],
     )) as unknown as Array<Record<string, unknown>>;
     const links = await linksFor(tx, viewer.org_id, rows.map((r) => String(r.id)));
     const counts = (await tx`
       SELECT count(*) FILTER (WHERE status = 'active')::int AS active,
              count(*) FILTER (WHERE status = 'pending_scan')::int AS pending_scan,
-             count(*) FILTER (WHERE status = 'pending_scan' AND created_at <= ${new Date(now.getTime() - DAY_MS)})::int AS stuck,
+             count(*) FILTER (WHERE status = 'pending_scan' AND created_at <= ${new Date(now.getTime() - BASTION_PENDING_SCAN_CAP_MS)})::int AS stuck,
              count(*) FILTER (WHERE status = 'blocked')::int AS blocked,
              count(*) FILTER (WHERE status = 'active' AND scan_label = 'not_scanned')::int AS not_scanned
         FROM bastion_manual_evidence WHERE organization_id = ${viewer.org_id}`)[0];

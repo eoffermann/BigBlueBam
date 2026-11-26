@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
   BASTION_BIN_SCAN_OUTCOME,
+  BASTION_DAY_MS,
+  BASTION_PENDING_SCAN_CAP_HOURS,
+  BASTION_PENDING_SCAN_CAP_MS,
+  bastionManualEvidenceListQuerySchema,
+  bastionManualEvidenceReviewSchema,
   bastionFeedBatchSchema,
   bastionFeedCreateSchema,
   bastionManualEvidenceCreateSchema,
@@ -66,5 +71,26 @@ describe('Bastion M5 route bodies', () => {
 
   it('every Bin scan status has an outcome (spec 3.3 table)', () => {
     expect(Object.keys(BASTION_BIN_SCAN_OUTCOME).sort()).toEqual(['clean', 'error', 'infected', 'pending', 'skipped']);
+  });
+
+  it('stuck parses "false" as false and "true" as true; anything else is refused (#215)', () => {
+    const q = (stuck: unknown) => bastionManualEvidenceListQuerySchema.safeParse({ stuck });
+    expect(q('false')).toMatchObject({ success: true, data: { stuck: false } });
+    expect(q('true')).toMatchObject({ success: true, data: { stuck: true } });
+    expect(q(false)).toMatchObject({ success: true, data: { stuck: false } });
+    expect(q(true)).toMatchObject({ success: true, data: { stuck: true } });
+    expect(q('yes').success).toBe(false);
+    expect(q('0').success).toBe(false);
+    expect(bastionManualEvidenceListQuerySchema.parse({}).stuck).toBeUndefined();
+  });
+
+  it('the stuck-scan cutoff and the day length are single constants (#215)', () => {
+    expect(BASTION_PENDING_SCAN_CAP_MS).toBe(BASTION_PENDING_SCAN_CAP_HOURS * 3_600_000);
+    expect(BASTION_DAY_MS).toBe(24 * 3_600_000);
+  });
+
+  it('a review may carry the verdict the reviewer saw (#216)', () => {
+    expect(bastionManualEvidenceReviewSchema.safeParse({ verdict: 'accepted', expected_verdict: 'shows_exception' }).success).toBe(true);
+    expect(bastionManualEvidenceReviewSchema.safeParse({ verdict: 'accepted', expected_verdict: 'nope' }).success).toBe(false);
   });
 });

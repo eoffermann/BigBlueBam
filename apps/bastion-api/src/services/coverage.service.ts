@@ -5,7 +5,7 @@
 //                  view and days to audit, banners, top stored gaps, evidence expiring soon.
 //   GET /coverage  every in-view control by source column (native, feed, uploaded, self-attested).
 
-import type { BastionReadinessBanner } from '@bigbluebam/shared';
+import { BASTION_DAY_MS as DAY_MS, BASTION_PENDING_SCAN_CAP_MS, type BastionReadinessBanner } from '@bigbluebam/shared';
 import { NotFoundError } from '../lib/errors.js';
 import { type EngineDeps, orgTx } from '../engine/context.js';
 import { daysLeft } from '../engine/manual.js';
@@ -18,8 +18,6 @@ export interface PlatformFacts {
   /** BASTION_BACKUP_S3_* configured (spec 9.7). */
   offsite_backup_configured: boolean;
 }
-
-const DAY_MS = 86_400_000;
 
 const STATE_WORDS: Record<string, string> = {
   pass: 'Proven',
@@ -74,7 +72,7 @@ export async function readinessSummary(engine: EngineDeps, viewer: Viewer, frame
     const facts2 = (await tx`
       SELECT (SELECT count(*)::int FROM bastion_manual_evidence WHERE organization_id = ${viewer.org_id} AND status = 'active' AND scan_label = 'not_scanned') AS not_scanned,
              (SELECT count(*)::int FROM bastion_manual_evidence WHERE organization_id = ${viewer.org_id} AND status = 'pending_scan'
-                AND created_at <= ${new Date(now.getTime() - DAY_MS)}) AS stuck_scans,
+                AND created_at <= ${new Date(now.getTime() - BASTION_PENDING_SCAN_CAP_MS)}) AS stuck_scans,
              (SELECT count(*)::int FROM bastion_ledger_restores WHERE organization_id = ${viewer.org_id} AND resolution IS NULL) AS restores_pending,
              (SELECT count(*)::int FROM bastion_outbox WHERE organization_id = ${viewer.org_id} AND status = 'dead') AS dead_deliveries,
              (SELECT max(completed_at) FROM bastion_evaluation_runs WHERE organization_id = ${viewer.org_id} AND status = 'succeeded' AND scope = 'all') AS last_full_run`)[0] ?? {};

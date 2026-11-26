@@ -12,7 +12,7 @@
 //   - every outcome is pass, fail, or unprovable with one stored reason (spec 3.2).
 
 import type { z } from 'zod';
-import type { BastionProbeKey, BastionProbeResult, BastionStoredUnprovableReason } from '@bigbluebam/shared';
+import { BASTION_DAY_MS, type BastionProbeKey, type BastionProbeResult, type BastionStoredUnprovableReason } from '@bigbluebam/shared';
 import { PROBE_CATALOG, type ProbeCatalogEntry } from '../library/probe-catalog.js';
 
 export type ProbeOutcome =
@@ -276,7 +276,7 @@ export function decide(def: ProbeDefinition, result: BastionProbeResult, predica
 export function probeWindow(result: BastionProbeResult, asOf: Date): { start: Date | null; end: Date } {
   const days = result.summary.window_days ?? result.summary.cadence_days;
   if (typeof days === 'number' && days > 0) {
-    return { start: new Date(asOf.getTime() - days * 86_400_000), end: asOf };
+    return { start: new Date(asOf.getTime() - days * BASTION_DAY_MS), end: asOf };
   }
   return { start: null, end: asOf };
 }

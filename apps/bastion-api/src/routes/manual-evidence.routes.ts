@@ -47,7 +47,7 @@ export default async function manualEvidenceRoutes(fastify: FastifyInstance) {
       kind: raw.kind || undefined,
       assertion_id: raw.assertion_id || undefined,
       control_id: raw.control_id || undefined,
-      stuck: raw.stuck === 'true' ? true : raw.stuck === 'false' ? false : undefined,
+      stuck: raw.stuck || undefined,
       limit: raw.limit || undefined,
     });
     if (!parsed.success) return validationError(request, reply, parsed.error);

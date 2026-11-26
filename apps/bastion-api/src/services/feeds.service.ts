@@ -10,6 +10,7 @@ import {
   type BastionFeedKeyCreate,
   type BastionFeedRecordListQuery,
   type BastionFeedUpdate,
+  BASTION_DAY_MS,
   BASTION_FEED_KEY_GRACE_DAYS,
   BASTION_PERSONAL_DATA_MAX_BYTES,
 } from '@bigbluebam/shared';
@@ -32,7 +33,7 @@ function shapeFeed(r: Record<string, unknown>, now: Date) {
   const today = utcDate(now);
   const usedToday = r.quota_day === today ? Number(r.records_on_quota_day) : 0;
   const lastAt = r.last_record_at ? new Date(r.last_record_at as string) : null;
-  const fresh = lastAt !== null && now.getTime() - lastAt.getTime() <= Number(r.cadence_days) * 86_400_000;
+  const fresh = lastAt !== null && now.getTime() - lastAt.getTime() <= Number(r.cadence_days) * BASTION_DAY_MS;
   return {
     ...r,
     bytes_total: Number(r.bytes_total),
@@ -139,7 +140,7 @@ export async function createFeedKey(engine: EngineDeps, viewer: Viewer, feedId: 
     if (feed.source_kind !== 'api_push') {
       throw new ConflictError('This feed takes its records from Bolt events, so it does not use keys.', 'FEED_NOT_PUSH');
     }
-    const graceUntil = new Date(now.getTime() + BASTION_FEED_KEY_GRACE_DAYS * 86_400_000);
+    const graceUntil = new Date(now.getTime() + BASTION_FEED_KEY_GRACE_DAYS * BASTION_DAY_MS);
     const previous = await tx`
       UPDATE bastion_feed_keys SET status = 'grace', grace_expires_at = ${graceUntil}
        WHERE organization_id = ${viewer.org_id} AND feed_id = ${feedId} AND status = 'active'

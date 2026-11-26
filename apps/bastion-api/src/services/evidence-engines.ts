@@ -10,6 +10,7 @@
 //                    once per item; expired evidence publishes evidence.expired once per item and
 //                    re-evaluates the controls it is linked to. Exception expiry joins at M6.
 
+import { BASTION_DAY_MS } from '@bigbluebam/shared';
 import { EVIDENCE_INGEST_START_CUTOFF_MS, evidenceCopyBudgetMs } from '../engine/budgets.js';
 import { type EngineDeps, orgTx } from '../engine/context.js';
 import { type QueuedRun, queueControlRuns } from '../engine/evidence-store.js';
@@ -19,7 +20,7 @@ import type { EvidenceDeps } from './evidence-deps.js';
 import { ingestBoltEventFeeds } from './feeds.service.js';
 import { retryPendingScan, retryRedactedDeletes, type ScanRetryOutcome } from './manual-evidence.service.js';
 
-const DAY_MS = 86_400_000;
+const DAY_MS = BASTION_DAY_MS;
 
 async function orgsWith(engine: EngineDeps, sqlWhere: 'pending' | 'feeds' | 'evidence', only?: string): Promise<string[]> {
   const rows =

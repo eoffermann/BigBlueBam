@@ -16,7 +16,7 @@
 // and the run stays resumable; a detected restore ends the run `partial` / `restore_pending`.
 
 import { randomUUID } from 'node:crypto';
-import type { BastionEvaluateRunSlice, BastionProbeResult } from '@bigbluebam/shared';
+import { BASTION_DAY_MS, type BastionEvaluateRunSlice, type BastionProbeResult } from '@bigbluebam/shared';
 import { withStorageTimeout } from '@bigbluebam/storage';
 import { canonicalJson, sha256Hex } from '../lib/ledger-canonical.js';
 import { decide, probeDefinition, probeWindow } from '../probes/definitions.js';
@@ -333,7 +333,7 @@ async function evaluateManual(deps: EngineDeps, run: RunRow, a: PlannedAssertion
   return {
     ...blank(),
     manual_evidence_ids: d.item_ids,
-    window_start: new Date(asOf.getTime() - cadence * 86_400_000),
+    window_start: new Date(asOf.getTime() - cadence * BASTION_DAY_MS),
     window_end: asOf,
     outcome: d.outcome,
     unprovable_reason: d.unprovable_reason,
