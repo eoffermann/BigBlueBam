@@ -33,6 +33,8 @@ export interface EngineDeps {
   log: EngineLog;
   now: () => Date;
   signer: SealSigner;
+  /** Published seal public keys by signing_key_id (current plus retired); bucket seals must verify. */
+  sealKeys: Map<string, string>;
   pdKeyId: string;
   probeTimeoutMs: number;
   putTimeoutMs: number;

@@ -85,13 +85,15 @@ export function makeDeps(
 ): EngineDeps {
   const cursors = new Map<string, string>();
   const c = opts.clock ?? clock();
+  const signer = sealSignerFromSeed('5'.repeat(64));
   return {
     sql,
     runRead: makeRunInOrgScopeRead({ primary: sql, read: opts.readSql ?? sql, statementTimeoutMs: 8000 }),
     storage: opts.bucket === undefined ? fakeBucket() : opts.bucket,
     log: quietLog,
     now: c.now,
-    signer: sealSignerFromSeed('5'.repeat(64)),
+    signer,
+    sealKeys: new Map([[signer.keyId, signer.publicKeyHex]]),
     pdKeyId: 'pd:test',
     probeTimeoutMs: 8000,
     putTimeoutMs: 2000,

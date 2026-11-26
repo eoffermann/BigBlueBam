@@ -5,6 +5,7 @@ import { runEvaluationSlice } from '../../src/engine/evaluator.js';
 import { defaultDeliverer, drainOutbox, type Deliverer } from '../../src/engine/outbox.js';
 import { checkLedgerIdentity } from '../../src/engine/restore.js';
 import { sealOrg } from '../../src/engine/sweeps.js';
+import { sealSignerFromSeed, signSeal } from '../../src/lib/ledger-canonical.js';
 import { clock, DATABASE_URL, fakeBucket, makeDeps, rewindLedger, seedOrg, wipeOrg, type Clock, type FakeBucket, type SeededOrg } from './engine-harness.js';
 
 /**
@@ -282,5 +283,62 @@ describe.skipIf(!DATABASE_URL)('M4 restore detection (live database)', () => {
     await sql`DELETE FROM platform_restores WHERE id = ${pr!.id as string}`;
     // No sequence number was reused: nothing was appended at all.
     expect(await maxSeq(s.org)).toBe(1);
+  });
+
+  it('forged bucket seals (unsigned, wrong key, epoch at the integer limit) are ignored; a signed one still triggers detection', async () => {
+    const s = await seedOrg(sql, 'forged-seal');
+    orgs.push(s.org);
+    const c = clock();
+    const bucket = fakeBucket();
+    const deps = makeDeps(sql, { bucket, clock: c });
+    await runToEnd(deps, s, c);
+    expect(await sealOrg(deps, s.org)).toMatchObject({ result: 'sealed', epoch: 1, head_seq: 1 });
+    await drainOutbox(deps, deliverer(deps, bucket, []), { orgId: s.org, claimant: 't' });
+
+    const put = (date: string, body: unknown) =>
+      bucket.objects.set(`seals/${s.org}/${date}.json`, {
+        body: Buffer.from(typeof body === 'string' ? body : JSON.stringify(body)),
+        contentType: 'application/json',
+        modifiedAt: new Date(),
+      });
+    const hash = '0'.repeat(64);
+    // 1. Unsigned, as written by anyone holding the shared storage key (the issue's scenario 1).
+    put('2099-01-01', { org: s.org, seal_date: '2099-01-01', epoch: 1, head_seq: 999_999_999, head_hash: hash, signing_key_id: 'x', signature: 'x' });
+    // 2. Signed by a key that is not published.
+    const rogue = sealSignerFromSeed('7'.repeat(64));
+    const roguePayload = { org: s.org, seal_date: '2099-01-02', epoch: 1, head_seq: 500, head_hash: hash, signing_key_id: rogue.keyId };
+    put('2099-01-02', { ...roguePayload, signature: signSeal(roguePayload, rogue) });
+    // 3. The permanent wedge: epoch 2147483647 overflows provisional_epoch. Signed with the REAL
+    //    key so the range bound is exercised on its own, not masked by the signature check.
+    const wedge = { org: s.org, seal_date: '2099-01-03', epoch: 2_147_483_647, head_seq: 1, head_hash: hash, signing_key_id: deps.signer.keyId };
+    put('2099-01-03', { ...wedge, signature: signSeal(wedge, deps.signer) });
+    // 4. Not JSON at all.
+    put('2099-01-04', '{not json');
+
+    const booted = makeDeps(sql, { bucket, clock: c });
+    const ident = await checkLedgerIdentity(booted, s.org);
+    expect(ident).toMatchObject({ opened: null, blockedBy: null });
+    expect(ident.highest).toMatchObject({ epoch: 1, head_seq: 1 });
+    expect(booted.sealCache.get(s.org)?.rejected).toBe(4);
+    expect((await sql`SELECT count(*)::int AS n FROM bastion_ledger_restores WHERE organization_id = ${s.org}`)[0]!.n).toBe(0);
+
+    // Appends and sealing continue as if the planted objects were not there.
+    c.offsetMs += DAY;
+    const run = await runToEnd(booted, s, c);
+    expect(run.slice).toMatchObject({ done: true });
+    expect(run.slice).not.toMatchObject({ partial_reason: 'restore_pending' });
+    expect(await maxSeq(s.org)).toBe(2);
+    expect(await sealOrg(booted, s.org)).toMatchObject({ result: 'sealed', epoch: 1, head_seq: 2 });
+
+    // Positive control: a correctly signed seal the database does not match still opens a restore.
+    const genuine = { org: s.org, seal_date: '2099-02-01', epoch: 1, head_seq: 50, head_hash: hash, signing_key_id: deps.signer.keyId };
+    put('2099-02-01', { ...genuine, signature: signSeal(genuine, deps.signer) });
+    const fresh = makeDeps(sql, { bucket, clock: c });
+    const detected = await checkLedgerIdentity(fresh, s.org);
+    expect(detected.opened).toBeTruthy();
+    expect(detected.highest).toMatchObject({ epoch: 1, head_seq: 50 });
+    const [row] = await sql`SELECT bucket_head_seq, provisional_epoch FROM bastion_ledger_restores WHERE id = ${detected.opened!}`;
+    expect(Number(row!.bucket_head_seq)).toBe(50);
+    expect(Number(row!.provisional_epoch)).toBe(2);
   });
 });

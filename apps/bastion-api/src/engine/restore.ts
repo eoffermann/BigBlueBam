@@ -15,7 +15,7 @@
 
 import { randomUUID } from 'node:crypto';
 import { withStorageTimeout } from '@bigbluebam/storage';
-import { compareEpochSeq } from '../lib/ledger-canonical.js';
+import { compareEpochSeq, verifySeal } from '../lib/ledger-canonical.js';
 import { type EngineDeps, orgTx, type Tx } from './context.js';
 import { enqueueBastionEvent } from './outbox.js';
 import { lockLedger } from './ledger.js';
@@ -35,6 +35,8 @@ export interface SealIdentity {
 export interface SealCacheEntry {
   keys: Set<string>;
   seals: SealIdentity[];
+  /** Objects under seals/<org>/ ignored because they are malformed or do not verify. */
+  rejected: number;
   refreshedAt: number;
   restoreMarker: string | null;
 }
@@ -74,23 +76,53 @@ async function listAll(deps: EngineDeps, prefix: string): Promise<string[]> {
   return keys;
 }
 
-function parseSeal(raw: unknown, key: string): SealIdentity | null {
+// Column ranges the identity is written into (0275_bastion_evidence.sql). bucket_epoch and
+// provisional_epoch are `integer` and provisional_epoch is max epoch + 1, so the largest
+// acceptable epoch leaves room for that increment; the seq columns are `bigint`, which holds
+// every JS safe integer.
+const MAX_SEAL_EPOCH = 2_147_483_646;
+const SEAL_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+const HEAD_HASH_RE = /^[0-9a-f]{64}$/;
+
+/** Shape and range check only. Trust comes from verifySeal in refreshSeals. */
+export function parseSeal(raw: unknown, key: string): SealIdentity | null {
   const o = raw as Record<string, unknown> | null;
   if (!o || typeof o !== 'object') return null;
-  const epoch = Number(o.epoch);
-  const seq = Number(o.head_seq);
-  if (!Number.isSafeInteger(epoch) || !Number.isSafeInteger(seq) || typeof o.head_hash !== 'string') return null;
+  if (typeof o.epoch !== 'number' || typeof o.head_seq !== 'number') return null;
+  const epoch = o.epoch;
+  const seq = o.head_seq;
+  if (!Number.isSafeInteger(epoch) || epoch < 1 || epoch > MAX_SEAL_EPOCH) return null;
+  if (!Number.isSafeInteger(seq) || seq < 0) return null;
+  if (typeof o.head_hash !== 'string' || !HEAD_HASH_RE.test(o.head_hash)) return null;
+  if (typeof o.org !== 'string' || typeof o.seal_date !== 'string' || !SEAL_DATE_RE.test(o.seal_date)) return null;
+  if (typeof o.signing_key_id !== 'string' || typeof o.signature !== 'string') return null;
   return {
-    org: String(o.org),
-    seal_date: String(o.seal_date),
+    org: o.org,
+    seal_date: o.seal_date,
     epoch,
     head_seq: seq,
     head_hash: o.head_hash,
-    signing_key_id: String(o.signing_key_id ?? ''),
-    signature: String(o.signature ?? ''),
+    signing_key_id: o.signing_key_id,
+    signature: o.signature,
     sealed_at: typeof o.sealed_at === 'string' ? o.sealed_at : null,
     object_key: key,
   };
+}
+
+/** True only when the seal's Ed25519 signature verifies against a published key. */
+export function sealIsAuthentic(seal: SealIdentity, keys: Map<string, string>): boolean {
+  return verifySeal(
+    {
+      org: seal.org,
+      seal_date: seal.seal_date,
+      epoch: seal.epoch,
+      head_seq: seal.head_seq,
+      head_hash: seal.head_hash,
+      signing_key_id: seal.signing_key_id,
+    },
+    seal.signature,
+    keys,
+  );
 }
 
 async function restoreMarker(deps: EngineDeps): Promise<string | null> {
@@ -106,13 +138,37 @@ export async function refreshSeals(deps: EngineDeps, orgId: string, force = fals
   if (cached && !force && Date.now() - cached.refreshedAt < CACHE_TTL_MS && cached.restoreMarker === marker) {
     return cached;
   }
-  const entry: SealCacheEntry = cached ?? { keys: new Set(), seals: [], refreshedAt: 0, restoreMarker: null };
+  const entry: SealCacheEntry = cached ?? { keys: new Set(), seals: [], rejected: 0, refreshedAt: 0, restoreMarker: null };
   const keys = await listAll(deps, `seals/${orgId}/`);
   for (const key of keys) {
     if (entry.keys.has(key)) continue;
-    const seal = parseSeal(await readJson(deps, key), key);
+    let raw: unknown;
+    try {
+      raw = await readJson(deps, key);
+    } catch (err) {
+      if (err instanceof SyntaxError) raw = null;
+      else throw err;
+    }
     entry.keys.add(key);
-    if (seal && seal.org === orgId) entry.seals.push(seal);
+    // The bucket is writable by every service holding the shared storage key, so an object
+    // under seals/<org>/ is only a trust anchor when its signature verifies (spec 3.4).
+    const seal = parseSeal(raw, key);
+    const reason = !seal
+      ? 'malformed or out of range'
+      : seal.org !== orgId
+        ? 'names a different organization'
+        : !sealIsAuthentic(seal, deps.sealKeys)
+          ? 'signature does not verify against any published key'
+          : null;
+    if (reason || !seal) {
+      entry.rejected += 1;
+      deps.log.error(
+        { organization_id: orgId, object_key: key, reason, rejected_total: entry.rejected },
+        'bastion-ledger: unsigned seal object ignored',
+      );
+      continue;
+    }
+    entry.seals.push(seal);
   }
   entry.refreshedAt = Date.now();
   entry.restoreMarker = marker;
