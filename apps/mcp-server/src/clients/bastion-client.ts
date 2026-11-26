@@ -3,6 +3,17 @@ import type {
   BastionAssertionRevise,
   BastionControlListQuery,
 } from '@bigbluebam/shared';
+import type {
+  BastionAdoptFramework,
+  BastionBulkApplicability,
+  BastionCompanyProfile,
+  BastionCompileRunListQuery,
+  BastionControlCreate,
+  BastionControlUpdate,
+  BastionFrameworkUpdate,
+  BastionRequirementApplicabilityUpdate,
+  BastionSetupComplianceProject,
+} from '@bigbluebam/shared';
 import type { ApiClient } from '../middleware/api-client.js';
 
 /**
@@ -77,6 +88,27 @@ export function createBastionClient(bastionApiUrl: string, api: ApiClient, fetch
     listProbes: () => request('GET', '/probes'),
     // Setup wizard state
     getSetup: () => request('GET', '/setup'),
+
+    // ── #196 parity: admin and setup writes plus the floored room reads ─────────
+    // (grouped here so milestone appends above merge cleanly)
+    listCompileRunsPage: (id: string, q: BastionCompileRunListQuery) =>
+      request('GET', `/frameworks/${id}/compile-runs${qs({ cursor: q.cursor, limit: q.limit === undefined ? undefined : String(q.limit) })}`),
+    adoptFramework: (body: BastionAdoptFramework) => request('POST', '/frameworks', body),
+    updateFramework: (id: string, body: BastionFrameworkUpdate) => request('PATCH', `/frameworks/${id}`, body),
+    archiveFramework: (id: string) => request('POST', `/frameworks/${id}/archive`, { confirm: true }),
+    createControl: (body: BastionControlCreate) => request('POST', '/controls', body),
+    updateControl: (id: string, body: BastionControlUpdate) => request('PATCH', `/controls/${id}`, body),
+    decideApplicability: (frameworkId: string, body: BastionBulkApplicability) =>
+      request('POST', `/frameworks/${frameworkId}/applicability`, body),
+    updateRequirementLink: (linkId: string, body: BastionRequirementApplicabilityUpdate) =>
+      request('PATCH', `/control-requirements/${linkId}`, body),
+    saveCompanyProfile: (body: BastionCompanyProfile) => request('PATCH', '/setup/profile', body),
+    setComplianceProject: (body: BastionSetupComplianceProject) => request('POST', '/setup/compliance-project', body),
+    // Spec 5.1 rows 84, 88, 89 (routes ship at M8).
+    listAuditorRooms: () => request('GET', '/auditor-rooms'),
+    getAuditorRoomAccessLog: (roomId: string) => request('GET', `/auditor-rooms/${roomId}/access-log`),
+    listAuditorRequests: (q: { room_id?: string; status?: string }) =>
+      request('GET', `/auditor-requests${qs({ room_id: q.room_id, status: q.status })}`),
   };
 }
 

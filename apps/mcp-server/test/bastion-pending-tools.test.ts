@@ -29,11 +29,26 @@ const fakeFetch = async (url: string, init: RequestInit) => {
   return new Response(JSON.stringify({ data: { ok: true } }), { status: 200, headers: { 'Content-Type': 'application/json' } });
 };
 
-async function load() {
+function memoryTokenStore() {
+  const m = new Map<string, { action: string; resource_id: string; ttlMs: number }>();
+  return {
+    entries: m,
+    set: async (k: string, v: { action: string; resource_id: string; ttlMs: number }) => {
+      m.set(k, v);
+    },
+    get: async (k: string) => m.get(k) ?? null,
+    delete: async (k: string) => {
+      m.delete(k);
+    },
+    close: async () => {},
+  };
+}
+
+async function load(store: ReturnType<typeof memoryTokenStore> | null = memoryTokenStore()) {
   captured.length = 0;
   const { registerBastionTools } = await import('../src/tools-pending/bastion.js');
   const api = { token: 'bbam_test' } as never;
-  registerBastionTools({} as never, api, 'http://bastion-api:4024/v1/', fakeFetch);
+  registerBastionTools({} as never, api, 'http://bastion-api:4024/v1/', fakeFetch, store ?? undefined);
   return (name: string) => {
     const t = captured.find((c) => c.name === name);
     if (!t) throw new Error(`tool ${name} not registered`);
@@ -56,7 +71,8 @@ describe('Bastion pending tools stay out of the registered surface until M11', (
   });
 
   it('every handler goes through registerTool (agent policies apply once registered)', () => {
-    expect((PENDING.match(/registerTool\(server, \{/g) ?? []).length).toBe(7);
+    // 7 milestone handlers + 9 #196 parity handlers.
+    expect((PENDING.match(/registerTool\(server, \{/g) ?? []).length).toBe(16);
     expect(PENDING).not.toMatch(/server\.tool\(/);
   });
 });
@@ -64,14 +80,14 @@ describe('Bastion pending tools stay out of the registered surface until M11', (
 describe('Bastion M3 tool handlers', () => {
   it('registers exactly the M3 roster', async () => {
     await load();
-    const { BASTION_PENDING_TOOL_NAMES } = await import('../src/tools-pending/bastion.js');
-    expect(captured.map((c) => c.name).sort()).toEqual([...BASTION_PENDING_TOOL_NAMES].sort());
+    const { BASTION_PENDING_TOOL_NAMES, BASTION_ADMIN_TOOL_NAMES } = await import('../src/tools-pending/bastion.js');
+    expect(captured.map((c) => c.name).sort()).toEqual([...BASTION_PENDING_TOOL_NAMES, ...BASTION_ADMIN_TOOL_NAMES].sort());
   });
 
-  it('has no tool for any human gate (confirm, reject, adopt, archive, applicability, setup writes)', async () => {
+  it('has no tool for a vouching act (confirm or reject a check): auth, session required (spec 2.8, #136)', async () => {
     await load();
     const names = captured.map((c) => c.name).join(' ');
-    expect(names).not.toMatch(/confirm|reject|adopt|archive|applicab|profile|compliance_project/);
+    expect(names).not.toMatch(/confirm|reject|attest|vouch/);
   });
 
   it('bastion_list_frameworks lists adopted frameworks and templates, forwarding the bearer token', async () => {
@@ -168,5 +184,130 @@ describe('Bastion M3 tool handlers', () => {
     const res = (await t.handler({ framework_id: FW } as never)) as { isError?: boolean; content: Array<{ text: string }> };
     expect(res.isError).toBe(true);
     expect(res.content[0]!.text).toContain('COMPILE_RUNNING');
+  });
+});
+
+describe('Bastion #196 parity tools (setup and admin writes, room reads)', () => {
+  const LINK = '44444444-4444-4444-8444-444444444444';
+  const PROJECT = '55555555-5555-4555-8555-555555555555';
+  const ROOM = '66666666-6666-4666-8666-666666666666';
+
+  const parse = (res: unknown) => JSON.parse((res as { content: Array<{ text: string }> }).content[0]!.text);
+
+  it('bastion_compile_framework pages run history with cursor and limit', async () => {
+    const tool = await load();
+    await tool('bastion_compile_framework').handler({ framework_id: FW, action: 'list_runs', cursor: 'abc', limit: 10 } as never);
+    expect(calls[0]!.url).toBe(`http://bastion-api:4024/v1/frameworks/${FW}/compile-runs?cursor=abc&limit=10`);
+  });
+
+  it('bastion_adopt_framework and bastion_update_framework call the framework routes', async () => {
+    const tool = await load();
+    await tool('bastion_adopt_framework').handler({ template_key: 'soc2', audit_target_date: '2027-03-31' } as never);
+    await tool('bastion_update_framework').handler({ framework_id: FW, changes: { name: 'SOC 2 Type II' } } as never);
+    expect(calls.map((c) => `${c.method} ${c.url}`)).toEqual([
+      'POST http://bastion-api:4024/v1/frameworks',
+      `PATCH http://bastion-api:4024/v1/frameworks/${FW}`,
+    ]);
+    expect(calls[0]!.body).toEqual({ template_key: 'soc2', audit_target_date: '2027-03-31' });
+    expect(calls[1]!.body).toEqual({ name: 'SOC 2 Type II' });
+  });
+
+  it('inputs are the shared Zod schemas (closed template list, strict changes)', async () => {
+    const tool = await load();
+    const tk = tool('bastion_adopt_framework').input.template_key as { safeParse: (v: unknown) => { success: boolean } };
+    expect(tk.safeParse('soc2').success).toBe(true);
+    expect(tk.safeParse('pci').success).toBe(false);
+    const changes = tool('bastion_update_framework').input.changes as { safeParse: (v: unknown) => { success: boolean } };
+    expect(changes.safeParse({}).success).toBe(false);
+    expect(changes.safeParse({ status: 'archived' }).success).toBe(false);
+  });
+
+  it('bastion_archive_framework is two-step: staging calls nothing, the token archives once', async () => {
+    const store = memoryTokenStore();
+    const tool = await load(store);
+    const staged = parse(await tool('bastion_archive_framework').handler({ framework_id: FW } as never));
+    expect(staged.status).toBe('pending_confirmation');
+    expect(calls).toEqual([]);
+    expect(store.entries.get(staged.confirm_token)).toMatchObject({ action: 'bastion_archive_framework', resource_id: FW, ttlMs: 300_000 });
+
+    // A token for another framework is refused and archives nothing.
+    const wrong = (await tool('bastion_archive_framework').handler({
+      framework_id: '77777777-7777-4777-8777-777777777777',
+      confirm_token: staged.confirm_token,
+    } as never)) as { isError?: boolean };
+    expect(wrong.isError).toBe(true);
+    expect(calls).toEqual([]);
+
+    await tool('bastion_archive_framework').handler({ framework_id: FW, confirm_token: staged.confirm_token } as never);
+    expect(calls).toEqual([{ url: `http://bastion-api:4024/v1/frameworks/${FW}/archive`, method: 'POST', body: { confirm: true } }]);
+    // Single use.
+    const again = (await tool('bastion_archive_framework').handler({ framework_id: FW, confirm_token: staged.confirm_token } as never)) as {
+      isError?: boolean;
+    };
+    expect(again.isError).toBe(true);
+    expect(calls).toHaveLength(1);
+  });
+
+  it('bastion_archive_framework fails closed without a confirm-token store', async () => {
+    const tool = await load(null);
+    const res = (await tool('bastion_archive_framework').handler({ framework_id: FW } as never)) as { isError?: boolean };
+    expect(res.isError).toBe(true);
+    expect(calls).toEqual([]);
+  });
+
+  it('bastion_upsert_control creates or edits, never both', async () => {
+    const tool = await load();
+    await tool('bastion_upsert_control').handler({ create: { slug: 'radio-check', title: 'The radio is checked daily' } } as never);
+    await tool('bastion_upsert_control').handler({ control_id: CTRL, changes: { risk_weight: 4 } } as never);
+    expect(calls.map((c) => `${c.method} ${c.url}`)).toEqual([
+      'POST http://bastion-api:4024/v1/controls',
+      `PATCH http://bastion-api:4024/v1/controls/${CTRL}`,
+    ]);
+    calls = [];
+    const bad = (await tool('bastion_upsert_control').handler({
+      create: { slug: 'x1', title: 'x' },
+      control_id: CTRL,
+    } as never)) as { isError?: boolean };
+    expect(bad.isError).toBe(true);
+    expect(calls).toEqual([]);
+  });
+
+  it('bastion_decide_applicability decides in bulk or one link', async () => {
+    const tool = await load();
+    const decisions = [{ ref_code: 'A.7.1', applicability: 'not_applicable', not_applicable_reason: 'No server room' }];
+    await tool('bastion_decide_applicability').handler({ framework_id: FW, decisions } as never);
+    await tool('bastion_decide_applicability').handler({
+      requirement_link_id: LINK,
+      decision: { applicability: 'applicable' },
+    } as never);
+    expect(calls.map((c) => `${c.method} ${c.url}`)).toEqual([
+      `POST http://bastion-api:4024/v1/frameworks/${FW}/applicability`,
+      `PATCH http://bastion-api:4024/v1/control-requirements/${LINK}`,
+    ]);
+    expect(calls[0]!.body).toEqual({ decisions });
+    const schema = tool('bastion_decide_applicability').input.decision as { safeParse: (v: unknown) => { success: boolean } };
+    expect(schema.safeParse({ applicability: 'not_applicable' }).success).toBe(false);
+  });
+
+  it('bastion_save_company_profile and bastion_set_compliance_project call the setup routes', async () => {
+    const tool = await load();
+    await tool('bastion_save_company_profile').handler({ profile: { company_size: '11-50', uses_github: true } } as never);
+    await tool('bastion_set_compliance_project').handler({ project_id: PROJECT } as never);
+    expect(calls).toEqual([
+      { url: 'http://bastion-api:4024/v1/setup/profile', method: 'PATCH', body: { company_size: '11-50', uses_github: true } },
+      { url: 'http://bastion-api:4024/v1/setup/compliance-project', method: 'POST', body: { project_id: PROJECT } },
+    ]);
+  });
+
+  it('the room reads (spec rows 84, 88, 89) are GETs', async () => {
+    const tool = await load();
+    await tool('bastion_list_auditor_rooms').handler({} as never);
+    await tool('bastion_list_auditor_rooms').handler({ room_id: ROOM } as never);
+    await tool('bastion_list_auditor_requests').handler({ room_id: ROOM, status: 'open' } as never);
+    expect(calls.map((c) => `${c.method} ${c.url}`)).toEqual([
+      'GET http://bastion-api:4024/v1/auditor-rooms',
+      `GET http://bastion-api:4024/v1/auditor-rooms/${ROOM}/access-log`,
+      `GET http://bastion-api:4024/v1/auditor-requests?room_id=${ROOM}&status=open`,
+    ]);
   });
 });
