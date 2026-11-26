@@ -27,6 +27,17 @@ import type {
   BastionManualEvidenceLink,
   BastionManualEvidenceListQuery,
 } from '@bigbluebam/shared';
+import type {
+  BastionDriftAcknowledge,
+  BastionDriftListQuery,
+  BastionExceptionListQuery,
+  BastionExceptionPropose,
+  BastionFixDraftListQuery,
+  BastionFixMarkApplied,
+  BastionGapDismiss,
+  BastionGapListQuery,
+  BastionProposeFix,
+} from '@bigbluebam/shared';
 import type { ApiClient } from '../middleware/api-client.js';
 
 /**
@@ -175,6 +186,45 @@ export function createBastionClient(bastionApiUrl: string, api: ApiClient, fetch
     // Spec 5.1 rows 43, 44 (M5 feed configuration).
     createFeed: (body: BastionFeedCreate) => request('POST', '/feeds', body),
     updateFeed: (id: string, body: BastionFeedUpdate) => request('PATCH', `/feeds/${id}`, body),
+
+    // ── M6: gaps, fix drafts, exceptions, drift (spec 5.1 rows 51-63) ───────────
+    // Rows 56 and 61 (both decide routes) have no client method: session required (spec 2.8).
+    listGaps: (q: Partial<BastionGapListQuery>) =>
+      request(
+        'GET',
+        `/gaps${qs({
+          framework_id: q.framework_id,
+          control_id: q.control_id,
+          status: q.status,
+          gap_kind: q.gap_kind,
+          sort: q.sort,
+          limit: q.limit === undefined ? undefined : String(q.limit),
+        })}`,
+      ),
+    proposeFix: (gapId: string, body: BastionProposeFix) => request('POST', `/gaps/${gapId}/propose-fix`, body),
+    dismissGap: (gapId: string, body: BastionGapDismiss) => request('POST', `/gaps/${gapId}/dismiss`, body),
+    listFixDrafts: (q: Partial<BastionFixDraftListQuery>) =>
+      request(
+        'GET',
+        `/fix-drafts${qs({ status: q.status, gap_id: q.gap_id, control_id: q.control_id, limit: q.limit === undefined ? undefined : String(q.limit) })}`,
+      ),
+    getFixDraft: (id: string) => request('GET', `/fix-drafts/${id}`),
+    markFixApplied: (id: string, body: BastionFixMarkApplied) => request('POST', `/fix-drafts/${id}/mark-applied`, body),
+    listExceptions: (q: Partial<BastionExceptionListQuery>) =>
+      request('GET', `/exceptions${qs({ status: q.status, control_id: q.control_id, limit: q.limit === undefined ? undefined : String(q.limit) })}`),
+    getException: (id: string) => request('GET', `/exceptions/${id}`),
+    proposeException: (body: BastionExceptionPropose) => request('POST', '/exceptions', body),
+    listDrift: (q: Partial<BastionDriftListQuery>) =>
+      request(
+        'GET',
+        `/drift${qs({
+          control_id: q.control_id,
+          unacknowledged: q.unacknowledged === undefined ? undefined : String(q.unacknowledged),
+          limit: q.limit === undefined ? undefined : String(q.limit),
+          before: q.before,
+        })}`,
+      ),
+    acknowledgeDrift: (id: string, body: BastionDriftAcknowledge) => request('POST', `/drift/${id}/acknowledge`, body),
   };
 }
 

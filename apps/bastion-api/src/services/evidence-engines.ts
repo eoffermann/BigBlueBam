@@ -8,7 +8,7 @@
 //                    redacted bytes whose delete failed at redaction time (#212).
 //   evidence-expiry  (10 6 * * *)    evidence inside the warning window publishes evidence.expiring
 //                    once per item; expired evidence publishes evidence.expired once per item and
-//                    re-evaluates the controls it is linked to. Exception expiry joins at M6.
+//                    re-evaluates the controls it is linked to; accepted risks that ran out expire (M6).
 
 import { BASTION_DAY_MS } from '@bigbluebam/shared';
 import { EVIDENCE_INGEST_START_CUTOFF_MS, evidenceCopyBudgetMs } from '../engine/budgets.js';
@@ -18,6 +18,7 @@ import { daysLeft } from '../engine/manual.js';
 import { enqueueBastionEvent } from '../engine/outbox.js';
 import type { EvidenceDeps } from './evidence-deps.js';
 import { ingestBoltEventFeeds } from './feeds.service.js';
+import { expireExceptions } from './exceptions.service.js';
 import { retryPendingScan, retryRedactedDeletes, type ScanRetryOutcome } from './manual-evidence.service.js';
 
 const DAY_MS = BASTION_DAY_MS;
@@ -167,7 +168,33 @@ export async function evidenceExpiry(d: EvidenceDeps, opts: { organization_id?: 
     engine.log.info({ organization_id: orgId }, `bastion-evidence-expiry: org ${i + 1}/${orgs.length} expiring ${r.soon} expired ${r.gone}`);
   }
   if (runs.length > 0) await d.enqueueRuns(runs).catch(() => undefined);
-  const summary = { expiring_notified: expiring, expired_notified: expired, controls_reevaluating: runs.length };
+
+  // Exceptions whose time is up (spec 2.6, M6): one transaction per org, drift and its outbox
+  // rows written with the expiry, idempotent on the exception id.
+  let exceptionsExpired = 0;
+  let exceptionDrift = 0;
+  const exOrgs = (
+    await engine.sql`SELECT DISTINCT organization_id FROM bastion_exceptions WHERE status = 'active' AND expires_at <= ${now}
+                      ${opts.organization_id ? engine.sql`AND organization_id = ${opts.organization_id}` : engine.sql``}`
+  ).map((r) => String(r.organization_id));
+  engine.log.info({ orgs: exOrgs.length }, `bastion-evidence-expiry: ${exOrgs.length} org(s) with accepted risks that ran out`);
+  for (const orgId of exOrgs) {
+    try {
+      const r = await orgTx(engine.sql, orgId, (tx) => expireExceptions(tx, orgId, now));
+      exceptionsExpired += r.expired;
+      exceptionDrift += r.drifted;
+      engine.log.info({ organization_id: orgId, ...r }, `bastion-evidence-expiry: ${r.expired} exception(s) expired, ${r.drifted} control(s) drifted`);
+    } catch (err) {
+      engine.log.error({ organization_id: orgId, err: (err as Error).message }, 'bastion-evidence-expiry: exception expiry failed for this org; the next run retries');
+    }
+  }
+  const summary = {
+    expiring_notified: expiring,
+    expired_notified: expired,
+    controls_reevaluating: runs.length,
+    exceptions_expired: exceptionsExpired,
+    exception_drift: exceptionDrift,
+  };
   engine.log.info(summary, 'bastion-evidence-expiry: complete');
   return summary;
 }

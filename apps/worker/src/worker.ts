@@ -340,6 +340,8 @@ import {
   BASTION_RETENTION_QUEUE,
   BASTION_EVIDENCE_INGEST_QUEUE,
   BASTION_EVIDENCE_EXPIRY_QUEUE,
+  BASTION_GAP_RANK_QUEUE,
+  BASTION_PROPOSAL_RECONCILE_QUEUE,
   type BastionEvaluateRunJobData,
   type BastionSweepJobData,
 } from '@bigbluebam/shared';
@@ -2745,6 +2747,11 @@ registerBastionSweep(BASTION_RETENTION_QUEUE, makeBastionEngineJob('retention', 
 // waiting on its scan, plus this 10-minute sweep); expiring and expired evidence daily.
 registerBastionSweep(BASTION_EVIDENCE_INGEST_QUEUE, makeBastionEngineJob('evidence-ingest', bastionEngineDeps), { id: 'bastion-evidence-ingest-10min', pattern: '*/10 * * * *' });
 registerBastionSweep(BASTION_EVIDENCE_EXPIRY_QUEUE, makeBastionEngineJob('evidence-expiry', bastionEngineDeps), { id: 'bastion-evidence-expiry-daily', pattern: '10 6 * * *' });
+// M6: stored gap ranking (also called by bastion-evaluate-run after each run) and the proposal
+// reconcile that re-reads agent_proposals (never the pruned inbox rows).
+registerBastionSweep(BASTION_GAP_RANK_QUEUE, makeBastionEngineJob('gap-rank', bastionEngineDeps), { id: 'bastion-gap-rank-daily', pattern: '30 6 * * *' });
+registerBastionSweep(BASTION_PROPOSAL_RECONCILE_QUEUE, makeBastionEngineJob('proposal-reconcile', bastionEngineDeps), { id: 'bastion-proposal-reconcile-15min', pattern: '*/15 * * * *' });
+// END Bastion jobs (src/lib/bastion-jobs.test.ts scans up to this line).
 
 // §1 Wave 5 banter subs — pattern-match consumer.
 // Subscribes to the banter:events Redis channel (the same fan-out used by

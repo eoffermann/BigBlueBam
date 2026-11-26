@@ -8,24 +8,40 @@ import { SetupPage } from '@/pages/setup';
 import { ControlsPage } from '@/pages/controls';
 import { CoveragePage } from '@/pages/coverage';
 import { EvidencePage } from '@/pages/evidence';
+import { ControlDetailPage } from '@/pages/control-detail';
+import { GapsPage } from '@/pages/gaps';
+import { ReviewPage } from '@/pages/review';
 
 // Grows one variant per page as later milestones land (spec 6.1).
-type Route = { page: 'home' } | { page: 'setup' } | { page: 'controls' } | { page: 'coverage' } | { page: 'evidence' };
+type Route =
+  | { page: 'home' }
+  | { page: 'setup' }
+  | { page: 'controls' }
+  | { page: 'control'; id: string }
+  | { page: 'coverage' }
+  | { page: 'evidence' }
+  | { page: 'gaps' }
+  | { page: 'review' };
 
 const BASE_PATH = '/bastion';
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export function parseRoute(path: string): Route {
   const rest = path.startsWith(BASE_PATH) ? path.slice(BASE_PATH.length) : path;
   const clean = rest.replace(/\/+$/, '');
   if (clean === '/setup') return { page: 'setup' };
   if (clean === '/controls') return { page: 'controls' };
+  const detail = /^\/controls\/([^/]+)$/.exec(clean);
+  if (detail && UUID_RE.test(detail[1]!)) return { page: 'control', id: detail[1]! };
   if (clean === '/coverage') return { page: 'coverage' };
   if (clean === '/evidence') return { page: 'evidence' };
+  if (clean === '/gaps') return { page: 'gaps' };
+  if (clean === '/review') return { page: 'review' };
   return { page: 'home' };
 }
 
 function toActiveRoute(route: Route): ActiveRoute {
-  return { page: route.page };
+  return { page: route.page === 'control' ? 'controls' : route.page };
 }
 
 export function App() {
@@ -117,6 +133,12 @@ export function App() {
         return <SetupPage />;
       case 'controls':
         return <ControlsPage onNavigate={navigate} />;
+      case 'control':
+        return <ControlDetailPage key={route.id} controlId={route.id} onNavigate={navigate} />;
+      case 'gaps':
+        return <GapsPage onNavigate={navigate} />;
+      case 'review':
+        return <ReviewPage onNavigate={navigate} />;
       default:
         return null;
     }

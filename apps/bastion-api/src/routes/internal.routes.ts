@@ -18,6 +18,9 @@ import { defaultDeliverer, drainOutbox } from '../engine/outbox.js';
 import { evaluateTick, evaluationMissed, ledgerSeal, ledgerVerify, retention, runReaper, weeklyReadiness } from '../engine/sweeps.js';
 import { evidenceExpiry, evidenceIngest } from '../services/evidence-engines.js';
 import { evidenceDeps } from '../services/evidence-runtime.js';
+import { env } from '../env.js';
+import { gapRank } from '../engine/gaps.js';
+import { proposalReconcile } from '../services/decisions.service.js';
 
 /**
  * Service-to-service routes (spec 5.1 rows 105-106), behind the shared internal secret and
@@ -76,11 +79,21 @@ export default async function internalRoutes(fastify: FastifyInstance) {
         return { data: await evaluateTick(d, opts) };
       case 'outbox-drain':
         return {
-          data: await drainOutbox(d, defaultDeliverer({ sql: d.sql, storage: d.storage, putTimeoutMs: d.putTimeoutMs }), {
-            orgId: opts.organization_id,
-            claimant: `bastion-api:${process.pid}`,
-          }),
+          data: await drainOutbox(
+            d,
+            defaultDeliverer({
+              sql: d.sql,
+              storage: d.storage,
+              putTimeoutMs: d.putTimeoutMs,
+              bam: { apiUrl: env.BBB_API_INTERNAL_URL, secret: env.INTERNAL_SERVICE_SECRET },
+            }),
+            { orgId: opts.organization_id, claimant: `bastion-api:${process.pid}` },
+          ),
         };
+      case 'gap-rank':
+        return { data: await gapRank(d, opts) };
+      case 'proposal-reconcile':
+        return { data: await proposalReconcile(d, opts) };
       case 'ledger-seal':
         return { data: await ledgerSeal(d, opts) };
       case 'ledger-verify':

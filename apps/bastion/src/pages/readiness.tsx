@@ -161,6 +161,9 @@ export function ReadinessPage({ onNavigate }: { onNavigate?: (path: string) => v
 
       {onNavigate && (
         <div className="flex gap-3 text-sm">
+          <button type="button" className="text-primary-600 hover:underline" onClick={() => onNavigate('/gaps')}>
+            See everything to fix
+          </button>
           <button type="button" className="text-primary-600 hover:underline" onClick={() => onNavigate('/coverage')}>
             Open the Evidence map
           </button>

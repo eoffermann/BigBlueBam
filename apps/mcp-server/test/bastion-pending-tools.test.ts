@@ -72,8 +72,8 @@ describe('Bastion pending tools stay out of the registered surface until M11', (
 
   it('every handler goes through registerTool (agent policies apply once registered)', () => {
     // 14 milestone handlers (M3 + M4) + 9 #196 parity handlers + M5 (7 evidence + 2 feed admin;
-    // withdrawal has no tool, #217).
-    expect((PENDING.match(/registerTool\(server, \{/g) ?? []).length).toBe(32);
+    // withdrawal has no tool, #217) + M6 (9 gap, fix, exception and drift handlers).
+    expect((PENDING.match(/registerTool\(server, \{/g) ?? []).length).toBe(41);
     expect(PENDING).not.toMatch(/server\.tool\(/);
   });
 });
@@ -81,9 +81,11 @@ describe('Bastion pending tools stay out of the registered surface until M11', (
 describe('Bastion M3 tool handlers', () => {
   it('registers exactly the M3 roster', async () => {
     await load();
-    const { BASTION_PENDING_TOOL_NAMES, BASTION_ADMIN_TOOL_NAMES, BASTION_EVIDENCE_TOOL_NAMES } = await import('../src/tools-pending/bastion.js');
+    const { BASTION_PENDING_TOOL_NAMES, BASTION_ADMIN_TOOL_NAMES, BASTION_EVIDENCE_TOOL_NAMES, BASTION_DECISION_TOOL_NAMES } = await import(
+      '../src/tools-pending/bastion.js'
+    );
     expect(captured.map((c) => c.name).sort()).toEqual(
-      [...BASTION_PENDING_TOOL_NAMES, ...BASTION_ADMIN_TOOL_NAMES, ...BASTION_EVIDENCE_TOOL_NAMES].sort(),
+      [...BASTION_PENDING_TOOL_NAMES, ...BASTION_ADMIN_TOOL_NAMES, ...BASTION_EVIDENCE_TOOL_NAMES, ...BASTION_DECISION_TOOL_NAMES].sort(),
     );
   });
 
@@ -232,7 +234,8 @@ describe('Bastion M3 tool handlers', () => {
 
   it('M4: resolving a ledger restore has no tool (owner integrity act behind a session)', async () => {
     await load();
-    expect(captured.map((c) => c.name).join(' ')).not.toMatch(/acknowledge|resolve|restore_ack/);
+    // (bastion_acknowledge_drift, M6, acknowledges a drift row, not a restore.)
+    expect(captured.map((c) => c.name).join(' ')).not.toMatch(/acknowledge_restore|restore_ack|resolve/);
   });
 
   it('surfaces a bastion-api error as an MCP error result', async () => {
@@ -470,5 +473,74 @@ describe('Bastion M5 tools (manual evidence, feeds, coverage)', () => {
     await load();
     const names = captured.map((c) => c.name).join(' ');
     expect(names).not.toMatch(/upload|supersede|review|redact|download|feed_key|push/);
+  });
+});
+
+describe('Bastion M6 tools (gaps, fixes, exceptions, drift)', () => {
+  const GAP = '66666666-6666-4666-8666-666666666666';
+  const DRAFT = '77777777-7777-4777-8777-777777777777';
+  const EXC = '88888888-8888-4888-8888-888888888888';
+  const DRIFT = '99999999-9999-4999-8999-999999999999';
+  const KEY = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+
+  it('reads gaps, fix drafts, exceptions and drift on the right routes', async () => {
+    const tool = await load();
+    await tool('bastion_coverage_gaps').handler({ sort: 'quick_wins', limit: 5 } as never);
+    await tool('bastion_list_fix_drafts').handler({ status: 'proposed' } as never);
+    await tool('bastion_list_fix_drafts').handler({ fix_draft_id: DRAFT } as never);
+    await tool('bastion_list_exceptions').handler({ control_id: CTRL } as never);
+    await tool('bastion_list_exceptions').handler({ exception_id: EXC } as never);
+    await tool('bastion_list_drift').handler({ unacknowledged: true } as never);
+    expect(calls.map((c) => `${c.method} ${c.url}`)).toEqual([
+      'GET http://bastion-api:4024/v1/gaps?sort=quick_wins&limit=5',
+      'GET http://bastion-api:4024/v1/fix-drafts?status=proposed',
+      `GET http://bastion-api:4024/v1/fix-drafts/${DRAFT}`,
+      `GET http://bastion-api:4024/v1/exceptions?control_id=${CTRL}`,
+      `GET http://bastion-api:4024/v1/exceptions/${EXC}`,
+      'GET http://bastion-api:4024/v1/drift?unacknowledged=true',
+    ]);
+  });
+
+  it('proposes fixes and exceptions, dismisses gaps, marks fixes applied, acknowledges drift', async () => {
+    const tool = await load();
+    await tool('bastion_propose_fix').handler({ gap_id: GAP } as never);
+    await tool('bastion_dismiss_gap').handler({ gap_id: GAP, reason: 'We have no laptops' } as never);
+    await tool('bastion_mark_fix_applied').handler({ fix_draft_id: DRAFT, applied_entity_type: 'bolt.rule', applied_entity_id: KEY } as never);
+    await tool('bastion_propose_exception').handler({
+      control_id: CTRL,
+      scope: 'entity',
+      cited_entity_type: 'bam.api_key',
+      cited_entity_id: KEY,
+      reason: 'Radio Relay key rotated by hand',
+      expires_on: '2027-06-30',
+    } as never);
+    await tool('bastion_acknowledge_drift').handler({ drift_id: DRIFT, note: 'Seen' } as never);
+    expect(calls.map((c) => `${c.method} ${c.url}`)).toEqual([
+      `POST http://bastion-api:4024/v1/gaps/${GAP}/propose-fix`,
+      `POST http://bastion-api:4024/v1/gaps/${GAP}/dismiss`,
+      `POST http://bastion-api:4024/v1/fix-drafts/${DRAFT}/mark-applied`,
+      'POST http://bastion-api:4024/v1/exceptions',
+      `POST http://bastion-api:4024/v1/drift/${DRIFT}/acknowledge`,
+    ]);
+    expect(calls[0]!.body).toEqual({ note: null });
+    expect(calls[2]!.body).toEqual({ applied_entity_type: 'bolt.rule', applied_entity_id: KEY, note: null });
+    expect(calls[3]!.body).toMatchObject({ scope: 'entity', cited_entity_id: KEY, expires_on: '2027-06-30' });
+  });
+
+  it('refuses an exception missing what it covers before calling bastion-api', async () => {
+    const tool = await load();
+    const r = (await tool('bastion_propose_exception').handler({ control_id: CTRL, scope: 'assertion', reason: 'x', expires_on: '2027-01-01' } as never)) as {
+      isError?: boolean;
+    };
+    expect(r.isError).toBe(true);
+    expect(calls).toHaveLength(0);
+  });
+
+  it('has no tool for either decide route: auth, session required (spec 2.8, #136)', async () => {
+    await load();
+    const names = captured.map((c) => c.name).join(' ');
+    // (bastion_decide_applicability is the setup applicability decision, not a vouching route.)
+    expect(names).not.toMatch(/decide_fix|decide_exception|fix_decide|exception_decide|approve/);
+    expect(PENDING).not.toMatch(/fix-drafts\/\$\{[^}]+\}\/decide|exceptions\/\$\{[^}]+\}\/decide/);
   });
 });

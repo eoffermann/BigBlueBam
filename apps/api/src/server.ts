@@ -76,6 +76,7 @@ import superuserRoutes from './routes/superuser.routes.js';
 import emailVerifyRoutes from './routes/email-verify.routes.js';
 import internalHelpdeskRoutes from './routes/internal-helpdesk.routes.js';
 import internalLlmRoutes from './routes/internal-llm.routes.js';
+import internalBastionRoutes from './routes/internal-bastion.routes.js';
 import internalBlueprintSyncRoutes from './routes/internal-blueprint-sync.routes.js';
 import slackWebhookRoutes from './routes/slack-webhook.routes.js';
 import slackIntegrationRoutes from './routes/slack-integration.routes.js';
@@ -299,6 +300,8 @@ await fastify.register(superuserRoutes, { prefix: '/superuser' });
 await fastify.register(emailVerifyRoutes);
 await fastify.register(internalHelpdeskRoutes, { prefix: '/internal/helpdesk' });
 await fastify.register(internalLlmRoutes, { prefix: '/internal/llm' });
+// Bastion -> Bam: remediation tasks, comments by external_id, proposal close (Bastion spec 8.4).
+await fastify.register(internalBastionRoutes, { prefix: '/internal/bastion' });
 await fastify.register(internalBlueprintSyncRoutes);
 await fastify.register(slackWebhookRoutes);
 await fastify.register(slackIntegrationRoutes);

@@ -51,6 +51,9 @@ const INTEGRITY: Record<string, string> = {
   // Withdrawal is a destructive human act with no tool (spec 2.8, #217).
   'POST /manual-evidence/:id/withdraw': "can('bastion.evidence.withdraw')",
   'POST /personal-data/:id/redact': "can('bastion.evidence.redact')",
+  // M6: both decide routes (spec 2.8): humans decide in Bastion.
+  'POST /fix-drafts/:id/decide': "can('bastion.fix.decide')",
+  'POST /exceptions/:id/decide': "can('bastion.exception.approve')",
 };
 
 // Routes that must NOT require a session: everything an agent may do through an API key
@@ -67,6 +70,18 @@ const AGENT_REACHABLE = [
   'GET /feeds/:id/records',
   'GET /coverage',
   'GET /summary',
+  // M6
+  'GET /gaps',
+  'POST /gaps/:id/propose-fix',
+  'POST /gaps/:id/dismiss',
+  'GET /fix-drafts',
+  'GET /fix-drafts/:id',
+  'POST /fix-drafts/:id/mark-applied',
+  'GET /exceptions',
+  'GET /exceptions/:id',
+  'POST /exceptions',
+  'GET /drift',
+  'POST /drift/:id/acknowledge',
 ];
 
 describe('bastion-api route gates', () => {

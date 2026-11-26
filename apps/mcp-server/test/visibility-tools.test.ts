@@ -3,6 +3,7 @@ import pino from 'pino';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { ApiClient } from '../src/middleware/api-client.js';
 import { registerVisibilityTools } from '../src/tools/visibility-tools.js';
+import { VISIBILITY_ENTITY_TYPES, canAccessToolDescription } from '@bigbluebam/shared';
 
 const mockFetch = vi.fn();
 vi.stubGlobal('fetch', mockFetch);
@@ -76,6 +77,14 @@ describe('visibility MCP tools', () => {
   it('registers can_access', () => {
     expect(tools.has('can_access')).toBe(true);
     expect(tools.get('can_access')!.description).toMatch(/preflight/i);
+  });
+
+  it('the can_access description is generated from the one shared entity-type list', () => {
+    // Regenerate with: node scripts/gen-can-access-description.mjs
+    expect(tools.get('can_access')!.description).toBe(canAccessToolDescription(VISIBILITY_ENTITY_TYPES));
+    for (const t of ['bastion.control', 'bastion.manual_evidence', 'bastion.policy', 'bastion.questionnaire', 'bastion.fix_draft', 'bastion.exception']) {
+      expect(tools.get('can_access')!.description).toContain(t);
+    }
   });
 
   it('forwards asker_user_id, entity_type, entity_id to /v1/visibility/can_access', async () => {
