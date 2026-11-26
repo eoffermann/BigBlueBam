@@ -6,6 +6,7 @@ export * from './driver.js';
 export * from './config.js';
 export * from './secrets.js';
 export * from './keys.js';
+export * from './errors.js';
 export { S3Driver, type S3DriverOptions } from './s3-driver.js';
 export { createDriver, createBootstrapDriver, type ProviderRow } from './factory.js';
 

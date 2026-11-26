@@ -37,6 +37,7 @@ vi.mock('drizzle-orm', async (importOriginal) => {
 // lock: a `.for('update')` select waits until no other transaction holds a lock
 // on the matching row, and the lock is held until that transaction ends.
 const rowLocks = new Map<string, Promise<void>>();
+let failUpdate = false;
 const forUpdateCalls: string[] = [];
 function fakeDb(txLocks?: Array<() => void>) {
   const limitRows = (c: Cond) => [...rows.values()].filter((r) => matches(r, c)).slice(0, 1);
@@ -68,6 +69,7 @@ function fakeDb(txLocks?: Array<() => void>) {
     update: () => ({
       set: (patch: Row) => ({
         where: async (c: Cond) => {
+          if (failUpdate) throw Object.assign(new Error('canceling statement due to lock timeout'), { code: '55P03' });
           for (const r of rows.values()) if (matches(r, c)) Object.assign(r, patch);
         },
       }),
@@ -116,11 +118,16 @@ vi.mock('../src/plugins/auth.js', () => ({
 
 // ---- in-memory storage driver ----
 const objects = new Map<string, { body: Buffer; contentType: string }>();
+const putsUnderLock: boolean[] = [];
+let stallPut = false;
 const memDriver = {
   kind: 'local',
   capabilities: {},
   healthCheck: async () => ({ ok: true, latencyMs: 0 }),
   put: vi.fn(async (key: string, body: Buffer, opts?: { contentType?: string }) => {
+    // Issue #169: the put must never run while an expense row lock is held.
+    putsUnderLock.push(rowLocks.size > 0);
+    if (stallPut) await new Promise(() => {});
     // A real S3 put takes time; yield so overlapping uploads interleave (#157).
     await new Promise((r) => setTimeout(r, 5));
     objects.set(key, { body, contentType: opts?.contentType ?? 'application/octet-stream' });
@@ -185,6 +192,9 @@ beforeEach(async () => {
   vi.clearAllMocks();
   canCalls.length = 0;
   forUpdateCalls.length = 0;
+  putsUnderLock.length = 0;
+  stallPut = false;
+  failUpdate = false;
   currentOrg = ORG_A;
   objects.clear();
   rows.clear();
@@ -208,7 +218,10 @@ describe('expense receipts (issue #145)', () => {
     const up = await upload(EXPENSE_A, 'lunch receipt.png', PNG);
     expect(up.statusCode).toBe(200);
     expect(up.json().data.receipt_url).toBe(`/bill/api/v1/expenses/${EXPENSE_A}/receipt`);
-    expect([...objects.keys()]).toEqual([`bill/receipts/${EXPENSE_A}`]);
+    // Issue #169: a versioned key of its own, recorded on the row.
+    const key = rows.get(EXPENSE_A)!.receipt_storage_key as string;
+    expect(key).toMatch(new RegExp(`^bill/receipts/${EXPENSE_A}/[0-9a-f-]{36}$`));
+    expect([...objects.keys()]).toEqual([key]);
     expect(rows.get(EXPENSE_A)!.receipt_url).toBe(`/bill/api/v1/expenses/${EXPENSE_A}/receipt`);
 
     const down = await download(EXPENSE_A);
@@ -258,10 +271,13 @@ describe('expense receipts (issue #145)', () => {
     expect(objects.size).toBe(0);
   });
 
-  it('a replacement with another extension overwrites the one key; nothing is left behind', async () => {
+  it('a replacement writes a new key, repoints the row, and deletes the replaced object', async () => {
     await upload(EXPENSE_A, 'r.png', PNG);
+    const first = rows.get(EXPENSE_A)!.receipt_storage_key as string;
     await upload(EXPENSE_A, 'r.pdf', Buffer.from('%PDF-1.7'), 'application/pdf');
-    expect([...objects.keys()]).toEqual([`bill/receipts/${EXPENSE_A}`]);
+    const second = rows.get(EXPENSE_A)!.receipt_storage_key as string;
+    expect(second).not.toBe(first);
+    expect([...objects.keys()]).toEqual([second]);
     const down = await download(EXPENSE_A);
     expect(down.headers['content-type']).toBe('application/pdf');
     expect(down.rawPayload.toString()).toBe('%PDF-1.7');
@@ -290,7 +306,10 @@ describe('expense receipts (issue #145)', () => {
       expect(down.headers['content-type']).toBe('image/png');
       expect(down.rawPayload.equals(PNG)).toBe(true);
     }
-    expect(memDriver.delete).not.toHaveBeenCalledWith(`bill/receipts/${EXPENSE_A}`);
+    // The key the row names was never deleted, and only that object remains.
+    const current = rows.get(EXPENSE_A)!.receipt_storage_key as string;
+    expect(memDriver.delete).not.toHaveBeenCalledWith(current);
+    expect([...objects.keys()]).toEqual([current]);
   });
 
   it('a pre-#157 receipt stored as <id><ext> still downloads, and is removed once replaced', async () => {
@@ -301,8 +320,68 @@ describe('expense receipts (issue #145)', () => {
     expect(legacy.rawPayload.equals(PNG)).toBe(true);
 
     await upload(EXPENSE_A, 'new.pdf', Buffer.from('%PDF-1.7'), 'application/pdf');
-    expect([...objects.keys()]).toEqual([`bill/receipts/${EXPENSE_A}`]);
+    expect([...objects.keys()]).toEqual([rows.get(EXPENSE_A)!.receipt_storage_key]);
     expect((await download(EXPENSE_A)).headers['content-type']).toBe('application/pdf');
+  });
+
+  it('a #157-era receipt at the extensionless key still downloads, and is removed once replaced', async () => {
+    objects.set(`bill/receipts/${EXPENSE_A}`, { body: PNG, contentType: 'image/png' });
+    Object.assign(rows.get(EXPENSE_A)!, { receipt_filename: 'old.png', receipt_uploaded_at: new Date() });
+    expect((await download(EXPENSE_A)).rawPayload.equals(PNG)).toBe(true);
+    await upload(EXPENSE_A, 'new.pdf', Buffer.from('%PDF-1.7'), 'application/pdf');
+    expect([...objects.keys()]).toEqual([rows.get(EXPENSE_A)!.receipt_storage_key]);
+  });
+});
+
+describe('receipt upload keeps object I/O out of the row lock (issue #169)', () => {
+  it('the object PUT never runs while the expense row is locked', async () => {
+    await Promise.all([upload(EXPENSE_A, 'a.png', PNG), upload(EXPENSE_A, 'b.png', PNG)]);
+    expect(putsUnderLock).toEqual([false, false]);
+    expect(forUpdateCalls).toEqual(['update', 'update']);
+  });
+
+  it('a stalled object store fails the upload with 504 STORAGE_TIMEOUT and never locks the row', async () => {
+    const svc = await import('../src/services/receipt.service.js');
+    svc.__setReceiptPutTimeoutForTests(50);
+    try {
+      await upload(EXPENSE_A, 'r.png', PNG);
+      const before = { ...rows.get(EXPENSE_A)! };
+      stallPut = true;
+      const res = await upload(EXPENSE_A, 'late.png', PNG);
+      expect(res.statusCode).toBe(504);
+      expect(res.json().error.code).toBe('STORAGE_TIMEOUT');
+      // No transaction was opened: the row is untouched and still downloadable.
+      expect(forUpdateCalls).toEqual(['update']);
+      expect(rowLocks.size).toBe(0);
+      expect(rows.get(EXPENSE_A)!.receipt_storage_key).toBe(before.receipt_storage_key);
+      stallPut = false;
+      expect((await download(EXPENSE_A)).rawPayload.equals(PNG)).toBe(true);
+    } finally {
+      svc.__setReceiptPutTimeoutForTests(30_000);
+    }
+  });
+
+  it('a lock timeout in the swap transaction is a 409 and the orphaned new object is deleted', async () => {
+    await upload(EXPENSE_A, 'r.png', PNG);
+    const kept = rows.get(EXPENSE_A)!.receipt_storage_key as string;
+    failUpdate = true;
+    const res = await upload(EXPENSE_A, 'second.png', PNG);
+    expect(res.statusCode).toBe(409);
+    expect(res.json().error.code).toBe('EXPENSE_BUSY');
+    expect(rows.get(EXPENSE_A)!.receipt_storage_key).toBe(kept);
+    expect([...objects.keys()]).toEqual([kept]);
+  });
+
+  it('a row key outside this expense is never read', async () => {
+    objects.set(`bill/receipts/${EXPENSE_B}/x`, { body: PNG, contentType: 'image/png' });
+    Object.assign(rows.get(EXPENSE_A)!, {
+      receipt_filename: 'r.png',
+      receipt_uploaded_at: new Date(),
+      receipt_storage_key: `bill/receipts/${EXPENSE_B}/x`,
+    });
+    const res = await download(EXPENSE_A);
+    expect(res.statusCode).toBe(404);
+    expect(memDriver.getStream).not.toHaveBeenCalled();
   });
 
   it('503 STORAGE_NOT_CONFIGURED when no storage is configured (no default credentials)', async () => {

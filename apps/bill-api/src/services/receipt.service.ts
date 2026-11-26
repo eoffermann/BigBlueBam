@@ -11,17 +11,32 @@
 
 import { eq, and } from 'drizzle-orm';
 import path from 'node:path';
+import { randomUUID } from 'node:crypto';
+import { withStorageTimeout } from '@bigbluebam/storage';
 import { db } from '../db/index.js';
 import { billExpenses } from '../db/schema/index.js';
 import {
   RECEIPT_TYPES,
   getReceiptDriver,
+  isReceiptVersionKeyFor,
   legacyReceiptKey,
   receiptDownloadPath,
   receiptKey,
+  receiptVersionKey,
 } from '../lib/receipt-storage.js';
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
+
+/** Budget for one receipt PUT (at most 10 MB). */
+let RECEIPT_PUT_TIMEOUT_MS = 30_000;
+
+/** Test hook: shorten the storage budget. */
+export function __setReceiptPutTimeoutForTests(ms: number): void {
+  RECEIPT_PUT_TIMEOUT_MS = ms;
+}
+
+/** SQLSTATE lock_not_available: the pool's lock_timeout fired (db/index.ts). */
+const LOCK_NOT_AVAILABLE = '55P03';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -99,41 +114,64 @@ export async function uploadReceipt(
   }
   const buffer = Buffer.concat(chunks);
 
-  // 4. Store it and point the expense at it, serialized per expense (issue #157).
-  //    The object key has no extension, so a replacement is one overwrite of the
-  //    same key and nothing is deleted on the way. The expense row is locked
-  //    (SELECT ... FOR UPDATE) across the put and the UPDATE, so two overlapping
-  //    uploads run one after the other and the row always describes the bytes
-  //    that were written last.
+  // 4. Write the bytes to a key of their own, with NO transaction open and no row
+  //    lock held (issue #169). A stalled object store now costs this one request
+  //    (bounded by withStorageTimeout), never a pooled DB connection or a lock
+  //    that every other write to the expense would queue behind.
+  const newKey = receiptVersionKey(expenseId, randomUUID());
+  await withStorageTimeout(
+    'receipt upload',
+    driver.put(newKey, buffer, { contentType, size: buffer.length }),
+    RECEIPT_PUT_TIMEOUT_MS,
+  );
+
+  // 5. A short locked transaction points the row at the new key (issue #157's
+  //    serialization, now without I/O inside it). Overlapping uploads each wrote a
+  //    distinct key; whichever commits last is current, and each one deletes only
+  //    the key it replaced, so neither can delete the other's file.
   const receiptUrl = receiptDownloadPath(expenseId);
-  await db.transaction(async (tx) => {
-    const [locked] = await tx
-      .select({ id: billExpenses.id })
-      .from(billExpenses)
-      .where(and(eq(billExpenses.id, expenseId), eq(billExpenses.organization_id, orgId)))
-      .for('update')
-      .limit(1);
-    if (!locked) throw notFound('Expense not found');
+  let replacedKey: string | null = null;
+  try {
+    await db.transaction(async (tx) => {
+      const [locked] = await tx
+        .select({ id: billExpenses.id, receipt_storage_key: billExpenses.receipt_storage_key })
+        .from(billExpenses)
+        .where(and(eq(billExpenses.id, expenseId), eq(billExpenses.organization_id, orgId)))
+        .for('update')
+        .limit(1);
+      if (!locked) throw notFound('Expense not found');
+      replacedKey = locked.receipt_storage_key;
 
-    await driver.put(receiptKey(expenseId), buffer, { contentType, size: buffer.length });
+      await tx
+        .update(billExpenses)
+        .set({
+          receipt_url: receiptUrl,
+          receipt_filename: file.filename,
+          receipt_mime_type: contentType,
+          receipt_size_bytes: buffer.length,
+          receipt_storage_key: newKey,
+          receipt_uploaded_at: new Date(),
+          updated_at: new Date(),
+        })
+        .where(eq(billExpenses.id, expenseId));
+    });
+  } catch (err) {
+    // The row never pointed at the new object: remove it. Best effort.
+    await driver.delete(newKey).catch(() => undefined);
+    const e = err as { code?: string; cause?: { code?: string } };
+    if (e.code === LOCK_NOT_AVAILABLE || e.cause?.code === LOCK_NOT_AVAILABLE) {
+      throw billError(409, 'EXPENSE_BUSY', 'This expense is being updated by another request. Try again.');
+    }
+    throw err;
+  }
 
-    await tx
-      .update(billExpenses)
-      .set({
-        receipt_url: receiptUrl,
-        receipt_filename: file.filename,
-        receipt_mime_type: contentType,
-        receipt_size_bytes: buffer.length,
-        receipt_uploaded_at: new Date(),
-        updated_at: new Date(),
-      })
-      .where(eq(billExpenses.id, expenseId));
-  });
-
-  // 5. Only after the row names the extensionless key: drop any pre-#157
-  //    `<id><ext>` object, which nothing references any more. Best effort.
-  for (const legacyExt of Object.keys(RECEIPT_TYPES)) {
-    await driver.delete(legacyReceiptKey(expenseId, legacyExt)).catch(() => undefined);
+  // 6. After commit, nothing references the replaced object any more: delete it,
+  //    and the pre-#169 fixed keys (extensionless #157 key, pre-#157 `<id><ext>`).
+  //    Best effort; a leftover object is unreferenced and never served.
+  const stale: string[] = [receiptKey(expenseId), ...Object.keys(RECEIPT_TYPES).map((x) => legacyReceiptKey(expenseId, x))];
+  if (replacedKey && replacedKey !== newKey) stale.unshift(replacedKey);
+  for (const key of stale) {
+    await driver.delete(key).catch(() => undefined);
   }
 
   return {
@@ -163,6 +201,7 @@ export async function openReceipt(
       receipt_filename: billExpenses.receipt_filename,
       receipt_mime_type: billExpenses.receipt_mime_type,
       receipt_uploaded_at: billExpenses.receipt_uploaded_at,
+      receipt_storage_key: billExpenses.receipt_storage_key,
     })
     .from(billExpenses)
     .where(and(eq(billExpenses.id, expenseId), eq(billExpenses.organization_id, orgId)))
@@ -178,15 +217,29 @@ export async function openReceipt(
 
   const driver = requireDriver();
   let obj: { stream: NodeJS.ReadableStream; size: number; contentType: string };
-  try {
-    obj = await driver.getStream(receiptKey(expense.id));
-  } catch {
-    // Pre-#157 receipts live at `<id><ext>`, derived from the row's filename.
-    if (!RECEIPT_TYPES[ext]) throw billError(404, 'RECEIPT_NOT_FOUND', 'This expense has no uploaded receipt');
+  const versioned = expense.receipt_storage_key;
+  if (versioned) {
+    // Issue #169: the row names the current object. Only ever one of this
+    // expense's own versioned keys; anything else is treated as missing.
+    if (!isReceiptVersionKeyFor(expense.id, versioned)) {
+      throw billError(404, 'RECEIPT_NOT_FOUND', 'The receipt file is missing from storage');
+    }
     try {
-      obj = await driver.getStream(legacyReceiptKey(expense.id, ext));
+      obj = await driver.getStream(versioned);
     } catch {
       throw billError(404, 'RECEIPT_NOT_FOUND', 'The receipt file is missing from storage');
+    }
+  } else {
+    // Pre-#169 rows: the #157 extensionless key, then pre-#157 `<id><ext>`.
+    try {
+      obj = await driver.getStream(receiptKey(expense.id));
+    } catch {
+      if (!RECEIPT_TYPES[ext]) throw billError(404, 'RECEIPT_NOT_FOUND', 'This expense has no uploaded receipt');
+      try {
+        obj = await driver.getStream(legacyReceiptKey(expense.id, ext));
+      } catch {
+        throw billError(404, 'RECEIPT_NOT_FOUND', 'The receipt file is missing from storage');
+      }
     }
   }
   // Serve the type stored with the bytes when it is one we accept, so the

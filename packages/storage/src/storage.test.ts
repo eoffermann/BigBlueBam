@@ -4,6 +4,20 @@ import { encryptSecret, decryptSecret, fingerprint, displayHint } from './secret
 import { createDriver, createBootstrapDriver } from './factory.js';
 import { buildStorageKey, billInvoicePdfKey } from './index.js';
 import { S3Driver } from './s3-driver.js';
+import { StorageTimeoutError, withStorageTimeout } from './errors.js';
+
+describe('withStorageTimeout (issue #169)', () => {
+  it('passes a result through, and rejects a stalled call with a 504 STORAGE_TIMEOUT', async () => {
+    expect(await withStorageTimeout('put', Promise.resolve(7), 50)).toBe(7);
+    const err = await withStorageTimeout('put', new Promise(() => {}), 20).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(StorageTimeoutError);
+    expect(err).toMatchObject({ statusCode: 504, code: 'STORAGE_TIMEOUT', operation: 'put', timeoutMs: 20 });
+  });
+
+  it('propagates the call own error unchanged', async () => {
+    await expect(withStorageTimeout('put', Promise.reject(new Error('NoSuchBucket')), 50)).rejects.toThrow('NoSuchBucket');
+  });
+});
 
 describe('shared object keys (issue #148)', () => {
   it('billInvoicePdfKey is the key the worker writes and bill-api reads', () => {

@@ -35,6 +35,10 @@ export const billExpenses = pgTable(
     receipt_mime_type: varchar('receipt_mime_type', { length: 100 }),
     receipt_size_bytes: bigint('receipt_size_bytes', { mode: 'number' }),
     receipt_uploaded_at: timestamp('receipt_uploaded_at', { withTimezone: true }),
+    // Added by migration 0272_bill_expense_receipt_storage_key.sql (issue #169):
+    // the versioned object key of the current receipt. Null for receipts
+    // uploaded before #169, which are read from the older fixed keys.
+    receipt_storage_key: text('receipt_storage_key'),
     status: varchar('status', { length: 20 }).notNull().default('pending'),
     approved_by: uuid('approved_by').references(() => users.id),
     billable: boolean('billable').notNull().default(false),

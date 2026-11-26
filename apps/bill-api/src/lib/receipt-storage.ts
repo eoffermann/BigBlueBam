@@ -35,13 +35,28 @@ export const RECEIPT_TYPES: Record<string, string> = {
 };
 
 /**
- * The one object key of an expense's receipt (issue #157). No extension: the
- * content type travels with the object and the row, so replacing a receipt is a
- * single overwrite of this key with nothing to clean up, and two overlapping
- * uploads can no longer delete each other's files.
+ * Issue #157-era key: one extensionless key per expense, overwritten in place.
+ * Still read for receipts uploaded before #169 (rows with no receipt_storage_key).
  */
 export function receiptKey(expenseId: string): string {
   return `${RECEIPT_PREFIX}/${expenseId}`;
+}
+
+/**
+ * Issue #169: each upload writes its own key, `bill/receipts/<expense-id>/<version>`,
+ * BEFORE any transaction opens, and the expense row then records which key is
+ * current (bill_expenses.receipt_storage_key). The object PUT never runs under a
+ * row lock, and because every upload has a distinct key, the last upload to
+ * commit wins and deletes only the key it replaced, never another upload's key.
+ */
+export function receiptVersionKey(expenseId: string, version: string): string {
+  return `${RECEIPT_PREFIX}/${expenseId}/${version}`;
+}
+
+/** True when `key` is one of this expense's versioned receipt keys. */
+export function isReceiptVersionKeyFor(expenseId: string, key: string): boolean {
+  const prefix = `${RECEIPT_PREFIX}/${expenseId}/`;
+  return key.startsWith(prefix) && /^[A-Za-z0-9-]+$/.test(key.slice(prefix.length));
 }
 
 /** Pre-#157 key shape (`<expense-id><ext>`), still read as a fallback for old receipts. */
