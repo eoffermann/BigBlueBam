@@ -577,7 +577,7 @@ Covers `permissions-admin.routes.ts` and `permissions-divergences.routes.ts`.
 | `PUT /projects/:id/github-integration` | — _(skip: GitHub integration config — UI-only)_ | Upsert GitHub integration (reveals secret) | `apps/frontend/src/pages/settings.tsx` |
 | `DELETE /projects/:id/github-integration` | — _(skip: GitHub integration config — UI-only)_ | Disconnect GitHub integration | `apps/frontend/src/pages/settings.tsx` |
 | `GET /tasks/:id/github-refs` | — _(skip: GitHub integration config — UI-only)_ | List linked commits/PRs for a task | `apps/frontend/src/pages/*task*` |
-| `POST /webhooks/github` | — _(skip: inbound webhook — public-inbound)_ | Public webhook ingest (HMAC-verified) | external (GitHub) |
+| `POST /webhooks/github` | — _(skip: inbound webhook — public-inbound)_ | Public webhook ingest (HMAC-verified). `ping` stores `hook.events` in `github_integrations.subscribed_events` (NULL = unknown); every `pull_request` and `pull_request_review` delivery is appended to `github_pr_events` whatever its task mention (migration 0273, read by Bastion's `change.*` probes) | external (GitHub) |
 
 
 ## Bam — Integrations: Slack

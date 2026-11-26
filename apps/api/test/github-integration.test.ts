@@ -5,6 +5,8 @@ import {
   verifyGithubSignature,
   generateWebhookSecret,
   decidePrTransition,
+  extractHookEvents,
+  buildPrEventRow,
 } from '../src/services/github-integration.service.js';
 
 describe('GitHub integration service', () => {
@@ -134,6 +136,72 @@ describe('GitHub integration service', () => {
       const a = generateWebhookSecret();
       const b = generateWebhookSecret();
       expect(a).not.toBe(b);
+    });
+  });
+
+  describe('extractHookEvents (migration 0273)', () => {
+    it('returns the sorted, de-duplicated hook.events', () => {
+      expect(extractHookEvents({ hook: { events: ['push', 'pull_request', 'push'] } })).toEqual([
+        'pull_request',
+        'push',
+      ]);
+    });
+
+    it('returns null (unknown) when the list is absent, empty or not an array', () => {
+      expect(extractHookEvents({})).toBeNull();
+      expect(extractHookEvents(null)).toBeNull();
+      expect(extractHookEvents({ hook: { events: [] } })).toBeNull();
+      expect(extractHookEvents({ hook: { events: 'push' } })).toBeNull();
+      expect(extractHookEvents({ hook: { events: [1, null] } })).toBeNull();
+    });
+  });
+
+  describe('buildPrEventRow (migration 0273)', () => {
+    const ctx = {
+      org_id: 'org',
+      integration_id: 'int',
+      project_id: 'proj',
+      repo_owner: 'skipper',
+      repo_name: 'radio',
+      delivery_id: 'd-1',
+      now: new Date('2026-11-26T00:00:00Z'),
+    };
+
+    it('ignores other events and payloads without a PR number', () => {
+      expect(buildPrEventRow('push', { pull_request: { number: 1 } }, ctx)).toBeNull();
+      expect(buildPrEventRow('pull_request', { pull_request: {} }, ctx)).toBeNull();
+    });
+
+    it('parses task refs from the title and body even when none match a task', () => {
+      const row = buildPrEventRow(
+        'pull_request',
+        { action: 'opened', pull_request: { number: 3, title: 'MAGE-38 fix', body: 'see isle-4' } },
+        ctx,
+      );
+      expect(row?.task_refs.sort()).toEqual(['ISLE-4', 'MAGE-38']);
+      expect(row?.merged).toBe(false);
+      expect(row?.merged_at).toBeNull();
+      expect(row?.occurred_at).toEqual(ctx.now);
+    });
+
+    it('uses merged_at as occurred_at for a merge, and the review time for a review', () => {
+      const merge = buildPrEventRow(
+        'pull_request',
+        { action: 'closed', pull_request: { number: 3, merged: true, merged_at: '2026-11-20T10:00:00Z' } },
+        ctx,
+      );
+      expect(merge?.occurred_at.toISOString()).toBe('2026-11-20T10:00:00.000Z');
+      const review = buildPrEventRow(
+        'pull_request_review',
+        {
+          action: 'submitted',
+          pull_request: { number: 3 },
+          review: { id: 5, state: 'CHANGES_REQUESTED', submitted_at: '2026-11-19T08:00:00Z' },
+        },
+        ctx,
+      );
+      expect(review?.review_state).toBe('changes_requested');
+      expect(review?.occurred_at.toISOString()).toBe('2026-11-19T08:00:00.000Z');
     });
   });
 });

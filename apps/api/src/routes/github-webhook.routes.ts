@@ -1,12 +1,19 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { eq, and, inArray } from 'drizzle-orm';
 import { db } from '../db/index.js';
-import { githubIntegrations, taskGithubRefs } from '../db/schema/github-integrations.js';
+import {
+  githubIntegrations,
+  githubPrEvents,
+  taskGithubRefs,
+} from '../db/schema/github-integrations.js';
+import { projects } from '../db/schema/projects.js';
 import { tasks } from '../db/schema/tasks.js';
 import {
   parseTaskRefs,
   verifyGithubSignature,
   decidePrTransition,
+  extractHookEvents,
+  buildPrEventRow,
 } from '../services/github-integration.service.js';
 import { logActivity } from '../services/activity.service.js';
 
@@ -19,9 +26,12 @@ import { logActivity } from '../services/activity.service.js';
  * the raw body around so HMAC verification sees the exact bytes GitHub
  * signed (re-serializing JSON would break the signature).
  *
- * We only act on two event types:
- *   - push           → parse commit messages, link to tasks
- *   - pull_request   → on opened/merged, link + optionally transition
+ * We act on these event types:
+ *   - ping                → store hook.events in github_integrations.subscribed_events
+ *   - push                → parse commit messages, link to tasks
+ *   - pull_request        → append to github_pr_events; on opened/merged, link +
+ *                           optionally transition
+ *   - pull_request_review → append to github_pr_events (Bastion change evidence)
  *
  * Anything else returns 204 (we acknowledge, but didn't do anything).
  */
@@ -83,9 +93,12 @@ export default async function githubWebhookRoutes(fastify: FastifyInstance) {
     const signature = request.headers['x-hub-signature-256'] as string | undefined;
     const rawBody = (request as RawBodyRequest).rawBody ?? Buffer.from('');
 
-    // We only care about push + pull_request. Everything else (ping,
-    // issues, stars, etc.) gets a quiet 204 after signature check.
-    const actionable = event === 'push' || event === 'pull_request';
+    // We act on push, pull_request and pull_request_review (the last only
+    // to record it in github_pr_events for Bastion's change-management
+    // evidence), and on ping (to store hook.events). Everything else
+    // (issues, stars, etc.) gets a quiet 204.
+    const actionable =
+      event === 'push' || event === 'pull_request' || event === 'pull_request_review';
     if (!actionable && event !== 'ping') {
       return reply.status(204).send();
     }
@@ -134,12 +147,54 @@ export default async function githubWebhookRoutes(fastify: FastifyInstance) {
       });
     }
 
-    // ping events are a handshake — valid signature, we're done.
+    // ping is the handshake. GitHub sends it when the webhook is created and
+    // again on "Redeliver", carrying hook.events: the event list the webhook
+    // is subscribed to. We store it (migration 0273) so Bastion can tell
+    // "review events are not sent" apart from "unknown" (NULL).
     if (event === 'ping') {
-      return reply.send({ data: { processed: 0 } });
+      const events = extractHookEvents(request.body);
+      if (events) {
+        await db
+          .update(githubIntegrations)
+          .set({ subscribed_events: events, updated_at: new Date() })
+          .where(eq(githubIntegrations.id, integration.id));
+      }
+      return reply.send({ data: { processed: 0, subscribed_events: events } });
     }
 
     if (!integration.enabled) {
+      return reply.send({ data: { processed: 0 } });
+    }
+
+    // Every pull_request and pull_request_review delivery is appended to
+    // github_pr_events whatever its task mention (Bastion spec 3.1/8.4), and
+    // before the task linking below. A failed insert fails the delivery so
+    // GitHub shows it as failed and "Redeliver" retries it; a redelivery of a
+    // recorded delivery is a no-op (unique on repo + X-GitHub-Delivery).
+    if (event === 'pull_request' || event === 'pull_request_review') {
+      const [project] = await db
+        .select({ org_id: projects.org_id })
+        .from(projects)
+        .where(eq(projects.id, integration.project_id))
+        .limit(1);
+      const deliveryHeader = request.headers['x-github-delivery'];
+      const row = project
+        ? buildPrEventRow(event, request.body, {
+            org_id: project.org_id,
+            integration_id: integration.id,
+            project_id: integration.project_id,
+            repo_owner: integration.repo_owner,
+            repo_name: integration.repo_name,
+            delivery_id: typeof deliveryHeader === 'string' ? deliveryHeader : null,
+            now: new Date(),
+          })
+        : null;
+      if (row) {
+        await db.insert(githubPrEvents).values(row).onConflictDoNothing();
+      }
+    }
+
+    if (event === 'pull_request_review') {
       return reply.send({ data: { processed: 0 } });
     }
 

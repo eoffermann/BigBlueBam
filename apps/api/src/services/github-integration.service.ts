@@ -102,3 +102,151 @@ export function decidePrTransition(
   if (action === 'closed' && merged) return config.transition_on_pr_merged_phase_id ?? null;
   return null;
 }
+
+/**
+ * Reads `hook.events` from a `ping` delivery (migration 0273, Bastion spec 3.1/8.4). Returns
+ * the de-duplicated, sorted event names, or null when the payload carries no usable list, so
+ * the caller leaves `github_integrations.subscribed_events` as it was (NULL means unknown).
+ */
+export function extractHookEvents(body: unknown): string[] | null {
+  const events = (body as { hook?: { events?: unknown } } | null)?.hook?.events;
+  if (!Array.isArray(events)) return null;
+  const names = events.filter(
+    (e): e is string => typeof e === 'string' && e.length > 0 && e.length <= 64,
+  );
+  if (names.length === 0) return null;
+  return [...new Set(names)].sort();
+}
+
+type GithubUser = { login?: string | null } | null | undefined;
+
+interface GithubPrShape {
+  number?: number;
+  title?: string | null;
+  body?: string | null;
+  html_url?: string | null;
+  merged?: boolean | null;
+  merged_at?: string | null;
+  merged_by?: GithubUser;
+  merge_commit_sha?: string | null;
+  updated_at?: string | null;
+  user?: GithubUser;
+  head?: { sha?: string | null } | null;
+  base?: { ref?: string | null } | null;
+}
+
+interface GithubReviewShape {
+  id?: number;
+  state?: string | null;
+  submitted_at?: string | null;
+  commit_id?: string | null;
+  user?: GithubUser;
+}
+
+/** One github_pr_events row, minus the server-assigned id/received_at. */
+export interface GithubPrEventRow {
+  org_id: string;
+  integration_id: string;
+  project_id: string;
+  repo_owner: string;
+  repo_name: string;
+  delivery_id: string | null;
+  event_type: 'pull_request' | 'pull_request_review';
+  action: string;
+  pr_number: number;
+  pr_title: string | null;
+  pr_html_url: string | null;
+  pr_author_login: string | null;
+  base_ref: string | null;
+  default_branch: string | null;
+  head_sha: string | null;
+  merged: boolean;
+  merged_at: Date | null;
+  merged_by_login: string | null;
+  merge_commit_sha: string | null;
+  review_id: number | null;
+  review_state: string | null;
+  reviewer_login: string | null;
+  review_submitted_at: Date | null;
+  review_commit_sha: string | null;
+  task_refs: string[];
+  occurred_at: Date;
+}
+
+function toDate(value: string | null | undefined): Date | null {
+  if (!value) return null;
+  const d = new Date(value);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+function clip(value: string | null | undefined, max: number): string | null {
+  if (value === null || value === undefined) return null;
+  return value.length > max ? value.slice(0, max) : value;
+}
+
+/**
+ * Builds the github_pr_events row for one pull_request or pull_request_review delivery
+ * (Bastion spec 3.1/8.4): every delivery is recorded whatever its task mention, so the
+ * change-management probes see every merge and every review. Returns null for any other
+ * event or a payload without a PR number. `now` is the receive time, used when GitHub sends
+ * no timestamp of its own.
+ */
+export function buildPrEventRow(
+  event: string,
+  body: unknown,
+  ctx: {
+    org_id: string;
+    integration_id: string;
+    project_id: string;
+    repo_owner: string;
+    repo_name: string;
+    delivery_id: string | null;
+    now: Date;
+  },
+): GithubPrEventRow | null {
+  if (event !== 'pull_request' && event !== 'pull_request_review') return null;
+  const payload = (body ?? {}) as {
+    action?: string;
+    pull_request?: GithubPrShape;
+    review?: GithubReviewShape;
+    repository?: { default_branch?: string | null };
+  };
+  const pr = payload.pull_request;
+  if (!pr || typeof pr.number !== 'number') return null;
+  const review = event === 'pull_request_review' ? payload.review : undefined;
+  const merged = pr.merged === true;
+  const mergedAt = merged ? toDate(pr.merged_at) : null;
+  const reviewSubmittedAt = toDate(review?.submitted_at);
+  const occurredAt =
+    event === 'pull_request_review'
+      ? (reviewSubmittedAt ?? ctx.now)
+      : (mergedAt ?? toDate(pr.updated_at) ?? ctx.now);
+  return {
+    org_id: ctx.org_id,
+    integration_id: ctx.integration_id,
+    project_id: ctx.project_id,
+    repo_owner: ctx.repo_owner,
+    repo_name: ctx.repo_name,
+    delivery_id: clip(ctx.delivery_id, 100),
+    event_type: event,
+    action: clip(payload.action, 32) ?? 'unknown',
+    pr_number: pr.number,
+    pr_title: pr.title ?? null,
+    pr_html_url: pr.html_url ?? null,
+    pr_author_login: clip(pr.user?.login, 200),
+    base_ref: clip(pr.base?.ref, 255),
+    default_branch: clip(payload.repository?.default_branch, 255),
+    head_sha: clip(pr.head?.sha, 64),
+    merged,
+    merged_at: mergedAt,
+    merged_by_login: merged ? clip(pr.merged_by?.login, 200) : null,
+    merge_commit_sha: merged ? clip(pr.merge_commit_sha, 64) : null,
+    review_id: typeof review?.id === 'number' ? review.id : null,
+    review_state: clip(review?.state?.toLowerCase(), 32),
+    reviewer_login: clip(review?.user?.login, 200),
+    review_submitted_at: reviewSubmittedAt,
+    review_commit_sha: clip(review?.commit_id, 64),
+    task_refs: parseTaskRefs(`${pr.title ?? ''}\n${pr.body ?? ''}`),
+    occurred_at: occurredAt,
+  };
+}
