@@ -10,7 +10,8 @@ function routeFiles(): string[] {
   return readdirSync(ROUTES).filter((f) => f.endsWith('.routes.ts'));
 }
 function routeSource(file: string): string {
-  return readFileSync(join(ROUTES, file), 'utf8');
+  // LF-normalized: a Windows checkout (core.autocrlf) has CRLF, and anchors below contain '\n'.
+  return readFileSync(join(ROUTES, file), 'utf8').replace(/\r\n/g, '\n');
 }
 
 /**
