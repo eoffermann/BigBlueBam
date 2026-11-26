@@ -119,7 +119,9 @@ export default async function fileRoutes(fastify: FastifyInstance) {
       await storage.put(key, buffer, { contentType, size: buffer.length });
 
       // Issue #156: only this user, in this org, may attach this key to a message.
-      await recordUploadGrant(key, request.user!.org_id, request.user!.id);
+      // (requireAuth guarantees a user; without one no grant exists and the key is unattachable.)
+      const uploader = request.user;
+      if (uploader) await recordUploadGrant(key, uploader.org_id, uploader.id);
 
       // Issue #142: no /files/ URL any more. The object is only reachable after it
       // is attached to a message, through the channel-authorized download route
@@ -265,7 +267,9 @@ export default async function fileRoutes(fastify: FastifyInstance) {
       const uploadUrl = await storage.presignPut(key, expiresIn);
 
       // Issue #156: only this user, in this org, may attach this key to a message.
-      await recordUploadGrant(key, request.user!.org_id, request.user!.id);
+      // (requireAuth guarantees a user; without one no grant exists and the key is unattachable.)
+      const uploader = request.user;
+      if (uploader) await recordUploadGrant(key, uploader.org_id, uploader.id);
 
       return reply.status(201).send({
         data: {
