@@ -36,6 +36,21 @@ test('findStaleAppCounts accepts the right count and ignores small numbers', () 
   assert.deepEqual(findStaleAppCounts(text, 24, 'x'), []);
 });
 
+test('the suite introduction files are checked, including the meta.json app_count (issue #143)', () => {
+  for (const rel of [
+    'docs/apps/introduction/help.md',
+    'docs/apps/introduction/help-index.json',
+    'docs/apps/introduction/guide.md',
+    'docs/apps/introduction/_narrative.md',
+    'docs/apps/introduction/_marketing_hook.md',
+    'docs/apps/introduction/meta.json',
+  ]) {
+    assert.ok(PUBLISHED.includes(rel), rel);
+  }
+  const old = ['## The sixteen apps', 'Sixteen apps that behave like one product.', '  "app_count": 16,'].join('\n');
+  assert.equal(findStaleAppCounts(old, 24, 'x').length, 3);
+});
+
 test('missingFaqNames finds catalog apps the FAQ prose forgot', () => {
   const tsx = "  {\n    question: 'How many apps are included?',\n    answer: `Bam (x), Banter (y)`,\n  },\n";
   assert.deepEqual(missingFaqNames(faqAnswer(tsx), ['Bam', 'Banter', 'Bursar']), ['Bursar']);

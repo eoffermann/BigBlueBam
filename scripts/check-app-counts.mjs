@@ -31,6 +31,13 @@ export const PUBLISHED = [
   'docs/apps/introduction/marketing.md',
   'site/src/pages/docs.tsx',
   'site/src/lib/facts.ts',
+  // Issue #143: the suite introduction (in-app Help Center, guide, manual sources).
+  'docs/apps/introduction/help.md',
+  'docs/apps/introduction/help-index.json',
+  'docs/apps/introduction/guide.md',
+  'docs/apps/introduction/_narrative.md',
+  'docs/apps/introduction/_marketing_hook.md',
+  'docs/apps/introduction/meta.json',
 ];
 
 const ONES = ['', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine',
@@ -58,6 +65,7 @@ export const APP_COUNT_PATTERNS = [
   /\bapps-(\d+)\b/gi,
   new RegExp(`\\b${NUM} (?:integrated |connected |first-party )?(?:apps|applications)\\b`, 'gi'),
   new RegExp(`\\ball ${NUM} live\\b`, 'gi'),
+  /"app_count":\s*(\d+)/g,
 ];
 
 export function findStaleAppCounts(text, expected, label) {

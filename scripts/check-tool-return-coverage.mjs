@@ -140,12 +140,29 @@ if (totalMissingReturns > 0) {
 // --- Check 3: published tool counts match the code ---
 // The README and the marketing site state the tool count. It drifted to a
 // stale 804 for months; this keeps every published number equal to the real one.
-const PUBLISHED = ['README.md', 'site/index.html', 'site/src/content/apps/introduction.md', 'site/src/lib/facts.ts'];
+const PUBLISHED = [
+  'README.md',
+  'site/index.html',
+  'site/src/content/apps/introduction.md',
+  'site/src/lib/facts.ts',
+  // Issue #143: the suite introduction (in-app Help Center, guide, manual sources).
+  'docs/apps/introduction/help.md',
+  'docs/apps/introduction/help-index.json',
+  'docs/apps/introduction/guide.md',
+  'docs/apps/introduction/marketing.md',
+  'docs/apps/introduction/mcp-tools.md',
+  'docs/apps/introduction/_narrative.md',
+  'docs/apps/introduction/_marketing_hook.md',
+  'docs/apps/introduction/meta.json',
+];
 const COUNT_PATTERNS = [
   /\b(\d{3,4})(?:-tool\b| (?:MCP |AI |structured )?tools?\b)/gi,
   /MCP%20tools-(\d+)/g,
   /\b(\d{3,4}) across \d+ modules/g,
   /MCP_TOOL_COUNT = (\d+)/g,
+  // "(885 across the suite)", "exposes 885 of them", "ships 885 of these tools"
+  /\b(\d{3,4}) (?:across the suite|of them|of these)\b/g,
+  /"mcp_tool_count":\s*(\d+)/g,
 ];
 const staleCounts = [];
 for (const rel of PUBLISHED) {

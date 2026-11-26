@@ -1,4 +1,4 @@
-# BigBlueBam - One suite, sixteen apps, built for people and agents together
+# BigBlueBam - One suite, twenty-four apps, built for people and agents together
 
 ## Overview
 
@@ -10,7 +10,7 @@ decision gets made in chat and never reaches the doc. The "AI feature" each vend
 added last year is a chat box in the corner that can summarize a page but cannot
 actually do anything.
 
-BigBlueBam is the answer to that sprawl: sixteen applications that behave like one
+BigBlueBam is the answer to that sprawl: twenty-four applications that behave like one
 product. They share a single login, a single organization and user model, and a
 single set of permissions. A deal in the CRM can become a project. A sticky note
 on the whiteboard can become a task. A won deal can become an invoice. You do not
@@ -25,7 +25,7 @@ Three ideas run through the whole suite:
 - **Agents are first-class, not a sidebar.** Nearly every action a person can take
   in BigBlueBam is also available as an MCP tool, so an AI agent can do real work
   on the same boards, with the same permissions and the same audit trail as a
-  person. The suite ships 847 of these tools. This is the architecture,
+  person. The suite ships 885 of these tools. This is the architecture,
   not an add-on.
 - **Presence is pervasive.** Every place you work is a live, shared surface. You
   can see which teammates are on the same task, deal, document, diagram, or board,
@@ -80,7 +80,7 @@ a command palette move you between them.
 - The **"(?)" Help Center** in each app's top bar opens the same documentation you
   are reading now, per app, with search and cross-references.
 
-## The sixteen apps
+## The twenty-four apps
 
 Here is the whole suite at a glance, grouped by what you are trying to do. Each
 app is deep enough to stand on its own and is genuinely better because it lives
@@ -89,7 +89,7 @@ take in that app.
 
 ### Plan and build the work
 
-- **Bam (123 tools), project management.** Sprint-powered Kanban boards with
+- **Bam (128 tools), project management.** Sprint-powered Kanban boards with
   configurable phases, swimlanes, carry-forward sprints, and Board, List,
   Timeline, Calendar, and Workload views. The hub the other apps feed work into.
 - **Board (40 tools), visual collaboration.** An infinite canvas for real-time
@@ -106,12 +106,22 @@ take in that app.
 
 ### Communicate and coordinate
 
-- **Banter (69 tools), team chat.** Real-time channels and DMs where your
+- **Banter (80 tools), team chat.** Real-time channels and DMs where your
   conversations and your AI agents work in the same room.
 - **Bureau (37 tools), virtual office.** Live floors and rooms with a presence
   widget that follows you across the suite, so a remote team has a place to be.
 - **Book (25 tools), scheduling.** Team calendars, availability, and public
   booking links, with bookings that can flow into the CRM.
+
+### Store and review files
+
+- **Bin (19 tools), files and structured data.** The suite's file store. Every
+  upload is versioned, scanned before it can be served, and organized in folders,
+  and CSV, JSON, and YAML files can be edited right in the browser.
+- **Bay (14 tools), media review and approval.** Turn a file from Bin into a
+  review: a version stack, notes pinned to a spot in an image, video, audio clip,
+  or 3D model, a decision from each reviewer, and a link you can share with an
+  outside client.
 
 ### Grow the business
 
@@ -121,6 +131,10 @@ take in that app.
   visual builder, saved segments, and open and click analytics.
 - **Helpdesk (11 tools), support portal.** A branded support portal per
   organization, where customer tickets resolve on the project board.
+- **Braid (13 tools), customer identity.** Recognizes that a CRM contact, a
+  billing client, a help desk requester, and a booking attendee are the same
+  person or company, and keeps one profile for them, with the uncertain matches
+  sent to a person to confirm.
 
 ### Run operations
 
@@ -130,8 +144,26 @@ take in that app.
   scheduled reports built from the data the rest of the suite already creates.
 - **Blank (20 tools), forms.** Build forms and surveys in a visual editor, publish
   them to a public link, and collect responses.
-- **Bolt (24 tools), automation.** Event-driven workflows that connect every app:
+- **Bolt (26 tools), automation.** Event-driven workflows that connect every app:
   when this happens, if these conditions hold, then run these steps.
+- **Basis (16 tools), metric definitions.** Define a business number such as
+  monthly revenue once, give it an owner, and certify it, so every app and chart
+  reads the same definition. When a certified number moves, Basis explains why
+  in plain language.
+- **Blip (38 tools), telemetry and logs.** Collect logs, crash reports, timings,
+  and custom counters from your own running software, watch them arrive live, and
+  search the history later.
+- **Bulwark (16 tools), contract obligations.** Reads your signed contracts into a
+  list of what each side owes and by when, with each item tied to its clause,
+  watches the deadlines that matter, and drafts the notices for a person to
+  approve and send.
+- **Burn (18 tools), scope and margin.** Reads a signed proposal or statement of
+  work into a priced list of what was sold, then compares the work actually done
+  against it in dollars, so work nobody sold shows up before it becomes an
+  unbilled surprise.
+- **Bursar (20 tools), vendor procurement.** Lays competing vendor quotes side by
+  side against one list of what you need, shows what each quote leaves out, and
+  after you choose a vendor, watches the bills against the agreed prices.
 
 ## How the apps work together
 
@@ -152,7 +184,7 @@ and pasting. A few of the connections that ship today:
   they describe.
 - **One notification surface and one activity stream.** Mentions, assignments, and
   cross-app events land in a shared feed and a unified activity view, so you do not
-  watch sixteen inboxes.
+  watch twenty-four inboxes.
 - **Automation as the connective tissue.** Bolt listens for events from any app
   (a deal goes stale, a form is submitted, a task is assigned) and runs the next
   step, so the integrations above can be extended without writing glue code.
@@ -197,7 +229,7 @@ BigBlueBam treats an AI agent as a teammate that uses the product, not as a
 chatbot pasted onto it.
 
 - **Parity, not a sidebar.** Nearly every action a person can take is also an MCP
-  tool. The suite exposes 847 of them across the sixteen apps and a
+  tool. The suite exposes 885 of them across the twenty-four apps and a
   shared platform layer (identity, search, activity, approvals, and more). An
   agent can plan a sprint, move a deal, triage a ticket, draft a campaign, or run
   a report.
@@ -224,7 +256,7 @@ The software is open source. You can read it, run it, host it, and export from i
 ## User Stories
 
 These walk through scenarios that cross several apps, which is where the suite is
-different from sixteen separate tools.
+different from twenty-four separate tools.
 
 ### Story: A lead becomes a project becomes an invoice
 

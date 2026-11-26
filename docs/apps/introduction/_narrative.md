@@ -1,10 +1,12 @@
 # BigBlueBam - The integrated suite
 
-BigBlueBam is sixteen applications that behave like one product. Project
+BigBlueBam is twenty-four applications that behave like one product. Project
 management, chat, a CRM, a help desk, documents, a whiteboard, knowledge,
 scheduling, invoicing, analytics, forms, automation, goals, diagrams, email
-campaigns, and a virtual office all share one login, one organization and user
-model, and one set of permissions. Work moves between them without re-keying:
+campaigns, a virtual office, a file store with media review, telemetry and logs,
+governed metric definitions, customer identity, contract obligations, project
+scope and margin, and vendor procurement all share one login, one organization
+and user model, and one set of permissions. Work moves between them without re-keying:
 a deal becomes a project, a sticky note becomes a task, a won deal becomes an
 invoice. It is built for small-to-medium teams, it is open source, and it is
 designed so AI agents can do real work on the same surfaces as the people.
@@ -14,8 +16,8 @@ designed so AI agents can do real work on the same surfaces as the people.
 - **One organization across every app** - a single sign-in, the same teammates,
   and one role and permission model everywhere, so switching apps never means
   switching accounts
-- **Sixteen genuinely deep apps** - each strong enough to stand alone (Bam for
-  projects, Bond for CRM, Banter for chat, Beacon for knowledge, and a dozen
+- **Twenty-four genuinely deep apps** - each strong enough to stand alone (Bam for
+  projects, Bond for CRM, Banter for chat, Beacon for knowledge, and twenty
   more) and better for living next to the others
 - **Real cross-app connections** - help desk tickets spawn project tasks,
   bookings create CRM contacts, documents graduate into the knowledge base, and
@@ -26,7 +28,7 @@ designed so AI agents can do real work on the same surfaces as the people.
   office carries your presence across every app, so voice and video feel like a
   hallway run-in rather than a scheduled meeting
 - **Agent parity, not a sidebar** - nearly every action a person can take is also
-  an MCP tool (847 across the suite), so an AI agent works the same
+  an MCP tool (885 across the suite), so an AI agent works the same
   boards with the same permissions and the same audit trail as a teammate
 - **Event-driven automation** - Bolt listens for events from any app and runs the
   next step, so the integrations extend without glue code
