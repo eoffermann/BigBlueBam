@@ -2221,7 +2221,7 @@ AI procurement leveling & spend-baseline monitor. 20 `bursar_*` tools (spec sect
 | `GET /v1/frameworks/:id/compile-runs` | `bastion_compile_framework` | Compile run history, newest first, cursor-paginated (`next_cursor`, `has_more`) | Setup wizard |
 | `GET /v1/controls` | `bastion_list_controls` | Controls in a framework view with requirement chips, setup state and the "Not set up yet" count | Controls (`pages/controls.tsx`) |
 | `POST /v1/controls` | `bastion_upsert_control` | Create a custom control (`custom:<slug>`) | — |
-| `GET /v1/controls/:id` | `bastion_control_status` | One control with requirements and checks | — (Control detail, M6) |
+| `GET /v1/controls/:id` | `bastion_control_status` | One control with requirements and checks | Control detail (`pages/control-detail.tsx`) |
 | `PATCH /v1/controls/:id` | `bastion_upsert_control` | Edit title, summary, owner, risk weight | — |
 | `PATCH /v1/control-requirements/:id` | `bastion_decide_applicability` | One link's applicability and reason (audited) | — |
 | `GET /v1/controls/:id/assertions` | `bastion_control_status` | A control's checks, with population lists and confirmation | — |
@@ -2235,7 +2235,7 @@ AI procurement leveling & spend-baseline monitor. 20 `bursar_*` tools (spec sect
 | `POST /v1/evaluations` | `bastion_run_evaluation` | Evaluate now (202 + queued run; full or one control); 409 `EVALUATION_RUNNING` while one of the same scope is live | — (Readiness "Check now", M5) |
 | `GET /v1/evaluations` | `bastion_list_evaluations` | Evaluation runs, newest first, with status, partial reason and counts; cursor-paginated (`next_cursor`/`has_more`) | — (Control detail, M6) |
 | `GET /v1/evaluations/:id` | `bastion_list_evaluations` | One run's status (polled; no realtime in v1) | — (Control detail, M6) |
-| `GET /v1/controls/:id/evidence` | `bastion_evidence_for` | A control's evidence snapshots with a plain explanation; counts only unless owner, admin or control owner; cursor-paginated | — (Control detail, M6) |
+| `GET /v1/controls/:id/evidence` | `bastion_evidence_for` | A control's evidence snapshots with a plain explanation; counts only unless owner, admin or control owner, who also get named chips (`cited_labels`: API key names, people, "PR #42 in <repo>: <title>", injection-scanned); cursor-paginated | Control detail evidence timeline |
 | `GET /v1/evidence/:id` | `bastion_get_evidence` | One evidence snapshot | — (Control detail, M6) |
 | `GET /v1/evidence/:id/verify` | `bastion_verify_evidence` | Re-hash entry and stored file, check the personal-data commitment, walk to the next signed seal | — (Control detail, M6) |
 | `GET /v1/ledger/seals` | `bastion_list_seals` | Signed daily seals plus every signing key (current and retired); cursor-paginated | — (Sharing, M9) |
