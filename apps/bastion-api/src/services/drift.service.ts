@@ -1,7 +1,7 @@
 // Drift (spec 2.5; 5.1 rows 62-63). A drift row records a worsening of a control's stored status
 // (or of its effective state when an accepted risk ran out) and what happened to its Bam task.
 
-import type { BastionDriftListQuery } from '@bigbluebam/shared';
+import type { BastionDriftListQuery, BastionDriftTaskStatus } from '@bigbluebam/shared';
 import { auditRaw } from '../lib/audit-raw.js';
 import { ConflictError, NotFoundError } from '../lib/errors.js';
 import { type EngineDeps, orgTx } from '../engine/context.js';
@@ -15,13 +15,14 @@ const STATE_WORDS: Record<string, string> = {
   unprovable: "Can't prove yet",
 };
 
-export const TASK_WORDS: Record<string, string> = {
+export const TASK_WORDS: Record<BastionDriftTaskStatus, string> = {
   pending: 'Task on its way',
   created: 'Task created',
   reopened: 'Task reopened',
   updated: 'Task updated',
   no_project: 'No Compliance project set, so no task',
   proposed: 'Waiting for someone to decide on a task',
+  project_unavailable: "Can't file the task: the Compliance project was deleted or has no open phase",
 };
 
 export async function listDrift(engine: EngineDeps, viewer: Viewer, q: BastionDriftListQuery) {
@@ -46,7 +47,7 @@ export async function listDrift(engine: EngineDeps, viewer: Viewer, q: BastionDr
       from_words: STATE_WORDS[r.from_status as string] ?? r.from_status,
       to_words: STATE_WORDS[r.to_status as string] ?? r.to_status,
       reason_words: REASON_PHRASE[r.reason as string] ?? r.reason,
-      task_words: TASK_WORDS[r.task_status as string] ?? r.task_status,
+      task_words: TASK_WORDS[r.task_status as BastionDriftTaskStatus] ?? r.task_status,
     })),
     has_more: rows.length > q.limit,
     next_cursor: rows.length > q.limit ? (page[page.length - 1]?.detected_at ?? null) : null,

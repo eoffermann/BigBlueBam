@@ -131,6 +131,22 @@ export interface BamTarget {
   timeoutMs?: number;
 }
 
+/**
+ * The api's refusal codes that mean "the Compliance project cannot take tasks" (#229): deleted,
+ * or no open phase. The drift row records project_unavailable instead of staying pending, and
+ * redriveProjectDeliveries (remediation.ts) re-sends these rows once the project is fixed.
+ */
+export const PROJECT_UNAVAILABLE_CODES = ['PROJECT_NOT_FOUND', 'CONFIGURATION_ERROR'] as const;
+
+function errorCodeOf(text: string): string | null {
+  try {
+    const code = (JSON.parse(text) as { error?: { code?: unknown } }).error?.code;
+    return typeof code === 'string' ? code : null;
+  } catch {
+    return null;
+  }
+}
+
 const BAM_PATHS: Record<'bam_task_upsert' | 'bam_task_comment', string> = {
   bam_task_upsert: '/internal/bastion/tasks/upsert',
   bam_task_comment: '/internal/bastion/tasks/comment',
@@ -160,6 +176,11 @@ export async function deliverToBam(sql: EngineDeps['sql'], bam: BamTarget | unde
   }
   const text = await res.text().catch(() => '');
   if (!res.ok) {
+    const code = errorCodeOf(text);
+    if (row.kind === 'bam_task_upsert' && typeof p.drift_id === 'string' && code && (PROJECT_UNAVAILABLE_CODES as readonly string[]).includes(code)) {
+      await sql`UPDATE bastion_drift_events SET task_status = 'project_unavailable'
+                 WHERE organization_id = ${row.organization_id} AND id = ${p.drift_id} AND task_status = 'pending'`;
+    }
     return { ok: false, error: `Bam API ${res.status}: ${text.slice(0, 300)}`, status: res.status, permanent: isPermanentHttpFailure(res.status) };
   }
   if (row.kind === 'bam_task_upsert' && typeof p.drift_id === 'string') {

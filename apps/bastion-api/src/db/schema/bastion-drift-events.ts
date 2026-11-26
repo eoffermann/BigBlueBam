@@ -20,7 +20,8 @@ export const bastionDriftEvents = pgTable(
     reason: varchar('reason', { length: 64 }).notNull(),
     snapshot_id: uuid('snapshot_id').references(() => bastionEvidenceSnapshots.id, { onDelete: 'set null' }),
     bam_task_id: uuid('bam_task_id'),
-    task_status: varchar('task_status', { length: 16 }).default('pending').notNull(),
+    // varchar(32) since 0285: 'project_unavailable' (#229) does not fit in 16.
+    task_status: varchar('task_status', { length: 32 }).default('pending').notNull(),
     proposal_id: uuid('proposal_id'),
     acknowledged_by: uuid('acknowledged_by').references(() => users.id, { onDelete: 'set null' }),
     acknowledged_at: timestamp('acknowledged_at', { withTimezone: true }),

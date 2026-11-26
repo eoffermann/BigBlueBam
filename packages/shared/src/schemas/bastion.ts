@@ -390,6 +390,8 @@ export const BastionDriftTaskStatus = z.enum([
   'updated',
   'no_project',
   'proposed',
+  /** The Compliance project was deleted or has no open phase; re-driven once fixed (#229, 0285). */
+  'project_unavailable',
 ]);
 export type BastionDriftTaskStatus = z.infer<typeof BastionDriftTaskStatus>;
 
@@ -1153,6 +1155,8 @@ export type BastionEvidenceSourceColumn = z.infer<typeof BastionEvidenceSourceCo
 /** Readiness banners (spec 6.1). */
 export const BastionReadinessBanner = z.enum([
   'no_compliance_project',
+  /** Set, but deleted or with no open phase: every task is refused until it is fixed (#229). */
+  'compliance_project_unavailable',
   'checks_stale',
   'scanning_off',
   'storage_not_set_up',

@@ -6,7 +6,10 @@
 --   writes it on those refusals, Readiness shows a plain banner, and fixing the project (or
 --   picking another one in Setup) re-drives the dead rows and puts the drift rows back to
 --   'pending'. Spec 2.5 of docs/brainstorming/2026_11_25_20_03_APP_DESIGN_bastion.md.
--- Client impact: additive only. One more allowed value on bastion_drift_events.task_status.
+-- Client impact: additive only. One more allowed value on bastion_drift_events.task_status, and
+--   the column widens from varchar(16) to varchar(32) so the value fits.
+
+ALTER TABLE bastion_drift_events ALTER COLUMN task_status TYPE varchar(32);
 
 DO $$
 BEGIN

@@ -231,6 +231,9 @@ describe.skipIf(!DATABASE_URL)('Bastion M3 services (live database)', { timeout:
     const [mine] = await sql`
       INSERT INTO projects (org_id, name, slug) VALUES (${ORG}, 'Compliance', 'bastion-m3-compliance') RETURNING id`;
     await sql`INSERT INTO project_memberships (project_id, user_id, role) VALUES (${mine!.id}, ${USER}, 'admin')`;
+    // #229: a project with no open phase cannot take tasks, so it is refused in plain words.
+    await expect(s.setup.setComplianceProject(viewer, { project_id: mine!.id })).rejects.toMatchObject({ code: 'PROJECT_HAS_NO_OPEN_PHASE' });
+    await sql`INSERT INTO phases (project_id, name, position, is_start) VALUES (${mine!.id}, 'To do', 0, true), (${restricted!.id}, 'To do', 0, true)`;
     const notMember = s.setup.setComplianceProject(viewer, { project_id: restricted!.id });
     await expect(notMember).rejects.toMatchObject({ name: 'NotFoundError' });
     await expect(notMember).rejects.toThrow('We could not find that project in your organization.');

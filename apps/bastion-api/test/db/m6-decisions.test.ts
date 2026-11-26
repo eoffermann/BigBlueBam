@@ -287,4 +287,52 @@ describe.skipIf(!DATABASE_URL)('M6 gaps, fixes, exceptions and drift (live datab
     expect(r2.fixes_expired).toBe(1);
     expect((await sql`SELECT status FROM bastion_fix_drafts WHERE id = ${third.id}`)[0]!.status).toBe('expired');
   });
+
+  it('a deleted Compliance project: drift rows say project_unavailable, Readiness says so, and fixing it re-drives the tasks (#229)', async () => {
+    const s = await setUp('project-gone');
+    const deps = makeDeps(sql, { clock: clock() });
+    const [control, assertion] = [s.controls[0]!, s.assertions[0]!];
+    await evaluate(deps, s.org, control, assertion, 'fail', [], new Date(Date.now() - DAY));
+
+    // The api refuses the upsert exactly as bastion-internal.service.ts does for a deleted project.
+    const refuse = vi.fn(async () =>
+      new Response(JSON.stringify({ error: { code: 'PROJECT_NOT_FOUND', message: 'The Compliance project was not found in this organization', details: [] } }), { status: 404 }),
+    );
+    const refusing: Deliverer = {
+      deliver: (row) => (row.kind === 'bolt_event' ? Promise.resolve({ ok: true }) : deliverToBam(sql, { apiUrl: 'http://api:4000', secret: 's', fetchImpl: refuse as never }, row)),
+    };
+    const d1 = await drainOutbox(deps, refusing, { orgId: s.org, claimant: 'm6-229' });
+    expect(d1.dead).toBe(1);
+    const [drift] = await sql`SELECT id, task_status FROM bastion_drift_events WHERE organization_id = ${s.org}`;
+    expect(drift!.task_status).toBe('project_unavailable');
+
+    const { complianceProjectHealth, complianceProjectProblem, redriveProjectDeliveries, redriveRecoveredProjects } = await import('../../src/engine/remediation.js');
+    // The setUp project has no phases yet: no open phase, so nothing is re-driven.
+    expect(await orgTx(sql, s.org, (tx) => complianceProjectHealth(tx, s.org, s.project))).toBe('no_open_phase');
+    expect(await redriveRecoveredProjects(deps, { organization_id: s.org })).toBe(0);
+    // Deleted: the Readiness wording.
+    await sql`UPDATE bastion_org_settings SET compliance_project_id = ${'0b0b0b0b-0000-4000-8000-0000000000aa'} WHERE organization_id = ${s.org}`;
+    const health = await orgTx(sql, s.org, (tx) => complianceProjectHealth(tx, s.org, '0b0b0b0b-0000-4000-8000-0000000000aa'));
+    expect(health).toBe('missing');
+    expect(complianceProjectProblem(health)).toMatch(/^Bastion can't file tasks: the Compliance project was deleted\./);
+
+    // A new Compliance project with an open phase: the dead row goes back to pending, addressed to it.
+    const [p2] = await sql`INSERT INTO projects (org_id, name, slug, task_id_prefix) VALUES (${s.org}, 'Compliance 2', ${`comp2-${Date.now()}`}, 'CMP') RETURNING id`;
+    projects.push(p2!.id as string);
+    await sql`INSERT INTO phases (project_id, name, position, is_start) VALUES (${p2!.id as string}, 'To do', 0, true)`;
+    await sql`UPDATE bastion_org_settings SET compliance_project_id = ${p2!.id as string} WHERE organization_id = ${s.org}`;
+    expect(await orgTx(sql, s.org, (tx) => redriveProjectDeliveries(tx, s.org))).toBe(1);
+    const [row] = await sql`SELECT status, attempts, redrive_count, payload FROM bastion_outbox WHERE organization_id = ${s.org} AND kind = 'bam_task_upsert'`;
+    expect(row).toMatchObject({ status: 'pending', attempts: 0, redrive_count: 1 });
+    expect((row!.payload as { request: { project_id: string } }).request.project_id).toBe(p2!.id);
+    expect((await sql`SELECT task_status FROM bastion_drift_events WHERE id = ${drift!.id as string}`)[0]!.task_status).toBe('pending');
+
+    // Delivered this time; the drift row records the task.
+    const ok = vi.fn(async () => new Response(JSON.stringify({ data: { task_id: control, outcome: 'created' } }), { status: 201 }));
+    const accepting: Deliverer = { deliver: (r) => deliverToBam(sql, { apiUrl: 'http://api:4000', secret: 's', fetchImpl: ok as never }, r) };
+    expect((await drainOutbox(deps, accepting, { orgId: s.org, claimant: 'm6-229' })).delivered).toBe(1);
+    expect((await sql`SELECT task_status FROM bastion_drift_events WHERE id = ${drift!.id as string}`)[0]!.task_status).toBe('created');
+    // Nothing left to re-drive.
+    expect(await redriveRecoveredProjects(deps, { organization_id: s.org })).toBe(0);
+  });
 });

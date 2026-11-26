@@ -9,6 +9,7 @@ import { BASTION_DAY_MS as DAY_MS, BASTION_PENDING_SCAN_CAP_MS, type BastionRead
 import { NotFoundError } from '../lib/errors.js';
 import { type EngineDeps, orgTx } from '../engine/context.js';
 import { daysLeft } from '../engine/manual.js';
+import { complianceProjectHealth, complianceProjectProblem } from '../engine/remediation.js';
 import { computeNumbers, coverageOfColumns, loadControlStates, type ReadinessNumbers } from '../engine/numbers.js';
 import type { Viewer } from './types.js';
 
@@ -83,6 +84,10 @@ export async function readinessSummary(engine: EngineDeps, viewer: Viewer, frame
     const banners: Array<{ code: BastionReadinessBanner; message: string; count?: number }> = [];
     if (!settings?.compliance_project_id) {
       banners.push({ code: 'no_compliance_project', message: 'Pick a Compliance project in Setup so Bastion can file tasks when a control needs attention.' });
+    } else {
+      // #229: set, but deleted or with no open phase, the api refuses every task.
+      const problem = complianceProjectProblem(await complianceProjectHealth(tx, viewer.org_id, settings.compliance_project_id as string));
+      if (problem) banners.push({ code: 'compliance_project_unavailable', message: problem });
     }
     if (staleControls > 0) {
       const when = facts2.last_full_run ? new Date(facts2.last_full_run as string).toISOString().slice(0, 10) : null;

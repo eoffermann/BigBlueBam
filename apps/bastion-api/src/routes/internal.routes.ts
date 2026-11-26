@@ -15,6 +15,7 @@ import { orgTx } from '../engine/context.js';
 import { engineDeps } from '../engine/runtime.js';
 import { RunLeaseHeldError, RunNotFoundError, runEvaluationSlice } from '../engine/evaluator.js';
 import { defaultDeliverer, drainOutbox } from '../engine/outbox.js';
+import { redriveRecoveredProjects } from '../engine/remediation.js';
 import { evaluateTick, evaluationMissed, ledgerSeal, ledgerVerify, retention, runReaper, weeklyReadiness } from '../engine/sweeps.js';
 import { evidenceExpiry, evidenceIngest } from '../services/evidence-engines.js';
 import { evidenceDeps } from '../services/evidence-runtime.js';
@@ -78,6 +79,9 @@ export default async function internalRoutes(fastify: FastifyInstance) {
       case 'evaluate-tick':
         return { data: await evaluateTick(d, opts) };
       case 'outbox-drain':
+        // #229: deliveries that died on a broken Compliance project go back to pending first,
+        // once it can take tasks again.
+        await redriveRecoveredProjects(d, opts);
         return {
           data: await drainOutbox(
             d,
