@@ -1,9 +1,8 @@
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import multipart from '@fastify/multipart';
 import { randomUUID } from 'node:crypto';
-import * as Minio from 'minio';
-import { env } from '../env.js';
+import { StorageNotConfiguredError, getBanterStorageDriver, isNotFoundError } from '../lib/storage-driver.js';
 import { and, eq } from 'drizzle-orm';
 import { requireAuth, requireScope } from '../plugins/auth.js';
 import { requireChannelMember } from '../middleware/channel-auth.js';
@@ -47,20 +46,15 @@ function isAllowedMimeType(mimeType: string): boolean {
   return false;
 }
 
-let minioClient: Minio.Client | null = null;
-
-function getMinioClient(): Minio.Client {
-  if (!minioClient) {
-    const url = new URL(env.S3_ENDPOINT);
-    minioClient = new Minio.Client({
-      endPoint: url.hostname,
-      port: Number.parseInt(url.port || '9000', 10),
-      useSSL: url.protocol === 'https:',
-      accessKey: env.S3_ACCESS_KEY,
-      secretKey: env.S3_SECRET_KEY,
-    });
-  }
-  return minioClient;
+function storageNotConfigured(reply: FastifyReply, requestId: string) {
+  return reply.status(503).send({
+    error: {
+      code: 'STORAGE_NOT_CONFIGURED',
+      message: new StorageNotConfiguredError().message,
+      details: [],
+      request_id: requestId,
+    },
+  });
 }
 
 export default async function fileRoutes(fastify: FastifyInstance) {
@@ -119,17 +113,10 @@ export default async function fileRoutes(fastify: FastifyInstance) {
       const safeFilename = file.filename.replace(/[^a-zA-Z0-9._-]/g, '_');
       const key = `banter/uploads/${uuid}-${safeFilename}`;
 
-      const client = getMinioClient();
-
-      // Ensure bucket exists
-      const bucketExists = await client.bucketExists(env.S3_BUCKET);
-      if (!bucketExists) {
-        await client.makeBucket(env.S3_BUCKET, env.S3_REGION);
-      }
-
-      await client.putObject(env.S3_BUCKET, key, buffer, buffer.length, {
-        'Content-Type': contentType,
-      });
+      // Issue #159: the shared storage driver (creates the bucket on first put).
+      const storage = getBanterStorageDriver();
+      if (!storage) return storageNotConfigured(reply, request.id);
+      await storage.put(key, buffer, { contentType, size: buffer.length });
 
       // Issue #156: only this user, in this org, may attach this key to a message.
       await recordUploadGrant(key, request.user!.org_id, request.user!.id);
@@ -197,21 +184,37 @@ export default async function fileRoutes(fastify: FastifyInstance) {
         return notFound();
       }
 
+      // Issue #159: the shared storage driver. Only a missing object is a 404;
+      // unconfigured storage is a 503, and any other storage failure is logged
+      // and answered 502 so a broken bucket no longer reads as "not found".
+      const storage = getBanterStorageDriver();
+      if (!storage) return storageNotConfigured(reply, request.id);
+      let obj: { stream: NodeJS.ReadableStream; size: number };
       try {
-        const client = getMinioClient();
-        const stat = await client.statObject(env.S3_BUCKET, row.storage_key);
-        const stream = await client.getObject(env.S3_BUCKET, row.storage_key);
-        return reply
-          .header('Content-Type', row.content_type)
-          .header('Content-Length', stat.size)
-          .header('Content-Disposition', dispositionFor(row.content_type, row.filename))
-          .header('Cache-Control', 'private, no-store')
-          .header('X-Content-Type-Options', 'nosniff')
-          .header('Content-Security-Policy', 'sandbox')
-          .send(stream);
-      } catch {
-        return notFound();
+        obj = await storage.getStream(row.storage_key);
+      } catch (err) {
+        if (isNotFoundError(err)) return notFound();
+        request.log.error(
+          { err, storage_key: row.storage_key, attachment_id: params.data.attachmentId },
+          'banter attachment download: storage read failed',
+        );
+        return reply.status(502).send({
+          error: {
+            code: 'STORAGE_ERROR',
+            message: 'The file could not be read from storage. Please try again.',
+            details: [],
+            request_id: request.id,
+          },
+        });
       }
+      return reply
+        .header('Content-Type', row.content_type)
+        .header('Content-Length', obj.size)
+        .header('Content-Disposition', dispositionFor(row.content_type, row.filename))
+        .header('Cache-Control', 'private, no-store')
+        .header('X-Content-Type-Options', 'nosniff')
+        .header('Content-Security-Policy', 'sandbox')
+        .send(obj.stream);
     },
   );
 
@@ -255,16 +258,11 @@ export default async function fileRoutes(fastify: FastifyInstance) {
       const safeFilename = body.filename.replace(/[^a-zA-Z0-9._-]/g, '_');
       const key = `banter/uploads/${uuid}-${safeFilename}`;
 
-      const client = getMinioClient();
-
-      // Ensure bucket exists
-      const bucketExists = await client.bucketExists(env.S3_BUCKET);
-      if (!bucketExists) {
-        await client.makeBucket(env.S3_BUCKET, env.S3_REGION);
-      }
+      const storage = getBanterStorageDriver();
+      if (!storage?.presignPut) return storageNotConfigured(reply, request.id);
 
       const expiresIn = 3600; // 1 hour
-      const uploadUrl = await client.presignedPutObject(env.S3_BUCKET, key, expiresIn);
+      const uploadUrl = await storage.presignPut(key, expiresIn);
 
       // Issue #156: only this user, in this org, may attach this key to a message.
       await recordUploadGrant(key, request.user!.org_id, request.user!.id);

@@ -13,7 +13,6 @@
 
 import { Queue } from 'bullmq';
 import Redis from 'ioredis';
-import * as Minio from 'minio';
 import StreamZip from 'node-stream-zip';
 import { and, eq } from 'drizzle-orm';
 import type { Readable } from 'node:stream';
@@ -23,58 +22,31 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { db } from '../db/index.js';
 import { banterSlackImports } from '../db/schema/index.js';
 import { env } from '../env.js';
+import { requireBanterStorageDriver } from '../lib/storage-driver.js';
 
 export const SLACK_IMPORT_QUEUE = 'slack-import';
 
-// ── MinIO ──────────────────────────────────────────────────────────
-
-let minioClient: Minio.Client | null = null;
-export function getMinioClient(): Minio.Client {
-  if (!minioClient) {
-    const url = new URL(env.S3_ENDPOINT);
-    minioClient = new Minio.Client({
-      endPoint: url.hostname,
-      port: Number.parseInt(url.port || '9000', 10),
-      useSSL: url.protocol === 'https:',
-      accessKey: env.S3_ACCESS_KEY,
-      secretKey: env.S3_SECRET_KEY,
-    });
-  }
-  return minioClient;
-}
+// ── Object storage (issue #159: the shared @bigbluebam/storage driver) ──
 
 export function slackImportObjectKey(orgId: string, importId: string): string {
   return `slack-imports/${orgId}/${importId}.zip`;
 }
 
-export async function ensureBucket(): Promise<void> {
-  const client = getMinioClient();
-  const exists = await client.bucketExists(env.S3_BUCKET);
-  if (!exists) {
-    await client.makeBucket(env.S3_BUCKET, env.S3_REGION);
-  }
-}
-
-/** Stream an uploaded file (already buffered or in a stream) into MinIO. */
+/** Store an uploaded file (already buffered or in a stream). The driver creates the bucket on first put. */
 export async function stashUpload(
   key: string,
   body: Buffer | Readable,
   size: number,
   contentType = 'application/zip',
 ): Promise<void> {
-  await ensureBucket();
-  const client = getMinioClient();
-  await client.putObject(env.S3_BUCKET, key, body, size, {
-    'Content-Type': contentType,
-  });
+  await requireBanterStorageDriver().put(key, body, { contentType, size });
 }
 
 /** Download the stashed .zip to a temporary directory for scanning. */
 export async function downloadToTempfile(key: string): Promise<{ path: string; cleanup: () => Promise<void> }> {
-  const client = getMinioClient();
+  const { stream } = await requireBanterStorageDriver().getStream(key);
   const dir = await mkdtemp(join(tmpdir(), 'bbb-slack-import-'));
   const path = join(dir, 'workspace.zip');
-  const stream = await client.getObject(env.S3_BUCKET, key);
   const chunks: Buffer[] = [];
   for await (const chunk of stream) {
     chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));

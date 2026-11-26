@@ -74,18 +74,14 @@ vi.mock('../src/middleware/channel-auth.js', () => ({
   },
 }));
 
+// Issue #159: reads go through the shared @bigbluebam/storage driver.
 const getObject = vi.fn();
-const statObject = vi.fn();
-vi.mock('minio', () => ({
-  Client: class {
-    getObject(...a: unknown[]) {
-      return getObject(...a);
-    }
-    statObject(...a: unknown[]) {
-      return statObject(...a);
-    }
+const fakeDriver = {
+  getStream: async (key: string) => {
+    const stream = await getObject(key);
+    return { stream, contentType: 'application/octet-stream', size: BYTES.length };
   },
-}));
+};
 
 import fileRoutes from '../src/routes/file.routes.js';
 import { attachmentDownloadUrl, isServableAttachmentKey, dispositionFor } from '../src/lib/attachment-download.js';
@@ -125,8 +121,9 @@ beforeEach(async () => {
   channelReadable = true;
   originalChannel = CH;
   joined = [attachment()];
-  statObject.mockResolvedValue({ size: BYTES.length });
   getObject.mockImplementation(async () => Readable.from([BYTES]));
+  const storage = await import('../src/lib/storage-driver.js');
+  storage.__setBanterStorageDriverForTests(fakeDriver as never);
   if (!app) app = await buildApp();
 });
 
@@ -139,7 +136,8 @@ describe('GET /v1/channels/:id/attachments/:attachmentId (issue #142)', () => {
     expect(res.headers['content-disposition']).toBe('inline; filename="site_photo.png"');
     expect(res.headers['cache-control']).toBe('private, no-store');
     expect(res.headers['x-content-type-options']).toBe('nosniff');
-    expect(getObject).toHaveBeenCalledWith('bigbluebam-uploads', 'banter/uploads/0000-site_photo.png');
+    expect(getObject).toHaveBeenCalledWith('banter/uploads/0000-site_photo.png');
+    expect(res.headers['content-length']).toBe(String(BYTES.length));
   });
 
   it('404s once the caller can no longer read the channel, without touching storage', async () => {
@@ -181,6 +179,26 @@ describe('GET /v1/channels/:id/attachments/:attachmentId (issue #142)', () => {
   it('401 without a session', async () => {
     const res = await app.inject({ method: 'GET', url: `/v1/channels/${CH}/attachments/${ATT}` });
     expect(res.statusCode).toBe(401);
+  });
+
+  it('404s when the object is missing from storage (issue #159)', async () => {
+    getObject.mockRejectedValue(Object.assign(new Error('Not Found'), { code: 'NoSuchKey' }));
+    expect((await get(CH, ATT)).statusCode).toBe(404);
+  });
+
+  it('503 STORAGE_NOT_CONFIGURED when storage is not configured, not a silent 404 (issue #159)', async () => {
+    const storage = await import('../src/lib/storage-driver.js');
+    storage.__setBanterStorageDriverForTests(null);
+    const res = await get(CH, ATT);
+    expect(res.statusCode).toBe(503);
+    expect(res.json().error.code).toBe('STORAGE_NOT_CONFIGURED');
+  });
+
+  it('502 STORAGE_ERROR, logged, when storage fails for another reason (issue #159)', async () => {
+    getObject.mockRejectedValue(Object.assign(new Error('connect ECONNREFUSED'), { code: 'ECONNREFUSED' }));
+    const res = await get(CH, ATT);
+    expect(res.statusCode).toBe(502);
+    expect(res.json().error.code).toBe('STORAGE_ERROR');
   });
 
   it('404s a key re-attached outside the channel it was originally posted in (issue #156)', async () => {

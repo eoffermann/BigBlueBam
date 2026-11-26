@@ -259,6 +259,9 @@ importers:
       '@bigbluebam/shared':
         specifier: workspace:*
         version: link:../../packages/shared
+      '@bigbluebam/storage':
+        specifier: workspace:*
+        version: link:../../packages/storage
       '@fastify/cookie':
         specifier: ^11.0.0
         version: 11.0.2
@@ -304,9 +307,6 @@ importers:
       livekit-server-sdk:
         specifier: ^2.15.0
         version: 2.15.0
-      minio:
-        specifier: ^8.0.0
-        version: 8.0.7
       nanoid:
         specifier: ^5.0.0
         version: 5.1.7

@@ -39,8 +39,9 @@ export async function startRecording(roomName: string, outputPrefix: string): Pr
       value: {
         bucket: env.S3_BUCKET,
         region: env.S3_REGION,
-        accessKey: env.S3_ACCESS_KEY,
-        secret: env.S3_SECRET_KEY,
+        // Optional since issue #159 (no default credentials); egress fails loudly without them.
+        accessKey: env.S3_ACCESS_KEY ?? '',
+        secret: env.S3_SECRET_KEY ?? '',
         endpoint: env.S3_ENDPOINT,
         forcePathStyle: true, // Required for MinIO
       },

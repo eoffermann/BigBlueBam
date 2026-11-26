@@ -17,11 +17,14 @@ const envSchema = z.object({
   RATE_LIMIT_MAX: z.coerce.number().int().positive().default(100),
   RATE_LIMIT_WINDOW_MS: z.coerce.number().int().positive().default(60000),
 
-  // S3 / MinIO
-  S3_ENDPOINT: z.string().default('http://minio:9000'),
-  S3_ACCESS_KEY: z.string().default('minioadmin'),
-  S3_SECRET_KEY: z.string().default('minioadmin'),
-  S3_BUCKET: z.string().default('banter-uploads'),
+  // S3 / MinIO (issue #159: read through @bigbluebam/storage, lib/storage-driver.ts).
+  // No default credentials: without them storage is "not configured" and file
+  // routes answer 503 STORAGE_NOT_CONFIGURED. The bucket default matches the
+  // platform bucket every other service and docker-compose use.
+  S3_ENDPOINT: z.preprocess((v) => (v === '' ? undefined : v), z.string().default('http://minio:9000')),
+  S3_ACCESS_KEY: z.preprocess((v) => (v === '' ? undefined : v), z.string().optional()),
+  S3_SECRET_KEY: z.preprocess((v) => (v === '' ? undefined : v), z.string().optional()),
+  S3_BUCKET: z.string().min(1).default('bigbluebam-uploads'),
   S3_REGION: z.string().default('us-east-1'),
 
   // LiveKit
