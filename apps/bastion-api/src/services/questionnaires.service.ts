@@ -282,6 +282,19 @@ export async function updateQuestionnaire(d: QuestionnaireDeps, viewer: Viewer, 
       const source = await loadSource(tx, viewer.org_id, id);
       if (!source) throw new ConflictError('This questionnaire has no readable source left; add it again.', 'SOURCE_MISSING');
       const map = bastionQuestionnaireColumnMapSchema.parse(body.column_map);
+      // #266: replacing the mapping must not silently drop the questions on sheets it leaves out.
+      const kept = new Set(map.sheets.map((s) => s.sheet_name));
+      const had = (await tx`SELECT DISTINCT sheet_name FROM bastion_questionnaire_items WHERE organization_id = ${viewer.org_id} AND questionnaire_id = ${id}`).map((r) =>
+        String(r.sheet_name),
+      );
+      const dropped = had.filter((s) => !kept.has(s));
+      if (dropped.length > 0 && body.drop_unmapped_sheets !== true) {
+        const names = dropped.map((s) => `"${s || 'the pasted rows'}"`).join(', ');
+        throw new ConflictError(
+          `This mapping leaves out ${dropped.length === 1 ? 'a sheet that holds' : `${dropped.length} sheets that hold`} questions (${names}). Include ${dropped.length === 1 ? 'it' : 'them'}, or confirm you want to drop ${dropped.length === 1 ? 'its' : 'their'} questions.`,
+          'SHEETS_DROPPED',
+        );
+      }
       const n = await insertItems(tx, viewer.org_id, id, source, map, await maxRows(tx, viewer.org_id));
       // Only the mapping keys change; anything else column_map carries (autofill_requested_by) stays.
       await tx`UPDATE bastion_questionnaires

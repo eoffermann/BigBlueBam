@@ -243,18 +243,38 @@ function columnOptions(count: number) {
   return Array.from({ length: Math.max(count, 1) }, (_, i) => i);
 }
 
+type SheetPreview = NonNullable<QuestionnaireRow['sheet_preview']>[number];
+
+/** A first guess for a sheet the person chooses to use: the first row is the header, questions in the first column. */
+function defaultSheetMap(name: string): QuestionnaireSheetMap {
+  return { sheet_name: name, header_row: 0, first_row: 1, question_column: 0, answer_column: null, yes_no_column: null, section_column: null, answer_kind: 'yes_no_text' };
+}
+
+/**
+ * Check the columns, for EVERY sheet (#266): one block per sheet in the file, each with its own
+ * mapping, and sheets the guess skipped shown as "Not used" with a way to add them. Saving sends
+ * the whole mapping; leaving out a sheet that held questions needs an explicit confirmation.
+ */
 function MappingStep({ q }: { q: QuestionnaireRow }) {
   const update = useUpdateQuestionnaire();
   const autofill = useAutofill();
   const canWrite = useCan('bastion.questionnaire.write');
-  const current = q.column_map?.sheets[0];
-  const sheet = q.sheet_preview?.find((s) => s.name === current?.sheet_name) ?? q.sheet_preview?.[0];
-  const [map, setMap] = useState<QuestionnaireSheetMap | undefined>(current);
-  if (!sheet || !map) return <p className="text-sm text-zinc-600">This questionnaire has no rows Bastion could read.</p>;
-  const header = map.header_row !== null ? (sheet.rows[map.header_row] ?? []) : [];
-  const colName = (i: number) => (header[i]?.trim() ? `${header[i]}` : `Column ${i + 1}`);
-  const set = (patch: Partial<QuestionnaireSheetMap>) => setMap({ ...map, ...patch });
-  const changed = JSON.stringify(map) !== JSON.stringify(current);
+  const sheets = q.sheet_preview ?? [];
+  const initial = Object.fromEntries(sheets.map((s) => [s.name, q.column_map?.sheets.find((m) => m.sheet_name === s.name) ?? null])) as Record<
+    string,
+    QuestionnaireSheetMap | null
+  >;
+  const [maps, setMaps] = useState<Record<string, QuestionnaireSheetMap | null>>(initial);
+  const [confirmDrop, setConfirmDrop] = useState(false);
+  if (sheets.length === 0 || !Object.values(initial).some(Boolean)) return <p className="text-sm text-zinc-600">This questionnaire has no rows Bastion could read.</p>;
+  const chosen = sheets.map((s) => maps[s.name]).filter((m): m is QuestionnaireSheetMap => !!m);
+  const changed = JSON.stringify(maps) !== JSON.stringify(initial);
+  const dropping = sheets.filter((s) => initial[s.name] && !maps[s.name]).map((s) => s.name || 'the pasted rows');
+  const save = () =>
+    update.mutate(
+      { id: q.id, body: { column_map: { sheets: chosen }, ...(dropping.length > 0 ? { drop_unmapped_sheets: true } : {}) } },
+      { onSuccess: () => setConfirmDrop(false) },
+    );
   return (
     <section className="space-y-3" data-testid="mapping-step">
       <h2 className="text-base font-semibold">Check the columns</h2>
@@ -262,6 +282,85 @@ function MappingStep({ q }: { q: QuestionnaireRow }) {
         {q.column_map?.guessed ? 'Bastion guessed which column holds the questions. Check it against the first rows below.' : 'These are the columns you chose.'}
         {q.source_truncated ? ' The file was larger than Bastion reads at once, so the last rows or columns were left out.' : ''}
       </p>
+      {sheets.map((sheet) => (
+        <SheetMapping
+          key={sheet.name}
+          sheet={sheet}
+          showName={sheets.length > 1}
+          map={maps[sheet.name] ?? null}
+          canWrite={canWrite}
+          onChange={(m) => setMaps({ ...maps, [sheet.name]: m })}
+        />
+      ))}
+      {canWrite && (
+        <div className="flex flex-wrap items-center gap-2">
+          {changed && chosen.length > 0 && !confirmDrop && (
+            <button type="button" className={secondary} disabled={update.isPending} onClick={() => (dropping.length > 0 ? setConfirmDrop(true) : save())}>
+              Use these columns
+            </button>
+          )}
+          {confirmDrop && (
+            <span className="flex flex-wrap items-center gap-2 text-xs text-amber-800" data-testid="confirm-drop">
+              The questions on {dropping.map((n) => `"${n}"`).join(', ')} will be left out.
+              <button type="button" className={primary} disabled={update.isPending} onClick={save}>
+                Leave them out
+              </button>
+              <button type="button" className={secondary} onClick={() => setConfirmDrop(false)}>
+                Keep them
+              </button>
+            </span>
+          )}
+          <button type="button" className={primary} disabled={changed || autofill.isPending || q.row_count === 0} onClick={() => autofill.mutate({ id: q.id })}>
+            Draft the answers
+          </button>
+          <span className="text-xs text-zinc-500">
+            {q.row_count} questions; drafting takes {draftingEstimate(q.row_count)}.
+          </span>
+        </div>
+      )}
+      {(update.error || autofill.error) && <p className="text-xs text-red-600">{friendlyError(update.error ?? autofill.error)}</p>}
+    </section>
+  );
+}
+
+function SheetMapping({
+  sheet,
+  showName,
+  map,
+  canWrite,
+  onChange,
+}: {
+  sheet: SheetPreview;
+  showName: boolean;
+  map: QuestionnaireSheetMap | null;
+  canWrite: boolean;
+  onChange: (m: QuestionnaireSheetMap | null) => void;
+}) {
+  const label = sheet.name || 'Pasted rows';
+  if (!map) {
+    return (
+      <div className="rounded border border-dashed border-zinc-300 dark:border-zinc-700 p-3 text-sm" data-testid="sheet-mapping" data-sheet={sheet.name}>
+        <p className="font-medium">
+          {showName ? `${label}: ` : ''}
+          <span className="text-zinc-500">Not used</span>
+        </p>
+        <p className="text-xs text-zinc-500">
+          {sheet.row_count} rows. Bastion found no questions here{canWrite ? '; use it if this sheet holds questions too' : ''}.
+        </p>
+        {canWrite && (
+          <button type="button" className={`${secondary} mt-2`} onClick={() => onChange(defaultSheetMap(sheet.name))}>
+            Use this sheet
+          </button>
+        )}
+      </div>
+    );
+  }
+  const header = map.header_row !== null ? (sheet.rows[map.header_row] ?? []) : [];
+  const colName = (i: number) => (header[i]?.trim() ? `${header[i]}` : `Column ${i + 1}`);
+  const set = (patch: Partial<QuestionnaireSheetMap>) => onChange({ ...map, ...patch });
+  return (
+    <div className="space-y-2" data-testid="sheet-mapping" data-sheet={sheet.name}>
+      {showName && <h3 className="text-sm font-semibold text-zinc-800 dark:text-zinc-200">{label}</h3>}
       <div className="overflow-x-auto rounded border border-zinc-200 dark:border-zinc-800">
         <table className="text-xs">
           <tbody>
@@ -314,22 +413,11 @@ function MappingStep({ q }: { q: QuestionnaireRow }) {
         </div>
       )}
       {canWrite && (
-        <div className="flex flex-wrap items-center gap-2">
-          {changed && (
-            <button type="button" className={secondary} disabled={update.isPending} onClick={() => update.mutate({ id: q.id, body: { column_map: { sheets: [map] } } })}>
-              Use these columns
-            </button>
-          )}
-          <button type="button" className={primary} disabled={changed || autofill.isPending || q.row_count === 0} onClick={() => autofill.mutate({ id: q.id })}>
-            Draft the answers
-          </button>
-          <span className="text-xs text-zinc-500">
-            {q.row_count} questions; drafting takes {draftingEstimate(q.row_count)}.
-          </span>
-        </div>
+        <button type="button" className={`${secondary}`} onClick={() => onChange(null)}>
+          Do not use this sheet
+        </button>
       )}
-      {(update.error || autofill.error) && <p className="text-xs text-red-600">{friendlyError(update.error ?? autofill.error)}</p>}
-    </section>
+    </div>
   );
 }
 

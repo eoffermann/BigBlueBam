@@ -1727,6 +1727,12 @@ export const bastionQuestionnaireUpdateSchema = z
     owner_user_id: z.string().uuid().nullable().optional(),
     bond_deal_id: z.string().uuid().nullable().optional(),
     column_map: bastionQuestionnaireColumnMapSchema.optional(),
+    /**
+     * #266: a column_map that leaves out a sheet which holds questions now is refused (409
+     * SHEETS_DROPPED) unless this is true, so a mapping fixed on one sheet never silently drops
+     * the questions on the others.
+     */
+    drop_unmapped_sheets: z.boolean().optional(),
   })
   .strict()
   .refine((b) => Object.keys(b).length > 0, { message: 'Nothing to change' });

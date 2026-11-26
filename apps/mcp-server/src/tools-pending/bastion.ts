@@ -1200,6 +1200,10 @@ export function registerBastionQuestionnaireTools(server: McpServer, client: Bas
       owner_user_id: z.string().uuid().nullable().optional(),
       bond_deal_id: z.string().uuid().nullable().optional(),
       column_map: bastionQuestionnaireColumnMapSchema.optional(),
+      drop_unmapped_sheets: z
+        .boolean()
+        .optional()
+        .describe('A column_map must list every sheet that holds questions (409 SHEETS_DROPPED); true confirms dropping the questions on the sheets it leaves out.'),
     },
     returns: z.record(z.unknown()),
     handler: async ({ questionnaire_id, ...rest }) => {

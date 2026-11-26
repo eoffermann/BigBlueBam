@@ -194,6 +194,56 @@ describe('Questionnaires (M8)', () => {
     await settled(reader.qc);
   });
 
+  // #266: every sheet is shown and saved; dropping one needs a confirmation.
+  it('maps every sheet: saving one sheet\'s change sends all of them, and leaving one out asks first', async () => {
+    const access = { sheet_name: 'Access', header_row: 0, first_row: 1, question_column: 0, answer_column: 1, yes_no_column: null, section_column: null, answer_kind: 'yes_no_text' };
+    const devices = { ...access, sheet_name: 'Devices' };
+    const MAPPING = {
+      ...QUESTIONNAIRE,
+      status: 'mapping',
+      rows_done: 0,
+      column_map: { sheets: [access, devices], guessed: true },
+      sheet_preview: [
+        { name: 'Access', row_count: 2, column_count: 3, rows: [['Question', 'Answer', 'Notes'], ['Do you use MFA?', '', '']] },
+        { name: 'Devices', row_count: 2, column_count: 2, rows: [['Question', 'Answer'], ['Are laptops encrypted?', '']] },
+        { name: 'Read me', row_count: 1, column_count: 1, rows: [['Please answer every question.']] },
+      ],
+    };
+    const patches: unknown[] = [];
+    vi.stubGlobal(
+      'fetch',
+      routedFetch({
+        [`GET /bastion/api/v1/questionnaires/${Q}`]: () => jsonResponse(200, { data: MAPPING }),
+        [`PATCH /bastion/api/v1/questionnaires/${Q}`]: (init) => {
+          patches.push(JSON.parse(String(init.body)));
+          return jsonResponse(200, { data: MAPPING });
+        },
+      }),
+    );
+    const view = wrap(<QuestionnaireDetailPage questionnaireId={Q} onNavigate={() => {}} />, OWNER);
+    await screen.findByText('Do you use MFA?');
+    const blocks = screen.getAllByTestId('sheet-mapping');
+    expect(blocks.map((b) => b.getAttribute('data-sheet'))).toEqual(['Access', 'Devices', 'Read me']);
+    expect(blocks[2]!.textContent).toMatch(/Not used/);
+    // Change the first sheet's question column: the save carries every mapped sheet.
+    fireEvent.change(blocks[0]!.querySelector('select') as HTMLSelectElement, { target: { value: '2' } });
+    fireEvent.click(screen.getByText('Use these columns'));
+    await waitFor(() => expect(patches).toHaveLength(1));
+    expect((patches[0] as { column_map: { sheets: Array<{ sheet_name: string; question_column: number }> } }).column_map.sheets.map((s) => [s.sheet_name, s.question_column])).toEqual([
+      ['Access', 2],
+      ['Devices', 0],
+    ]);
+    expect((patches[0] as Record<string, unknown>).drop_unmapped_sheets).toBeUndefined();
+    // Leaving a sheet out asks first, then says so to the server.
+    fireEvent.click(screen.getAllByText('Do not use this sheet')[1] as HTMLElement);
+    fireEvent.click(screen.getByText('Use these columns'));
+    expect(screen.getByTestId('confirm-drop').textContent).toMatch(/"Devices" will be left out/);
+    fireEvent.click(screen.getByText('Leave them out'));
+    await waitFor(() => expect(patches).toHaveLength(2));
+    expect(patches[1]).toMatchObject({ drop_unmapped_sheets: true });
+    await settled(view.qc);
+  });
+
   // #272: the page, the hooks and the types use @bigbluebam/shared, not hand-copied literals.
   it('takes the confidence words, request bodies and enums from @bigbluebam/shared', () => {
     const page = readFileSync(join(__dirname, '../src/pages/questionnaires.tsx'), 'utf8')

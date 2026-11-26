@@ -489,6 +489,44 @@ describe.skipIf(!DATABASE_URL)('M8 questionnaires (live database)', () => {
     expect(new Set(keys).size).toBe(2);
   });
 
+  it('a mapping that leaves out a sheet with questions is refused unless dropping is confirmed (#266)', async () => {
+    const s = await setUp('two-sheets');
+    const owner = viewer(s.org, s.owner);
+    const bucket = fakeBucket();
+    const bytes = encodeXlsx([
+      { name: 'Access', rows: [['Question', 'Answer'], ['Do you require two-step sign-in for every account?', '']] },
+      { name: 'Devices', rows: [['Question', 'Answer'], ['Are company laptops encrypted?', ''], ['Do laptops lock when left alone?', '']] },
+    ]);
+    await bucket.put('uploads/two.xlsx', Buffer.from(bytes), { contentType: 'application/octet-stream' });
+    const asset = '00000000-0000-4000-8000-00000000c001';
+    const version = '00000000-0000-4000-8000-00000000c002';
+    const bin: BinAccessDeps = {
+      loadAsset: async () => ({ id: asset, org_id: s.org, scan_status: 'clean', current_version_id: version }),
+      loadVersion: async () => ({ id: version, asset_id: asset, object_key: 'uploads/two.xlsx', size: bytes.length, content_type: 'application/octet-stream' }),
+      canAccess: async () => true,
+    };
+    const d = qdeps(s.engine, { bin, bucket });
+    const q = (await createQuestionnaire(d, owner, { title: 'Two sheets', source: { kind: 'bin_asset', bin_asset_id: asset } })).data as unknown as {
+      id: string;
+      row_count: number;
+      column_map: { sheets: Array<{ sheet_name: string }> };
+      sheet_preview: Array<{ name: string }>;
+    };
+    expect(q.row_count).toBe(3);
+    expect(q.column_map.sheets.map((m) => m.sheet_name)).toEqual(['Access', 'Devices']);
+    expect(q.sheet_preview.map((p) => p.name)).toEqual(['Access', 'Devices']);
+    const access = { sheet_name: 'Access', header_row: 0, first_row: 1, question_column: 0, answer_column: 1, yes_no_column: null, section_column: null, answer_kind: 'text' as const };
+    // Fixing the first sheet alone would drop the Devices questions: refused, nothing changed.
+    await expect(updateQuestionnaire(d, owner, q.id, { column_map: { sheets: [access] } })).rejects.toMatchObject({ code: 'SHEETS_DROPPED' });
+    expect((await sql`SELECT row_count FROM bastion_questionnaires WHERE id = ${q.id}`)[0]!.row_count).toBe(3);
+    // Sending every sheet keeps them all; dropping is allowed only when confirmed.
+    const devices = { ...access, sheet_name: 'Devices' };
+    await updateQuestionnaire(d, owner, q.id, { column_map: { sheets: [access, devices] } });
+    expect((await sql`SELECT row_count FROM bastion_questionnaires WHERE id = ${q.id}`)[0]!.row_count).toBe(3);
+    await updateQuestionnaire(d, owner, q.id, { column_map: { sheets: [access] }, drop_unmapped_sheets: true });
+    expect((await sql`SELECT row_count FROM bastion_questionnaires WHERE id = ${q.id}`)[0]!.row_count).toBe(1);
+  });
+
   it('SIGTERM releases; the reaper releases stale claims and parks after three; the tick finds orphans', async () => {
     const s = await setUp('reaper');
     await provider(s.org, s.owner);
