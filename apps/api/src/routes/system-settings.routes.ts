@@ -16,6 +16,7 @@ import {
   resolveSmtpFromSettings,
 } from '@bigbluebam/smtp-resolver';
 import { env } from '../env.js';
+import { LAUNCHPAD_APP_IDS, type LaunchpadAppId } from '@bigbluebam/shared';
 import {
   clearPolicyCache,
   generatePasswordFromPolicy,
@@ -29,8 +30,9 @@ import {
 // every frontend container.
 //
 // Adding a new app:
-//   1. Append its id to LAUNCHPAD_APP_IDS below (kept as a literal-tuple so
-//      zod's z.enum can derive the union type for stored override columns).
+//   1. Append its id to LAUNCHPAD_APP_IDS in packages/shared/src/launchpad-apps.ts
+//      (issue #144: one literal tuple shared with the MCP platform tools, so
+//      zod's z.enum derives the union type everywhere).
 //   2. Append the matching metadata row to LAUNCHPAD_CATALOG.
 //   3. If a brand-new icon name is needed, add it to the icon map in
 //      packages/ui/launchpad.tsx::ICONS so client renderers can resolve it.
@@ -38,34 +40,8 @@ import {
 // Once those three edits land in apps/api and packages/ui rebuilds, every
 // other SPA picks up the new app at runtime without a container rebuild.
 
-export const LAUNCHPAD_APP_IDS = [
-  'b3',
-  'banter',
-  'beacon',
-  'bond',
-  'blast',
-  'bill',
-  'blank',
-  'book',
-  'bench',
-  'brief',
-  'bolt',
-  'bearing',
-  'board',
-  'blueprint',
-  'bin',
-  'bay',
-  'blip',
-  'helpdesk',
-  'bureau',
-  'basis',
-  'braid',
-  'bulwark',
-  'burn',
-  'bursar',
-] as const;
-
-export type LaunchpadAppId = (typeof LAUNCHPAD_APP_IDS)[number];
+export { LAUNCHPAD_APP_IDS };
+export type { LaunchpadAppId };
 
 export interface LaunchpadAppEntry {
   id: LaunchpadAppId;

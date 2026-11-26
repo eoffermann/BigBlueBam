@@ -1,5 +1,6 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
+import { LAUNCHPAD_APP_IDS } from '@bigbluebam/shared';
 import type { ApiClient } from '../middleware/api-client.js';
 import { registerTool } from '../lib/register-tool.js';
 
@@ -250,10 +251,8 @@ export function registerPlatformTools(server: McpServer, api: ApiClient): void {
   // admins/owners override it per-org. The resolver in
   // /b3/api/launchpad/apps returns the effective list for the caller.
 
-  const launchpadAppIdSchema = z.enum([
-    'b3', 'banter', 'beacon', 'bond', 'blast', 'bill', 'blank',
-    'book', 'bench', 'brief', 'bolt', 'bearing', 'board', 'helpdesk',
-  ]);
+  // Issue #144: derived from the one shared list, never hand-copied.
+  const launchpadAppIdSchema = z.enum(LAUNCHPAD_APP_IDS);
 
   registerTool(server, {
     name: 'get_launchpad_apps',

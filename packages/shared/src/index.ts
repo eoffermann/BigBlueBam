@@ -6,6 +6,8 @@ export * from './schemas/index.js';
 export * from './types/index.js';
 export * from './bolt-events.js';
 export * from './bolt-sources.js';
+// The single Launchpad app-id list (issue #144), shared by the api and the MCP tools.
+export * from './launchpad-apps.js';
 export * from './bolt-graph.js';
 export * from './bolt-graph-shape.js';
 export * from './bolt-automation-versions/index.js';
