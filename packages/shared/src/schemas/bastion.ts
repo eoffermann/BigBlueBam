@@ -834,6 +834,21 @@ export const bastionInternalEventSchema = z
   .strict();
 export type BastionInternalEvent = z.infer<typeof bastionInternalEventSchema>;
 
+/**
+ * Whether a forwarded event is one Bastion consumes, on payload grounds (issue #206). Bastion
+ * reads platform `proposal.decided` only for its OWN proposals (proposed_action `bastion.*`,
+ * spec 2.4 / 2.8); every other event passes (feeds are gated by their bindings). Used by
+ * bolt-api's dispatch hook (do not forward) and by bastion-api's inbox (do not store), so the
+ * rule lives in one place.
+ */
+export function bastionConsumesEvent(source: string, eventType: string, payload: Record<string, unknown> | null | undefined): boolean {
+  if (source === 'platform' && eventType === 'proposal.decided') {
+    const proposal = (payload?.proposal ?? null) as { proposed_action?: unknown } | null;
+    return typeof proposal?.proposed_action === 'string' && proposal.proposed_action.startsWith('bastion.');
+  }
+  return true;
+}
+
 /** Worker queues (spec 7). bastion-api produces evaluate-run; the rest are scheduled sweeps. */
 export const BASTION_EVALUATE_TICK_QUEUE = 'bastion-evaluate-tick';
 export const BASTION_EVALUATE_RUN_QUEUE = 'bastion-evaluate-run';

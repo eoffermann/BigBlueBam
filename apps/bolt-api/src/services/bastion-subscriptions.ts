@@ -3,7 +3,9 @@
  * suite can assert it directly. bastion-dispatch-hook.ts imports these.
  *
  * Static: Bastion consumes platform `proposal.decided`, only to detect a Bastion proposal decided
- * outside Bastion (spec 2.8; reconciled at M6).
+ * outside Bastion (spec 2.8; reconciled at M6). The dispatch hook narrows it on the payload with
+ * bastionConsumesEvent (@bigbluebam/shared): only `bastion.*` proposed actions are forwarded,
+ * never every org's approval traffic (issue #206).
  *
  * Dynamic: a machine feed with source_kind `bolt_event` (spec 3.5) names one (source, event_type)
  * pair. Those are forwarded only when the org's binding set `bastion:feed-bindings:<org_id>` in

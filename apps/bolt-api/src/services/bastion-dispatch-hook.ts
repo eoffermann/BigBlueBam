@@ -1,5 +1,6 @@
 import type { FastifyBaseLogger } from 'fastify';
 import type { Redis } from 'ioredis';
+import { bastionConsumesEvent } from '@bigbluebam/shared';
 import { env } from '../env.js';
 import {
   BASTION_FEED_BINDINGS_KEY,
@@ -50,6 +51,8 @@ export async function dispatchToBastion(
   fetchImpl: typeof fetch = fetch,
 ): Promise<void> {
   if (!(await bastionWants(redis, event.orgId, event.source, event.eventType))) return;
+  // proposal.decided only for Bastion's own proposals (issue #206); the inbox re-checks.
+  if (!bastionConsumesEvent(event.source, event.eventType, event.payload)) return;
   const secret = env.INTERNAL_SERVICE_SECRET;
   if (!secret) return; // fail closed: the inbox requires the shared secret
 

@@ -343,22 +343,82 @@ export async function weeklyReadiness(deps: EngineDeps, opts: { organization_id?
 
 // ── retention ────────────────────────────────────────────────────────────────────────────
 
+const DAY_MS = 86_400_000;
+/** Delivered / superseded outbox rows and finished inbox rows. */
+export const RETENTION_DONE_DAYS = 30;
+/**
+ * Inbox rows nothing consumed (status pending, issue #206). Until the M5/M6 processors exist
+ * nothing claims them; afterwards a row this old is far past any reconcile window (the M6
+ * proposal reconcile re-reads agent_proposals, feeds report staleness through feed.fresh).
+ */
+export const RETENTION_UNCONSUMED_INBOX_DAYS = 30;
+/** Dead outbox rows: kept well past an operator's re-drive and audit window, then pruned. */
+export const RETENTION_DEAD_OUTBOX_DAYS = 90;
+const RETENTION_BATCH = 5_000;
+
+/** Delete in bounded batches with a progress line per batch, so a large backlog never stalls silently. */
+async function pruneInBatches(
+  deps: EngineDeps,
+  label: string,
+  batch: () => PromiseLike<ArrayLike<unknown>>,
+): Promise<number> {
+  let total = 0;
+  for (let i = 0; i < 10_000; i++) {
+    const n = (await batch()).length;
+    total += n;
+    if (n > 0) deps.log.info({ phase: label, batch: n, total }, `bastion-retention: ${label}: pruned ${total} so far`);
+    if (n < RETENTION_BATCH) break;
+  }
+  return total;
+}
+
 export async function retention(deps: EngineDeps, opts: { organization_id?: string } = {}) {
-  const cutoff = new Date(deps.now().getTime() - 30 * 86_400_000);
-  const outbox = await deps.sql`
-    DELETE FROM bastion_outbox WHERE status IN ('delivered', 'superseded') AND coalesce(delivered_at, created_at) < ${cutoff}
-      ${opts.organization_id ? deps.sql`AND organization_id = ${opts.organization_id}` : deps.sql``}
-    RETURNING id`;
-  const ingest = await deps.sql`
-    DELETE FROM bastion_ingest_events WHERE status = 'done' AND updated_at < ${cutoff}
-      ${opts.organization_id ? deps.sql`AND organization_id = ${opts.organization_id}` : deps.sql``}
-    RETURNING id`;
+  const now = deps.now().getTime();
+  const doneCutoff = new Date(now - RETENTION_DONE_DAYS * DAY_MS);
+  const unconsumedCutoff = new Date(now - RETENTION_UNCONSUMED_INBOX_DAYS * DAY_MS);
+  const deadCutoff = new Date(now - RETENTION_DEAD_OUTBOX_DAYS * DAY_MS);
+  const orgFilter = () => (opts.organization_id ? deps.sql`AND organization_id = ${opts.organization_id}` : deps.sql``);
+  deps.log.info({ organization_id: opts.organization_id ?? null }, 'bastion-retention: starting (outbox, inbox, access log)');
+
+  const outbox = await pruneInBatches(deps, 'outbox delivered/superseded', () => deps.sql`
+    DELETE FROM bastion_outbox WHERE id IN (
+      SELECT id FROM bastion_outbox
+       WHERE status IN ('delivered', 'superseded') AND coalesce(delivered_at, created_at) < ${doneCutoff} ${orgFilter()}
+       LIMIT ${RETENTION_BATCH})
+    RETURNING id`);
+  const outboxDead = await pruneInBatches(deps, 'outbox dead', () => deps.sql`
+    DELETE FROM bastion_outbox WHERE id IN (
+      SELECT id FROM bastion_outbox
+       WHERE status = 'dead' AND created_at < ${deadCutoff} ${orgFilter()}
+       LIMIT ${RETENTION_BATCH})
+    RETURNING id`);
+  const ingest = await pruneInBatches(deps, 'inbox done/failed/dead', () => deps.sql`
+    DELETE FROM bastion_ingest_events WHERE id IN (
+      SELECT id FROM bastion_ingest_events
+       WHERE status IN ('done', 'failed', 'dead') AND updated_at < ${doneCutoff} ${orgFilter()}
+       LIMIT ${RETENTION_BATCH})
+    RETURNING id`);
+  const ingestUnconsumed = await pruneInBatches(deps, 'inbox unconsumed', () => deps.sql`
+    DELETE FROM bastion_ingest_events WHERE id IN (
+      SELECT id FROM bastion_ingest_events
+       WHERE status = 'pending' AND created_at < ${unconsumedCutoff} ${orgFilter()}
+       LIMIT ${RETENTION_BATCH})
+    RETURNING id`);
+
   const orgs = await bastionOrgs(deps, opts.organization_id);
   let purged = 0;
-  for (const org of orgs) {
+  for (const [i, org] of orgs.entries()) {
     const r = await orgTx(deps.sql, org.organization_id, (tx) => tx`SELECT bastion_purge_access_log(${org.organization_id}::uuid) AS n`);
     purged += Number(r[0]?.n ?? 0);
+    deps.log.info({ organization_id: org.organization_id }, `bastion-retention: access log ${i + 1}/${orgs.length}`);
   }
-  deps.log.info({ outbox: outbox.length, ingest: ingest.length, access_log: purged }, 'bastion-retention: pruned');
-  return { outbox_pruned: outbox.length, ingest_pruned: ingest.length, access_log_purged: purged };
+  const out = {
+    outbox_pruned: outbox,
+    outbox_dead_pruned: outboxDead,
+    ingest_pruned: ingest,
+    ingest_unconsumed_pruned: ingestUnconsumed,
+    access_log_purged: purged,
+  };
+  deps.log.info(out, 'bastion-retention: pruned');
+  return out;
 }

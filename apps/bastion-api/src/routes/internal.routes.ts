@@ -1,6 +1,7 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import {
   BastionEngineName,
+  bastionConsumesEvent,
   bastionEvaluateRunEngineSchema,
   bastionInternalEventSchema,
   bastionSweepEngineSchema,
@@ -93,6 +94,19 @@ export default async function internalRoutes(fastify: FastifyInstance) {
     const key = `${e.source}:${e.event}:${e.event_id ?? sha256Hex(canonicalJson(e.payload))}`.slice(0, 256);
     const org = await deps().sql`SELECT 1 FROM organizations WHERE id = ${e.organization_id}`;
     if (org.length === 0) return send(request, reply, 404, 'NOT_FOUND', 'Unknown organization');
+    // Store only what Bastion will consume (issue #206): its own proposals' decisions, and only
+    // for orgs that have set Bastion up. Anything else is acknowledged and dropped, so the
+    // sender does not retry it and the inbox does not grow with rows nothing reads.
+    if (!bastionConsumesEvent(e.source, e.event, e.payload)) {
+      reply.status(202);
+      return { data: { accepted: false, ignored: 'not_consumed' } };
+    }
+    const setUp = await orgTx(deps().sql, e.organization_id, (tx) =>
+      tx`SELECT 1 FROM bastion_org_settings WHERE organization_id = ${e.organization_id}`);
+    if (setUp.length === 0) {
+      reply.status(202);
+      return { data: { accepted: false, ignored: 'not_set_up' } };
+    }
     const inserted = await orgTx(deps().sql, e.organization_id, (tx) => tx`
       INSERT INTO bastion_ingest_events (organization_id, source, event_type, source_idempotency_key, payload)
       VALUES (${e.organization_id}, ${e.source}, ${e.event}, ${key}, ${tx.json(e.payload as never)})
