@@ -7,7 +7,10 @@ vi.mock('@bigbluebam/ui/impersonation-banner', () => ({
   getImpersonation: () => (impersonating ? { user_id: 'u-g', display_name: 'Gilligan' } : null),
 }));
 
-import { QuestionnaireDetailPage, QuestionnairesPage, draftingEstimate } from '@/pages/questionnaires';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { BASTION_CONFIDENCE_WORDS } from '@bigbluebam/shared';
+import { QuestionnaireDetailPage, QuestionnairesPage, bandCountsWords, draftingEstimate } from '@/pages/questionnaires';
 import { ALL_BASTION_PERMISSIONS, MEMBER_PERMISSIONS, jsonResponse, routedFetch, settled, wrap } from './helpers';
 
 // M8 page (spec 6.1-6.3): Questionnaires. Plain words ("Sure", "Check this", "Needs an expert"),
@@ -189,6 +192,24 @@ describe('Questionnaires (M8)', () => {
     await screen.findByText('Howell Industries Vendor Security Review');
     expect(screen.queryByText('Add a questionnaire')).toBeNull();
     await settled(reader.qc);
+  });
+
+  // #272: the page, the hooks and the types use @bigbluebam/shared, not hand-copied literals.
+  it('takes the confidence words, request bodies and enums from @bigbluebam/shared', () => {
+    const page = readFileSync(join(__dirname, '../src/pages/questionnaires.tsx'), 'utf8')
+      .split('\n')
+      .filter((l) => !/^\s*(\/\/|\/\*\*|\*)/.test(l))
+      .join('\n');
+    const hooks = readFileSync(join(__dirname, '../src/hooks/use-bastion.ts'), 'utf8');
+    const types = readFileSync(join(__dirname, '../src/lib/api.ts'), 'utf8');
+    for (const w of ['Sure', 'Check this', 'Needs an expert']) expect(page, w).not.toMatch(new RegExp(`[\\d}] ${w}[,'"]|"${w}"`));
+    expect(bandCountsWords({ high_count: 1, medium_count: 2, low_count: 3 })).toBe(
+      `1 ${BASTION_CONFIDENCE_WORDS.high}, 2 ${BASTION_CONFIDENCE_WORDS.medium}, 3 ${BASTION_CONFIDENCE_WORDS.low}`,
+    );
+    expect(hooks).not.toMatch(/review_status: 'accepted' \| 'edited'/);
+    expect(hooks).not.toMatch(/source: \{ kind: 'bin_asset'/);
+    expect(types).not.toMatch(/status: 'uploaded' \| 'mapping'/);
+    expect(types).toMatch(/QuestionnaireSheetMap = BastionQuestionnaireSheetMap/);
   });
 
   it('estimates drafting time from the spec 7.3 throughput', () => {

@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { ArrowLeft, Download, Loader2 } from 'lucide-react';
+import { BASTION_CONFIDENCE_WORDS } from '@bigbluebam/shared';
 import { useCan } from '@bigbluebam/ui/use-can';
 import { getImpersonation, impersonateHeader } from '@bigbluebam/ui/impersonation-banner';
 import type { AnswerLibraryRow, QuestionnaireItemRow, QuestionnaireRow, QuestionnaireSheetMap } from '@/lib/api';
@@ -60,6 +61,11 @@ export function draftingEstimate(rowsLeft: number): string {
 }
 
 const yesNoWords = (v: boolean | null) => (v === true ? 'Yes' : v === false ? 'No' : null);
+
+/** "1 Sure, 1 Check this, 1 Needs an expert", in the shared confidence words (#272). */
+export function bandCountsWords(r: Pick<QuestionnaireRow, 'high_count' | 'medium_count' | 'low_count'>): string {
+  return `${r.high_count} ${BASTION_CONFIDENCE_WORDS.high}, ${r.medium_count} ${BASTION_CONFIDENCE_WORDS.medium}, ${r.low_count} ${BASTION_CONFIDENCE_WORDS.low}`;
+}
 
 function formatDate(iso: string | null): string | null {
   return iso ? new Date(iso).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }) : null;
@@ -219,7 +225,7 @@ export function QuestionnairesPage({ onNavigate }: { onNavigate: (path: string) 
                   {STATUS_WORDS[r.status]}
                   {r.requester_label ? ` · from ${r.requester_label}` : ''}
                   {r.row_count > 0 ? ` · ${r.row_count} questions` : ''}
-                  {r.row_count > 0 && r.rows_done > 0 ? ` · ${r.high_count} Sure, ${r.medium_count} Check this, ${r.low_count} Needs an expert` : ''}
+                  {r.row_count > 0 && r.rows_done > 0 ? ` · ${bandCountsWords(r)}` : ''}
                 </span>
               </button>
             </li>
@@ -462,7 +468,7 @@ function ReviewStep({ q }: { q: QuestionnaireRow }) {
       )}
       {q.injection_suspected && (
         <p className="text-xs text-amber-700 bg-amber-50 dark:bg-amber-950/30 rounded px-2 py-1">
-          Some questions contain text that reads like instructions to a computer. Bastion marked those "Needs an expert"; a person should answer them.
+          Some questions contain text that reads like instructions to a computer. Bastion marked those "{BASTION_CONFIDENCE_WORDS.low}"; a person should answer them.
         </p>
       )}
       <div className="flex flex-wrap items-center gap-3">
@@ -538,7 +544,7 @@ export function QuestionnaireDetailPage({ questionnaireId, onNavigate }: { quest
               {STATUS_WORDS[row.status]}
               {row.requester_label ? ` · from ${row.requester_label}` : ''}
               {row.due_date ? ` · due ${formatDate(row.due_date)}` : ''}
-              {row.rows_done > 0 ? ` · ${row.high_count} Sure, ${row.medium_count} Check this, ${row.low_count} Needs an expert` : ''}
+              {row.rows_done > 0 ? ` · ${bandCountsWords(row)}` : ''}
             </p>
           </div>
           {(row.status === 'mapping' || row.status === 'uploaded') && <MappingStep q={row} />}

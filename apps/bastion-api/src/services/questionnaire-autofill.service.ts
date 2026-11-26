@@ -16,7 +16,7 @@
 // delimited data, then the deterministic verifier and bander (library/questionnaire-draft.ts),
 // with can_access on every citation for the person who started the autofill.
 
-import type { BastionDraftAnswer, BastionQuestionnaireSlice } from '@bigbluebam/shared';
+import { BASTION_CONFIDENCE_WORDS, type BastionDraftAnswer, type BastionQuestionnaireSlice } from '@bigbluebam/shared';
 import { type EngineDeps, orgTx, type Tx } from '../engine/context.js';
 import { LLM_SLICE_START_CUTOFF_MS, MAX_RESUMES, STALE_HEARTBEAT_MS } from '../engine/budgets.js';
 import { RunLeaseHeldError, RunNotFoundError } from '../engine/evaluator.js';
@@ -373,7 +373,7 @@ export async function draftOneAnswer(
   return {
     data: {
       ...banded,
-      confidence_words: banded.confidence_band === 'high' ? 'Sure' : banded.confidence_band === 'medium' ? 'Check this' : 'Needs an expert',
+      confidence_words: BASTION_CONFIDENCE_WORDS[banded.confidence_band],
       citations: banded.cited_refs.map((r) => ({ ...r, label: labels.get(`${r.entity_type}:${r.entity_id}`) ?? null })),
       drafted_by_ai: response !== null,
       note,

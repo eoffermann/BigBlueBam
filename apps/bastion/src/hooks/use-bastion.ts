@@ -1,11 +1,17 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import type { z } from 'zod';
 import type {
+  BastionAnswerLibraryUpdate,
   BastionBulkApplicability,
   BastionCompanyProfile,
   BastionExceptionPropose,
   BastionManualEvidenceCreate,
   BastionNotApplicableSuggestions,
+  BastionQuestionnaireAutofill,
+  BastionQuestionnaireItemReview,
   BastionTemplateKey,
+  bastionQuestionnaireCreateSchema,
+  bastionQuestionnaireUpdateSchema,
 } from '@bigbluebam/shared';
 import {
   api,
@@ -33,7 +39,6 @@ import {
   type QuestionnaireApproval,
   type QuestionnaireItemRow,
   type QuestionnaireRow,
-  type QuestionnaireSheetMap,
   type SummaryResponse,
   type RequirementsResponse,
   type SetupState,
@@ -234,11 +239,8 @@ export function useQuestionnaireItems(id: string, drafting: boolean) {
 export function useCreateQuestionnaire() {
   const invalidate = useInvalidate();
   return useMutation({
-    mutationFn: (body: {
-      title: string;
-      requester_label?: string | null;
-      source: { kind: 'bin_asset'; bin_asset_id: string } | { kind: 'pasted'; text: string; format: 'tsv' | 'csv' };
-    }) => api.post<{ data: QuestionnaireRow }>('/questionnaires', body),
+    // #272: the shared request body (z.input, so defaults may be left out).
+    mutationFn: (body: z.input<typeof bastionQuestionnaireCreateSchema>) => api.post<{ data: QuestionnaireRow }>('/questionnaires', body),
     onSuccess: invalidate,
   });
 }
@@ -246,8 +248,7 @@ export function useCreateQuestionnaire() {
 export function useUpdateQuestionnaire() {
   const invalidate = useInvalidate();
   return useMutation({
-    mutationFn: (args: { id: string; body: { column_map?: { sheets: QuestionnaireSheetMap[] }; title?: string } }) =>
-      api.patch<{ data: QuestionnaireRow }>(`/questionnaires/${args.id}`, args.body),
+    mutationFn: (args: { id: string; body: z.input<typeof bastionQuestionnaireUpdateSchema> }) => api.patch<{ data: QuestionnaireRow }>(`/questionnaires/${args.id}`, args.body),
     onSuccess: invalidate,
   });
 }
@@ -255,7 +256,8 @@ export function useUpdateQuestionnaire() {
 export function useAutofill() {
   const invalidate = useInvalidate();
   return useMutation({
-    mutationFn: (args: { id: string; redraft?: boolean }) => api.post<{ data: QuestionnaireRow }>(`/questionnaires/${args.id}/autofill`, { redraft: args.redraft ?? false }),
+    mutationFn: (args: { id: string } & Partial<BastionQuestionnaireAutofill>) =>
+      api.post<{ data: QuestionnaireRow }>(`/questionnaires/${args.id}/autofill`, { redraft: args.redraft ?? false }),
     onSuccess: invalidate,
   });
 }
@@ -265,7 +267,7 @@ export function useReviewItem(questionnaireId: string) {
   const qc = useQueryClient();
   const itemsKey = key('questionnaire-items', questionnaireId);
   return useMutation({
-    mutationFn: (args: { id: string; review_status: 'accepted' | 'edited' | 'needs_owner' | 'pending'; final_answer?: string | null; final_yes_no?: boolean | null; assigned_to?: string | null }) => {
+    mutationFn: (args: { id: string } & BastionQuestionnaireItemReview) => {
       const { id, ...body } = args;
       return api.patch<{ data: QuestionnaireItemRow; approval: QuestionnaireApproval }>(`/questionnaire-items/${id}`, body);
     },
@@ -306,7 +308,7 @@ export function useAnswerLibrary(q: string) {
 export function useUpdateAnswerLibrary() {
   const invalidate = useInvalidate();
   return useMutation({
-    mutationFn: (args: { id: string; body: { stale?: false; retired?: boolean } }) => api.patch(`/answer-library/${args.id}`, args.body),
+    mutationFn: (args: { id: string; body: BastionAnswerLibraryUpdate }) => api.patch(`/answer-library/${args.id}`, args.body),
     onSuccess: invalidate,
   });
 }

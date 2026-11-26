@@ -1746,7 +1746,7 @@ export const bastionQuestionnaireItemListQuerySchema = z
   .object({
     band: BastionConfidenceBand.optional(),
     review_status: BastionItemReviewStatus.optional(),
-    needs_review: z.preprocess((v) => (v === 'true' ? true : v === 'false' ? false : v), z.boolean()).optional(),
+    needs_review: boolQueryParam().optional(),
   })
   .strict();
 export type BastionQuestionnaireItemListQuery = z.infer<typeof bastionQuestionnaireItemListQuerySchema>;
@@ -1809,8 +1809,8 @@ export type BastionDraftAnswer = z.infer<typeof bastionDraftAnswerSchema>;
 export const bastionAnswerLibraryQuerySchema = z
   .object({
     q: z.string().trim().max(500).optional(),
-    include_stale: z.preprocess((v) => (v === 'true' ? true : v === 'false' ? false : v), z.boolean()).optional(),
-    include_retired: z.preprocess((v) => (v === 'true' ? true : v === 'false' ? false : v), z.boolean()).optional(),
+    include_stale: boolQueryParam().optional(),
+    include_retired: boolQueryParam().optional(),
     limit: z.coerce.number().int().min(1).max(100).default(25),
   })
   .strict();

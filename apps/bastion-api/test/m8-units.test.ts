@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { encodeXlsx, decodeXlsx } from '@bigbluebam/structured-data';
 import {
@@ -115,6 +117,14 @@ describe('questionnaire parsing and mapping', () => {
     // The xlsx carries the same neutralized text as an inline string.
     const back = decodeXlsx(encodeXlsx(grid));
     expect(back.sheets[0]?.rows[1]?.[0]).toBe('\'=HYPERLINK("http://evil")');
+  });
+});
+
+describe('confidence words have one source (#272)', () => {
+  it('the one-off draft names its band with BASTION_CONFIDENCE_WORDS, not literals', () => {
+    const src = readFileSync(join(__dirname, '../src/services/questionnaire-autofill.service.ts'), 'utf8');
+    expect(src).not.toMatch(/'Sure'|'Check this'|'Needs an expert'/);
+    expect(src).toMatch(/confidence_words: BASTION_CONFIDENCE_WORDS\[banded\.confidence_band\]/);
   });
 });
 
