@@ -12,8 +12,9 @@ import postgres from 'postgres';
  * and, for the probes, that each is SECURITY DEFINER and STABLE and that the org guard refuses a
  * call outside a matching app.current_org_id scope.
  *
- * CI's db-drift job runs this suite against the freshly migrated service container (see
- * .github/workflows/db-drift.yml). Locally, point DATABASE_URL at the compose postgres. Without
+ * CI's Vitest job runs this suite against the freshly migrated service container (see
+ * .github/workflows/test.yml: the migrate-runner step and the job-level DATABASE_URL; db-drift.yml
+ * runs no vitest). Locally, point DATABASE_URL at the compose postgres. Without
  * DATABASE_URL the suite SKIPS LOUDLY rather than silently passing.
  */
 

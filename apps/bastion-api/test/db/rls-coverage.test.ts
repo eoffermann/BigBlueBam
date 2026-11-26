@@ -9,7 +9,8 @@ import postgres from 'postgres';
  * ran against the live schema: all 35 tables of spec 4.1.1 exist, RLS is enabled on each, and
  * each carries exactly the org-isolation policy bound to app.current_org_id.
  *
- * Runs in CI's db-drift job against the migrated service container; SKIPS LOUDLY without
+ * Runs in CI's Vitest job (.github/workflows/test.yml, not db-drift.yml) against the migrated
+ * service container; SKIPS LOUDLY without
  * DATABASE_URL.
  */
 

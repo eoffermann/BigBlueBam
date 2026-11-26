@@ -21,6 +21,10 @@ export type BastionFrameworkStatus = z.infer<typeof BastionFrameworkStatus>;
 export const BastionControlLifecycle = z.enum(['active', 'retired']);
 export type BastionControlLifecycle = z.infer<typeof BastionControlLifecycle>;
 
+/** bastion_org_settings.remediation_tasks (spec 4.1): create Bam tasks directly, or propose them. */
+export const BastionRemediationTasks = z.enum(['create', 'propose']);
+export type BastionRemediationTasks = z.infer<typeof BastionRemediationTasks>;
+
 /** The STORED status of a control or the outcome of one snapshot (spec 3.2). */
 export const BastionStoredStatus = z.enum(['pass', 'fail', 'unprovable']);
 export type BastionStoredStatus = z.infer<typeof BastionStoredStatus>;

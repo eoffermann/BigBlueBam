@@ -10,6 +10,7 @@ import {
   BastionAuditorRequestStatus,
   BastionAuditorViewKind,
   BastionConfidenceBand,
+  BastionControlLifecycle,
   BastionCoverageKind,
   BastionDriftTaskStatus,
   BastionEvaluationScope,
@@ -37,6 +38,9 @@ import {
   BastionPolicyStatus,
   BastionQuestionnaireFormat,
   BastionQuestionnaireStatus,
+  BastionRemediationTasks,
+  BastionRequirementApplicability,
+  BastionRequirementSource,
   BastionRestoreResolution,
   BastionRestoreStatus,
   BastionReviewVerdict,
@@ -53,32 +57,74 @@ import {
   bastionProbeFunctionName,
 } from './bastion.js';
 
-// The Bastion enums mirror CHECK constraints in migrations 0274-0278. This suite reads the
-// migration files and fails when the two drift apart, so a new status value cannot land in
-// one place only (fix the fact, not the place).
+// The Bastion enums mirror CHECK constraints in the bastion migrations. This suite reads every
+// migration file and fails when the two drift apart, so a new status value cannot land in one
+// place only (fix the fact, not the place). It also ENUMERATES every CHECK IN-list on a
+// bastion_* constraint, so a CHECK added by a later migration must be paired with a shared enum
+// (CASES) or explicitly allowlisted; it cannot slip past unnoticed (#185).
 
 const MIGRATIONS_DIR = join(__dirname, '../../../../infra/postgres/migrations');
-const bastionSql = readdirSync(MIGRATIONS_DIR)
+const BASTION_FILES = readdirSync(MIGRATIONS_DIR)
   .filter((f) => /^\d{4}_bastion_.*\.sql$/.test(f))
-  .sort()
-  .map((f) => readFileSync(join(MIGRATIONS_DIR, f), 'utf8'))
-  .join('\n');
+  .sort();
+/** Comment lines stripped, so header prose naming a constraint cannot shadow its definition. */
+const bastionSql = BASTION_FILES.map((f) =>
+  readFileSync(join(MIGRATIONS_DIR, f), 'utf8')
+    .split('\n')
+    .filter((line) => !/^\s*--/.test(line))
+    .join('\n'),
+).join('\n');
+
+/**
+ * The CHECK body of every bastion_* constraint. Files are read in migration order and a later
+ * definition (a guarded drop/re-add, e.g. 0283 widening bastion_outbox_shape_check) replaces
+ * the earlier one, so the map holds what the database enforces today.
+ */
+function collectChecks(): Map<string, string> {
+  const out = new Map<string, string>();
+  const re = /ADD CONSTRAINT\s+(bastion_\w+)\s+CHECK\b/g;
+  for (const m of bastionSql.matchAll(re)) {
+    const start = m.index! + m[0].length;
+    out.set(m[1]!, bastionSql.slice(start, bastionSql.indexOf(';', start)));
+  }
+  return out;
+}
+const CHECKS = collectChecks();
+
+/** Every `<column> IN ('a', ...)` list inside a CHECK body, keyed by column. */
+function inLists(body: string): Map<string, string[]> {
+  const out = new Map<string, string[]>();
+  for (const m of body.matchAll(/\b(\w+)\s+IN\s*\(([^)]*)\)/g)) {
+    const values = [...m[2]!.matchAll(/'([^']+)'/g)].map((x) => x[1]!).sort();
+    if (values.length > 0) out.set(m[1]!, values);
+  }
+  return out;
+}
 
 /** The literal values a constraint allows for one column: `<column> IN ('a', 'b', ...)`. */
 function checkValues(constraint: string, column: string): string[] {
-  const start = bastionSql.indexOf(`ADD CONSTRAINT ${constraint}`);
-  if (start < 0) throw new Error(`constraint ${constraint} not found in the bastion migrations`);
-  const body = bastionSql.slice(start, bastionSql.indexOf(';', start));
-  const m = body.match(new RegExp(`\\b${column}\\s+IN\\s*\\(([^)]*)\\)`));
-  if (!m) throw new Error(`${constraint} has no "${column} IN (...)" list`);
-  return [...m[1]!.matchAll(/'([^']+)'/g)].map((x) => x[1]!).sort();
+  const body = CHECKS.get(constraint);
+  if (body === undefined) throw new Error(`constraint ${constraint} not found in the bastion migrations`);
+  const values = inLists(body).get(column);
+  if (!values) throw new Error(`${constraint} has no "${column} IN (...)" list`);
+  return values;
 }
+
+/**
+ * CHECK IN-lists that deliberately have no shared enum. Each entry needs a reason; adding one is
+ * a conscious decision, which is the point of the enumeration below.
+ */
+const NO_SHARED_ENUM: Record<string, string> = {};
 
 const CASES: Array<[string, string, z.ZodEnum<[string, ...string[]]>]> = [
   ['bastion_frameworks_status_check', 'status', BastionFrameworkStatus],
   ['bastion_controls_status_check', 'status', BastionStoredStatus],
   ['bastion_controls_status_reason_check', 'status_reason', BastionStoredUnprovableReason],
   ['bastion_controls_coverage_kind_check', 'coverage_kind', BastionCoverageKind],
+  ['bastion_controls_lifecycle_check', 'lifecycle', BastionControlLifecycle],
+  ['bastion_control_requirements_applicability_check', 'applicability', BastionRequirementApplicability],
+  ['bastion_control_requirements_source_check', 'source', BastionRequirementSource],
+  ['bastion_org_settings_ranges_check', 'remediation_tasks', BastionRemediationTasks],
   ['bastion_assertions_proposed_by_check', 'proposed_by', BastionAssertionProposedBy],
   ['bastion_assertions_review_status_check', 'review_status', BastionAssertionReviewStatus],
   ['bastion_compile_runs_status_check', 'status', BastionRunStatus],
@@ -126,6 +172,36 @@ describe('Bastion enums match the migration CHECK constraints', () => {
       expect(checkValues(constraint, column)).toEqual([...schema.options].sort());
     });
   }
+
+  it('finds the CHECK constraints (an empty parse would silently pass)', () => {
+    expect(CHECKS.size).toBeGreaterThanOrEqual(37);
+  });
+
+  it('every CHECK in the bastion migrations is an ADD CONSTRAINT bastion_* the parser sees', () => {
+    // An inline column CHECK or a differently named constraint would escape the enumeration.
+    const allChecks = [...bastionSql.matchAll(/\bCHECK\s*\(/g)].length;
+    const named = [...bastionSql.matchAll(/ADD CONSTRAINT\s+bastion_\w+\s+CHECK\s*\(/g)].length;
+    expect(allChecks).toBe(named);
+  });
+
+  it('every CHECK IN-list on a bastion_* constraint is covered by CASES or allowlisted', () => {
+    const covered = new Set(CASES.map(([c, col]) => `${c}.${col}`));
+    const uncovered: string[] = [];
+    for (const [constraint, body] of CHECKS) {
+      for (const column of inLists(body).keys()) {
+        const key = `${constraint}.${column}`;
+        if (!covered.has(key) && !(key in NO_SHARED_ENUM)) uncovered.push(key);
+      }
+    }
+    expect(uncovered, 'add a shared enum + CASES row, or a NO_SHARED_ENUM entry with a reason').toEqual([]);
+  });
+
+  it('has no stale NO_SHARED_ENUM entries', () => {
+    for (const key of Object.keys(NO_SHARED_ENUM)) {
+      const [constraint, column] = key.split('.') as [string, string];
+      expect(() => checkValues(constraint, column), key).not.toThrow();
+    }
+  });
 });
 
 describe('Bastion vocabulary', () => {
