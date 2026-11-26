@@ -1,9 +1,5 @@
 import { z } from 'zod';
-<<<<<<< HEAD
-import { llmTimeoutEnvSchema } from '@bigbluebam/shared';
-=======
-import { envBool } from '@bigbluebam/shared';
->>>>>>> origin/suite-brainstorm
+import { envBool, llmTimeoutEnvSchema } from '@bigbluebam/shared';
 
 const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
