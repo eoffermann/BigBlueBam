@@ -28,6 +28,11 @@
  *     and Skipper approves it in Bastion ("Not met, risk accepted"); Skipper drafts the evidence
  *     request for the expiring 2-Step report (to the Professor); drift tasks reach the Compliance
  *     project through the outbox; laptop encryption is the top gap.
+ * M7 rows (spec 10.2):
+ *   - "Island Information Security Policy" written once in Gilligan's Beacon (shared with the whole
+ *     organization), linked as a policy for the seven castaways, and read and acknowledged by five
+ *     of them (each in their own session: acknowledging is a vouching act); Gilligan and Ginger
+ *     have not, so the Policies page reads "5 of 7 have read the current version".
  * Uploading and accepting are vouching acts too, so the Professor, Mary Ann and Skipper each sign
  * in for theirs.
  *
@@ -141,8 +146,10 @@ async function adoptAndCompile(templateKey) {
   if (latest?.status === 'succeeded') {
     log(`${templateKey} already compiled`);
   } else {
-    log(`compiling ${templateKey} (deterministic, a few seconds)...`);
-    const run = must(await bastion('POST', `/frameworks/${fw.id}/compile`, {}), `compile ${templateKey}`).data;
+    // use_ai: false keeps the seed deterministic (BASTION_SEED_EXPECTATIONS is derived from the
+    // library); since M7 a compile with an AI provider would be queued and tailored on the worker.
+    log(`compiling ${templateKey} (deterministic library suggestions, a few seconds)...`);
+    const run = must(await bastion('POST', `/frameworks/${fw.id}/compile`, { use_ai: false }), `compile ${templateKey}`).data;
     log(`  ${run.assertions_proposed} checks proposed, ${run.assertions_dropped} dropped`);
   }
   return fw.id;
@@ -713,8 +720,110 @@ async function verifyM6() {
   if (problems.length) throw new Error(`seeded M6 rows do not match BASTION_SEED_EXPECTATIONS: ${problems.join('; ')}`);
 }
 
+// ── M7: the Island Information Security Policy, read by 5 of 7 ────────────────────────────
+
+const BEACON = 'http://beacon-api:4004/v1';
+const POLICY_BODY = `# Island Information Security Policy
+
+This policy applies to everyone on the island who uses Gilligan Travel Ltd systems.
+
+## What we protect
+
+- Guest bookings for the charter fleet, including names, dates and payment details.
+- The rescue radio, its firmware and the Radio Relay key.
+- The crew roster and anything the Howells hand us for safekeeping.
+
+## What everyone does
+
+1. Use two-step sign-in on every company account. No exceptions, not even for the Skipper.
+2. Keep laptops encrypted and with you. A laptop left on the beach is a laptop lost to the tide.
+3. Never share an API key, a password or the radio code by coconut, note or shouting across the lagoon.
+4. Report anything odd to the Professor straight away: strange sign-ins, a missing laptop, or a radio that hums when it should not.
+
+## Leaving the island
+
+When someone leaves, their access ends the same day. The Skipper confirms it and the Professor checks it.
+
+## Review
+
+The Skipper reviews this policy every year, or sooner after anything goes wrong.
+`;
+
+/** The policy article in Gilligan's Beacon: created once (an upsert would add a version each run). */
+async function ensurePolicyArticle() {
+  const m = EXP.m7.policy;
+  const existing = (await withDb((sql) => sql`SELECT id, status::text AS status, visibility::text AS visibility FROM beacon_entries WHERE slug = ${m.slug}`))[0];
+  if (existing) {
+    log(`  "${m.title}" already in Beacon (${existing.status}, shared with ${existing.visibility})`);
+    return existing.id;
+  }
+  log(`  writing "${m.title}" in Beacon as Skipper...`);
+  const up = must(
+    await call(BEACON, 'POST', '/entries/upsert', {
+      slug: m.slug,
+      title: m.title,
+      summary: 'What everyone at Gilligan Travel does to keep bookings, the radio and the crew roster safe.',
+      body_markdown: POLICY_BODY,
+      visibility: 'Organization',
+      change_note: 'Bastion M7 seed: the security policy castaways acknowledge',
+    }),
+    'create the policy article',
+  );
+  const entry = up.data ?? up;
+  const pub = await call(BEACON, 'POST', `/beacons/${entry.id}/publish`);
+  if (!pub.ok) log(`  publish answered ${pub.status} (${pub.code ?? 'no code'}); continuing`);
+  return entry.id;
+}
+
+/** Link the article as a policy for the seven castaways, then five of them read and acknowledge it. */
+async function seedPolicy() {
+  const m = EXP.m7.policy;
+  log('M7: the Island Information Security Policy...');
+  const entryId = await ensurePolicyArticle();
+  const audience = [];
+  for (const email of m.audienceEmails) {
+    const id = await userIdByEmail(email);
+    if (!id) throw new Error(`${email} is not a user; run the platform seed first`);
+    audience.push(id);
+  }
+  let policy = must(await bastion('GET', '/policies?status=all'), 'GET /policies').data.find((p) => p.beacon_entry_id === entryId);
+  if (!policy) {
+    policy = must(
+      await bastion('POST', '/policies', { beacon_entry_id: entryId, audience: { kind: 'users', user_ids: audience }, cadence_days: m.cadenceDays }),
+      'link the policy',
+    ).data;
+    log(`  linked as a policy for ${audience.length} castaways`);
+  }
+  for (const email of m.attestedEmails) {
+    const cookie = email === EXP.actorEmail ? sessionCookie : await loginAs(email);
+    const body = must(await bastion('GET', `/policies/${policy.id}/body`, undefined, { session: cookie }), `read the policy as ${email}`).data;
+    if (!body.due) {
+      log(`  ${email} already acknowledged version ${body.beacon_version}`);
+      continue;
+    }
+    must(
+      await bastion('POST', `/policies/${policy.id}/attest`, { beacon_version: body.beacon_version, body_sha256: body.body_sha256 }, { session: cookie }),
+      `acknowledge the policy as ${email}`,
+    );
+    log(`  ${email} read and acknowledged version ${body.beacon_version}`);
+  }
+}
+
+async function verifyM7() {
+  const m = EXP.m7.policy;
+  const p = must(await bastion('GET', '/policies'), 'GET /policies').data.find((x) => x.title === m.title);
+  const problems = [];
+  if (!p) problems.push(`no policy titled "${m.title}"`);
+  else {
+    if (p.attestation_label !== m.label) problems.push(`the policy reads "${p.attestation_label}", expected "${m.label}"`);
+    if (!p.shared_with_everyone) problems.push('the policy article is not shared with everyone');
+  }
+  log(`M7: ${p?.title}: ${p?.attestation_label}`);
+  if (problems.length) throw new Error(`seeded M7 rows do not match BASTION_SEED_EXPECTATIONS: ${problems.join('; ')}`);
+}
+
 async function main() {
-  log('Bastion seed (M3, M5 and M6) starting...');
+  log('Bastion seed (M3, M5, M6 and M7) starting...');
   await login();
   const ids = {};
   ids.soc2 = await adoptAndCompile('soc2');
@@ -748,6 +857,9 @@ async function main() {
     log(`  delivered ${d.delivered}, waiting ${d.failed}, dead ${d.dead}`);
   }
   await verifyM6();
+  // M7: the security policy, read and acknowledged by five castaways (each with their own session).
+  await seedPolicy();
+  await verifyM7();
   log('Bastion seed done');
 }
 

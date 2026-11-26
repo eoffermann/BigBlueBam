@@ -149,4 +149,13 @@ describe('BASTION_SEED_EXPECTATIONS matches the library', () => {
       true,
     )).toContain(m6.codeReview.pingNote);
   });
+
+  it('M7: the policy ratio is the audience minus the two castaways who have not read it, in the words the page shows', () => {
+    const p = EXP.m7.policy;
+    expect(p.audienceEmails).toHaveLength(p.required);
+    expect(p.attestedEmails).toHaveLength(p.attested);
+    expect(p.attestedEmails.every((e: string) => p.audienceEmails.includes(e))).toBe(true);
+    expect(p.attestedEmails).not.toContain('gilligan@gilligantravel.example');
+    expect(p.label).toBe(`${p.attested} of ${p.required} have read the current version`);
+  });
 });
