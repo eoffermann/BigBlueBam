@@ -5,6 +5,7 @@ import * as crypto from 'node:crypto';
 import { ask, askPassword, select, confirm } from './prompt.mjs';
 import { bold, dim, check, green, yellow, cyan } from './colors.mjs';
 import { formatPublicUrl } from './public-url.mjs';
+import { ENV_HINTS } from './env-hints.mjs';
 
 /**
  * Generate a cryptographically random hex string.
@@ -13,10 +14,85 @@ function randomHex(bytes = 32) {
   return crypto.randomBytes(bytes).toString('hex');
 }
 
+/** The marker state.mjs writes in place of every secret it persists. */
+export const REDACTED = '[REDACTED]';
+
+const usable = (v) => typeof v === 'string' && v !== '' && v !== REDACTED;
+
+// ── Stable secrets ────────────────────────────────────────────────────
+//
+// Most generated secrets are safe to re-roll (sessions are invalidated, services restart
+// together). A STABLE secret is not: it signs or keys durable data (e.g. Bastion's seal
+// signing key, personal-data HMAC key, feed-key pepper; spec 9.4/9.7), so a silently new
+// value breaks every existing seal, commitment or key. An env hint opts in with
+// `{ kind: 'secret', stable: true, bytes?: 32 }` in env-hints.mjs.
+//
+// The rule (resolveStableSecrets):
+//   1. a live value (the existing .env, or live Railway service variables) is reused;
+//   2. a saved value that is '[REDACTED]' means one EXISTED; it is never regenerated, the
+//      name is reported as unresolved so the operator restores it from escrow;
+//   3. only when no value exists anywhere is a new one generated.
+
+/** Names of every env hint declared `kind: 'secret', stable: true`, sorted. */
+export function stableSecretNames(hints = ENV_HINTS) {
+  return Object.keys(hints)
+    .filter((k) => hints[k]?.kind === 'secret' && hints[k]?.stable === true)
+    .sort();
+}
+
 /**
- * Generate all required secrets automatically.
+ * @param {object} opts
+ * @param {string[]} [opts.names]  stable secret names (default: from env-hints)
+ * @param {Record<string,string>} [opts.live]  live values (.env map or Railway variables)
+ * @param {Record<string,string>} [opts.saved] saved deploy state (may hold '[REDACTED]')
+ * @param {(name:string)=>string} [opts.generate] value factory (default 32 random bytes hex)
+ * @returns {{ values: Record<string,string>, generated: string[], reused: string[], unresolved: string[] }}
  */
-export function generateSecrets() {
+export function resolveStableSecrets({
+  names = stableSecretNames(),
+  live = {},
+  saved = {},
+  generate = (name) => randomHex(ENV_HINTS[name]?.bytes ?? 32),
+} = {}) {
+  const values = {};
+  const generated = [];
+  const reused = [];
+  const unresolved = [];
+  for (const name of names) {
+    if (usable(live?.[name])) {
+      values[name] = live[name];
+      reused.push(name);
+    } else if (saved?.[name] === REDACTED) {
+      unresolved.push(name);
+    } else if (usable(saved?.[name])) {
+      values[name] = saved[name];
+      reused.push(name);
+    } else {
+      values[name] = generate(name);
+      generated.push(name);
+    }
+  }
+  return { values, generated, reused, unresolved };
+}
+
+/** Parse KEY=VALUE lines of a .env file into a map (comments and blanks ignored). */
+export function parseEnvText(text) {
+  const map = {};
+  for (const line of String(text ?? '').split(/\r?\n/)) {
+    const m = line.match(/^([A-Z_][A-Z0-9_]*)=(.*)$/);
+    if (m) map[m[1]] = m[2];
+  }
+  return map;
+}
+
+/**
+ * Generate all required secrets automatically, plus every stable secret per the rule
+ * above. `live` / `saved` only affect stable secrets; the re-rollable set is always
+ * freshly generated (callers preserve volume-bound ones themselves). Stable secrets that
+ * are unresolved are ABSENT from the result; use resolveStableSecrets() to report them.
+ */
+export function generateSecrets({ live = {}, saved = {}, stableNames } = {}) {
+  const stable = resolveStableSecrets({ names: stableNames ?? stableSecretNames(), live, saved });
   return {
     SESSION_SECRET: randomHex(32),
     INTERNAL_HELPDESK_SECRET: randomHex(32),
@@ -27,6 +103,7 @@ export function generateSecrets() {
     REDIS_PASSWORD: randomHex(24),
     LIVEKIT_API_KEY: 'API' + randomHex(16),
     LIVEKIT_API_SECRET: randomHex(32),
+    ...stable.values,
   };
 }
 
@@ -277,6 +354,12 @@ export function buildEnvConfig(choices) {
     env.LIVEKIT_URL = livekit.LIVEKIT_URL;
     env.LIVEKIT_API_KEY = livekit.LIVEKIT_API_KEY;
     env.LIVEKIT_API_SECRET = livekit.LIVEKIT_API_SECRET;
+  }
+
+  // Stable secrets (see resolveStableSecrets): carried into .env verbatim so a re-run
+  // keeps the same value. Absent (unresolved) names are not written.
+  for (const name of stableSecretNames()) {
+    if (usable(secrets[name])) env[name] = secrets[name];
   }
 
   // Integrations

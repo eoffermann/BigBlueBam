@@ -457,6 +457,11 @@ for (const [name, hint] of Object.entries(ENV_HINTS)) {
   if (hint.propagate === undefined && hint.kind === 'computed' && DEFAULT_PROPAGATE_NAME_RE.test(name)) {
     hint.propagate = true;
   }
+  // `stable: true` (scripts/deploy/shared/secrets.mjs resolveStableSecrets) only means
+  // something for generated secrets.
+  if (hint.stable && hint.kind !== 'secret') {
+    throw new Error(`env-hints: ${name} is marked stable: true but is kind '${hint.kind}', not 'secret'.`);
+  }
   if (hint.propagate && !PROPAGATABLE_KINDS.has(hint.kind)) {
     throw new Error(
       `env-hints: ${name} is kind '${hint.kind}' but marked propagate: true. Only computed ` +

@@ -15,7 +15,22 @@ import {
   promptOptionalIntegrations,
   promptRootRedirect,
   buildEnvConfig,
+  parseEnvText,
+  resolveStableSecrets,
 } from './shared/secrets.mjs';
+import { readFileSync, existsSync } from 'node:fs';
+import { resolve as resolvePath } from 'node:path';
+
+// The live value source for stable secrets on this host: the existing .env (Docker
+// Compose feeds it to every service). Returns {} when there is no .env yet.
+function readDotEnvForStableSecrets() {
+  const envPath = resolvePath(process.cwd(), '.env');
+  try {
+    return existsSync(envPath) ? parseEnvText(readFileSync(envPath, 'utf8')) : {};
+  } catch {
+    return {};
+  }
+}
 import { createSuperUser } from './shared/admin-setup.mjs';
 import { printSummary } from './shared/summary.mjs';
 import { maybeAdvancedPortMapping } from './shared/port-mapping.mjs';
@@ -149,7 +164,18 @@ async function main() {
       // apps require SESSION_SECRET ≥ 32 chars). Regenerate any redacted
       // or missing values, merge them back in, and persist so subsequent
       // runs are stable.
-      const fresh = generateSecrets();
+      // Stable secrets (secrets.mjs) are NEVER regenerated from '[REDACTED]': the
+      // live .env value is reused, and a value that existed but cannot be found is
+      // reported for the operator to restore from escrow instead of silently replaced.
+      const liveEnv = readDotEnvForStableSecrets();
+      const fresh = generateSecrets({ live: liveEnv, saved: envConfig });
+      const stableCheck = resolveStableSecrets({ live: liveEnv, saved: envConfig, generate: () => '' });
+      if (stableCheck.unresolved.length > 0) {
+        console.log(yellow(`  ! ${stableCheck.unresolved.length} stable secret(s) existed in a previous run but are not in .env:`));
+        console.log(yellow(`    ${stableCheck.unresolved.join(', ')}`));
+        console.log(yellow('    They are NOT regenerated (a new value would break signed or keyed data).'));
+        console.log(yellow('    Restore each from your key escrow into .env, then re-run.'));
+      }
       const rehydrated = [];
       for (const [key, value] of Object.entries(fresh)) {
         const current = envConfig[key];
@@ -220,7 +246,8 @@ async function main() {
     // active sessions / require simultaneous service restart, which the
     // deploy script does anyway.
     process.stdout.write('\nGenerating cryptographic secrets... ');
-    const secrets = generateSecrets();
+    // Stable secrets reuse a live .env value and are generated only when none exists.
+    const secrets = generateSecrets({ live: readDotEnvForStableSecrets() });
     const STORAGE_SECRET_KEYS = [
       'POSTGRES_PASSWORD',
       'REDIS_PASSWORD',

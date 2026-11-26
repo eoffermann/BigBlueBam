@@ -16,9 +16,10 @@ export function sanitizeState(state) {
     for (const key of SECRET_KEYS) {
       if (clean.envConfig[key]) clean.envConfig[key] = '[REDACTED]';
     }
-    // Also redact any *_PASSWORD, *_SECRET, *_KEY patterns
+    // Also redact any *_PASSWORD, *_SECRET, *_KEY, *_SALT, *_PEPPER patterns (the last two
+    // cover stable secrets such as BASTION_ROOM_IP_SALT / BASTION_FEED_KEY_PEPPER).
     for (const key of Object.keys(clean.envConfig)) {
-      if (/PASSWORD|SECRET|_KEY$/i.test(key) && clean.envConfig[key] !== '[REDACTED]') {
+      if (/PASSWORD|SECRET|_KEY$|_SALT$|_PEPPER$/i.test(key) && clean.envConfig[key] !== '[REDACTED]') {
         clean.envConfig[key] = '[REDACTED]';
       }
     }

@@ -45,6 +45,7 @@ import { dirname, join } from 'node:path';
 import { RailwayClient } from './shared/railway-api.mjs';
 import { RailwayOrchestrator } from './shared/railway-orchestrator.mjs';
 import { hintFor } from './shared/env-hints.mjs';
+import { stableSecretNames } from './shared/secrets.mjs';
 import { APP_SERVICES, INFRA_SERVICES, JOB_SERVICES } from './shared/services.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -118,7 +119,15 @@ const SECRET_SOURCE_SERVICES = ['api', 'minio', 'livekit', 'helpdesk-api', 'bant
 async function collectSharedSecrets(client, { projectId, environmentId, liveByName }) {
   const wanted = secretKeyCatalog();
   const collected = {};
-  for (const name of SECRET_SOURCE_SERVICES) {
+  // Stable secrets (secrets.mjs) usually live on ONE app service (e.g. bastion-api), not
+  // on api/minio, so also read every live service whose catalog entry lists one. A value
+  // found here is reused; fillMissingSecrets only generates when none exists live.
+  const stable = new Set(stableSecretNames());
+  const stableHolders = [...APP_SERVICES, ...INFRA_SERVICES, ...JOB_SERVICES]
+    .filter((s) => [...(s.env?.required ?? []), ...(s.env?.optional ?? [])].some((n) => stable.has(n)))
+    .map((s) => s.name);
+  const sources = [...new Set([...SECRET_SOURCE_SERVICES, ...stableHolders])];
+  for (const name of sources) {
     const serviceId = liveByName.get(name);
     if (!serviceId) continue;
     let vars;
