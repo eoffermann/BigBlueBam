@@ -25,6 +25,7 @@ import { SLICE_START_CUTOFF_MS, SLICE_WRITE_CUTOFF_MS, STALE_HEARTBEAT_MS } from
 import { type EngineDeps, orgTx, sqlstateOf, type Tx } from './context.js';
 import { appendLedger, AppendBlockedError, LedgerLockTimeoutError, RestoreDetectedError } from './ledger.js';
 import { enqueueBastionEvent } from './outbox.js';
+import { decideManual } from './manual.js';
 import { checkLedgerIdentity, type SealIdentity, StorageUnavailableError } from './restore.js';
 import { aggregateStored, coverageKindOf, infraDecision, isWorsening } from './status.js';
 
@@ -74,6 +75,7 @@ interface PlannedAssertion {
   params: Record<string, unknown>;
   predicate: Record<string, unknown>;
   feed_id: string | null;
+  manual_evidence_spec: Record<string, unknown> | null;
 }
 
 interface Evaluated {
@@ -179,7 +181,7 @@ function scopeFilter(run: RunRow) {
 async function plan(tx: Tx, run: RunRow): Promise<{ pending: PlannedAssertion[]; total: number; controlsTotal: number }> {
   if (run.control_id && !/^[0-9a-f-]{36}$/i.test(run.control_id)) throw new Error('bad control id on run');
   const rows = (await tx.unsafe(
-    `SELECT a.id, a.control_id, a.kind, a.probe_key, a.probe_version, a.params, a.predicate, a.feed_id,
+    `SELECT a.id, a.control_id, a.kind, a.probe_key, a.probe_version, a.params, a.predicate, a.feed_id, a.manual_evidence_spec,
             EXISTS (SELECT 1 FROM bastion_evidence_snapshots s
                      WHERE s.organization_id = a.organization_id AND s.evaluation_run_id = $2 AND s.assertion_id = a.id) AS done
        FROM bastion_assertions a
@@ -298,27 +300,51 @@ async function evaluateProbe(deps: EngineDeps, run: RunRow, key: string, params:
 }
 
 /**
- * Manual evidence at M4: accepted, current, active evidence passes; `shows_exception` fails;
- * expired accepted evidence is manual_evidence_expired; otherwise manual_evidence_missing.
- * M5 extends this with the window and small-team rules of spec 3.3.
+ * Manual evidence (spec 3.3): the pure decision table in ./manual.ts over the assertion's active,
+ * still-linked items. The window is the assertion's cadence_days (manual_evidence_spec).
  */
 async function evaluateManual(deps: EngineDeps, run: RunRow, a: PlannedAssertion): Promise<Evaluated> {
   const rows = await orgTx(deps.sql, run.organization_id, (tx) => tx`
-    SELECT e.id, e.valid_until, l.review_verdict
+    SELECT e.id, e.kind, e.status, e.valid_until, e.produced_on::text AS produced_on, e.period_end::text AS period_end,
+           e.uploaded_by, l.review_verdict, l.reviewed_by, l.small_team_self_review
       FROM bastion_manual_evidence_links l
       JOIN bastion_manual_evidence e ON e.id = l.manual_evidence_id AND e.organization_id = l.organization_id
      WHERE l.organization_id = ${run.organization_id} AND l.assertion_id = ${a.id} AND l.unlinked_at IS NULL
-       AND e.status = 'active'`);
+       AND e.status = 'active'
+     ORDER BY e.created_at, e.id`);
   const asOf = new Date(run.as_of);
-  const ids = rows.map((r) => String(r.id));
-  const base = { ...blank(), manual_evidence_ids: ids, window_end: asOf };
-  if (rows.some((r) => r.review_verdict === 'shows_exception')) return { ...base, outcome: 'fail', unprovable_reason: null };
-  const accepted = rows.filter((r) => r.review_verdict === 'accepted');
-  if (accepted.some((r) => !r.valid_until || new Date(r.valid_until as string).getTime() > asOf.getTime())) {
-    return { ...base, outcome: 'pass', unprovable_reason: null };
-  }
-  if (accepted.length > 0) return { ...base, outcome: 'unprovable', unprovable_reason: 'manual_evidence_expired' };
-  return { ...base, outcome: 'unprovable', unprovable_reason: 'manual_evidence_missing' };
+  const cadence = Number((a.manual_evidence_spec as { cadence_days?: number } | null)?.cadence_days ?? 365);
+  const d = decideManual(
+    rows.map((r) => ({
+      id: String(r.id),
+      kind: r.kind as 'file' | 'attestation_statement',
+      status: String(r.status),
+      valid_until: r.valid_until ? new Date(r.valid_until as string) : null,
+      produced_on: (r.produced_on as string | null) ?? null,
+      period_end: (r.period_end as string | null) ?? null,
+      uploaded_by: String(r.uploaded_by),
+      review_verdict: r.review_verdict as 'pending' | 'accepted' | 'shows_exception',
+      reviewed_by: (r.reviewed_by as string | null) ?? null,
+      small_team_self_review: r.small_team_self_review === true,
+    })),
+    asOf,
+    cadence,
+  );
+  return {
+    ...blank(),
+    manual_evidence_ids: d.item_ids,
+    window_start: new Date(asOf.getTime() - cadence * 86_400_000),
+    window_end: asOf,
+    outcome: d.outcome,
+    unprovable_reason: d.unprovable_reason,
+    summary: {
+      items_considered: d.item_ids.length,
+      items_passing: d.passing_ids.length,
+      self_attested_only: d.self_attested_only,
+      small_team_self_review: d.small_team_self_review,
+      expires_at: d.expires_at ? d.expires_at.toISOString() : null,
+    },
+  };
 }
 
 async function evaluateAssertion(deps: EngineDeps, run: RunRow, a: PlannedAssertion): Promise<Evaluated> {
@@ -447,7 +473,7 @@ export async function aggregateControl(deps: EngineDeps, tx: Tx, run: RunRow, co
   if (control.last_evaluated_at && new Date(control.last_evaluated_at as string).getTime() >= asOf.getTime()) return;
 
   const snaps = (await tx`
-    SELECT s.id, s.outcome, s.unprovable_reason, a.kind
+    SELECT s.id, s.outcome, s.unprovable_reason, a.kind, a.manual_evidence_spec->>'kind' AS manual_kind
       FROM bastion_evidence_snapshots s
       JOIN bastion_assertions a ON a.id = s.assertion_id AND a.organization_id = s.organization_id
      WHERE s.organization_id = ${run.organization_id} AND s.evaluation_run_id = ${run.id} AND s.control_id = ${controlId}
@@ -457,9 +483,12 @@ export async function aggregateControl(deps: EngineDeps, tx: Tx, run: RunRow, co
     outcome: 'pass' | 'fail' | 'unprovable';
     unprovable_reason: string | null;
     kind: 'probe' | 'manual' | 'feed';
+    manual_kind: string | null;
   }>;
   const agg = aggregateStored(snaps);
-  const coverage = coverageKindOf(snaps.map((s) => s.kind));
+  const coverage = coverageKindOf(
+    snaps.map((s) => (s.kind === 'manual' && s.manual_kind === 'attestation_statement' ? 'self_attested' : s.kind)),
+  );
   const from = control.status as 'pass' | 'fail' | 'unprovable';
 
   if (agg.infra) {

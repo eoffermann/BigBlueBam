@@ -42,7 +42,8 @@ afterEach(() => {
 });
 
 describe('Bastion job registration rules (spec 7)', () => {
-  const bastionBlock = WORKER.slice(WORKER.indexOf('function registerBastionSweep'), WORKER.indexOf('bastion-retention-daily') + 40);
+  // The block runs to the last Bastion scheduler (M5's evidence-expiry).
+  const bastionBlock = WORKER.slice(WORKER.indexOf('function registerBastionSweep'), WORKER.indexOf('bastion-evidence-expiry-daily') + 40);
 
   it('registerBastionSweep wraps every scheduler in withRetention with tz UTC', () => {
     const schedulers = calls(bastionBlock, '.upsertJobScheduler(');

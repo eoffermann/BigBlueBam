@@ -3,12 +3,14 @@ import { Castle, Loader2 } from 'lucide-react';
 import { openHelpCenter } from '@bigbluebam/ui/help-center';
 import { useAuthStore } from '@/stores/auth.store';
 import { BastionLayout, type ActiveRoute } from '@/components/layout/bastion-layout';
-import { HomePage } from '@/pages/home';
+import { ReadinessPage } from '@/pages/readiness';
 import { SetupPage } from '@/pages/setup';
 import { ControlsPage } from '@/pages/controls';
+import { CoveragePage } from '@/pages/coverage';
+import { EvidencePage } from '@/pages/evidence';
 
 // Grows one variant per page as later milestones land (spec 6.1).
-type Route = { page: 'home' } | { page: 'setup' } | { page: 'controls' };
+type Route = { page: 'home' } | { page: 'setup' } | { page: 'controls' } | { page: 'coverage' } | { page: 'evidence' };
 
 const BASE_PATH = '/bastion';
 
@@ -17,6 +19,8 @@ export function parseRoute(path: string): Route {
   const clean = rest.replace(/\/+$/, '');
   if (clean === '/setup') return { page: 'setup' };
   if (clean === '/controls') return { page: 'controls' };
+  if (clean === '/coverage') return { page: 'coverage' };
+  if (clean === '/evidence') return { page: 'evidence' };
   return { page: 'home' };
 }
 
@@ -104,7 +108,11 @@ export function App() {
   const renderPage = () => {
     switch (route.page) {
       case 'home':
-        return <HomePage />;
+        return <ReadinessPage onNavigate={navigate} />;
+      case 'coverage':
+        return <CoveragePage />;
+      case 'evidence':
+        return <EvidencePage />;
       case 'setup':
         return <SetupPage />;
       case 'controls':

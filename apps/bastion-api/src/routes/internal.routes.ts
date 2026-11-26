@@ -16,6 +16,8 @@ import { engineDeps } from '../engine/runtime.js';
 import { RunLeaseHeldError, RunNotFoundError, runEvaluationSlice } from '../engine/evaluator.js';
 import { defaultDeliverer, drainOutbox } from '../engine/outbox.js';
 import { evaluateTick, evaluationMissed, ledgerSeal, ledgerVerify, retention, runReaper, weeklyReadiness } from '../engine/sweeps.js';
+import { evidenceExpiry, evidenceIngest } from '../services/evidence-engines.js';
+import { evidenceDeps } from '../services/evidence-runtime.js';
 
 /**
  * Service-to-service routes (spec 5.1 rows 105-106), behind the shared internal secret and
@@ -91,6 +93,10 @@ export default async function internalRoutes(fastify: FastifyInstance) {
         return { data: await weeklyReadiness(d, opts) };
       case 'retention':
         return { data: await retention(d, opts) };
+      case 'evidence-ingest':
+        return { data: await evidenceIngest(evidenceDeps(fastify.log, fastify.redis), opts) };
+      case 'evidence-expiry':
+        return { data: await evidenceExpiry(evidenceDeps(fastify.log, fastify.redis), opts) };
       default:
         return send(request, reply, 404, 'NOT_FOUND', 'Unknown engine');
     }

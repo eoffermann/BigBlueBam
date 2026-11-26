@@ -1,10 +1,22 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { BastionBulkApplicability, BastionCompanyProfile, BastionTemplateKey } from '@bigbluebam/shared';
+import type {
+  BastionBulkApplicability,
+  BastionCompanyProfile,
+  BastionManualEvidenceCreate,
+  BastionTemplateKey,
+} from '@bigbluebam/shared';
 import {
   api,
   bamApi,
   type AssertionRow,
   type ControlsResponse,
+  type CoverageResponse,
+  type EvidenceItem,
+  type EvidenceListResponse,
+  type FeedKeyRow,
+  type FeedRow,
+  type MintedKey,
+  type SummaryResponse,
   type RequirementsResponse,
   type SetupState,
   type TemplateRow,
@@ -39,6 +51,91 @@ export function useControls(filters: { framework_id?: string; setup?: string }) 
   return useQuery({
     queryKey: key('controls', filters),
     queryFn: () => api.get<ControlsResponse>('/controls', filters),
+  });
+}
+
+/* ------------------------------- M5 reads -------------------------------- */
+
+export function useSummary(filters: { framework_id?: string }) {
+  return useQuery({ queryKey: key('summary', filters), queryFn: () => api.get<SummaryResponse>('/summary', filters) });
+}
+
+export function useCoverage(filters: { framework_id?: string }) {
+  return useQuery({ queryKey: key('coverage', filters), queryFn: () => api.get<CoverageResponse>('/coverage', filters) });
+}
+
+export function useManualEvidence(filters: { status?: string; stuck?: boolean } = {}) {
+  return useQuery({ queryKey: key('manual-evidence', filters), queryFn: () => api.get<EvidenceListResponse>('/manual-evidence', filters) });
+}
+
+export function useFeeds(enabled = true) {
+  return useQuery({ queryKey: key('feeds'), queryFn: () => api.get<{ data: FeedRow[] }>('/feeds'), enabled, retry: false });
+}
+
+export function useFeedKeys(feedId: string | null) {
+  return useQuery({
+    queryKey: key('feed-keys', feedId),
+    queryFn: () => api.get<{ data: FeedKeyRow[] }>(`/feeds/${feedId}/keys`),
+    enabled: !!feedId,
+  });
+}
+
+/* ------------------------------ M5 mutations ------------------------------ */
+
+export function useCreateEvidence() {
+  const invalidate = useInvalidate();
+  return useMutation({
+    mutationFn: (body: BastionManualEvidenceCreate) => api.post<{ data: EvidenceItem }>('/manual-evidence', body),
+    onSuccess: invalidate,
+  });
+}
+
+export function useCheckScanAgain() {
+  const invalidate = useInvalidate();
+  return useMutation({
+    mutationFn: (id: string) => api.post<{ data: EvidenceItem & { check_result: string } }>(`/manual-evidence/${id}/check-again`, {}),
+    onSuccess: invalidate,
+  });
+}
+
+export function useWithdrawEvidence() {
+  const invalidate = useInvalidate();
+  return useMutation({
+    mutationFn: (id: string) => api.post(`/manual-evidence/${id}/withdraw`, { confirm: true }),
+    onSuccess: invalidate,
+  });
+}
+
+export function useReviewEvidence() {
+  const invalidate = useInvalidate();
+  return useMutation({
+    mutationFn: (args: { id: string; assertion_id: string; verdict: 'accepted' | 'shows_exception' }) =>
+      api.post(`/manual-evidence/${args.id}/links/${args.assertion_id}/review`, { verdict: args.verdict }),
+    onSuccess: invalidate,
+  });
+}
+
+export function useCreateFeed() {
+  const invalidate = useInvalidate();
+  return useMutation({
+    mutationFn: (body: { feed_key: string; label: string; cadence_days?: number }) => api.post<{ data: FeedRow }>('/feeds', body),
+    onSuccess: invalidate,
+  });
+}
+
+export function useMintFeedKey() {
+  const invalidate = useInvalidate();
+  return useMutation({
+    mutationFn: (args: { feedId: string; label?: string }) => api.post<{ data: MintedKey }>(`/feeds/${args.feedId}/keys`, { label: args.label ?? null }),
+    onSuccess: invalidate,
+  });
+}
+
+export function useRevokeFeedKey() {
+  const invalidate = useInvalidate();
+  return useMutation({
+    mutationFn: (keyId: string) => api.post(`/feed-keys/${keyId}/revoke`, {}),
+    onSuccess: invalidate,
   });
 }
 

@@ -19,6 +19,9 @@
  *     notSetUp is 4 here too and setUp = 46 - 4 = 42.
  *   - sharedControlCount: crosswalk() length, the controls ISO reuses from SOC 2 (45).
  *   - soaRowCount: the 93 Annex A requirements of ISO 27001:2022.
+ *   - m5.provenByEvidence: auth.mfa (one manual file check) and hr.screening (one statement
+ *     check) are the only checks with accepted evidence, both have no other check, and both are
+ *     linked in SOC 2 (CC6.1, CC1.4) and ISO 27001 (A.5.17, A.6.1), so 2 in either view.
  */
 
 export const BASTION_SEED_EXPECTATIONS = {
@@ -57,6 +60,48 @@ export const BASTION_SEED_EXPECTATIONS = {
     notApplicableControlKey: 'physical.premises',
     notApplicableReason: 'We operate from a shared island hut with no server room',
     notApplicableRefs: ['A.7.1', 'A.7.2', 'A.7.3', 'A.7.4', 'A.7.5', 'A.7.6', 'A.7.8', 'A.7.11', 'A.7.12', 'A.7.13'],
+  },
+
+  // M5 rows (spec 10.2). Uploaded and self-attested evidence, the empty laptop-encryption check,
+  // and the "Crew roster export" feed with a key.
+  m5: {
+    // The Professor uploads the Google Workspace 2-Step Verification report; Skipper accepts it.
+    // It is valid through the end of the day 12 days after seeding (org time zone), so the
+    // Readiness page and the Evidence locker show "expires in 12 days" on the seed day.
+    twoStep: {
+      controlKey: 'auth.mfa',
+      title: 'Google Workspace 2-Step Verification report',
+      sourceSystem: 'Google Workspace',
+      uploaderEmail: 'professor@gilligantravel.example',
+      uploaderRole: 'professor',
+      reviewerEmail: 'skipper@gilligantravel.example',
+      fileName: '2-step-verification-report.pdf',
+      daysLeft: 12,
+      producedDaysAgo: 2,
+    },
+    // Mary Ann's written statement about background checks: self-attested, accepted by Skipper.
+    backgroundChecks: {
+      controlKey: 'hr.screening',
+      title: 'Background checks for everyone who joined this year',
+      sourceSystem: 'Crew records kept by Mary Ann',
+      authorEmail: 'maryann@gilligantravel.example',
+      statement:
+        'Everyone who joined Gilligan Travel Ltd this year had a background check before their first charter: the Professor and Ginger Grant. Checked by Mary Ann Summers against the crew records.',
+      validDays: 300,
+    },
+    // Nothing is uploaded for laptop encryption, so it stays "Can't prove yet" (the top gap at M6).
+    laptopEncryption: { controlKey: 'assets.device_encryption' },
+    // Both evidence-backed controls count under "Proven by evidence you provided" in both views.
+    provenByEvidence: 2,
+    feed: {
+      feedKey: 'crew-roster',
+      label: 'Crew roster export',
+      feedKind: 'roster',
+      cadenceDays: 7,
+      keyLabel: 'Roster export job',
+      // One record per castaway, keyed so a re-seed is a no-op.
+      records: ['skipper', 'gilligan', 'professor', 'maryann', 'ginger', 'howell', 'lovey'],
+    },
   },
 
   companyProfile: {

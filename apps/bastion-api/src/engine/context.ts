@@ -36,6 +36,8 @@ export interface EngineDeps {
   /** Published seal public keys by signing_key_id (current plus retired); bucket seals must verify. */
   sealKeys: Map<string, string>;
   pdKeyId: string;
+  /** HMAC commitment over a holder's personal data (spec 3.4). The key never leaves bastion-api. */
+  pdHmac: (data: unknown) => string;
   probeTimeoutMs: number;
   putTimeoutMs: number;
   leaseMs: number;

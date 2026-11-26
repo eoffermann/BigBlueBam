@@ -1,0 +1,148 @@
+// The two M5 scheduled engines (spec 7), run by the worker's thin jobs through
+// POST /v1/internal/engines/<name>. Org by org, each org in its own transactions, logging a start
+// line and per-org progress (spec 7.1).
+//
+//   evidence-ingest  (event + */10)  retries `pending_scan` uploads whose next attempt is due (5 min
+//                    doubling to 6 h, then once a day after 24 h), and turns pending Bolt-event inbox
+//                    rows into feed records for Bolt-event feeds.
+//   evidence-expiry  (10 6 * * *)    evidence inside the warning window publishes evidence.expiring
+//                    once per item; expired evidence publishes evidence.expired once per item and
+//                    re-evaluates the controls it is linked to. Exception expiry joins at M6.
+
+import { type EngineDeps, orgTx } from '../engine/context.js';
+import { type QueuedRun, queueControlRuns } from '../engine/evidence-store.js';
+import { daysLeft } from '../engine/manual.js';
+import { enqueueBastionEvent } from '../engine/outbox.js';
+import type { EvidenceDeps } from './evidence-deps.js';
+import { ingestBoltEventFeeds } from './feeds.service.js';
+import { retryPendingScan, type ScanRetryOutcome } from './manual-evidence.service.js';
+
+const DAY_MS = 86_400_000;
+const INGEST_BUDGET_MS = 20_000;
+
+async function orgsWith(engine: EngineDeps, sqlWhere: 'pending' | 'feeds' | 'evidence', only?: string): Promise<string[]> {
+  const rows =
+    sqlWhere === 'pending'
+      ? await engine.sql`SELECT DISTINCT organization_id FROM bastion_manual_evidence
+                          WHERE status = 'pending_scan' AND (next_attempt_at IS NULL OR next_attempt_at <= ${engine.now()})
+                          ${only ? engine.sql`AND organization_id = ${only}` : engine.sql``}`
+      : sqlWhere === 'feeds'
+        ? await engine.sql`SELECT DISTINCT organization_id FROM bastion_evidence_feeds
+                            WHERE source_kind = 'bolt_event' AND status = 'active'
+                            ${only ? engine.sql`AND organization_id = ${only}` : engine.sql``}`
+        : await engine.sql`SELECT DISTINCT organization_id FROM bastion_manual_evidence
+                            WHERE status = 'active' AND valid_until IS NOT NULL
+                            ${only ? engine.sql`AND organization_id = ${only}` : engine.sql``}`;
+  return rows.map((r) => String(r.organization_id));
+}
+
+export async function evidenceIngest(d: EvidenceDeps, opts: { organization_id?: string; manual_evidence_id?: string } = {}) {
+  const engine = d.engine;
+  const started = Date.now();
+  const outcomes: ScanRetryOutcome[] = [];
+  const orgs = await orgsWith(engine, 'pending', opts.organization_id);
+  engine.log.info({ orgs: orgs.length }, `bastion-evidence-ingest: ${orgs.length} org(s) with uploads waiting for a scan`);
+  for (const [i, orgId] of orgs.entries()) {
+    const due = await orgTx(engine.sql, orgId, (tx) => tx`
+      SELECT id FROM bastion_manual_evidence
+       WHERE organization_id = ${orgId} AND status = 'pending_scan' AND (next_attempt_at IS NULL OR next_attempt_at <= ${engine.now()})
+         ${opts.manual_evidence_id ? tx`AND id = ${opts.manual_evidence_id}` : tx``}
+       ORDER BY next_attempt_at NULLS FIRST, created_at LIMIT 100`);
+    for (const r of due) {
+      if (Date.now() - started > INGEST_BUDGET_MS) break;
+      try {
+        outcomes.push(await retryPendingScan(d, orgId, String(r.id)));
+      } catch (err) {
+        engine.log.warn({ organization_id: orgId, manual_evidence_id: r.id, err: (err as Error).message }, 'bastion-evidence-ingest: retry failed; it stays pending');
+      }
+    }
+    engine.log.info({ organization_id: orgId }, `bastion-evidence-ingest: scans checked for org ${i + 1}/${orgs.length}`);
+  }
+  let recorded = 0;
+  let duplicates = 0;
+  let quotaBlocked = 0;
+  for (const orgId of await orgsWith(engine, 'feeds', opts.organization_id)) {
+    try {
+      const r = await ingestBoltEventFeeds(engine, orgId);
+      recorded += r.recorded;
+      duplicates += r.duplicates;
+      quotaBlocked += r.quota_blocked;
+    } catch (err) {
+      engine.log.warn({ organization_id: orgId, err: (err as Error).message }, 'bastion-evidence-ingest: Bolt-event feed records not written; next run retries');
+    }
+  }
+  const summary = {
+    scans_checked: outcomes.filter((o) => o.result !== 'skipped').length,
+    copied: outcomes.filter((o) => o.result === 'copied').length,
+    still_pending: outcomes.filter((o) => o.result === 'still_pending').length,
+    blocked: outcomes.filter((o) => o.result === 'blocked').length,
+    feed_records: recorded,
+    feed_duplicates: duplicates,
+    feed_quota_blocked: quotaBlocked,
+    elapsed_ms: Date.now() - started,
+  };
+  engine.log.info(summary, `bastion-evidence-ingest: copied ${summary.copied}, still pending ${summary.still_pending}, blocked ${summary.blocked}, feed records ${recorded}`);
+  return summary;
+}
+
+export async function evidenceExpiry(d: EvidenceDeps, opts: { organization_id?: string } = {}) {
+  const engine = d.engine;
+  const now = engine.now();
+  const orgs = await orgsWith(engine, 'evidence', opts.organization_id);
+  engine.log.info({ orgs: orgs.length }, `bastion-evidence-expiry: checking ${orgs.length} org(s)`);
+  let expiring = 0;
+  let expired = 0;
+  const runs: QueuedRun[] = [];
+  for (const [i, orgId] of orgs.entries()) {
+    const r = await orgTx(engine.sql, orgId, async (tx) => {
+      const settings = (await tx`SELECT manual_expiry_warn_days FROM bastion_org_settings WHERE organization_id = ${orgId}`)[0];
+      const warn = Number(settings?.manual_expiry_warn_days ?? 30);
+      const items = await tx`
+        SELECT id, valid_until, owner_user_id FROM bastion_manual_evidence
+         WHERE organization_id = ${orgId} AND status = 'active' AND valid_until IS NOT NULL
+           AND valid_until <= ${new Date(now.getTime() + warn * DAY_MS)}`;
+      let soon = 0;
+      let gone = 0;
+      const controls = new Set<string>();
+      for (const it of items) {
+        const until = new Date(it.valid_until as string);
+        if (until.getTime() > now.getTime()) {
+          if (
+            await enqueueBastionEvent(
+              'evidence.expiring',
+              { manual_evidence_id: it.id, valid_until: until.toISOString(), days_left: daysLeft(until, now), owner_user_id: it.owner_user_id },
+              tx,
+              { orgId, idempotencyKey: `evidence.expiring:${it.id as string}:${until.toISOString()}` },
+            )
+          ) {
+            soon += 1;
+          }
+          continue;
+        }
+        const fresh = await enqueueBastionEvent(
+          'evidence.expired',
+          { manual_evidence_id: it.id, valid_until: until.toISOString(), owner_user_id: it.owner_user_id },
+          tx,
+          { orgId, idempotencyKey: `evidence.expired:${it.id as string}:${until.toISOString()}` },
+        );
+        if (!fresh) continue;
+        gone += 1;
+        const linked = await tx`
+          SELECT DISTINCT a.control_id FROM bastion_manual_evidence_links l
+            JOIN bastion_assertions a ON a.id = l.assertion_id AND a.organization_id = l.organization_id
+           WHERE l.organization_id = ${orgId} AND l.manual_evidence_id = ${it.id as string} AND l.unlinked_at IS NULL`;
+        for (const c of linked) controls.add(String(c.control_id));
+      }
+      const queued = await queueControlRuns(tx, orgId, controls, now, null, 'manual');
+      return { soon, gone, queued };
+    });
+    expiring += r.soon;
+    expired += r.gone;
+    runs.push(...r.queued);
+    engine.log.info({ organization_id: orgId }, `bastion-evidence-expiry: org ${i + 1}/${orgs.length} expiring ${r.soon} expired ${r.gone}`);
+  }
+  if (runs.length > 0) await d.enqueueRuns(runs).catch(() => undefined);
+  const summary = { expiring_notified: expiring, expired_notified: expired, controls_reevaluating: runs.length };
+  engine.log.info(summary, 'bastion-evidence-expiry: complete');
+  return summary;
+}

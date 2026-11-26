@@ -42,6 +42,9 @@ const envSchema = z.object({
   S3_ACCESS_KEY: z.preprocess(emptyToUndefined, z.string().optional()),
   S3_SECRET_KEY: z.preprocess(emptyToUndefined, z.string().optional()),
   S3_REGION: z.string().default('us-east-1'),
+  // The shared uploads bucket Bin writes to (spec 3.3, M5). Read-only for Bastion: it streams the
+  // pinned Bin version's bytes from here into its own bucket at attach. Same credentials.
+  S3_BUCKET: z.string().min(3).default('bigbluebam-uploads'),
 
   // Off-site evidence backup (spec 9.7, M9). All optional; unset disables the mirror.
   BASTION_BACKUP_S3_ENDPOINT: z.preprocess(emptyToUndefined, z.string().url().optional()),

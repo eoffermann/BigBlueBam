@@ -8,7 +8,8 @@ import type { ObjectStat, StorageDriver } from '@bigbluebam/storage';
 import type { EngineDeps, EngineLog } from '../../src/engine/context.js';
 import { makeRunInOrgScopeRead } from '../../src/engine/read-scope.js';
 import type { SealCacheEntry } from '../../src/engine/restore.js';
-import { sealSignerFromSeed, sha256Hex } from '../../src/lib/ledger-canonical.js';
+import { createHmac } from 'node:crypto';
+import { canonicalJson, sealSignerFromSeed, sha256Hex } from '../../src/lib/ledger-canonical.js';
 
 export const DATABASE_URL = process.env.DATABASE_URL;
 
@@ -29,7 +30,13 @@ export function fakeBucket(): FakeBucket {
     },
     async put(key, body, opts) {
       if (bucket.failPuts) throw new Error('bucket unavailable (test)');
-      const buf = Buffer.isBuffer(body) ? body : Buffer.from(String(body));
+      let buf: Buffer;
+      if (Buffer.isBuffer(body)) buf = body;
+      else {
+        const chunks: Buffer[] = [];
+        for await (const c of body as AsyncIterable<Buffer | string>) chunks.push(typeof c === 'string' ? Buffer.from(c) : c);
+        buf = Buffer.concat(chunks);
+      }
       objects.set(key, { body: buf, contentType: opts?.contentType ?? 'application/octet-stream', modifiedAt: new Date() });
       return { key, size: buf.length, integrity: sha256Hex(buf) };
     },
@@ -95,6 +102,7 @@ export function makeDeps(
     signer,
     sealKeys: new Map([[signer.keyId, signer.publicKeyHex]]),
     pdKeyId: 'pd:test',
+    pdHmac: (data: unknown) => createHmac('sha256', Buffer.from('7'.repeat(64), 'hex')).update(canonicalJson(data)).digest('hex'),
     probeTimeoutMs: 8000,
     putTimeoutMs: 2000,
     leaseMs: opts.leaseMs ?? 300_000,

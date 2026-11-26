@@ -24,10 +24,13 @@ interface RouteDecl {
 // Service-to-service routes (spec 5.1 rows 105-106) authenticate with the internal secret, not a
 // user, and nginx denies /bastion/api/v1/internal/ from outside. Checked separately below.
 const INTERNAL_FILE = 'internal.routes.ts';
+// The machine push (spec 5.1 row 48) authenticates with its own per-feed key, not a user. Checked
+// separately below.
+const FEED_INGEST_FILE = 'feed-ingest.routes.ts';
 
 function routes(): RouteDecl[] {
   const out: RouteDecl[] = [];
-  for (const file of readdirSync(ROUTES).filter((f) => f.endsWith('.routes.ts') && f !== INTERNAL_FILE)) {
+  for (const file of readdirSync(ROUTES).filter((f) => f.endsWith('.routes.ts') && f !== INTERNAL_FILE && f !== FEED_INGEST_FILE)) {
     const src = readFileSync(join(ROUTES, file), 'utf8');
     const re = /fastify\.(get|post|patch|put|delete)\(\s*'([^']+)',\s*\{\s*preHandler:\s*\[([^\]]*)\]/g;
     for (const m of src.matchAll(re)) out.push({ file, method: m[1]!.toUpperCase(), path: m[2]!, preHandler: m[3]! });
@@ -38,10 +41,32 @@ function routes(): RouteDecl[] {
 }
 
 const VOUCHING = new Set(['POST /assertions/:id/confirm', 'POST /assertions/:id/reject']);
-// Integrity acts (spec 3.4): owner-only in the service, session-only and never impersonated here.
+// Integrity acts (spec 3.4) and the M5 vouching routes (spec 2.8, #136): session-only and never
+// impersonated, before requireCan. A person attests to an upload, accepts it, or redacts.
 const INTEGRITY: Record<string, string> = {
   'POST /ledger/restores/:id/acknowledge': "can('bastion.ledger.acknowledge_restore')",
+  'POST /manual-evidence': "can('bastion.evidence.upload')",
+  'POST /manual-evidence/:id/supersede': "can('bastion.evidence.upload')",
+  'POST /manual-evidence/:id/links/:assertion_id/review': "can('bastion.evidence.review')",
+  'POST /personal-data/:id/redact': "can('bastion.evidence.redact')",
 };
+
+// Routes that must NOT require a session: everything an agent may do through an API key
+// (decision #196). A session gate here would silently break the MCP tool.
+const AGENT_REACHABLE = [
+  'GET /manual-evidence',
+  'GET /manual-evidence/:id',
+  'POST /manual-evidence/:id/links',
+  'DELETE /manual-evidence/:id/links/:assertion_id',
+  'POST /manual-evidence/:id/withdraw',
+  'POST /manual-evidence/:id/check-again',
+  'GET /feeds',
+  'POST /feeds',
+  'PATCH /feeds/:id',
+  'GET /feeds/:id/records',
+  'GET /coverage',
+  'GET /summary',
+];
 
 describe('bastion-api route gates', () => {
   const all = routes();
@@ -78,6 +103,24 @@ describe('bastion-api route gates', () => {
       expect(order.every((i) => i >= 0), route).toBe(true);
       expect([...order].sort((a, b) => a - b)).toEqual(order);
     }
+  });
+
+  it('M5 routes an agent may call carry no session gate', () => {
+    for (const route of AGENT_REACHABLE) {
+      const r = all.find((x) => `${x.method} ${x.path}` === route);
+      expect(r, route).toBeDefined();
+      expect(r!.preHandler, route).not.toMatch(/requireSession|rejectWhenImpersonating/);
+    }
+  });
+
+  it('the feed push authenticates with its own key, a byte cap, and no user gate', () => {
+    const src = readFileSync(join(ROUTES, FEED_INGEST_FILE), 'utf8');
+    const handlers = [...src.matchAll(/fastify\.(get|post|patch|put|delete)\(\s*'([^']+)'/g)].map((m) => `${m[1]!.toUpperCase()} ${m[2]}`);
+    expect(handlers).toEqual(['POST /feeds/:feed_key/records']);
+    expect(src).toContain('bodyLimit: BASTION_FEED_MAX_BATCH_BYTES');
+    expect(src).toContain('authenticateFeedPush(');
+    expect(src.indexOf('authenticateFeedPush(')).toBeLessThan(src.indexOf('bastionFeedBatchSchema.safeParse'));
+    expect(src).not.toMatch(/import[^;]*requireAuth|requireCan\(/);
   });
 
   it('every internal route checks the internal secret first', () => {

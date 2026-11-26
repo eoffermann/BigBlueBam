@@ -1,7 +1,7 @@
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import type { ZodError } from 'zod';
 import type { Viewer } from '../services/types.js';
-import { ConflictError, ForbiddenError, NotFoundError, ValidationFailure } from './errors.js';
+import { ConflictError, ForbiddenError, NotFoundError, RateLimitedError, UnavailableError, ValidationFailure } from './errors.js';
 import { authMethodOf } from './guards.js';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -61,6 +61,19 @@ export function mapServiceError(request: FastifyRequest, reply: FastifyReply, er
   }
   if (err instanceof ConflictError) {
     reply.status(409).send({
+      error: { code: err.code, message: err.message, details: [], request_id: request.id },
+    });
+    return true;
+  }
+  if (err instanceof UnavailableError) {
+    reply.status(503).send({
+      error: { code: err.code, message: err.message, details: [], request_id: request.id },
+    });
+    return true;
+  }
+  if (err instanceof RateLimitedError) {
+    if (err.retryAfterSeconds !== null) reply.header('Retry-After', String(err.retryAfterSeconds));
+    reply.status(429).send({
       error: { code: err.code, message: err.message, details: [], request_id: request.id },
     });
     return true;

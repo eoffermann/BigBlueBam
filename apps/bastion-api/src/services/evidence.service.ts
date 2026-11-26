@@ -24,15 +24,9 @@ import { enqueueBastionEvent } from '../engine/outbox.js';
 import { bucketRestoreRecords, refreshSeals, highestSeal, writeRestoreObject } from '../engine/restore.js';
 import { probeDefinition } from '../probes/definitions.js';
 import type { BastionProbeResult } from '@bigbluebam/shared';
+import { auditRaw } from '../lib/audit-raw.js';
 import { isAdminViewer, type Viewer } from './types.js';
 
-async function auditRaw(tx: Tx, viewer: Viewer, action: string, subject: { type: string; id: string | null }, details: Record<string, unknown> = {}) {
-  const kind = (await tx`SELECT kind FROM users WHERE id = ${viewer.id}`)[0]?.kind ?? 'human';
-  await tx`
-    INSERT INTO bastion_audit_log (organization_id, actor_id, actor_kind, impersonator_id, action, subject_type, subject_id, details)
-    VALUES (${viewer.org_id}, ${viewer.id}, ${kind as string}, ${viewer.impersonator_id}, ${action}, ${subject.type}, ${subject.id},
-            ${tx.json({ auth_method: viewer.auth_method, ...details } as never)})`;
-}
 
 const RUN_SELECT = `id, trigger, scope, control_id, nightly_for_date::text AS nightly_for_date, as_of, status, partial_reason,
   resume_count, controls_total, controls_done, pass_count, fail_count, unprovable_count, started_by, started_at,

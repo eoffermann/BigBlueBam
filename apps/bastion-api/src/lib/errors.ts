@@ -40,6 +40,29 @@ export class ConflictError extends Error {
   }
 }
 
+/** A dependency Bastion needs right now is down or not set up (evidence storage). Maps to 503. */
+export class UnavailableError extends Error {
+  constructor(
+    message = 'This is not available right now. Try again in a few minutes.',
+    public readonly code = 'UNAVAILABLE',
+  ) {
+    super(message);
+    this.name = 'UnavailableError';
+  }
+}
+
+/** A limit was reached (feed quotas and per-key rates, spec 3.5). Maps to 429. */
+export class RateLimitedError extends Error {
+  constructor(
+    message: string,
+    public readonly code = 'RATE_LIMITED',
+    public readonly retryAfterSeconds: number | null = null,
+  ) {
+    super(message);
+    this.name = 'RateLimitedError';
+  }
+}
+
 /** A service-layer rule on top of the permission (e.g. owner-only acts, spec 5.5). Maps to 403. */
 export class ForbiddenError extends Error {
   constructor(

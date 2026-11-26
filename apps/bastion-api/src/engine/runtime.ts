@@ -5,7 +5,7 @@ import type { FastifyBaseLogger } from 'fastify';
 import type { Redis } from 'ioredis';
 import { engineConnection, engineReadConnection } from '../db/index.js';
 import { env } from '../env.js';
-import { currentSealSigner, pdHmacKeyId, publishedSealKeyMap } from '../lib/keys.js';
+import { currentSealSigner, pdHmac, pdHmacKeyId, publishedSealKeyMap } from '../lib/keys.js';
 import { createBastionStorage } from '../lib/storage.js';
 import type { EngineDeps } from './context.js';
 import { makeRunInOrgScopeRead } from './read-scope.js';
@@ -34,6 +34,7 @@ export function engineDeps(log: FastifyBaseLogger, redis: Redis): EngineDeps {
     signer: currentSealSigner(),
     sealKeys: publishedSealKeyMap(),
     pdKeyId: pdHmacKeyId(),
+    pdHmac,
     probeTimeoutMs: env.BASTION_PROBE_TIMEOUT_MS,
     putTimeoutMs: env.BASTION_PUT_TIMEOUT_MS,
     leaseMs: env.BASTION_RUN_LEASE_MS,

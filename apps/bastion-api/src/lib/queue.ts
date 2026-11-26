@@ -2,8 +2,10 @@ import { Queue } from 'bullmq';
 import IORedis from 'ioredis';
 import {
   BASTION_EVALUATE_RUN_QUEUE,
+  BASTION_EVIDENCE_INGEST_QUEUE,
   bastionEvaluateRunJobId,
   type BastionEvaluateRunJobData,
+  type BastionSweepJobData,
 } from '@bigbluebam/shared';
 import { env } from '../env.js';
 
@@ -46,7 +48,38 @@ export async function enqueueEvaluationRun(data: BastionEvaluateRunJobData): Pro
   }
 }
 
+let ingestQueue: Queue<BastionSweepJobData> | null = null;
+
+function getIngestQueue(): Queue<BastionSweepJobData> {
+  if (!ingestQueue) {
+    if (!connection) connection = new IORedis(env.REDIS_URL, { maxRetriesPerRequest: null });
+    ingestQueue = new Queue<BastionSweepJobData>(BASTION_EVIDENCE_INGEST_QUEUE, { connection });
+  }
+  return ingestQueue;
+}
+
+/**
+ * Ask the worker to retry a pending virus scan soon (spec 7: bastion-evidence-ingest is event plus
+ * a 10-minute sweep). Best effort: the sweep is the floor. The jobId is per item and per minute,
+ * so repeated uploads in one minute collapse into one job.
+ */
+export async function enqueueEvidenceIngest(orgId: string, manualEvidenceId: string): Promise<boolean> {
+  try {
+    const minute = Math.floor(Date.now() / 60_000);
+    await getIngestQueue().add('ingest', { organization_id: orgId }, {
+      jobId: `ingest-${manualEvidenceId}-${minute}`,
+      delay: 60_000,
+      ...EVALUATE_RUN_JOB_RETENTION,
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export async function closeBastionQueues(): Promise<void> {
+  await ingestQueue?.close().catch(() => {});
+  ingestQueue = null;
   await queue?.close().catch(() => {});
   queue = null;
   if (connection) {
