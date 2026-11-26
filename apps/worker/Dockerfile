@@ -10,6 +10,7 @@ COPY pnpm-lock.yaml* ./
 COPY apps/worker/package.json ./apps/worker/
 COPY packages/shared/package.json ./packages/shared/
 COPY packages/smtp-resolver/package.json ./packages/smtp-resolver/
+COPY packages/storage/package.json ./packages/storage/
 
 RUN pnpm install --no-frozen-lockfile
 
@@ -20,11 +21,13 @@ COPY tsconfig.base.json ./
 COPY packages/shared/src ./packages/shared/src
 COPY packages/shared/tsconfig.json packages/shared/tsup.config.ts ./packages/shared/
 COPY packages/smtp-resolver/ ./packages/smtp-resolver/
+COPY packages/storage/ ./packages/storage/
 COPY apps/worker/src ./apps/worker/src
 COPY apps/worker/tsconfig.json apps/worker/tsup.config.ts ./apps/worker/
 
 RUN pnpm --filter @bigbluebam/shared build \
  && pnpm --filter @bigbluebam/smtp-resolver build \
+ && pnpm --filter @bigbluebam/storage build \
  && pnpm --filter @bigbluebam/worker build
 
 RUN pnpm --filter @bigbluebam/worker deploy --prod /app/deployed
@@ -44,6 +47,7 @@ RUN apk add --no-cache ffmpeg postgresql18-client
 COPY tsconfig.base.json ./
 COPY packages/shared/ ./packages/shared/
 COPY packages/smtp-resolver/ ./packages/smtp-resolver/
+COPY packages/storage/ ./packages/storage/
 COPY apps/worker/ ./apps/worker/
 
 WORKDIR /app/apps/worker

@@ -3,8 +3,9 @@
  *
  * Picks up a `bill_worker_jobs` row where `job_type = 'pdf_generate'` and
  * `status = 'pending'`, marks it processing, renders a real PDF for the
- * invoice with pdf-lib, uploads it to MinIO under
- * `bill/invoices/<invoice-id>.pdf`, and records the storage key on
+ * invoice with pdf-lib, uploads it through @bigbluebam/storage under
+ * billInvoicePdfKey(invoice id) (`bill/invoices/<invoice-id>.pdf`, the one
+ * definition bill-api's download route also uses), and records the key on
  * `bill_invoices.pdf_url`.
  *
  * Invocation model. The Bill API does not push jobs to a BullMQ queue
@@ -25,7 +26,7 @@ import type { Job } from 'bullmq';
 import type { Logger } from 'pino';
 import { sql } from 'drizzle-orm';
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
-import { Client as MinioClient } from 'minio';
+import { billInvoicePdfKey, createBootstrapDriver, type StorageDriver } from '@bigbluebam/storage';
 import { getDb } from '../utils/db.js';
 import { publishBoltEvent } from '../utils/bolt-events.js';
 
@@ -382,38 +383,36 @@ async function renderInvoicePdf(
 // MinIO upload
 // ───────────────────────────────────────────────────────────────────────────
 
-let cachedMinioClient: MinioClient | null = null;
-let cachedBucketEnsuredFor: string | null = null;
+// Issue #148: writes go through @bigbluebam/storage's bootstrap driver (which
+// creates the bucket on first put), the same substrate bill-api reads with.
+let cachedDriver: StorageDriver | null | undefined;
 
-function getMinioClient(): MinioClient | null {
-  if (cachedMinioClient) return cachedMinioClient;
+function getStorageDriver(): StorageDriver | null {
+  if (cachedDriver !== undefined) return cachedDriver;
   const endpoint = process.env.S3_ENDPOINT;
   const accessKey = process.env.S3_ACCESS_KEY;
   const secretKey = process.env.S3_SECRET_KEY;
-  if (!endpoint || !accessKey || !secretKey) return null;
-
-  try {
-    const url = new URL(endpoint);
-    cachedMinioClient = new MinioClient({
-      endPoint: url.hostname,
-      port: Number(url.port) || (url.protocol === 'https:' ? 443 : 80),
-      useSSL: url.protocol === 'https:',
-      accessKey,
-      secretKey,
-    });
-    return cachedMinioClient;
-  } catch {
-    return null;
+  if (!endpoint || !accessKey || !secretKey) {
+    cachedDriver = null;
+    return cachedDriver;
   }
+  try {
+    cachedDriver = createBootstrapDriver({
+      S3_ENDPOINT: endpoint,
+      S3_REGION: process.env.S3_REGION ?? 'us-east-1',
+      S3_BUCKET: process.env.S3_BUCKET ?? 'bigbluebam-uploads',
+      S3_ACCESS_KEY: accessKey,
+      S3_SECRET_KEY: secretKey,
+    });
+  } catch {
+    cachedDriver = null;
+  }
+  return cachedDriver;
 }
 
-async function ensureBucket(client: MinioClient, bucket: string): Promise<void> {
-  if (cachedBucketEnsuredFor === bucket) return;
-  const exists = await client.bucketExists(bucket);
-  if (!exists) {
-    await client.makeBucket(bucket, process.env.S3_REGION ?? 'us-east-1');
-  }
-  cachedBucketEnsuredFor = bucket;
+/** Test hook: inject a driver (null = not configured), or undefined to re-read env. */
+export function __setBillPdfStorageDriverForTests(d: StorageDriver | null | undefined): void {
+  cachedDriver = d;
 }
 
 async function uploadPdfToMinio(
@@ -421,21 +420,14 @@ async function uploadPdfToMinio(
   pdfBytes: Uint8Array,
   logger: Logger,
 ): Promise<{ uploaded: boolean; reason?: string }> {
-  const client = getMinioClient();
-  if (!client) {
-    logger.warn('bill-pdf-generate: MinIO client not configured; skipping upload');
-    return { uploaded: false, reason: 'minio client not configured' };
+  const driver = getStorageDriver();
+  if (!driver) {
+    logger.warn('bill-pdf-generate: object storage not configured; skipping upload');
+    return { uploaded: false, reason: 'storage not configured' };
   }
-  const bucket = process.env.S3_BUCKET ?? 'bigbluebam-uploads';
   try {
-    await ensureBucket(client, bucket);
-    await client.putObject(
-      bucket,
-      storageKey,
-      Buffer.from(pdfBytes),
-      pdfBytes.length,
-      { 'Content-Type': 'application/pdf' },
-    );
+    const bytes = Buffer.from(pdfBytes);
+    await driver.put(storageKey, bytes, { contentType: 'application/pdf', size: bytes.length });
     return { uploaded: true };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
@@ -543,7 +535,7 @@ async function processWorkerJobRow(
 
     const lines = await fetchLineItems(invoice.id);
     const pdfBytes = await renderInvoicePdf(invoice, lines);
-    const storageKey = `bill/invoices/${invoice.id}.pdf`;
+    const storageKey = billInvoicePdfKey(invoice.id);
 
     const uploadResult = await uploadPdfToMinio(storageKey, pdfBytes, logger);
     if (!uploadResult.uploaded) {

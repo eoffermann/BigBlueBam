@@ -12,6 +12,7 @@
   "dependencies": {
     "@bigbluebam/shared": "workspace:*",
     "@bigbluebam/smtp-resolver": "workspace:*",
+    "@bigbluebam/storage": "workspace:*",
     "@gltf-transform/core": "^4.4.0",
     "@gltf-transform/extensions": "^4.4.0",
     "@gltf-transform/functions": "^4.4.0",

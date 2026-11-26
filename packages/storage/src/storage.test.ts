@@ -2,8 +2,16 @@ import { describe, it, expect } from 'vitest';
 import { parseProviderConfig, s3ConfigSchema, rcloneConfigSchema } from './config.js';
 import { encryptSecret, decryptSecret, fingerprint, displayHint } from './secrets.js';
 import { createDriver, createBootstrapDriver } from './factory.js';
-import { buildStorageKey } from './index.js';
+import { buildStorageKey, billInvoicePdfKey } from './index.js';
 import { S3Driver } from './s3-driver.js';
+
+describe('shared object keys (issue #148)', () => {
+  it('billInvoicePdfKey is the key the worker writes and bill-api reads', () => {
+    expect(billInvoicePdfKey('11111111-1111-1111-1111-111111111111')).toBe(
+      'bill/invoices/11111111-1111-1111-1111-111111111111.pdf',
+    );
+  });
+});
 
 describe('config schemas', () => {
   it('accepts a valid s3 config and defaults the region', () => {

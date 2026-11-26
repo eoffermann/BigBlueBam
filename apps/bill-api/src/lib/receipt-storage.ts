@@ -12,8 +12,12 @@
  * derives the key from the expense row it has already authorized, so no
  * client-supplied value ever selects which object is read.
  */
-import { createBootstrapDriver, type StorageDriver } from '@bigbluebam/storage';
-import { env } from '../env.js';
+// The driver itself lives in ./storage-driver.ts, shared with the invoice PDF
+// download (issue #148); these aliases keep the receipt call sites unchanged.
+export {
+  getBillStorageDriver as getReceiptDriver,
+  __setBillStorageDriverForTests as __setReceiptDriverForTests,
+} from './storage-driver.js';
 
 export const RECEIPT_PREFIX = 'bill/receipts';
 
@@ -36,28 +40,4 @@ export function receiptKey(expenseId: string, ext: string): string {
 /** The authorized download path the SPA and API consumers use for a receipt. */
 export function receiptDownloadPath(expenseId: string): string {
   return `/bill/api/v1/expenses/${expenseId}/receipt`;
-}
-
-let driver: StorageDriver | null | undefined;
-
-/** The storage driver, or null when S3_ENDPOINT / credentials are not configured. */
-export function getReceiptDriver(): StorageDriver | null {
-  if (driver !== undefined) return driver;
-  if (!env.S3_ENDPOINT || !env.S3_ACCESS_KEY || !env.S3_SECRET_KEY) {
-    driver = null;
-    return driver;
-  }
-  driver = createBootstrapDriver({
-    S3_ENDPOINT: env.S3_ENDPOINT,
-    S3_REGION: env.S3_REGION,
-    S3_BUCKET: env.S3_BUCKET,
-    S3_ACCESS_KEY: env.S3_ACCESS_KEY,
-    S3_SECRET_KEY: env.S3_SECRET_KEY,
-  });
-  return driver;
-}
-
-/** Test hook: inject a driver (or null for "not configured"), or reset to env. */
-export function __setReceiptDriverForTests(d: StorageDriver | null | undefined): void {
-  driver = d;
 }

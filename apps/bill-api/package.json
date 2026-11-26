@@ -22,7 +22,6 @@
     "@fastify/cors": "^10.0.0",
     "@fastify/multipart": "^9.0.0",
     "@fastify/rate-limit": "^10.0.0",
-    "minio": "^8.0.0",
     "argon2": "^0.41.1",
     "date-fns": "^4.1.0",
     "dotenv": "^16.4.0",

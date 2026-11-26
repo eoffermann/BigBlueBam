@@ -45,14 +45,11 @@ vi.mock('../src/services/pdf.service.js', () => ({
   generateInvoicePdf: (...args: unknown[]) => generateInvoicePdf(...args),
 }));
 
+// Issue #148: reads go through bill-api's shared @bigbluebam/storage driver.
 const getObject = vi.fn();
-vi.mock('minio', () => ({
-  Client: class {
-    getObject(...args: unknown[]) {
-      return getObject(...args);
-    }
-  },
-}));
+const fakeDriver = {
+  getStream: async (key: string) => ({ stream: await getObject(key), contentType: 'application/pdf', size: 0 }),
+};
 
 const canCalls: string[] = [];
 let denied = false;
@@ -90,11 +87,8 @@ beforeEach(async () => {
   vi.clearAllMocks();
   canCalls.length = 0;
   denied = false;
-  process.env.S3_ENDPOINT = 'http://minio:9000';
-  process.env.S3_ACCESS_KEY = 'k';
-  process.env.S3_SECRET_KEY = 's';
-  const storage = await import('../src/lib/invoice-pdf-storage.js');
-  storage.__resetInvoicePdfStorageForTests();
+  const storage = await import('../src/lib/storage-driver.js');
+  storage.__setBillStorageDriverForTests(fakeDriver as never);
   getInvoice.mockImplementation(async (id: string, orgId: string) => {
     if (id === INVOICE_ID && orgId === ORG_A) return invoiceRow();
     const { BillError } = await import('../src/lib/utils.js');
@@ -119,7 +113,7 @@ describe('GET /v1/invoices/:id/pdf/download (issue #134)', () => {
     expect(res.headers['content-disposition']).toBe('attachment; filename="INV-00042.pdf"');
     expect(res.headers['cache-control']).toBe('private, no-store');
     expect(res.rawPayload.equals(STORED)).toBe(true);
-    expect(getObject).toHaveBeenCalledWith('bigbluebam-uploads', `bill/invoices/${INVOICE_ID}.pdf`);
+    expect(getObject).toHaveBeenCalledWith(`bill/invoices/${INVOICE_ID}.pdf`);
     expect(generateInvoicePdf).not.toHaveBeenCalled();
   });
 
@@ -170,12 +164,17 @@ describe('GET /v1/invoices/:id/pdf/download (issue #134)', () => {
   });
 
   it('renders from the database when storage is not configured', async () => {
-    delete process.env.S3_ENDPOINT;
-    const storage = await import('../src/lib/invoice-pdf-storage.js');
-    storage.__resetInvoicePdfStorageForTests();
+    const storage = await import('../src/lib/storage-driver.js');
+    storage.__setBillStorageDriverForTests(null);
     const res = await app.inject({ method: 'GET', url: url(INVOICE_ID), headers: { 'x-test-user': 'yes' } });
     expect(res.statusCode).toBe(200);
     expect(getObject).not.toHaveBeenCalled();
+  });
+
+  it('pins pdf_url to the one shared key builder the worker also uses', async () => {
+    const { billInvoicePdfKey } = await import('@bigbluebam/storage');
+    const { invoicePdfKey } = await import('../src/lib/invoice-pdf-storage.js');
+    expect(invoicePdfKey).toBe(billInvoicePdfKey);
   });
 
   it('sanitizes the filename', async () => {
