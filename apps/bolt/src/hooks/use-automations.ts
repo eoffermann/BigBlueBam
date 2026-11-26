@@ -5,21 +5,9 @@ import { useProjectStore } from '@/stores/project.store';
 
 // ─── Types ───
 
-export type TriggerSource =
-  | 'bam'
-  | 'banter'
-  | 'beacon'
-  | 'brief'
-  | 'helpdesk'
-  | 'schedule'
-  | 'bond'
-  | 'blast'
-  | 'board'
-  | 'bench'
-  | 'bearing'
-  | 'bill'
-  | 'book'
-  | 'blank';
+// Derived from BOLT_SOURCES in @bigbluebam/shared (issue #133).
+export type { TriggerSource } from '@/lib/trigger-sources';
+import type { TriggerSource } from '@/lib/trigger-sources';
 export type ExecutionStatus = 'running' | 'success' | 'partial' | 'failed' | 'skipped';
 export type ConditionOperator =
   | 'equals'

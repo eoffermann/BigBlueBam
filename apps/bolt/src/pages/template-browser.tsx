@@ -1,29 +1,12 @@
 import { Loader2, LayoutTemplate, Zap } from 'lucide-react';
 import { useTemplates, useInstantiateTemplate, type BoltTemplate } from '@/hooks/use-templates';
-import type { TriggerSource } from '@/hooks/use-automations';
+import { TRIGGER_SOURCE_COLORS as sourceColors } from '@/lib/trigger-sources';
 import { Badge } from '@/components/common/badge';
 import { Button } from '@/components/common/button';
 
 interface TemplateBrowserPageProps {
   onNavigate: (path: string) => void;
 }
-
-const sourceColors: Record<TriggerSource, string> = {
-  bam: '#2563eb',
-  banter: '#7c3aed',
-  beacon: '#059669',
-  brief: '#d97706',
-  helpdesk: '#dc2626',
-  schedule: '#6b7280',
-  bond: '#0891b2',
-  blast: '#db2777',
-  board: '#9333ea',
-  bench: '#0d9488',
-  bearing: '#ea580c',
-  bill: '#16a34a',
-  book: '#4f46e5',
-  blank: '#64748b',
-};
 
 function TemplateCard({ template, onInstantiate, isInstantiating }: {
   template: BoltTemplate;

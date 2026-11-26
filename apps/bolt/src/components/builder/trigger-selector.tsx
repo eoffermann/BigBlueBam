@@ -1,5 +1,6 @@
 import type { TriggerSource } from '@/hooks/use-automations';
 import { useEventsBySource } from '@/hooks/use-event-catalog';
+import { TRIGGER_SOURCE_OPTIONS } from '@/lib/trigger-sources';
 
 interface TriggerSelectorProps {
   source: TriggerSource | undefined;
@@ -8,22 +9,8 @@ interface TriggerSelectorProps {
   onEventTypeChange: (eventType: string) => void;
 }
 
-const triggerSources: { value: TriggerSource; label: string }[] = [
-  { value: 'bam', label: 'Bam' },
-  { value: 'banter', label: 'Banter' },
-  { value: 'beacon', label: 'Beacon' },
-  { value: 'brief', label: 'Brief' },
-  { value: 'helpdesk', label: 'Helpdesk' },
-  { value: 'schedule', label: 'Schedule' },
-  { value: 'bond', label: 'Bond' },
-  { value: 'blast', label: 'Blast' },
-  { value: 'board', label: 'Board' },
-  { value: 'bearing', label: 'Bearing' },
-  { value: 'bill', label: 'Bill' },
-  { value: 'book', label: 'Book' },
-  { value: 'blank', label: 'Blank' },
-  { value: 'bench', label: 'Bench' },
-];
+// Derived from BOLT_SOURCES in @bigbluebam/shared (issue #133).
+const triggerSources = TRIGGER_SOURCE_OPTIONS;
 
 export function TriggerSelector({ source, eventType, onSourceChange, onEventTypeChange }: TriggerSelectorProps) {
   const { data: events, isLoading } = useEventsBySource(source);

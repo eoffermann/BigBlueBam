@@ -9,11 +9,7 @@
  */
 
 import { z } from 'zod';
-
-const TRIGGER_SOURCES = [
-  'bam', 'banter', 'beacon', 'brief', 'helpdesk', 'schedule',
-  'bond', 'blast', 'board', 'bench', 'bearing', 'bill', 'book', 'blank',
-] as const;
+import { TRIGGER_SOURCES } from './trigger-sources';
 
 export const automationFormSchema = z.object({
   name: z.string().min(1, 'Name is required').max(255, 'Name must be 255 characters or fewer'),

@@ -2513,6 +2513,9 @@ importers:
       '@bigbluebam/bureau-client':
         specifier: workspace:*
         version: link:../../packages/bureau-client
+      '@bigbluebam/shared':
+        specifier: workspace:*
+        version: link:../../packages/shared
       '@bigbluebam/ui':
         specifier: workspace:*
         version: link:../../packages/ui

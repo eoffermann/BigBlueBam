@@ -1,27 +1,13 @@
 import { useCallback } from 'react';
 import type { TriggerSource } from '@/hooks/use-automations';
 import { useEventsBySource } from '@/hooks/use-event-catalog';
+import { TRIGGER_SOURCE_OPTIONS } from '@/lib/trigger-sources';
 import { TriggerFilterList } from '@/components/builder/trigger-filter-list';
 import { useGraphEditorStore } from '@/stores/graph-editor.store';
 
-// ─── Source catalog (mirrors trigger-selector.tsx) ──────────────────────────
+// ─── Source catalog (derived from BOLT_SOURCES, issue #133) ─────────────────
 
-const triggerSources: { value: TriggerSource; label: string }[] = [
-  { value: 'bam', label: 'Bam' },
-  { value: 'banter', label: 'Banter' },
-  { value: 'beacon', label: 'Beacon' },
-  { value: 'brief', label: 'Brief' },
-  { value: 'helpdesk', label: 'Helpdesk' },
-  { value: 'schedule', label: 'Schedule' },
-  { value: 'bond', label: 'Bond' },
-  { value: 'blast', label: 'Blast' },
-  { value: 'board', label: 'Board' },
-  { value: 'bearing', label: 'Bearing' },
-  { value: 'bill', label: 'Bill' },
-  { value: 'book', label: 'Book' },
-  { value: 'blank', label: 'Blank' },
-  { value: 'bench', label: 'Bench' },
-];
+const triggerSources = TRIGGER_SOURCE_OPTIONS;
 
 // ─── Props ──────────────────────────────────────────────────────────────────
 
