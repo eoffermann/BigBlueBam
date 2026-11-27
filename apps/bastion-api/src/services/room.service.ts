@@ -15,7 +15,8 @@
 //   - reads never reach outside the room's controls, period and restricted allowlist, whatever
 //     ids are supplied; evidence explanations are counts-only (no cited item ever leaves).
 
-import { createHash } from 'node:crypto';
+import { createHash, createHmac } from 'node:crypto';
+import { Readable } from 'node:stream';
 import argon2 from 'argon2';
 import { withStorageTimeout } from '@bigbluebam/storage';
 import {
@@ -273,6 +274,8 @@ interface EvidenceHit {
   redacted: boolean;
   content_type: string | null;
   size: number | null;
+  /** SHA-256 of the stored record (checks): the auditor can match it against a packet or seal. */
+  fingerprint: string | null;
   body: Record<string, unknown>;
 }
 
@@ -298,6 +301,7 @@ async function findRoomEvidence(deps: RoomDeps, r: ResolvedRoom, id: string): Pr
         redacted: !!snap.bytes_redacted_at,
         content_type: 'application/json',
         size: snap.size_bytes == null ? null : Number(snap.size_bytes),
+        fingerprint: (snap.content_sha256 as string | null) ?? null,
         body: {
           id: snap.id,
           kind: 'check',
@@ -324,6 +328,7 @@ async function findRoomEvidence(deps: RoomDeps, r: ResolvedRoom, id: string): Pr
       redacted: !!obj?.bytes_redacted_at,
       content_type: (file.content_type as string | null) ?? null,
       size: obj?.size_bytes == null ? null : Number(obj.size_bytes),
+      fingerprint: null,
       body: out,
     };
   });
@@ -352,10 +357,34 @@ export async function publicRoomEvidence(deps: RoomDeps, ctx: RoomRequestContext
   };
 }
 
+/**
+ * What a room download of a check carries (#307): the same counts-only view the room's JSON shows,
+ * plus the stored record's fingerprint. The stored evidence document itself (population names,
+ * repository lists, cited entity ids, probe params) never leaves through the room; it goes only
+ * into an audit packet the organization builds and sends on purpose.
+ */
+export function roomCheckDocument(hit: Pick<EvidenceHit, 'body' | 'fingerprint'>): Buffer {
+  const doc = {
+    ...hit.body,
+    fingerprint_sha256: hit.fingerprint,
+    note: 'Counts only. This is the summary an auditor room shows; the full evidence record stays with the organization and is identified by fingerprint_sha256.',
+  };
+  return Buffer.from(`${JSON.stringify(doc, null, 2)}\n`, 'utf8');
+}
+
 export async function publicRoomDownload(deps: RoomDeps, ctx: RoomRequestContext, id: string) {
   const r = await resolveRoom(deps, ctx);
   const hit = await findRoomEvidence(deps, r, id);
   if (hit.redacted) throw new NotFoundError('This file was redacted.');
+  if (hit.kind === 'check') {
+    // Never the stored object: it is the detail view, and the room is counts-only (spec 3.1, 5.2).
+    const body = roomCheckDocument(hit);
+    await logRoomAccess(deps, r, ctx, 'download', id);
+    return {
+      stream: Readable.from([body]),
+      headers: downloadHeaders({ contentType: 'application/json', filename: `${hit.title}.json`, size: body.length }),
+    };
+  }
   if (!hit.object_key || !deps.engine.storage) throw new NotFoundError('There is no file to download for this evidence.');
   let obj: Awaited<ReturnType<NonNullable<EngineDeps['storage']>['getStream']>>;
   try {
@@ -364,7 +393,7 @@ export async function publicRoomDownload(deps: RoomDeps, ctx: RoomRequestContext
     throw new NotFoundError('Evidence file missing.');
   }
   await logRoomAccess(deps, r, ctx, 'download', id);
-  const ext = hit.kind === 'check' ? '.json' : hit.kind === 'statement' ? '.txt' : '';
+  const ext = hit.kind === 'statement' ? '.txt' : '';
   return { stream: obj.stream, headers: downloadHeaders({ contentType: hit.content_type, filename: `${hit.title}${ext}`, size: hit.size ?? obj.size }) };
 }
 

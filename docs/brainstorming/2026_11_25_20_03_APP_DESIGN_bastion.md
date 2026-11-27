@@ -1127,6 +1127,10 @@ In addition:
   "Evidence file missing" notices.
 - Room-scoped reads expose no evidence outside the room's controls, period, and restricted
   allowlist, whatever ids are supplied.
+- `?download=1` on a check (row 103) serves the same counts-only view the room's JSON shows, plus
+  the stored record's SHA-256 as `fingerprint_sha256`; it never streams the stored evidence
+  document (population names, repository lists, cited entity ids, probe params). Only uploaded
+  files and statements stream their bytes (#307).
 
 ### 5.3 Realtime: none in v1
 

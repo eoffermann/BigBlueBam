@@ -318,7 +318,7 @@ The auditor then sees:
 - A reminder that Bastion shows the evidence your organization collected, is not an auditor, and does not certify anything.
 - Plain notices wherever the history is incomplete, for example "History lost by restore" or "Unexplained gap" with the range of entries. Nothing is hidden.
 - Five counts: Met, Not met, Not met, risk accepted, Can't prove yet, and Not assessed (controls you have not set up).
-- **Controls**: every control in the room with its state and requirement codes. Clicking a control opens its **Requirements**, its **Checks in the period**, its **Uploaded evidence**, and any accepted risks. Each check or file opens on its own, with **Download** for files. A file that can no longer be found reads "Evidence file missing". **Back to all controls** returns to the list.
+- **Controls**: every control in the room with its state and requirement codes. Clicking a control opens its **Requirements**, its **Checks in the period**, its **Uploaded evidence**, and any accepted risks. Each check or file opens on its own, with **Download**. Downloading a file gives the file itself; downloading a check gives the same summary the room shows (counts only, no names) plus the record's fingerprint, which matches the one in an audit packet. A file that can no longer be found reads "Evidence file missing". **Back to all controls** returns to the list.
 - **Restricted evidence included**, when you ticked restricted items.
 - **Accepted risks**, each with its reason, what is done in the meantime, its owner and the date it is accepted until.
 - **Statement of Applicability** (ISO 27001), with whether each requirement applies, why, and how it is met.

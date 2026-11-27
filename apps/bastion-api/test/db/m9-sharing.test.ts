@@ -263,6 +263,58 @@ describe.skipIf(!DATABASE_URL)('M9 sharing, packets, sweep and mirror (live data
     await sharing.revokeRoom(d.sharing, viewerOf(s), created.data.id as string);
   });
 
+  it('a check download is the counts-only view, never the stored evidence document (#307)', async () => {
+    const s = await setUp('dl');
+    const bucket = fakeBucket();
+    const engine = makeDeps(sql, { bucket });
+    const d = deps(engine);
+    const secretRepo = 'gilligan-travel/private-lagoon-ops';
+    const citedId = randomUUID();
+    const raw = Buffer.from(JSON.stringify({
+      org: s.org,
+      params: { repos: [secretRepo] },
+      population_checked: [secretRepo],
+      summary: { repos: [{ repo: secretRepo, merged: 3 }], cited_count: 1 },
+      cited_refs: [{ entity_type: 'bam.task', entity_id: citedId }],
+    }));
+    const sha = sha256Hex(raw);
+    const key = `evidence/${s.org}/${sha}.json`;
+    bucket.objects.set(key, { body: raw, contentType: 'application/json', modifiedAt: new Date() });
+    await sql`INSERT INTO bastion_evidence_objects (organization_id, content_sha256, object_key, size_bytes, holder_count)
+              VALUES (${s.org}, ${sha}, ${key}, ${raw.length}, 1)`;
+    const [run] = await sql`INSERT INTO bastion_evaluation_runs (organization_id, trigger, scope, control_id, as_of, status)
+                            VALUES (${s.org}, 'manual', 'control', ${s.controls[0]!}, now(), 'succeeded') RETURNING id`;
+    const [snap] = await sql`
+      INSERT INTO bastion_evidence_snapshots (organization_id, evaluation_run_id, assertion_id, control_id, outcome, summary, cited_refs,
+                                              population_checked, content_sha256)
+      VALUES (${s.org}, ${run!.id as string}, ${s.assertions[0]!}, ${s.controls[0]!}, 'pass',
+              ${sql.json({ repos: [{ repo: secretRepo, merged: 3 }], cited_count: 1 })},
+              ${sql.json([{ entity_type: 'bam.task', entity_id: citedId }])}, ${sql.json([secretRepo])}, ${sha})
+      RETURNING id`;
+    const created = await sharing.createRoom(d.sharing, viewerOf(s), {
+      label: 'Download check',
+      framework_id: s.framework,
+      period_start: '2026-01-01',
+      period_end: '2027-12-31',
+      expires_in_days: 5,
+      restricted_evidence_ids: [],
+      confirm: true,
+    }, false);
+    const out = await room.publicRoomDownload(d.room, ctx(created.data.token), snap!.id as string);
+    const chunks: Buffer[] = [];
+    for await (const c of out.stream as AsyncIterable<Buffer>) chunks.push(Buffer.from(c));
+    const text = Buffer.concat(chunks).toString('utf8');
+    expect(text).not.toContain(secretRepo);
+    expect(text).not.toContain(citedId);
+    expect(text).not.toContain('cited_refs');
+    expect(text).not.toContain('population_checked');
+    const doc = JSON.parse(text);
+    expect(doc).toMatchObject({ id: snap!.id, kind: 'check', outcome: 'pass', fingerprint_sha256: sha });
+    expect(out.headers['Content-Type'] ?? out.headers['content-type']).toMatch(/json/);
+    const logged = await sql`SELECT view_kind FROM bastion_auditor_access_log WHERE organization_id = ${s.org} AND view_kind = 'download'`;
+    expect(logged).toHaveLength(1);
+  });
+
   it('packet commitments go through verify-commitments: intact, pd_mismatch, key_changed, redacted, no_personal_data', async () => {
     const s = await setUp('pd');
     const engine = makeDeps(sql);
