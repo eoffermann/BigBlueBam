@@ -27,6 +27,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { GENERATED_MARKER, isUnchanged, planOutput } from './lib/generated-marker.mjs';
+import { appMetaPath } from './lib/app-doc-files.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -321,7 +322,7 @@ function main() {
     .readdirSync(appsDir, { withFileTypes: true })
     .filter((d) => d.isDirectory())
     .map((d) => d.name)
-    .filter((name) => fs.existsSync(path.join(appsDir, name, 'meta.json')));
+    .filter((name) => fs.existsSync(appMetaPath(ROOT, name)));
 
   const appsToProcess = requestedApps
     ? allAppNames.filter((name) => requestedApps.includes(name))

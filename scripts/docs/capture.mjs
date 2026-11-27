@@ -8,13 +8,15 @@
  *   node scripts/docs/capture.mjs --apps bond,bench   # specific apps only
  *
  * Requires a running stack at http://localhost (or DOCS_CAPTURE_BASE_URL).
- * Outputs PNGs to docs/apps/{app}/screenshots/{light,dark}/ and writes
- * per-app meta.json files.
+ * Outputs PNGs to docs/apps/{app}/screenshots/{light,dark}/ and writes the
+ * per-app screenshot list to docs/apps/{app}/screenshots.json (meta.json is
+ * extract.mjs's counts file, #400).
  */
 
 import { chromium } from 'playwright';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { appScreenshotsPath } from './lib/app-doc-files.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '..', '..');
@@ -560,8 +562,8 @@ try {
       }
     }
 
-    // Write meta.json
-    const metaPath = path.join(OUTPUT_ROOT, app, 'meta.json');
+    // Write the screenshot list (screenshots.json; never meta.json, #400)
+    const metaPath = appScreenshotsPath(ROOT, app);
     fs.mkdirSync(path.dirname(metaPath), { recursive: true });
     fs.writeFileSync(metaPath, JSON.stringify(allMeta, null, 2) + '\n');
 

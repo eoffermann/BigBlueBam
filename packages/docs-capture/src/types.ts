@@ -19,7 +19,7 @@ export interface Scene {
 export interface SnapOptions {
   /** Output file path (absolute). */
   file: string;
-  /** Human-readable label for meta.json. */
+  /** Human-readable label for screenshots.json. */
   label: string;
   /** CSS selector to wait for before capture. */
   waitFor?: string;

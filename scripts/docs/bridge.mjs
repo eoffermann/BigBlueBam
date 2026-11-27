@@ -15,8 +15,10 @@
  * where NN = zero-padded `doc.order` and slug = the recipe id with the `<app>-`
  * prefix and any trailing `-dark` removed (so a light recipe and its `-dark`
  * sibling share an ordinal and land in light/ and dark/). It then regenerates
- * the per-app `docs/apps/<app>/meta.json` array (id/label/theme/file/sha256/
- * width/height/captured_at) the docs pipeline + Help Center consume.
+ * the per-app `docs/apps/<app>/screenshots.json` array (id/label/theme/file/
+ * sha256/width/height/captured_at). It never writes meta.json: that file is
+ * extract.mjs's route/schema counts (one file, one writer, #400; see
+ * scripts/docs/lib/app-doc-files.mjs).
  *
  * Captures without a `doc:` field are ignored here; they stay in the shared
  * `screenshots/` tree for ad-hoc / marketing use.
@@ -25,18 +27,21 @@
  *   node scripts/docs/bridge.mjs                  # every app present in the manifest
  *   node scripts/docs/bridge.mjs --apps=bam,bond  # subset
  *   node scripts/docs/bridge.mjs --dry-run        # report only, no writes
+ *   node scripts/docs/bridge.mjs --root=<dir>     # another repo-shaped tree (tests)
  */
 
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { appScreenshotsPath } from './lib/app-doc-files.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const ROOT = path.resolve(__dirname, '..', '..');
+const args = process.argv.slice(2);
+const rootFlag = args.find((a) => a.startsWith('--root='));
+const ROOT = rootFlag ? path.resolve(rootFlag.slice('--root='.length)) : path.resolve(__dirname, '..', '..');
 const SHOTS_ROOT = path.join(ROOT, 'screenshots');
 const MANIFEST = path.join(SHOTS_ROOT, 'manifest.json');
 
-const args = process.argv.slice(2);
 const dryRun = args.includes('--dry-run');
 const appsFlag = args.find((a) => a.startsWith('--apps='));
 const appFilter = appsFlag
@@ -58,7 +63,7 @@ function slugFor(id, app) {
   return s;
 }
 
-/** Remove the *.png currently in an app's light/ + dark/ dirs (meta.json is the
+/** Remove the *.png currently in an app's light/ + dark/ dirs (screenshots.json is the
  *  authoritative regenerated list, so stale renamed slugs must not linger). */
 function clearThemeDirs(app) {
   for (const theme of ['light', 'dark']) {
@@ -128,8 +133,11 @@ function main() {
       });
     }
 
-    const metaPath = path.join(ROOT, 'docs', 'apps', app, 'meta.json');
-    if (!dryRun) fs.writeFileSync(metaPath, `${JSON.stringify(meta, null, 2)}\n`);
+    const listPath = appScreenshotsPath(ROOT, app);
+    if (!dryRun) {
+      fs.mkdirSync(path.dirname(listPath), { recursive: true });
+      fs.writeFileSync(listPath, `${JSON.stringify(meta, null, 2)}\n`);
+    }
     summary.push(`${app}: ${meta.length} image(s)`);
   }
 

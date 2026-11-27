@@ -4,6 +4,14 @@ import path from 'node:path';
 import type { Browser, Page } from 'playwright';
 import type { RunScenesOptions, Scene, ScreenshotMeta, SnapOptions, Theme } from './types.js';
 
+/**
+ * Per-app screenshot list file under docs/apps/<app>/. Mirrors
+ * APP_SCREENSHOTS_FILE in scripts/docs/lib/app-doc-files.mjs (this package
+ * cannot import that .mjs module); scripts/lib/docs-app-files.test.mjs fails
+ * if the two drift. meta.json is extract.mjs's file and is never written here.
+ */
+export const APP_SCREENSHOTS_FILE = 'screenshots.json';
+
 const VIEWPORT = { width: 1440, height: 900 };
 const DEFAULT_BASE_URL = 'http://localhost';
 const DEFAULT_TIMEOUT = 15_000;
@@ -193,7 +201,8 @@ export interface SceneResult {
  * Run a list of scenes for a given app, capturing each scene in both light
  * and dark themes.
  *
- * Returns per-scene results and writes a `meta.json` alongside the screenshots.
+ * Returns per-scene results and writes the per-app `screenshots.json` list
+ * beside the screenshots.
  */
 export async function runScenes(
   browser: Browser,
@@ -258,8 +267,8 @@ export async function runScenes(
     await page.context().close();
   }
 
-  // Write meta.json
-  const metaPath = path.join(outputRoot, app, 'meta.json');
+  // Write the screenshot list (never meta.json, which is extract.mjs's counts file, #400)
+  const metaPath = path.join(outputRoot, app, APP_SCREENSHOTS_FILE);
   fs.mkdirSync(path.dirname(metaPath), { recursive: true });
   fs.writeFileSync(metaPath, JSON.stringify(allMeta, null, 2) + '\n');
 

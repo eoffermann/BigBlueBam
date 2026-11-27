@@ -14,6 +14,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseToolsFromFile, APP_TOOL_MODULES, TOOLS_DIR, readLaunchpadCatalog } from './lib/tool-source.mjs';
+import { appMetaPath } from './lib/app-doc-files.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -229,7 +230,7 @@ function buildAppMetadata(appName, reg) {
 function detectChanges(allMeta) {
   const changed = [];
   for (const meta of allMeta) {
-    const prevPath = path.join(ROOT, 'docs', 'apps', meta.app, 'meta.json');
+    const prevPath = appMetaPath(ROOT, meta.app);
     if (!fs.existsSync(prevPath)) {
       changed.push({ app: meta.app, reason: 'new' });
       continue;
@@ -322,7 +323,8 @@ function main() {
   for (const { appName, appDocsDir, allTools, meta } of appResults) {
     writeToolsMarkdown(appName, allTools, appDocsDir);
 
-    const metaPath = path.join(appDocsDir, 'meta.json');
+    // extract.mjs is the only writer of meta.json (#400, lib/app-doc-files.mjs).
+    const metaPath = appMetaPath(ROOT, appName);
     if (!dryRun) {
       ensureDir(appDocsDir);
       fs.writeFileSync(metaPath, JSON.stringify(withStableTimestamp(meta, metaPath), null, 2) + '\n', 'utf-8');

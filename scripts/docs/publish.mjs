@@ -16,6 +16,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { readLaunchpadCatalog, docDirForAppId } from './lib/tool-source.mjs';
 import { syncSiteScreenshots } from './sync-site-screenshots.mjs';
+import { appMetaPath, readAppMeta } from './lib/app-doc-files.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -357,9 +358,9 @@ function generateAppCard(appName, meta, productCount) {
   // hand-curated display name.
   const heading = help && help.heading ? help.heading : displayName(appName);
 
-  // Counts line kept as a secondary detail. A meta.json written by the
-  // docs-capture bridge is the screenshot array, with no counts: omit the line
-  // rather than print "undefined routes, undefined schemas".
+  // Counts line kept as a secondary detail. meta.json is always extract's
+  // counts object (#400; readAppMeta refuses anything else), but an app whose
+  // extract found no API dir still has no numbers to print.
   const hasCounts = typeof meta.route_files === 'number' && typeof meta.schema_modules === 'number';
   const counts = !hasCounts
     ? ''
@@ -637,20 +638,27 @@ function main() {
   const allAppDirs = fs.readdirSync(appsDir, { withFileTypes: true })
     .filter((d) => d.isDirectory())
     .map((d) => d.name)
-    .filter((name) => fs.existsSync(path.join(appsDir, name, 'meta.json')));
+    .filter((name) => fs.existsSync(appMetaPath(ROOT, name)));
 
   const appNames = requestedApps
     ? allAppDirs.filter((name) => requestedApps.includes(name))
     : allAppDirs;
 
-  // Load all app metadata
+  // Load all app metadata. A meta.json that is not extract's counts object
+  // (#400) is a pipeline bug, not a card to drop quietly from the README.
   const appMetas = {};
+  const metaErrors = [];
   for (const name of appNames) {
     try {
-      appMetas[name] = JSON.parse(fs.readFileSync(path.join(appsDir, name, 'meta.json'), 'utf-8'));
+      appMetas[name] = readAppMeta(ROOT, name);
     } catch (err) {
-      console.error(`  WARNING: Could not read meta.json for ${name}: ${err.message}`);
+      metaErrors.push(`${name}: ${err.message}`);
     }
+  }
+  if (metaErrors.length > 0) {
+    console.error('ERROR: unreadable docs/apps/<app>/meta.json:');
+    for (const e of metaErrors) console.error(`  - ${e}`);
+    process.exit(1);
   }
 
   // The README app catalog is the Launchpad roster (plus the suite introduction):

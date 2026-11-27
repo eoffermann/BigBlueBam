@@ -150,9 +150,9 @@ export const RecipeSchema = z.object({
    * Opt-in marker that this capture is a curated doc/marketing image. When set,
    * `scripts/docs/bridge.mjs` copies the shot into
    * `docs/apps/<app>/screenshots/<theme>/<NN>-<slug>.png` and regenerates the
-   * per-app `meta.json`. `order` is the ordinal (give a light recipe and its
+   * per-app `screenshots.json`. `order` is the ordinal (give a light recipe and its
    * `-dark` sibling the SAME order so they pair into light/ and dark/); `label`
-   * is the human caption stored in meta.json. Recipes without `doc` are still
+   * is the human caption stored in screenshots.json. Recipes without `doc` are still
    * captured but are NOT published into the docs.
    */
   doc: z
