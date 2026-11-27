@@ -336,8 +336,10 @@ export interface MyAttestationRow {
   current_version: number | null;
   shared_with_everyone: boolean;
   due: boolean;
-  /** Whether the Beacon article can be read and acknowledged (#244). */
-  article_state?: PolicyArticleState;
+  /** Nothing can be read or acknowledged right now (the article is not current) (#296). */
+  paused?: boolean;
+  /** Whether the Beacon article can be read and acknowledged (#244); null when you cannot open the article (#296). */
+  article_state?: PolicyArticleState | null;
   state_words: string;
   last_attested_version: number | null;
   last_attested_at: string | null;

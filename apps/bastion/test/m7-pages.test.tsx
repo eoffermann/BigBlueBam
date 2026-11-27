@@ -249,6 +249,34 @@ describe('Policies to read', () => {
     expect(screen.queryByText(/next by/)).toBeNull();
   });
 
+  it('a paused policy whose article you cannot open shows no state and no read action (#296)', async () => {
+    fetchMock = routedFetch({
+      'GET /bastion/api/v1/me/attestations': () =>
+        jsonResponse(200, {
+          data: [
+            {
+              policy_id: POLICY_ID,
+              title: 'Island Information Security Policy',
+              current_version: 3,
+              shared_with_everyone: false,
+              due: false,
+              paused: true,
+              article_state: null,
+              state_words: 'Nothing to do for now.',
+              last_attested_version: null,
+              last_attested_at: null,
+              next_due_at: null,
+            },
+          ],
+        }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    wrap(<AttestPage />, VIEWER);
+    expect(await screen.findByText('Nothing to do for now.')).toBeInTheDocument();
+    expect(screen.queryByText('Read again')).toBeNull();
+    expect(screen.queryByText('Read it')).toBeNull();
+  });
+
   it('without attestation.sign there is no button', async () => {
     wrap(<AttestPage />, { ...VIEWER, 'bastion.attestation.sign': false });
     fireEvent.click(await screen.findByText('Read it'));

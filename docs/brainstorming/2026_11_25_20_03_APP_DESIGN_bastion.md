@@ -677,6 +677,13 @@ policy is no longer shared with everyone" if it was narrowed), then serves the e
 records the version and body hash. A new version resets the requirement. Agents and impersonated
 sessions cannot attest.
 
+A policy whose article is deleted, retired or archived, or past its Beacon review date is paused
+(build decisions #244, #285, #296): nobody is due or nudged, body, attest and request-attestations
+refuse it (404 for a deleted article, 409 `POLICY_ARTICLE_RETIRED` / `POLICY_ARTICLE_EXPIRED`),
+and "Policies to read" says which in plain words and offers no read action. Which of the three
+happened is a Beacon fact, so it is shown only to a viewer who can open the article or who
+manages the policy (its owner or `bastion.policy.write`); anyone else sees "Nothing to do for now."
+
 ---
 
 ## 4. Data model and migrations

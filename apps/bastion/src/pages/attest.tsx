@@ -81,7 +81,8 @@ export function AttestPage() {
         {rows.map((r) => {
           // #285: a paused policy (its article removed, withdrawn or past review) has nothing to
           // read, so no button and no "next by" date: an action the server would refuse is hidden.
-          const readable = (r.article_state ?? 'current') === 'current';
+          // #296: `paused` without a state when the reader cannot open the article.
+          const readable = !r.paused && (r.article_state ?? 'current') === 'current';
           return (
             <li key={r.policy_id} className="py-3 flex items-center justify-between gap-4" data-testid="to-read-row">
               <div>

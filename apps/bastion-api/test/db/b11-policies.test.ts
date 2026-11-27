@@ -135,7 +135,7 @@ describe.skipIf(!DATABASE_URL)('batch 11: policies and attestation (live databas
     await sql`UPDATE beacon_entries SET status = 'Retired' WHERE id = ${s.entry}`;
     const listed = (await listPolicies(d, owner, { status: 'active' })).data[0]!;
     expect(listed).toMatchObject({ article_state: 'retired', not_attested_count: 0, attestation_label: null });
-    expect(listed.article_problem).toContain('retired or archived in Beacon');
+    expect(listed.article_problem).toContain('withdrawn (retired or archived) in Beacon');
     const nudge = await attestationNudge(d.engine, { organization_id: s.org });
     expect(nudge).toMatchObject({ nudged: 0, due_people: 0, unreadable_policies: 1 });
     await expect(attest(d, owner, policyId, good)).rejects.toMatchObject({ code: 'POLICY_ARTICLE_RETIRED' });
@@ -181,6 +181,30 @@ describe.skipIf(!DATABASE_URL)('batch 11: policies and attestation (live databas
     }))[0]!.f as { summary: Record<string, unknown>; cited_count: number };
     expect(probe.summary).toMatchObject({ policy_found: true, article_state: 'missing' });
     expect(probe.cited_count).toBe(0);
+  });
+
+  it('the article state is withheld from a viewer who cannot open the article, and told to its manager (#296)', async () => {
+    const s = await setUp('state-gate');
+    const owner = viewer(s.org, s.owner);
+    const member = { ...viewer(s.org, s.people[0]!), role: 'member' };
+    const d: PolicyDeps = {
+      ...deps(),
+      // The member cannot open the article in Beacon (restricted audience or project); the owner can.
+      canAccess: async (asker) => asker !== member.id,
+    };
+    const policyId = (await createPolicy(d, owner, { beacon_entry_id: s.entry, audience: { kind: 'all' }, cadence_days: 365 })).data.id;
+    await sql`UPDATE beacon_entries SET status = 'Retired' WHERE id = ${s.entry}`;
+
+    const seen = (await listPolicies(d, member, { status: 'active' })).data[0]!;
+    expect(seen).toMatchObject({ article_state: null, article_problem: null, beacon_status: null });
+    const mine = (await myAttestations(d, member)).data[0]!;
+    expect(mine).toMatchObject({ due: false, paused: true, article_state: null, state_words: 'Nothing to do for now.' });
+    await expect(requestAttestations(d, member, policyId, {})).rejects.toMatchObject({ code: 'POLICY_NOT_READABLE' });
+
+    // The owner (and anyone with bastion.policy.write) is told, since they act on it.
+    expect((await listPolicies(d, owner, { status: 'active' })).data[0]).toMatchObject({ article_state: 'retired' });
+    expect((await listPolicies(d, member, { status: 'active' }, { policyWrite: true })).data[0]).toMatchObject({ article_state: 'retired' });
+    await expect(requestAttestations(d, member, policyId, {}, { policyWrite: true })).rejects.toMatchObject({ code: 'POLICY_ARTICLE_RETIRED' });
   });
 
   it('a double submit of one attestation answers both requests, once created and once not, never a 500 (#245)', async () => {

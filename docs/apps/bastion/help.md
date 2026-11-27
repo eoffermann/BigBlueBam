@@ -213,6 +213,8 @@ To link a policy (owners and admins):
 
 **Ask people to read it** sends a reminder to everyone who has not read the current version. **Retire** stops tracking a policy; tick **Show retired policies** to see retired ones.
 
+If the Beacon article behind a policy is removed, withdrawn (retired or archived) or past its review date, nobody is asked to read it and acknowledgements pause. The policy shows a red note saying which, and what to do: restore the article in Beacon, or click **Link a Beacon article** to add its replacement and then **Retire** this one. A policy cannot be pointed at a different article. Only people who can open the article in Beacon, and the people who manage the policy, see which of these happened.
+
 ### Policies to read
 
 **Policies to read** (`/bastion/attest`) is every person's own list.
@@ -224,6 +226,8 @@ To link a policy (owners and admins):
 3. Click **I have read and understood this**.
 
 Bastion records which version you read. Only you can do this for yourself: it cannot be done while someone is viewing Bastion as you, and agents cannot do it. **Read again** opens a policy you have already acknowledged.
+
+A policy with nothing to read right now has no button, and says why: "This policy's article was removed. Nothing to do.", "This policy was withdrawn. Nothing to do.", or "Paused while its owner reviews it. Nothing to do for now." If you cannot open the article in Beacon yourself and do not own the policy, it only says "Nothing to do for now."
 
 ### Questionnaires
 

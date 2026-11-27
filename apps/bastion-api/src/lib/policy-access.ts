@@ -32,6 +32,12 @@ export const ARTICLE_READER_WORDS: Record<Exclude<ArticleState, 'current'>, stri
   expired: 'Paused while its owner reviews it. Nothing to do for now.',
 };
 
+/**
+ * What a reader who cannot open the article sees for a paused policy (#296): nothing to do, and
+ * nothing about whether Beacon retired, expired or deleted an article they may not see.
+ */
+export const ARTICLE_PAUSED_NEUTRAL_WORDS = 'Nothing to do for now.';
+
 /** The article state from a loaded row (the same rule as the v2 probe). */
 export function articleStateOf(p: { entry_status: string | null; version: number | null; expires_at: string | Date | null }, asOf: Date): ArticleState {
   if (p.entry_status === null || p.version === null) return 'missing';
