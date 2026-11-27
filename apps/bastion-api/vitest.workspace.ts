@@ -1,13 +1,15 @@
 import { defineWorkspace } from 'vitest/config';
+import { DB_HOOK_TIMEOUT_MS, DB_TEST_TIMEOUT_MS } from '../../vitest.db-policy.mjs';
 
-// The ONE place bastion-api's test timeouts live (#320). The DB-backed suites under test/db each
+// The ONE place bastion-api's test projects live (#320). The DB-backed suites under test/db each
 // used to set their own (vi.setConfig in 14 files, vitest's 10 s hook default in 5 more), and
 // m3-services hit that 10 s hook ceiling in a full parallel run: seeding an org through the real
 // migrations is slow on a loaded Windows host, and the first test in a file also pays the cold
 // module load (beacon-api needed 300 s for it in the same session). A DB hook or test that is
-// merely slow under load must not read as a failure; a hang still fails, after this budget.
-export const DB_TEST_TIMEOUT_MS = 300_000;
-export const DB_HOOK_TIMEOUT_MS = 300_000;
+// merely slow under load must not read as a failure; a hang still fails, after this budget. The
+// budget itself is the workspace-wide one in vitest.db-policy.mjs (#385), re-exported here for
+// test/db-suite-hygiene.test.ts.
+export { DB_HOOK_TIMEOUT_MS, DB_TEST_TIMEOUT_MS };
 
 export default defineWorkspace([
   {

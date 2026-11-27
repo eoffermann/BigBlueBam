@@ -28,7 +28,12 @@
 //      must be NULLIF(current_setting(...), '')::uuid (an emptied GUC is '').
 //   6. drop-column-separate-release (#375): no DROP COLUMN on a table the
 //      same file adds a column to; the contract ships in a later release.
-//   (5 and 6 live in scripts/lib/migration-lint-rules.mjs, unit tested.)
+//   7. unique-sequence-prefix (#386): no two files share a 4-digit prefix.
+//      Same-numbered files apply in accidental alphabetical order. The
+//      historical pairs (0141, 0226, 0227) were applied everywhere and must
+//      never be renamed; they are suppressed at line 0 in
+//      OFF_FILE_SUPPRESSIONS, so only a NEW duplicate is flagged.
+//   (5, 6 and 7 live in scripts/lib/migration-lint-rules.mjs, unit tested.)
 //
 // Inline escape: append `-- noqa: <rule-name>` on the offending line to
 // silence a single rule. Use sparingly and only with justification.
@@ -53,12 +58,17 @@ import { fileURLToPath } from 'node:url';
 import { findTopLevelTransactionControl } from './lib/sql-top-level.mjs';
 import {
   findBareOrgGucCasts,
+  findDuplicateSequencePrefixes,
   findSameFileAddDropColumn,
   stripSqlComments,
 } from './lib/migration-lint-rules.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const MIGRATIONS_DIR = resolve(__dirname, '..', 'infra', 'postgres', 'migrations');
+// LINT_MIGRATIONS_DIR exists so scripts/lib/migration-lint-rules.test.mjs can run this exact
+// linter over a fixture directory; CI and developers use the default.
+const MIGRATIONS_DIR = process.env.LINT_MIGRATIONS_DIR
+  ? resolve(process.env.LINT_MIGRATIONS_DIR)
+  : resolve(__dirname, '..', 'infra', 'postgres', 'migrations');
 
 const FILENAME_RE = /^[0-9]{4}_[a-z][a-z0-9_]*\.sql$/;
 const HEADER_SCAN_LINES = 20;
@@ -213,11 +223,13 @@ const OFF_FILE_SUPPRESSIONS = {
     58: ['org-guc-nullif'],
   },
   '0226_basis_core.sql': {
+    0: ['unique-sequence-prefix'], // #386, see the historical-pairs block below
     94: ['org-guc-nullif'],
     99: ['org-guc-nullif'],
     104: ['org-guc-nullif'],
   },
   '0227_basis_snapshots_explanations.sql': {
+    0: ['unique-sequence-prefix'], // #386, see the historical-pairs block below
     57: ['org-guc-nullif'],
     88: ['org-guc-nullif'],
   },
@@ -283,6 +295,18 @@ const OFF_FILE_SUPPRESSIONS = {
   '0355_rls_policies_nullif_org_guc.sql': {
     15: ['org-guc-nullif'],
   },
+  // unique-sequence-prefix (#386): three historical pairs share a prefix. All
+  // six files are applied everywhere and keyed by full filename in
+  // schema_migrations, so renaming one would re-run it as a new migration;
+  // they stay as they are. Line 0 is the filename-level slot. Any other file
+  // that takes one of these prefixes is still flagged. 0226_basis_core.sql
+  // and 0227_basis_snapshots_explanations.sql already have entries above (a
+  // second key for a file would silently replace the first), so their line-0
+  // suppression lives there.
+  '0141_book_event_livekit_room.sql': { 0: ['unique-sequence-prefix'] },
+  '0141_users_created_by.sql': { 0: ['unique-sequence-prefix'] },
+  '0226_platform_backups.sql': { 0: ['unique-sequence-prefix'] },
+  '0227_permissions_seed_actions_delta_020.sql': { 0: ['unique-sequence-prefix'] },
 };
 
 function hasOffFileSuppression(filename, lineNumber, rule) {
@@ -469,6 +493,19 @@ function main() {
 
   let totalViolations = 0;
   let totalWarnings = 0;
+
+  // Rule 7: unique-sequence-prefix (#386). Every file in a shared-prefix group
+  // is reported unless it is one of the suppressed historical files.
+  for (const { prefix, files: group } of findDuplicateSequencePrefixes(files)) {
+    for (const filename of group) {
+      if (hasOffFileSuppression(filename, 0, 'unique-sequence-prefix')) continue;
+      const others = group.filter((f) => f !== filename).join(', ');
+      console.error(
+        `${filename}:0  [unique-sequence-prefix] sequence ${prefix} is also used by ${others}; renumber this migration to the next free number (only if it has not been applied anywhere)`,
+      );
+      totalViolations++;
+    }
+  }
 
   for (const filename of files) {
     const content = readFileSync(join(MIGRATIONS_DIR, filename), 'utf8');

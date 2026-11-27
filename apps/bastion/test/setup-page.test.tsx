@@ -8,7 +8,8 @@ vi.mock('@bigbluebam/ui/impersonation-banner', () => ({
 }));
 
 import { SetupPage } from '@/pages/setup';
-import { EMPTY_STEPS, VIEWER_PERMISSIONS, jsonResponse, routedFetch, setupState, wrap } from './helpers';
+import type { QueryClient } from '@tanstack/react-query';
+import { EMPTY_STEPS, VIEWER_PERMISSIONS, jsonResponse, routedFetch, settled, setupState, wrap } from './helpers';
 
 const POP_CHECK = {
   id: 'a-pop',
@@ -87,8 +88,11 @@ function mount(
       ...(opts.routes ?? {}),
     }),
   );
-  wrap(<SetupPage />, opts.permissions);
+  qc = wrap(<SetupPage />, opts.permissions).qc;
 }
+
+/** The mounted page's query client, so a test can wait for a mutation's refetch to settle (#384). */
+let qc: QueryClient;
 
 /** Record a request the way the built-in routes do (for routes a test adds). */
 function recorded(respond: () => Response) {
@@ -103,7 +107,10 @@ beforeEach(() => {
   document.cookie = 'csrf_token=tok123';
 });
 
-afterEach(() => {
+afterEach(async () => {
+  // Every setup mutation invalidates the bastion queries; let that refetch land inside act()
+  // before unmounting, so it can never settle after the test and trip the #224 guard (#384).
+  await settled(qc);
   cleanup();
   vi.unstubAllGlobals();
 });
