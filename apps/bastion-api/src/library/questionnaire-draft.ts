@@ -26,6 +26,15 @@ export const DRAFT_PROMPT_VERSION = 1;
 export const MAX_CANDIDATES = 8;
 /** A reused library answer must rank at least this well to be offered without the model. */
 export const LIBRARY_REUSE_MIN_RANK = 0.1;
+/**
+ * Without the model, a library answer is reused only for the SAME question (#388): the content
+ * words of the asked question and of the question the answer was approved for must overlap at
+ * least this much (Dice coefficient over normalized words). The lexical retrieval is an OR query,
+ * so one shared word ("every", "company", "year") ranks an unrelated answer above
+ * LIBRARY_REUSE_MIN_RANK; rank alone reused the laptop answer, and its control, for two-step
+ * sign-in and leaver access.
+ */
+export const LIBRARY_REUSE_MIN_OVERLAP = 0.6;
 
 export interface DraftCitedRef {
   entity_type: string;
@@ -145,6 +154,29 @@ export function tsQueryTerms(question: string, max = 24): string {
   return [...new Set(words)].slice(0, max).join(' | ');
 }
 
+/**
+ * The content words of a question, lightly stemmed (plural, -ed, -ing and a final -e, so
+ * "replace", "replaced" and "replaces" are one word), for comparing two questions.
+ */
+export function questionWords(question: string): Set<string> {
+  const out = new Set<string>();
+  for (const w of tsQueryTerms(question, 64).split(' | ')) {
+    if (!w) continue;
+    out.add(w.replace(/ies$/, 'y').replace(/(?:ing|ed|es|s|e)$/, '') || w);
+  }
+  return out;
+}
+
+/** How alike two questions are (#388): the Dice coefficient of their content words, 0 to 1. */
+export function questionOverlap(a: string, b: string): number {
+  const x = questionWords(a);
+  const y = questionWords(b);
+  if (x.size === 0 || y.size === 0) return 0;
+  let shared = 0;
+  for (const w of x) if (y.has(w)) shared += 1;
+  return (2 * shared) / (x.size + y.size);
+}
+
 /* ------------------------------ prompt ------------------------------ */
 
 const SYSTEM = [
@@ -241,8 +273,14 @@ export function bandAnswer(input: BandInput): BandResult {
   let dropped = 0;
 
   if (input.response === null) {
-    // No AI answer: reuse a strong, current approved answer from the library, else nothing.
-    const lib = input.candidates.filter((c) => c.kind === 'library' && c.library && c.rank >= LIBRARY_REUSE_MIN_RANK).sort((a, b) => b.rank - a.rank)[0];
+    // No AI answer: reuse a current approved answer from the library that was approved for this
+    // same question (#388), the closest match first, else nothing. Its citations are the controls
+    // it was approved against, so an answer about another subject must never be picked by rank.
+    const lib = input.candidates
+      .filter((c) => c.kind === 'library' && c.library && c.rank >= LIBRARY_REUSE_MIN_RANK)
+      .map((c) => ({ c, overlap: questionOverlap(input.question, c.title) }))
+      .filter((x) => x.overlap >= LIBRARY_REUSE_MIN_OVERLAP)
+      .sort((a, b) => b.overlap - a.overlap || b.c.rank - a.c.rank)[0]?.c;
     if (!lib?.library) {
       return {
         draft_answer: null,

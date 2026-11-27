@@ -255,7 +255,7 @@ To answer a questionnaire:
 
 ### Answer library
 
-The **Answer library** on the Questionnaires page keeps every answer you approved. Bastion reuses them in later questionnaires. When a control an answer relies on changes, the answer is marked to check again; an owner or admin clicks **It still holds** or **Retire**. Use **Search approved answers** to find one.
+The **Answer library** on the Questionnaires page keeps every answer you approved. Bastion reuses them in later questionnaires, but only for the same question (or one worded almost the same way), and a reused answer cites the controls it was approved against. A question no approved answer was written for is never given one about another subject. When a control an answer relies on changes, the answer is marked to check again; an owner or admin clicks **It still holds** or **Retire**. Use **Search approved answers** to find one.
 
 ### Sharing: auditor rooms
 

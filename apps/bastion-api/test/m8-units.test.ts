@@ -195,7 +195,7 @@ describe('banding (spec 2.7 step 6)', () => {
   });
 
   it('without an AI answer: a strong library answer is reused at medium; otherwise nothing, low', () => {
-    const lib: DraftCandidate = { handle: 'L1', kind: 'library', refs: [{ entity_type: 'bastion.control', entity_id: '00000000-0000-0000-0000-000000000001' }], title: 'q', text: '', rank: 0.4, library: { answer: 'Yes, MFA everywhere.', yes_no: true } };
+    const lib: DraftCandidate = { handle: 'L1', kind: 'library', refs: [{ entity_type: 'bastion.control', entity_id: '00000000-0000-0000-0000-000000000001' }], title: 'Do you require MFA?', text: '', rank: 0.4, library: { answer: 'Yes, MFA everywhere.', yes_no: true } };
     const c = [lib, ctrl('1', 'pass', { handle: 'X1' })];
     const b = bandAnswer({ question: 'Do you require MFA?', answer_kind: 'yes_no_text', candidates: c, visible: visibleAll(c), floors, response: null });
     expect(b.confidence_band).toBe('medium');

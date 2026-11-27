@@ -1071,14 +1071,26 @@ async function seedAnswerLibrary(orgId) {
 
 const LIVE_AI = process.env.BASTION_SEED_LIVE_AI === '1';
 
-/** True when the seeded story rows read as the expectations say (band and the reason codes). */
+/**
+ * Rows that reused a library answer approved for another question (#388): only the two story
+ * questions have an approved answer, so any other row carrying `reused_answer` borrowed an
+ * unrelated answer and its control (a draft from before the fix).
+ */
+function borrowedReuseRows(items) {
+  const m = EXP.m8.questionnaire;
+  const own = new Set([m.encryption.question, m.radioRelay.question]);
+  return items.filter((i) => !own.has(i.question_text) && (i.band_reasons ?? []).some((r) => r.code === 'reused_answer'));
+}
+
+/** True when the seeded story rows read as the expectations say (band and the reason codes), and no other row borrowed one. */
 function storyRowsMatch(items) {
   const m = EXP.m8.questionnaire;
-  return [m.encryption, m.radioRelay].every((row) => {
+  const story = [m.encryption, m.radioRelay].every((row) => {
     const it = items.find((i) => i.question_text === row.question);
     const codes = (it?.band_reasons ?? []).map((r) => r.code);
     return it && it.confidence_band === row.band && row.reasons.every((c) => codes.includes(c));
   });
+  return story && borrowedReuseRows(items).length === 0;
 }
 
 /** Howell's xlsx goes into Bin, becomes a questionnaire with the guessed columns, and is autofilled. */
@@ -1139,7 +1151,9 @@ async function verifyM8(q) {
     if (rr.confidence_band !== m.radioRelay.band) problems.push(`the Radio Relay row is ${rr.confidence_band}, expected ${m.radioRelay.band} (${JSON.stringify(rr.band_reasons)})`);
     if (!String(rr.draft_answer ?? '').includes(m.radioRelay.mentions)) problems.push(`the Radio Relay row does not name the exception: "${rr.draft_answer}"`);
   }
-  if (!storyRowsMatch(items.data)) problems.push(`the story rows do not carry the expected reasons (${[m.encryption, m.radioRelay].map((r) => r.reasons.join('+')).join(', ')})`);
+  const borrowed = borrowedReuseRows(items.data);
+  if (borrowed.length > 0) problems.push(`${borrowed.length} row(s) reuse an approved answer written for another question: ${borrowed.map((i) => `"${i.question_text}"`).join(', ')}`);
+  else if (!storyRowsMatch(items.data)) problems.push(`the story rows do not carry the expected reasons (${[m.encryption, m.radioRelay].map((r) => r.reasons.join('+')).join(', ')})`);
   if (items.approval.can_approve) problems.push('Approve is available before the "Needs an expert" rows are reviewed');
   log(`M8: ${q.title}: ${items.approval.blocked_because.join('; ')}`);
   if (problems.length && LIVE_AI) {
