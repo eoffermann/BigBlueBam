@@ -37,4 +37,11 @@ infra/nginx/** text eol=lf
 # guards, so they must be LF for the same reason.
 site/src/content/*.generated.json text eol=lf
 
+# Permission catalog artifacts are regenerated (LF) by scripts/check-permission-catalog.mjs
+# and compared with the committed copies; pin them to LF so a Windows checkout
+# never reports line-ending-only drift (issue #361). The checker also ignores
+# line endings when it compares.
+docs/permissions-action-manifest.json text eol=lf
+packages/permissions/src/generated/*.ts text eol=lf
+
 # SQL migrations and the remaining docs are fine as default (LF on Unix, whatever on Win)

@@ -37,6 +37,18 @@ function readFile(path) {
   return readFileSync(path, 'utf8');
 }
 
+/**
+ * True when a regenerated artifact matches the committed copy, ignoring line
+ * endings. The generators write LF; a Windows checkout with core.autocrlf
+ * gives the working copy CRLF, which is not drift (git normalizes it on
+ * commit). Issue #361: the byte comparison reported false drift on every
+ * Windows session.
+ */
+export function sameArtifactText(fresh, committed) {
+  const norm = (s) => s.replace(/\r\n?/g, '\n');
+  return norm(fresh) === norm(committed);
+}
+
 function ensureDir(path) {
   mkdirSync(dirname(path), { recursive: true });
 }
@@ -80,7 +92,7 @@ function regenerate() {
   for (const f of COMMITTED_FILES) {
     const fresh = readFile(join(ROOT, f));
     const committed = readFile(join(tmp, f));
-    if (fresh !== committed) drifted.push(f);
+    if (!sameArtifactText(fresh, committed)) drifted.push(f);
   }
 
   // Restore the committed copies on drift, so this script doesn't leave
