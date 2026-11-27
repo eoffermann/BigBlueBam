@@ -2125,6 +2125,31 @@ export type BastionMirrorEngine = z.infer<typeof bastionMirrorEngineSchema>;
 export const BastionMirrorStatus = z.enum(['not_configured', 'running', 'completed', 'partial', 'failed']);
 export type BastionMirrorStatus = z.infer<typeof BastionMirrorStatus>;
 
+/**
+ * Object transfer bounds, shared by bastion-api (the off-site mirror copy) and the worker (the
+ * packet upload, the mirror call timeout), so every deadline is derived from one fact (#332).
+ *
+ * The slowest sustained transfer rate Bastion waits for: 512 KB/s.
+ */
+export const BASTION_MIN_TRANSFER_BYTES_PER_S = 512 * 1024;
+/** The largest evidence object Bastion stores (a manual upload; machine evidence is far smaller). */
+export const BASTION_MAX_EVIDENCE_OBJECT_BYTES = 100 * 1024 * 1024;
+/** Deadline for moving `bytes` at the floor rate, never under `floorMs`. */
+export function bastionTransferTimeoutMs(bytes: number, floorMs: number): number {
+  return Math.max(floorMs, Math.ceil(Math.max(0, bytes) / BASTION_MIN_TRANSFER_BYTES_PER_S) * 1000);
+}
+/** Minimum deadline for one mirror copy (small objects). */
+export const BASTION_MIRROR_COPY_FLOOR_MS = 60_000;
+/** Deadline for copying the largest evidence object to the mirror (200 s at the floor rate). */
+export const BASTION_MIRROR_MAX_COPY_MS = bastionTransferTimeoutMs(BASTION_MAX_EVIDENCE_OBJECT_BYTES, BASTION_MIRROR_COPY_FLOOR_MS);
+/** Copy time one mirror-objects call starts new copies within (a started copy may run past it). */
+export const BASTION_MIRROR_TIME_BUDGET_MS = 20_000;
+/**
+ * How long the worker waits for one mirror-objects call: the budget, plus one copy of the largest
+ * object started at its end, plus a minute for the source read and the bookkeeping.
+ */
+export const BASTION_MIRROR_CALL_TIMEOUT_MS = BASTION_MIRROR_TIME_BUDGET_MS + BASTION_MIRROR_MAX_COPY_MS + 60_000;
+
 /** 200 `data` of the mirror-objects engine. `complete: false` means call again (the budget ran out). */
 export const bastionMirrorResultSchema = z.object({
   status: BastionMirrorStatus,

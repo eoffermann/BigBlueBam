@@ -378,7 +378,7 @@ A few things happen without anyone clicking:
 
 - **The nightly check.** At the check time in Settings, Bastion checks every confirmed control, records each result in its history, and re-ranks What to fix first. If a control gets worse, Bastion files or reopens its Bam task in the Compliance project. A check that fails for a technical reason never counts as a compliance failure; Bastion tries again the next night.
 - **Daily seals.** Once a day Bastion signs the latest point of its history.
-- **Off-site evidence backup.** Every night, after the database backup, Bastion copies new evidence files to a separate off-site backup, if one is configured. A failed copy never fails the database backup. Readiness warns when no off-site backup is configured.
+- **Off-site evidence backup.** Every night, after the database backup, Bastion copies new evidence files to a separate off-site backup, if one is configured. A failed copy never fails the database backup. Large files get more time to copy (at least a minute, more for big files). If one file still cannot be copied, Bastion skips it, copies the rest, shows "Partly copied, continues after the next backup", and tries that file again after the next backup. Readiness warns when no off-site backup is configured.
 - **Clean-up.** A daily sweep removes leftover copies of files whose save never finished.
 - **Reminders.** People who have not read a policy are reminded once each period, and uploaded evidence is flagged before it expires.
 

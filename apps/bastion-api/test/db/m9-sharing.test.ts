@@ -2,10 +2,19 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { randomUUID } from 'node:crypto';
 import postgres from 'postgres';
 import argon2 from 'argon2';
-import { BASTION_ROOM_PASSCODE_MAX_FAILURES, BASTION_ROOM_REQUESTS_PER_HOUR, BASTION_ROOM_TOKEN_MISSES } from '@bigbluebam/shared';
+import {
+  BASTION_MAX_EVIDENCE_OBJECT_BYTES,
+  BASTION_MIRROR_CALL_TIMEOUT_MS,
+  BASTION_MIRROR_COPY_FLOOR_MS,
+  BASTION_MIRROR_MAX_COPY_MS,
+  BASTION_MIRROR_TIME_BUDGET_MS,
+  BASTION_ROOM_PASSCODE_MAX_FAILURES,
+  BASTION_ROOM_REQUESTS_PER_HOUR,
+  BASTION_ROOM_TOKEN_MISSES,
+} from '@bigbluebam/shared';
 import type { EngineDeps } from '../../src/engine/context.js';
 import { verifyCommitments } from '../../src/engine/commitments.js';
-import { mirrorObjects, objectSweep, restoreObjectsFromBackup, SWEEP_INTENT_AGE_MS } from '../../src/engine/objects.js';
+import { mirrorCopyTimeoutMs, mirrorObjects, objectSweep, restoreObjectsFromBackup, SWEEP_INTENT_AGE_MS } from '../../src/engine/objects.js';
 import { storeBuffer } from '../../src/engine/evidence-store.js';
 import { sha256Hex } from '../../src/lib/ledger-canonical.js';
 import { clock, DATABASE_URL, fakeBucket, type FakeBucket, makeDeps, seedOrg, type SeededOrg, wipeOrg } from './engine-harness.js';
@@ -265,15 +274,6 @@ describe.skipIf(!DATABASE_URL)('M9 sharing, packets, sweep and mirror (live data
     }
   });
 
-  it('room reads stay inside the restricted allowlist; questions are capped at 20 an hour', async () => {
-    const s = await setUp('allow');
-    const d = deps(makeDeps(sql));
-    const open = await restrictedItem(s, 'Laptop list (standard)', 'standard', s.assertions[0]!);
-    const shared = await restrictedItem(s, 'Background checks (restricted, shared)', 'restricted', s.assertions[0]!);
-    const hidden = await restrictedItem(s, 'Salary review (restricted, not shared)', 'restricted', s.assertions[0]!);
-    // Sharing restricted evidence needs read_restricted.
-    await expect(
-      sharing.createRoom(d.sharing, viewerOf(s), { label: 'x', framework_id: s.framework, period_start: '2026-01-01', period_end: '2027-12-31', expires_in_days: 5, restricted_evidence_ids: [shared], confirm: true }, false),
   it('passcode: a try reserved by a request that died is not a miss and expires on its own (#327)', async () => {
     const s = await setUp('leak');
     const c = clock();
@@ -309,6 +309,15 @@ describe.skipIf(!DATABASE_URL)('M9 sharing, packets, sweep and mirror (live data
     expect(row.passcode_inflight).toEqual({});
   });
 
+  it('room reads stay inside the restricted allowlist; questions are capped at 20 an hour', async () => {
+    const s = await setUp('allow');
+    const d = deps(makeDeps(sql));
+    const open = await restrictedItem(s, 'Laptop list (standard)', 'standard', s.assertions[0]!);
+    const shared = await restrictedItem(s, 'Background checks (restricted, shared)', 'restricted', s.assertions[0]!);
+    const hidden = await restrictedItem(s, 'Salary review (restricted, not shared)', 'restricted', s.assertions[0]!);
+    // Sharing restricted evidence needs read_restricted.
+    await expect(
+      sharing.createRoom(d.sharing, viewerOf(s), { label: 'x', framework_id: s.framework, period_start: '2026-01-01', period_end: '2027-12-31', expires_in_days: 5, restricted_evidence_ids: [shared], confirm: true }, false),
     ).rejects.toThrow(/restricted evidence/);
     const created = await sharing.createRoom(d.sharing, viewerOf(s), {
       label: 'Allowlist',
@@ -542,6 +551,58 @@ describe.skipIf(!DATABASE_URL)('M9 sharing, packets, sweep and mirror (live data
     // leaves exactly the leftover the sweep removes a day later.
     const stored = await storeBuffer(engine, s.org, Buffer.from('statement'), 'text/plain');
     expect((await sql`SELECT 1 FROM bastion_object_intents WHERE object_key = ${stored.object_key}`).length).toBe(1);
+  });
+
+  it('off-site mirror: one object that cannot be copied in time is skipped and recorded; newer objects are still mirrored (#332)', async () => {
+    // The copy deadline follows the object size at the shared floor rate, and the worker waits long
+    // enough for the largest object's copy started at the end of a call's budget.
+    expect(mirrorCopyTimeoutMs(1024, 5_000)).toBe(BASTION_MIRROR_COPY_FLOOR_MS);
+    expect(mirrorCopyTimeoutMs(BASTION_MAX_EVIDENCE_OBJECT_BYTES, 5_000)).toBe(200_000);
+    expect(mirrorCopyTimeoutMs(10 * BASTION_MAX_EVIDENCE_OBJECT_BYTES, 5_000)).toBe(BASTION_MIRROR_MAX_COPY_MS);
+    expect(BASTION_MIRROR_CALL_TIMEOUT_MS).toBeGreaterThan(BASTION_MIRROR_TIME_BUDGET_MS + BASTION_MIRROR_MAX_COPY_MS);
+
+    const s = await setUp('mirror-stuck');
+    const source = fakeBucket();
+    const engine = makeDeps(sql, { bucket: source });
+    const put = async (body: Buffer, hoursAgo: number) => {
+      const key = `evidence/${s.org}/${sha256Hex(body)}.json`;
+      source.objects.set(key, { body, contentType: 'application/json', modifiedAt: new Date() });
+      await sql`INSERT INTO bastion_evidence_objects (organization_id, content_sha256, object_key, size_bytes, holder_count, created_at)
+                VALUES (${s.org}, ${sha256Hex(body)}, ${key}, ${body.length}, 1, now() - make_interval(hours => ${hoursAgo}))`;
+      return key;
+    };
+    // The oldest object is the one the link cannot carry in time; two newer ones are fine.
+    const big = await put(Buffer.from('{"evidence":"very large"}'), 6);
+    const newer = [await put(Buffer.from('{"evidence":"n1"}'), 3), await put(Buffer.from('{"evidence":"n2"}'), 2)];
+    const [b] = await sql`INSERT INTO platform_backups (kind, status, started_at, completed_at) VALUES ('manual', 'completed', now(), now()) RETURNING id`;
+    backups.push(b!.id as string);
+
+    const dest = fakeBucket();
+    const realPut = dest.put.bind(dest);
+    let bigTries = 0;
+    dest.put = async (key, body, opts) => {
+      if (key === big) {
+        bigTries += 1;
+        (body as { destroy?: () => void }).destroy?.();
+        throw Object.assign(new Error('put timed out after 200000 ms (test)'), { name: 'StorageTimeoutError' });
+      }
+      return realPut(key, body, opts);
+    };
+    let res = await mirrorObjects(engine, dest, { backup_id: b!.id as string });
+    for (let i = 0; !res.complete && i < 20; i++) res = await mirrorObjects(engine, dest, { backup_id: b!.id as string });
+    expect(res.status).toBe('partial');
+    for (const k of newer) {
+      expect(dest.objects.has(k)).toBe(true);
+      expect((await sql`SELECT mirrored_at FROM bastion_evidence_objects WHERE object_key = ${k}`)[0]!.mirrored_at).not.toBeNull();
+    }
+    expect(dest.objects.has(big)).toBe(false);
+    // Tried once in this pass, recorded on the object, not retried until the next pass.
+    expect(bigTries).toBe(1);
+    const row = (await sql`SELECT mirrored_at, mirror_attempts, mirror_last_error FROM bastion_evidence_objects WHERE object_key = ${big}`)[0]!;
+    expect(row.mirrored_at).toBeNull();
+    expect(Number(row.mirror_attempts)).toBe(1);
+    expect(String(row.mirror_last_error)).toMatch(/timed out/);
+    expect((await sql`SELECT bastion_mirror_status FROM platform_backups WHERE id = ${b!.id as string}`)[0]!.bastion_mirror_status).toBe('partial');
   });
 
   it('off-site mirror: copies objects and seals, records completed; a failing destination records failed and the backup stays completed', async () => {

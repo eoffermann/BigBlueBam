@@ -562,7 +562,9 @@ rows through Postgres.
   `WHEN` clause naming the protected columns, `BEFORE DELETE`, `ON DELETE RESTRICT`, `BEFORE
   TRUNCATE`). Protected columns per table: `bastion_evidence_snapshots` (all);
   `bastion_evidence_objects` (`content_sha256`, `object_key`, `size_bytes`, `content_type`,
-  `created_at`; `holder_count`, `mirrored_at`, `bytes_redacted_at` change in normal operation);
+  `created_at`; `holder_count`, `mirrored_at`, `bytes_redacted_at` and the mirror-attempt
+  columns `mirror_attempts`, `mirror_last_error`, `mirror_last_attempt_at` (#332) change in
+  normal operation);
   `bastion_manual_evidence` (every column except `status`, `blocked_reason`, `attempts`,
   `next_attempt_at`, `superseded_by_id`, `withdrawn_*`, `redacted_at`, `updated_at`);
   `bastion_feed_records` (all); `bastion_policy_attestations` (all); `bastion_exceptions` (every
@@ -1357,7 +1359,7 @@ in bastion-api.
 | `bastion-ledger-verify` | `40 4 * * 0` | budgeted re-hash, resume cursor |
 | `bastion-evaluation-missed` | `0 * * * *` | idempotent per org and `last_completed_at` |
 | `bastion-object-sweep` | `15 4 * * *` | calls bastion-api's `object-sweep` engine, which scans only `bastion_object_intents` older than 24 h (cost bounded by failed writes); paused for an org with an open restore row |
-| `bastion-object-backup` | event, **enqueued by `backup-database.job.ts` after the backup has recorded `completed`**, `jobId = backup.id` | calls bastion-api's `mirror-objects` engine (async-start, polled), which mirrors objects with `mirrored_at IS NULL` to the off-site destination within a per-run budget (5,000 objects or 2 GiB) with a resume cursor and progress lines, sets `mirrored_at`, and writes `platform_backups.bastion_mirror_status` and `bastion_mirror_cursor`; a mirror failure never changes the backup's own status |
+| `bastion-object-backup` | event, **enqueued by `backup-database.job.ts` after the backup has recorded `completed`**, `jobId = backup.id` | calls bastion-api's `mirror-objects` engine (async-start, polled), which mirrors objects with `mirrored_at IS NULL` to the off-site destination within a per-run budget (5,000 objects or 2 GiB) with a resume cursor and progress lines, sets `mirrored_at`, and writes `platform_backups.bastion_mirror_status` and `bastion_mirror_cursor`; a mirror failure never changes the backup's own status. Each copy's deadline follows the object size at the shared 512 KB/s floor (at least 60 s, at most the 100 MB object's 200 s), and the worker's call timeout is derived from the same constants. A copy that fails for one object (a timeout, say) is recorded on that object (`mirror_attempts`, `mirror_last_error`, `mirror_last_attempt_at`), skipped for the rest of the pass and retried next pass, fewest attempts first; only a destination-wide error (credentials, missing bucket) or 5 failures in a row end the pass `failed` (#332) |
 | `bastion-run-reaper` | `*/5 * * * *` | releases claims on resumable runs whose heartbeat exceeded the lease (`claimed_by = NULL`, status `queued`, **`resume_count` incremented on every release**) up to `resume_count` 3; only then `partial`; unwedges frameworks and questionnaires |
 | `bastion-weekly-readiness` | `0 13 * * 1` | via the outbox |
 | `bastion-retention` | `20 5 * * *` | prunes processed ingest and delivered or superseded outbox rows older than 30 days; calls the access-log purge |

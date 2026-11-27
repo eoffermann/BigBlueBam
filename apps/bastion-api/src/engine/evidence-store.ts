@@ -10,13 +10,18 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { PassThrough } from 'node:stream';
 import { withStorageTimeout, type StorageDriver } from '@bigbluebam/storage';
+import { BASTION_MAX_EVIDENCE_OBJECT_BYTES } from '@bigbluebam/shared';
 import { ConflictError, UnavailableError } from '../lib/errors.js';
 import { EVIDENCE_COPY_TIMEOUT_MS } from './budgets.js';
 import { type EngineDeps, orgTx, type Tx } from './context.js';
 
 export const MANUAL_OBJECT_PREFIX = 'manual';
-/** Largest single manual-evidence file Bastion will copy (Bin's own cap is larger). */
-export const MAX_MANUAL_EVIDENCE_BYTES = 100 * 1024 * 1024;
+/**
+ * Largest single manual-evidence file Bastion will copy (Bin's own cap is larger). The shared
+ * BASTION_MAX_EVIDENCE_OBJECT_BYTES, which the mirror's copy deadline and the worker's mirror call
+ * timeout are derived from (#332).
+ */
+export const MAX_MANUAL_EVIDENCE_BYTES = BASTION_MAX_EVIDENCE_OBJECT_BYTES;
 /** Copying a large file can take longer than a probe write; still bounded. */
 const COPY_TIMEOUT_MS = EVIDENCE_COPY_TIMEOUT_MS;
 

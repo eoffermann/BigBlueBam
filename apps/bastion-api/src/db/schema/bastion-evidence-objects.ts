@@ -16,6 +16,10 @@ export const bastionEvidenceObjects = pgTable(
     created_at: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
     bytes_redacted_at: timestamp('bytes_redacted_at', { withTimezone: true }),
     mirrored_at: timestamp('mirrored_at', { withTimezone: true }),
+    // Per-object mirror failures, so one object cannot block the rest (0317, #332).
+    mirror_attempts: integer('mirror_attempts').default(0).notNull(),
+    mirror_last_error: varchar('mirror_last_error', { length: 500 }),
+    mirror_last_attempt_at: timestamp('mirror_last_attempt_at', { withTimezone: true }),
   },
   (table) => [primaryKey({ columns: [table.organization_id, table.content_sha256] })],
 );

@@ -33,6 +33,7 @@ import {
 } from '@bigbluebam/storage';
 import {
   bastionPacketClaimSchema,
+  bastionTransferTimeoutMs,
   bastionVerifyCommitmentsResultSchema,
   toCsv,
   type BastionCommitmentResult,
@@ -83,9 +84,9 @@ export interface PacketJobDeps {
   heartbeatEveryMs?: number;
 }
 
-/** The upload bound: at least 15 minutes, else the packet limit at 512 KB/s. */
+/** The upload bound: at least 15 minutes, else the packet limit at the shared floor rate (512 KB/s). */
 export function packetUploadTimeoutMs(maxPacketBytes: number): number {
-  return Math.max(15 * 60_000, Math.ceil(maxPacketBytes / (512 * 1024)) * 1000);
+  return bastionTransferTimeoutMs(maxPacketBytes, 15 * 60_000);
 }
 
 const FINISH_ATTEMPTS = 3;

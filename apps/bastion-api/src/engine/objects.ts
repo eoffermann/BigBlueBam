@@ -17,7 +17,15 @@
 
 import type { Readable } from 'node:stream';
 import { type StorageDriver, isStorageNotFoundError, withStorageTimeout } from '@bigbluebam/storage';
-import type { BastionMirrorResult, BastionMirrorStatus, BastionObjectSweepResult } from '@bigbluebam/shared';
+import {
+  BASTION_MIRROR_COPY_FLOOR_MS,
+  BASTION_MIRROR_MAX_COPY_MS,
+  BASTION_MIRROR_TIME_BUDGET_MS,
+  bastionTransferTimeoutMs,
+  type BastionMirrorResult,
+  type BastionMirrorStatus,
+  type BastionObjectSweepResult,
+} from '@bigbluebam/shared';
 import { type EngineDeps, orgTx } from './context.js';
 import { listPages } from './restore.js';
 
@@ -108,7 +116,19 @@ export async function objectSweep(deps: EngineDeps, opts: { organization_id?: st
 export const MIRROR_BUDGET_OBJECTS = 5_000;
 export const MIRROR_BUDGET_BYTES = 2 * 1024 * 1024 * 1024;
 /** One engine call; the worker calls again while `complete` is false. */
-const MIRROR_TIME_BUDGET_MS = 20_000;
+const MIRROR_TIME_BUDGET_MS = BASTION_MIRROR_TIME_BUDGET_MS;
+/**
+ * Copies that fail one after another, with none succeeding in between, before the pass is treated
+ * as a destination problem and ends `failed` (#332). Fewer than this is a per-object problem: the
+ * object is recorded and skipped, and the pass goes on.
+ */
+export const MIRROR_MAX_CONSECUTIVE_FAILURES = 5;
+/** Errors that mean the destination as a whole is unusable (credentials, bucket), never one object. */
+const DESTINATION_ERROR_CODES = new Set(['AccessDenied', 'InvalidAccessKeyId', 'SignatureDoesNotMatch', 'NoSuchBucket', 'ExpiredToken', 'InvalidBucketName']);
+function isDestinationWideError(err: unknown): boolean {
+  const e = err as { code?: unknown; name?: unknown };
+  return DESTINATION_ERROR_CODES.has(String(e?.code ?? '')) || DESTINATION_ERROR_CODES.has(String(e?.name ?? ''));
+}
 /** "Current" (spec 9.7): every object created before the backup's start minus 1 hour is mirrored. */
 const CURRENT_SLACK_MS = 3_600_000;
 /** Bastion's own prefixes that are not evidence-object rows but must survive a lost bucket. */
@@ -131,6 +151,8 @@ interface MirrorProgress {
   records_after?: string | null;
   /** When the current records step began (becomes the next high-water mark when it finishes). */
   records_started?: string;
+  /** When this pass's object step began: an object whose copy failed since then is not retried in this pass (#332). */
+  objects_started?: string;
 }
 
 /**
@@ -143,13 +165,25 @@ interface MirrorProgress {
 export const MIRROR_RECORDS_SINCE_KEY = 'bastion:mirror:records-since';
 const FRESH_PROGRESS: MirrorProgress = { objects: 0, bytes: 0, records_done: false };
 
-async function copyObject(source: StorageDriver, dest: StorageDriver, key: string, timeoutMs: number): Promise<number> {
+/**
+ * The put deadline for one mirror copy (#332): the object's size at the shared floor rate, at least
+ * a minute, and never more than the largest object's deadline (which the worker's call timeout is
+ * built from). `sizeBytes` is the row's size_bytes, or the source's own size when it is larger.
+ */
+export function mirrorCopyTimeoutMs(sizeBytes: number, timeoutMs: number): number {
+  return Math.min(
+    BASTION_MIRROR_MAX_COPY_MS,
+    Math.max(timeoutMs, bastionTransferTimeoutMs(sizeBytes, BASTION_MIRROR_COPY_FLOOR_MS)),
+  );
+}
+
+async function copyObject(source: StorageDriver, dest: StorageDriver, key: string, timeoutMs: number, sizeBytes = 0): Promise<number> {
   const got = await withStorageTimeout('get', source.getStream(key), timeoutMs);
   try {
     const put = await withStorageTimeout(
       'put',
       dest.put(key, got.stream as Readable, { contentType: got.contentType, size: got.size }),
-      Math.max(timeoutMs, 60_000),
+      mirrorCopyTimeoutMs(Math.max(sizeBytes, got.size ?? 0), timeoutMs),
     );
     return put.size || got.size;
   } catch (err) {
@@ -281,7 +315,7 @@ export async function mirrorObjects(deps: EngineDeps, dest: StorageDriver | null
             if (!unchanged) {
               const there = await withStorageTimeout('stat', dest.stat(o.key), deps.putTimeoutMs);
               if (!there || there.size !== o.size) {
-                await copyObject(source, dest, o.key, deps.putTimeoutMs);
+                await copyObject(source, dest, o.key, deps.putTimeoutMs, o.size ?? 0);
                 out.seals_and_records += 1;
               }
             }
@@ -304,18 +338,25 @@ export async function mirrorObjects(deps: EngineDeps, dest: StorageDriver | null
       }
     }
 
-    // 3. Evidence objects not yet mirrored, oldest first, within the time and per-backup budgets.
-    let after: { created_at: Date; object_key: string } | null = null;
+    // 3. Evidence objects not yet mirrored, fewest failed attempts first and then oldest first,
+    //    within the time and per-backup budgets. An object whose copy already failed in this pass
+    //    is not tried again until the next pass, so one object that cannot be copied (too large
+    //    for the link, say) never stops the newer ones behind it (#332).
+    progress.objects_started ??= deps.now().toISOString();
+    const objectsStarted = new Date(progress.objects_started);
+    let after: { attempts: number; created_at: Date; object_key: string } | null = null;
     let budgetHit = false;
+    let consecutiveFailures = 0;
     outer: for (let round = 0; !recordsTimeUp && round < 1000; round++) {
       const batch: Array<Record<string, unknown>> = await deps.sql`
-        SELECT organization_id, content_sha256, object_key, size_bytes, created_at FROM bastion_evidence_objects
+        SELECT organization_id, content_sha256, object_key, size_bytes, created_at, mirror_attempts FROM bastion_evidence_objects
          WHERE mirrored_at IS NULL AND bytes_redacted_at IS NULL
-           ${after ? deps.sql`AND (created_at, object_key) > (${after.created_at}, ${after.object_key})` : deps.sql``}
-         ORDER BY created_at, object_key LIMIT 200`;
+           AND (mirror_last_attempt_at IS NULL OR mirror_last_attempt_at < ${objectsStarted})
+           ${after ? deps.sql`AND (mirror_attempts, created_at, object_key) > (${after.attempts}, ${after.created_at}, ${after.object_key})` : deps.sql``}
+         ORDER BY mirror_attempts, created_at, object_key LIMIT 200`;
       if (batch.length === 0) break;
       for (const o of batch) {
-        after = { created_at: new Date(o.created_at as string), object_key: String(o.object_key) };
+        after = { attempts: Number(o.mirror_attempts ?? 0), created_at: new Date(o.created_at as string), object_key: String(o.object_key) };
         if (progress.objects >= MIRROR_BUDGET_OBJECTS || progress.bytes >= MIRROR_BUDGET_BYTES) {
           budgetHit = true;
           break outer;
@@ -323,24 +364,41 @@ export async function mirrorObjects(deps: EngineDeps, dest: StorageDriver | null
         if (Date.now() - started > timeBudget) break outer;
         let size: number;
         try {
-          size = await copyObject(source, dest, String(o.object_key), deps.putTimeoutMs);
+          size = await copyObject(source, dest, String(o.object_key), deps.putTimeoutMs, Number(o.size_bytes ?? 0));
         } catch (err) {
-          // A missing source object is reported (the evidence file is gone) and skipped; any
-          // other error is the destination's or the network's, and ends the pass.
           const msg = (err as Error).message ?? '';
+          const orgId = String(o.organization_id);
           if (isStorageNotFoundError(err) || /not found|nosuchkey/i.test(msg)) {
+            // A missing source object is reported (the evidence file is gone) and skipped.
             out.failed += 1;
-            deps.log.error({ organization_id: o.organization_id }, 'bastion-mirror: an evidence file is missing from the Bastion bucket and could not be copied');
+            deps.log.error({ organization_id: orgId }, 'bastion-mirror: an evidence file is missing from the Bastion bucket and could not be copied');
             continue;
           }
-          throw err;
+          // Credentials or a missing bucket: nothing can be copied, so the pass ends `failed`.
+          if (isDestinationWideError(err)) throw err;
+          // Anything else (a timeout, a reset upload) is recorded on this object, which waits for
+          // the next pass; the pass goes on. Several in a row with no success between them mean the
+          // destination itself is failing, and that ends the pass.
+          consecutiveFailures += 1;
+          out.failed += 1;
+          await orgTx(deps.sql, orgId, (tx) => tx`
+            UPDATE bastion_evidence_objects
+               SET mirror_attempts = mirror_attempts + 1, mirror_last_error = ${msg.slice(0, 500)}, mirror_last_attempt_at = ${deps.now()}
+             WHERE organization_id = ${orgId} AND content_sha256 = ${String(o.content_sha256)}`);
+          deps.log.warn(
+            { organization_id: orgId, size_bytes: Number(o.size_bytes ?? 0), attempts: Number(o.mirror_attempts ?? 0) + 1, err: msg },
+            'bastion-mirror: one evidence file could not be copied this pass; it is skipped until the next pass and newer files go on',
+          );
+          if (consecutiveFailures >= MIRROR_MAX_CONSECUTIVE_FAILURES) throw err;
+          continue;
         }
+        consecutiveFailures = 0;
         // The bytes reached the mirror, so mirrored_at is recorded whatever happened meanwhile
         // (#310): a redaction that landed during the copy must still find this copy. When it did,
         // the copy is deleted at once; if that delete fails, step 1 retries it next pass.
         const orgId = String(o.organization_id);
         const [marked] = await orgTx(deps.sql, orgId, (tx) => tx`
-          UPDATE bastion_evidence_objects SET mirrored_at = ${deps.now()}
+          UPDATE bastion_evidence_objects SET mirrored_at = ${deps.now()}, mirror_last_error = NULL
            WHERE organization_id = ${orgId} AND content_sha256 = ${String(o.content_sha256)}
           RETURNING bytes_redacted_at`);
         if (marked?.bytes_redacted_at) {

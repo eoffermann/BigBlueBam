@@ -15,13 +15,22 @@
  */
 import type { Job } from 'bullmq';
 import type { Logger } from 'pino';
-import { bastionMirrorResultSchema, type BastionMirrorResult, type BastionObjectBackupJobData } from '@bigbluebam/shared';
+import {
+  BASTION_MIRROR_CALL_TIMEOUT_MS,
+  bastionMirrorResultSchema,
+  type BastionMirrorResult,
+  type BastionObjectBackupJobData,
+} from '@bigbluebam/shared';
 import { bodyData, parseContract, postBastion } from './bastion-shared.js';
 
 /** Upper bound on engine calls in one job (about 20 s of copying each). */
 export const MIRROR_MAX_CALLS = 240;
-/** One mirror call may copy a 100 MB file; give it room above the engine's 20 s budget. */
-const MIRROR_CALL_TIMEOUT_MS = 120_000;
+/**
+ * One mirror call may start a copy of the largest evidence object at the end of its 20 s budget,
+ * and that copy is allowed BASTION_MIRROR_MAX_COPY_MS at the floor rate; the shared constant is
+ * derived from both, so the worker never gives up on a call the engine is still entitled to (#332).
+ */
+const MIRROR_CALL_TIMEOUT_MS = BASTION_MIRROR_CALL_TIMEOUT_MS;
 const MAX_TRANSIENT = 5;
 
 export interface ObjectBackupDeps {
