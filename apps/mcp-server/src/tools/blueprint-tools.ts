@@ -140,7 +140,7 @@ export function registerBlueprintTools(
   registerTool(server, {
     name: 'blueprint_list',
     description:
-      'List Blueprint diagrams visible to the caller, optionally filtered by project, diagram type, starred-by-me, or include-archived. Blueprint diagrams are typed graphs (nodes, edges, ports) backed by relational tables — distinct from Board (freeform whiteboard). Returns metadata only; use blueprint_get / blueprint_read_nodes / blueprint_read_edges for the graph payload.',
+      'List Blueprint diagrams visible to the caller, optionally filtered by project, diagram type, starred-by-me, or include-archived. Blueprint diagrams are typed graphs (nodes, edges, ports) backed by relational tables - distinct from Board (freeform whiteboard). Returns metadata only; use blueprint_get / blueprint_read_nodes / blueprint_read_edges for the graph payload.',
     input: {
       project_id: z.string().uuid().optional().describe('Filter by project'),
       diagram_type: z.string().optional().describe('Filter by diagram type (e.g., "flowchart", "orgchart", "swimlane")'),
@@ -227,7 +227,7 @@ export function registerBlueprintTools(
   registerTool(server, {
     name: 'blueprint_export',
     description:
-      "Export a Blueprint diagram in the requested format. `json` is the canonical structured payload; `mermaid` produces a Mermaid source string useful for re-embedding in Briefs or LLM context; `svg` and `png` produce rendered artifacts (large graphs may be queued via a worker job — the response surfaces whatever the api returns).",
+      "Export a Blueprint diagram in the requested format. `json` is the canonical structured payload; `mermaid` produces a Mermaid source string useful for re-embedding in Briefs or LLM context; `svg` and `png` produce rendered artifacts (large graphs may be queued via a worker job - the response surfaces whatever the api returns).",
     input: {
       id: z.string().uuid().describe('Diagram ID'),
       format: z.enum(['json', 'mermaid', 'svg', 'png']).describe('Export format'),
@@ -288,7 +288,7 @@ export function registerBlueprintTools(
   registerTool(server, {
     name: 'blueprint_archive',
     description:
-      "Archive a Blueprint diagram (soft delete — sets is_archived=true on blueprint_diagrams). Destructive — requires confirm_action=true to actually proceed. Call once with confirm_action: false (or omit) to preview the action, then call again with confirm_action: true to commit. Requires the caller's API key scope to include `admin`.",
+      "Archive a Blueprint diagram (soft delete - sets is_archived=true on blueprint_diagrams). Destructive - requires confirm_action=true to actually proceed. Call once with confirm_action: false (or omit) to preview the action, then call again with confirm_action: true to commit. Requires the caller's API key scope to include `admin`.",
     input: {
       id: z.string().uuid().describe('Diagram ID to archive'),
       confirm_action: z.boolean().describe('Must be true to actually archive. Call once with false (or omit) to preview the action, then call again with true.'),
@@ -313,15 +313,15 @@ export function registerBlueprintTools(
   registerTool(server, {
     name: 'blueprint_add_node',
     description:
-      "Add a node to a Blueprint diagram. `shape` is a free-form tag the renderer maps to a visual (e.g. 'rounded', 'rectangle', 'diamond', 'circle', 'cylinder', 'subroutine', 'actor'). Set `parent_node_id` to nest the node inside a container/swimlane. Set `ref_entity_type` + `ref_entity_id` to back-link the node to a cross-product entity (e.g. ref_entity_type='bam.task', ref_entity_id=<task uuid>). Positions are optional — if omitted, blueprint_apply_layout will place the node.",
+      "Add a node to a Blueprint diagram. `shape` is a free-form tag the renderer maps to a visual (e.g. 'rounded', 'rectangle', 'diamond', 'circle', 'cylinder', 'subroutine', 'actor'). Set `parent_node_id` to nest the node inside a container/swimlane. Set `ref_entity_type` + `ref_entity_id` to back-link the node to a cross-product entity (e.g. ref_entity_type='bam.task', ref_entity_id=<task uuid>). Positions are optional - if omitted, blueprint_apply_layout will place the node.",
     input: {
       id: z.string().uuid().describe('Diagram ID'),
       shape: z.string().max(32).optional().describe('Shape tag (e.g., "rounded", "diamond", "circle")'),
       label: z.string().max(2000).optional().describe('Visible label text'),
       description: z.string().max(10000).optional().describe('Long-form description shown in the node detail pane'),
       parent_node_id: z.string().uuid().nullable().optional().describe('Parent container node for nesting (null for top-level)'),
-      position_x: z.number().optional().describe('X position (px) — optional; auto-layout will place if omitted'),
-      position_y: z.number().optional().describe('Y position (px) — optional; auto-layout will place if omitted'),
+      position_x: z.number().optional().describe('X position (px) - optional; auto-layout will place if omitted'),
+      position_y: z.number().optional().describe('Y position (px) - optional; auto-layout will place if omitted'),
       width: z.number().positive().max(5000).optional().describe('Node width (px)'),
       height: z.number().positive().max(5000).optional().describe('Node height (px)'),
       z_index: z.number().int().optional().describe('Stacking order (higher = on top)'),
@@ -341,7 +341,7 @@ export function registerBlueprintTools(
   registerTool(server, {
     name: 'blueprint_update_node',
     description:
-      "Update fields on a Blueprint node. Provide only the fields to change. Does NOT update position — use blueprint_move_node for that. To re-target the cross-product link, prefer blueprint_link_entity (single-purpose tool with cleaner semantics).",
+      "Update fields on a Blueprint node. Provide only the fields to change. Does NOT update position - use blueprint_move_node for that. To re-target the cross-product link, prefer blueprint_link_entity (single-purpose tool with cleaner semantics).",
     input: {
       id: z.string().uuid().describe('Diagram ID'),
       node_id: z.string().uuid().describe('Node ID'),
@@ -386,7 +386,7 @@ export function registerBlueprintTools(
   registerTool(server, {
     name: 'blueprint_duplicate_node',
     description:
-      "Duplicate a Blueprint node in the same diagram. The clone copies every visual attribute (label, shape, dimensions, style, data, cross-product entity ref) and is offset from the original so it doesn't sit on top of it — defaults to +32px down-right. Containment (parent_node_id), pinned state, and z-index are preserved. Edges to/from the source are NOT duplicated; connect the clone yourself if you need it wired in. Broadcasts a blueprint.node.created event.",
+      "Duplicate a Blueprint node in the same diagram. The clone copies every visual attribute (label, shape, dimensions, style, data, cross-product entity ref) and is offset from the original so it doesn't sit on top of it - defaults to +32px down-right. Containment (parent_node_id), pinned state, and z-index are preserved. Edges to/from the source are NOT duplicated; connect the clone yourself if you need it wired in. Broadcasts a blueprint.node.created event.",
     input: {
       id: z.string().uuid().describe('Diagram ID'),
       node_id: z.string().uuid().describe('Node to duplicate'),
@@ -403,7 +403,7 @@ export function registerBlueprintTools(
   registerTool(server, {
     name: 'blueprint_delete_node',
     description:
-      "Delete a node from a Blueprint diagram. CASCADE-deletes every edge that references the node as source or target. Destructive — requires confirm_action=true to actually proceed. Call once with confirm_action: false (or omit) to preview, then call again with true to commit.",
+      "Delete a node from a Blueprint diagram. CASCADE-deletes every edge that references the node as source or target. Destructive - requires confirm_action=true to actually proceed. Call once with confirm_action: false (or omit) to preview, then call again with true to commit.",
     input: {
       id: z.string().uuid().describe('Diagram ID'),
       node_id: z.string().uuid().describe('Node ID to delete'),
@@ -476,7 +476,7 @@ export function registerBlueprintTools(
   registerTool(server, {
     name: 'blueprint_delete_edge',
     description:
-      "Delete an edge from a Blueprint diagram. Destructive — requires confirm_action=true to actually proceed. Call once with confirm_action: false (or omit) to preview, then call again with true to commit.",
+      "Delete an edge from a Blueprint diagram. Destructive - requires confirm_action=true to actually proceed. Call once with confirm_action: false (or omit) to preview, then call again with true to commit.",
     input: {
       id: z.string().uuid().describe('Diagram ID'),
       edge_id: z.string().uuid().describe('Edge ID to delete'),
@@ -539,7 +539,7 @@ export function registerBlueprintTools(
         kind: z.string().max(32).optional().describe('Edge kind tag (e.g., "reports_to", "depends_on")'),
       })).max(2000).optional().describe('Edge specs (up to 2000); refs must match entries in the nodes array'),
       auto_layout: z.boolean().optional().describe('Run ELK auto-layout after materializing nodes/edges (default true)'),
-      replace: z.boolean().optional().describe('Wipe the existing graph first (default false — appends)'),
+      replace: z.boolean().optional().describe('Wipe the existing graph first (default false - appends)'),
     },
     returns: z.object({ data: z.object({ graph: z.unknown(), layout: z.unknown().nullable() }) }).passthrough(),
     handler: async ({ diagram_id, ...body }) => {
@@ -553,7 +553,7 @@ export function registerBlueprintTools(
   registerTool(server, {
     name: 'blueprint_promote_graph_to_tasks',
     description:
-      "Compile a Blueprint diagram into a Bam-tasks-creation plan. Returns the structured list of tasks to create (one per node) plus parent/child links to set up (one per edge), under the chosen edge-direction convention. The blueprint-api deliberately does NOT create the tasks itself — the caller (SPA or agent) drives the actual `create_task` / `bam_add_task_parent` calls so attribution stays on the caller. After tasks land, the caller should also patch each blueprint_node with ref_entity_type='bam.task' + ref_entity_id=<new task id> via blueprint_link_entity so the two-way sync hook fires. Edge-direction options: 'source-parent' (A->B means A parents B, default for mindmaps/decision trees), 'target-parent' (A->B means B parents A, for dependency graphs), 'none' (skip parent links).",
+      "Compile a Blueprint diagram into a Bam-tasks-creation plan. Returns the structured list of tasks to create (one per node) plus parent/child links to set up (one per edge), under the chosen edge-direction convention. The blueprint-api deliberately does NOT create the tasks itself - the caller (SPA or agent) drives the actual `create_task` / `bam_add_task_parent` calls so attribution stays on the caller. After tasks land, the caller should also patch each blueprint_node with ref_entity_type='bam.task' + ref_entity_id=<new task id> via blueprint_link_entity so the two-way sync hook fires. Edge-direction options: 'source-parent' (A->B means A parents B, default for mindmaps/decision trees), 'target-parent' (A->B means B parents A, for dependency graphs), 'none' (skip parent links).",
     input: {
       id: z.string().uuid().describe('Diagram ID'),
       project_id: z.string().uuid().describe('Bam project the new tasks land in'),
@@ -586,7 +586,7 @@ export function registerBlueprintTools(
       "Materialize a brand-new Blueprint diagram from a Bam project's tasks. Creates one node per task (with ref_entity_type='bam.task' + ref_entity_id back-link) and one edge per task parent link (using both the legacy tasks.parent_task_id self-FK and the task_parent_links many-to-many join table from B3 Frndo Launch). Auto-runs layered ELK so the diagram opens already laid out. Skips completed tasks unless include_completed=true. Reverse direction of blueprint_promote_graph_to_tasks; the two together give a round-trip Blueprint↔Bam workflow. After creation, any Bam task title/description change propagates into every linked node (and vice-versa) via the two-way sync hook.",
     input: {
       project_id: z.string().uuid().describe('Bam project whose tasks become the graph'),
-      name: z.string().min(1).max(200).optional().describe('Diagram name; defaults to "<Project> — tasks"'),
+      name: z.string().min(1).max(200).optional().describe('Diagram name; defaults to "<Project> - tasks"'),
       description: z.string().max(5000).nullable().optional().describe('Diagram description'),
       include_completed: z.boolean().optional().describe('Pull tasks whose phase is terminal too. Default false.'),
       sprint_id: z.string().uuid().nullable().optional().describe('When set, only tasks in this sprint are pulled.'),
@@ -613,7 +613,7 @@ export function registerBlueprintTools(
   registerTool(server, {
     name: 'blueprint_promote_node_to_task',
     description:
-      "Generate a Bam-task payload from a Blueprint node and suggest back-linking the node to the new task. Returns a structured payload the caller can POST to /b3/api/projects/:id/tasks (the second hop is not yet executed server-side — wire-up is on the Wave 5 roadmap). Use this when a node represents work to be tracked in Bam (e.g. a swimlane step or a deliverable).",
+      "Generate a Bam-task payload from a Blueprint node and suggest back-linking the node to the new task. Returns a structured payload the caller can POST to /b3/api/projects/:id/tasks (the second hop is not yet executed server-side - wire-up is on the Wave 5 roadmap). Use this when a node represents work to be tracked in Bam (e.g. a swimlane step or a deliverable).",
     input: {
       id: z.string().uuid().describe('Diagram ID'),
       node_id: z.string().uuid().describe('Source node ID'),
@@ -676,7 +676,7 @@ export function registerBlueprintTools(
   registerTool(server, {
     name: 'blueprint_list_versions',
     description:
-      'List the saved version snapshots of a Blueprint diagram, newest first. Each version is an immutable point-in-time snapshot of the full graph (nodes + edges), captured by blueprint_snapshot_version or by the SPA. Use the version_number with blueprint_restore_version to roll the live diagram back. Returns metadata only — the snapshot payload is not inlined here.',
+      'List the saved version snapshots of a Blueprint diagram, newest first. Each version is an immutable point-in-time snapshot of the full graph (nodes + edges), captured by blueprint_snapshot_version or by the SPA. Use the version_number with blueprint_restore_version to roll the live diagram back. Returns metadata only - the snapshot payload is not inlined here.',
     input: {
       id: z.string().uuid().describe('Diagram ID'),
     },
@@ -690,7 +690,7 @@ export function registerBlueprintTools(
   registerTool(server, {
     name: 'blueprint_snapshot_version',
     description:
-      "Capture the current graph (nodes + edges) of a Blueprint diagram as a new immutable version snapshot, auto-numbered one higher than the latest. An optional `label` annotates the snapshot (e.g. \"before agent rewrite\", \"approved v2\"). Snapshotting does not change the live diagram — it just records a restore point. Pair with blueprint_restore_version to roll back later.",
+      "Capture the current graph (nodes + edges) of a Blueprint diagram as a new immutable version snapshot, auto-numbered one higher than the latest. An optional `label` annotates the snapshot (e.g. \"before agent rewrite\", \"approved v2\"). Snapshotting does not change the live diagram - it just records a restore point. Pair with blueprint_restore_version to roll back later.",
     input: {
       id: z.string().uuid().describe('Diagram ID to snapshot'),
       label: z.string().max(200).nullable().optional().describe('Optional human label for the snapshot (max 200 chars)'),
@@ -705,7 +705,7 @@ export function registerBlueprintTools(
   registerTool(server, {
     name: 'blueprint_restore_version',
     description:
-      "Roll a Blueprint diagram's live graph back to a previously-snapshotted version, identified by its version_number (see blueprint_list_versions). Restoring replaces the current nodes and edges with the snapshot's contents — destructive to the current graph state. Take a fresh blueprint_snapshot_version first if you might want to undo the restore. Returns the restored graph payload.",
+      "Roll a Blueprint diagram's live graph back to a previously-snapshotted version, identified by its version_number (see blueprint_list_versions). Restoring replaces the current nodes and edges with the snapshot's contents - destructive to the current graph state. Take a fresh blueprint_snapshot_version first if you might want to undo the restore. Returns the restored graph payload.",
     input: {
       id: z.string().uuid().describe('Diagram ID'),
       version_number: z.number().int().positive().describe('Version number to restore (from blueprint_list_versions)'),
@@ -776,7 +776,7 @@ export function registerBlueprintTools(
   registerTool(server, {
     name: 'blueprint_update_comment',
     description:
-      "Edit a Blueprint comment's text or toggle its resolved state. Provide only the fields to change: pass `resolved: true` to resolve a review thread (or `false` to reopen it), and/or `body`/`body_plain` to edit the text. This is the resolve mechanism — there is no separate resolve endpoint.",
+      "Edit a Blueprint comment's text or toggle its resolved state. Provide only the fields to change: pass `resolved: true` to resolve a review thread (or `false` to reopen it), and/or `body`/`body_plain` to edit the text. This is the resolve mechanism - there is no separate resolve endpoint.",
     input: {
       id: z.string().uuid().describe('Diagram ID'),
       comment_id: z.string().uuid().describe('Comment ID'),
@@ -820,7 +820,7 @@ export function registerBlueprintTools(
   registerTool(server, {
     name: 'blueprint_add_collaborator',
     description:
-      "Grant a user explicit access to a Blueprint diagram at a given role. `role` is one of owner / editor / commenter / viewer (defaults to editor). Idempotent: re-adding an existing collaborator updates their role rather than erroring. `user_id` must be a Bam user UUID — resolve emails/names first via find_user_by_email / find_user_by_name.",
+      "Grant a user explicit access to a Blueprint diagram at a given role. `role` is one of owner / editor / commenter / viewer (defaults to editor). Idempotent: re-adding an existing collaborator updates their role rather than erroring. `user_id` must be a Bam user UUID - resolve emails/names first via find_user_by_email / find_user_by_name.",
     input: {
       id: z.string().uuid().describe('Diagram ID'),
       user_id: z.string().uuid().describe('Bam user UUID to grant access to'),
@@ -836,7 +836,7 @@ export function registerBlueprintTools(
   registerTool(server, {
     name: 'blueprint_remove_collaborator',
     description:
-      "Revoke a user's explicit collaborator grant on a Blueprint diagram. This removes only the direct share grant — the user may still see the diagram via project- or org-level visibility. Destructive — requires confirm_action=true to actually proceed. Call once with confirm_action: false (or omit) to preview, then call again with true to commit.",
+      "Revoke a user's explicit collaborator grant on a Blueprint diagram. This removes only the direct share grant - the user may still see the diagram via project- or org-level visibility. Destructive - requires confirm_action=true to actually proceed. Call once with confirm_action: false (or omit) to preview, then call again with true to commit.",
     input: {
       id: z.string().uuid().describe('Diagram ID'),
       user_id: z.string().uuid().describe('Bam user UUID whose collaborator grant to revoke'),
@@ -862,7 +862,7 @@ export function registerBlueprintTools(
   registerTool(server, {
     name: 'blueprint_star',
     description:
-      "Star a Blueprint diagram for the calling user, so it surfaces in their starred list (blueprint_list with starred=true). Idempotent — starring an already-starred diagram is a no-op. Personal bookmark only; does not affect other users.",
+      "Star a Blueprint diagram for the calling user, so it surfaces in their starred list (blueprint_list with starred=true). Idempotent - starring an already-starred diagram is a no-op. Personal bookmark only; does not affect other users.",
     input: {
       id: z.string().uuid().describe('Diagram ID to star'),
     },
@@ -876,7 +876,7 @@ export function registerBlueprintTools(
   registerTool(server, {
     name: 'blueprint_unstar',
     description:
-      "Remove the calling user's star from a Blueprint diagram. Idempotent — unstarring a diagram that was not starred is a no-op. Personal bookmark only; does not affect other users.",
+      "Remove the calling user's star from a Blueprint diagram. Idempotent - unstarring a diagram that was not starred is a no-op. Personal bookmark only; does not affect other users.",
     input: {
       id: z.string().uuid().describe('Diagram ID to unstar'),
     },
@@ -896,7 +896,7 @@ export function registerBlueprintTools(
     input: {
       id: z.string().uuid().describe('Diagram ID to import into'),
       source: z.string().min(1).max(200000).describe('Mermaid source string (max 200000 chars)'),
-      replace: z.boolean().optional().describe('Wipe the existing graph before importing (default false — appends)'),
+      replace: z.boolean().optional().describe('Wipe the existing graph before importing (default false - appends)'),
     },
     returns: z.object({ data: z.unknown() }).passthrough(),
     handler: async ({ id, source, replace }) => {

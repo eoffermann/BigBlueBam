@@ -247,7 +247,7 @@ export function registerBlipTools(server: McpServer, api: ApiClient, blipApiUrl:
     handler: async ({ id, confirm_action }) => {
       if (!confirm_action) {
         return ok({
-          preview: `Will permanently revoke ingest key ${id}. This is terminal — the token can never be reactivated (use blip_key_suspend for a reversible pause). Call again with confirm_action:true to proceed.`,
+          preview: `Will permanently revoke ingest key ${id}. This is terminal - the token can never be reactivated (use blip_key_suspend for a reversible pause). Call again with confirm_action:true to proceed.`,
         });
       }
       const result = await client.request('POST', `/keys/${id}/revoke`);
@@ -468,7 +468,7 @@ export function registerBlipTools(server: McpServer, api: ApiClient, blipApiUrl:
       if (!confirm_action) {
         return ok({
           preview: `Will permanently purge entries for app ${id}, report_type "${report_type}"${
-            filter ? ' matching the supplied filter' : ' (the ENTIRE collection — no filter supplied)'
+            filter ? ' matching the supplied filter' : ' (the ENTIRE collection - no filter supplied)'
           }, including their stored captures. Call again with confirm_action:true to proceed.`,
         });
       }

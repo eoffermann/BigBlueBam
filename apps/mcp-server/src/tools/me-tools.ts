@@ -6,7 +6,7 @@ import { registerTool } from '../lib/register-tool.js';
 /**
  * Tools wrapping /auth/me, /auth/orgs, /auth/switch-org, /auth/logout,
  * /auth/change-password and the /me/notifications feed. These map to the
- * "what can *I* do about *me*" surface — profile, org membership, session,
+ * "what can *I* do about *me*" surface - profile, org membership, session,
  * notification inbox.
  */
 export function registerMeTools(server: McpServer, api: ApiClient): void {
@@ -65,7 +65,7 @@ export function registerMeTools(server: McpServer, api: ApiClient): void {
   registerTool(server, {
     name: 'get_my_org',
     description:
-      "Read the caller's active organization metadata — name, slug, plan, logo, free-form settings JSONB, plus live counts (active_owner_count, member_count) used by the People UI. This is the org-level analog of get_me: it tells you which org downstream calls are scoped to and basic facts about it. Read-only; use platform_get_org (SuperUser) for a different org by id, or switch_active_org first to change scope.",
+      "Read the caller's active organization metadata - name, slug, plan, logo, free-form settings JSONB, plus live counts (active_owner_count, member_count) used by the People UI. This is the org-level analog of get_me: it tells you which org downstream calls are scoped to and basic facts about it. Read-only; use platform_get_org (SuperUser) for a different org by id, or switch_active_org first to change scope.",
     input: {},
     returns: z
       .object({
@@ -123,7 +123,7 @@ export function registerMeTools(server: McpServer, api: ApiClient): void {
     name: 'switch_active_org',
     description: 'Switch the active organization for the current session. Affects which projects/members/tickets are returned by downstream calls.',
     input: {
-      org_id: z.string().uuid().describe('Target organization ID — must be one of the caller\'s memberships.'),
+      org_id: z.string().uuid().describe('Target organization ID - must be one of the caller\'s memberships.'),
     },
     returns: z.object({ ok: z.boolean(), active_org_id: z.string().uuid().optional() }).passthrough(),
     handler: async ({ org_id }) => {
@@ -160,7 +160,7 @@ export function registerMeTools(server: McpServer, api: ApiClient): void {
 
   registerTool(server, {
     name: 'logout',
-    description: 'Invalidate the current session cookie. Note: API-key callers are not affected — this only logs out cookie sessions.',
+    description: 'Invalidate the current session cookie. Note: API-key callers are not affected - this only logs out cookie sessions.',
     input: {},
     returns: z.object({ ok: z.boolean() }),
     handler: async () => {

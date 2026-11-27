@@ -51,7 +51,7 @@ type BlastClient = ReturnType<typeof createBlastClient>;
 // resolve the org's effective LLM provider via the Bam API and then proxy a
 // chat completion through /internal/llm/chat (which holds the decrypted
 // provider key). This mirrors the bolt-api ai-assist pattern. Default model
-// is whatever the configured provider stores in model_id — the suite ships
+// is whatever the configured provider stores in model_id - the suite ships
 // the latest Claude as the recommended default. When no provider is
 // configured (or the proxy is unreachable), the tools fall back to the
 // previous deterministic heuristic so they never hard-fail.
@@ -152,7 +152,7 @@ function buildQs(params: Record<string, unknown>): string {
 // ---------------------------------------------------------------------------
 //
 // Rule authors routinely reference Blast entities by their human-readable
-// names — "send the Welcome campaign", "use the Newsletter template",
+// names - "send the Welcome campaign", "use the Newsletter template",
 // "segment: Active Customers". These resolvers let the canonical action
 // tools accept either a UUID (fast path, no HTTP) or a name (single lookup
 // via the existing list endpoints) without forcing the caller to do a
@@ -165,7 +165,7 @@ function buildQs(params: Record<string, unknown>): string {
 //   - returns null on failure so the caller can surface a clean error
 //
 // Templates and segments have dedicated `?search=` query params on their
-// list endpoints. Campaigns do not (as of Phase C) — so we fetch a bounded
+// list endpoints. Campaigns do not (as of Phase C) - so we fetch a bounded
 // page and filter client-side.
 
 async function resolveCampaignId(
@@ -173,7 +173,7 @@ async function resolveCampaignId(
   nameOrId: string,
 ): Promise<string | null> {
   if (isUuid(nameOrId)) return nameOrId;
-  // Campaigns list endpoint has no `search` param — fetch a bounded page
+  // Campaigns list endpoint has no `search` param - fetch a bounded page
   // and filter client-side. 100 is the route-level max.
   const result = await blast.request('GET', '/campaigns?limit=100');
   if (!result.ok) return null;
@@ -308,7 +308,7 @@ export function registerBlastTools(
 
   registerTool(server, {
     name: 'blast_draft_campaign',
-    description: 'Create a campaign in draft status with template, segment, and schedule. `template_id` and `segment_id` accept either a UUID or the entity name — exact match preferred, single fuzzy match acceptable.',
+    description: 'Create a campaign in draft status with template, segment, and schedule. `template_id` and `segment_id` accept either a UUID or the entity name - exact match preferred, single fuzzy match acceptable.',
     input: {
       name: z.string().min(1).max(255).describe('Campaign name'),
       subject: z.string().min(1).max(500).describe('Email subject line'),
@@ -399,7 +399,7 @@ export function registerBlastTools(
         });
       }
       if (require_human_approval) {
-        // Schedule instead of send — requires human confirmation
+        // Schedule instead of send - requires human confirmation
         const result = await client.request('POST', `/campaigns/${resolved}/schedule`, {
           scheduled_at: new Date(Date.now() + 3600000).toISOString(), // 1 hour from now
         });
@@ -522,7 +522,7 @@ export function registerBlastTools(
             });
           }
         } catch {
-          // Model did not return parseable JSON — fall through to heuristic.
+          // Model did not return parseable JSON - fall through to heuristic.
         }
       }
 
@@ -569,7 +569,7 @@ export function registerBlastTools(
             }
           }
         } catch {
-          // Model did not return a parseable array — fall through to heuristic.
+          // Model did not return a parseable array - fall through to heuristic.
         }
       }
 
@@ -672,7 +672,7 @@ export function registerBlastTools(
 
   registerTool(server, {
     name: 'blast_preview_template',
-    description: 'Render a template with sample merge data to preview the resulting subject and HTML. Read-only — does not send anything. `id` accepts either a UUID or the template name.',
+    description: 'Render a template with sample merge data to preview the resulting subject and HTML. Read-only - does not send anything. `id` accepts either a UUID or the template name.',
     input: {
       id: z.string().describe('Template UUID or template name'),
       merge_data: z.record(z.string()).optional().describe('Optional map of merge-field name → sample value (e.g. { first_name: "Alex" })'),
@@ -806,7 +806,7 @@ export function registerBlastTools(
     input: {
       id: z.string().describe('Campaign UUID or campaign name'),
     },
-    returns: z.object({}).passthrough().describe('Device-breakdown analytics — shape varies by provider'),
+    returns: z.object({}).passthrough().describe('Device-breakdown analytics - shape varies by provider'),
     handler: async ({ id }) => {
       const campaignId = await resolveCampaignId(client, id);
       if (!campaignId) {
@@ -890,11 +890,11 @@ export function registerBlastTools(
 
   registerTool(server, {
     name: 'blast_evaluate_segment',
-    description: 'Run the full recipient evaluation for a segment (the resolved send list a campaign would target). Read-only — does not send anything. `id` accepts either a UUID or the segment name.',
+    description: 'Run the full recipient evaluation for a segment (the resolved send list a campaign would target). Read-only - does not send anything. `id` accepts either a UUID or the segment name.',
     input: {
       id: z.string().describe('Segment UUID or segment name'),
     },
-    returns: z.object({ data: z.object({}).passthrough() }).passthrough().describe('Resolved recipient set — shape varies'),
+    returns: z.object({ data: z.object({}).passthrough() }).passthrough().describe('Resolved recipient set - shape varies'),
     handler: async ({ id }) => {
       const segmentId = await resolveSegmentId(client, id);
       if (!segmentId) {

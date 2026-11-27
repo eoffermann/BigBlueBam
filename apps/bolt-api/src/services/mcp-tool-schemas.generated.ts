@@ -174,7 +174,7 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
   },
   {
     "mcp_tool": "agent_self_report",
-    "description": "Service-account only. Append a self-report entry (action='agent.self_report') to activity_log under the given project. project_id is REQUIRED — the platform does not create sentinel projects in Wave 1. Callers that are not service accounts get 403 NOT_A_SERVICE_ACCOUNT.",
+    "description": "Service-account only. Append a self-report entry (action='agent.self_report') to activity_log under the given project. project_id is REQUIRED - the platform does not create sentinel projects in Wave 1. Callers that are not service accounts get 403 NOT_A_SERVICE_ACCOUNT.",
     "source": "agent",
     "parameters": [
       {
@@ -240,7 +240,7 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
   },
   {
     "mcp_tool": "agent_policy_set",
-    "description": "Upsert the policy row for an agent/service user. Patch any subset of enabled, allowed_tools, channel_subscriptions, rate_limit_override, notes. allowed_tools uses glob-prefix matching: a single entry '*' allows every tool; entries like 'banter.*' or 'banter_*' allow any tool starting with the prefix; bare entries are exact match. Returns confirmation_required:true when the call flips enabled from true to false on a live agent — the caller is expected to route through confirm_action before committing the kill. 400 if the target is not an agent/service user; 403 if the target is in a different org.",
+    "description": "Upsert the policy row for an agent/service user. Patch any subset of enabled, allowed_tools, channel_subscriptions, rate_limit_override, notes. allowed_tools uses glob-prefix matching: a single entry '*' allows every tool; entries like 'banter.*' or 'banter_*' allow any tool starting with the prefix; bare entries are exact match. Returns confirmation_required:true when the call flips enabled from true to false on a live agent - the caller is expected to route through confirm_action before committing the kill. 400 if the target is not an agent/service user; 403 if the target is in a different org.",
     "source": "agent-policy",
     "parameters": [
       {
@@ -431,7 +431,7 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
   },
   {
     "mcp_tool": "attachment_meta",
-    "description": "Discovery endpoint for the federated attachment surface. Returns the static set of supported parent entity_type values, the valid scan_status filter values, and the default/max list limits — so an agent can self-describe attachment_list/attachment_get capabilities without consulting docs or guessing. Read-only; no parameters. AGENTIC_TODO §17 Wave 4.",
+    "description": "Discovery endpoint for the federated attachment surface. Returns the static set of supported parent entity_type values, the valid scan_status filter values, and the default/max list limits - so an agent can self-describe attachment_list/attachment_get capabilities without consulting docs or guessing. Read-only; no parameters. AGENTIC_TODO §17 Wave 4.",
     "source": "attachment",
     "parameters": []
   },
@@ -493,7 +493,7 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
   },
   {
     "mcp_tool": "archive_project",
-    "description": "Archive a project (destructive — the project disappears from active lists). Requires project admin (or org owner/admin). Requires confirm:true — the first call without it returns a confirmation prompt and changes nothing.",
+    "description": "Archive a project (destructive - the project disappears from active lists). Requires project admin (or org owner/admin). Requires confirm:true - the first call without it returns a confirmation prompt and changes nothing.",
     "source": "bam",
     "parameters": [
       {
@@ -546,7 +546,7 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
         "format": "uuid",
         "required": true,
         "nullable": false,
-        "description": "The subtask UUID — the task being attached."
+        "description": "The subtask UUID - the task being attached."
       },
       {
         "name": "parent_task_id",
@@ -560,7 +560,7 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
   },
   {
     "mcp_tool": "bam_admin_reset_password",
-    "description": "Org-admin: reset another user's password to a freshly generated 16-character password (or one you supply via `password`). All of that user's active sessions are invalidated in the same transaction. The new password is returned in the response so the operator can hand it off — there is no second chance to retrieve it. The caller must be an org admin/owner or a SuperUser, and must outrank the target. Prefer `bam_send_password_reset_link` when the user can be reached by email; this tool is the right choice when SMTP is unconfigured or the user is locked out without email access.",
+    "description": "Org-admin: reset another user's password to a freshly generated 16-character password (or one you supply via `password`). All of that user's active sessions are invalidated in the same transaction. The new password is returned in the response so the operator can hand it off - there is no second chance to retrieve it. The caller must be an org admin/owner or a SuperUser, and must outrank the target. Prefer `bam_send_password_reset_link` when the user can be reached by email; this tool is the right choice when SMTP is unconfigured or the user is locked out without email access.",
     "source": "bam",
     "parameters": [
       {
@@ -611,7 +611,7 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
   },
   {
     "mcp_tool": "bam_get_member_activity",
-    "description": "Org-admin: read a member's activity feed (their authored task/project actions within the caller's active org), newest first, cursor-paginated. Read-only audit view — for cross-app activity prefer activity_by_actor. Requires org admin/owner scope (or SuperUser) and that the caller outranks the target.",
+    "description": "Org-admin: read a member's activity feed (their authored task/project actions within the caller's active org), newest first, cursor-paginated. Read-only audit view - for cross-app activity prefer activity_by_actor. Requires org admin/owner scope (or SuperUser) and that the caller outranks the target.",
     "source": "bam",
     "parameters": [
       {
@@ -741,7 +741,7 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
   },
   {
     "mcp_tool": "bam_invite_member",
-    "description": "Invite a user to the caller's active org. Reuses an existing user by email if one already exists (`was_existing=true`); otherwise creates a brand-new user. Optionally adds the user to one or more projects in the same org at the same time (`project_ids`). When SMTP is configured, the user receives an invitation email — for brand-new users the email carries a 7-day password-onboarding link via the password-reset token machinery; for existing users it's just a 'you have new access' notice. The response reports `email_sent` so the caller knows whether the email actually went out. Errors: 409 ALREADY_MEMBER, 400 CROSS_ORG_PROJECT (one or more project_ids belong to another org).",
+    "description": "Invite a user to the caller's active org. Reuses an existing user by email if one already exists (`was_existing=true`); otherwise creates a brand-new user. Optionally adds the user to one or more projects in the same org at the same time (`project_ids`). When SMTP is configured, the user receives an invitation email - for brand-new users the email carries a 7-day password-onboarding link via the password-reset token machinery; for existing users it's just a 'you have new access' notice. The response reports `email_sent` so the caller knows whether the email actually went out. Errors: 409 ALREADY_MEMBER, 400 CROSS_ORG_PROJECT (one or more project_ids belong to another org).",
     "source": "bam",
     "parameters": [
       {
@@ -781,7 +781,7 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
   },
   {
     "mcp_tool": "bam_list_member_projects",
-    "description": "Org-admin: list the projects a given member belongs to within the caller's active org, with the member's per-project role and join date. Read-only — pair with bam_add_member_to_projects to grant access. Requires org admin/owner scope (or SuperUser). 404 if the user is not a member of the active org.",
+    "description": "Org-admin: list the projects a given member belongs to within the caller's active org, with the member's per-project role and join date. Read-only - pair with bam_add_member_to_projects to grant access. Requires org admin/owner scope (or SuperUser). 404 if the user is not a member of the active org.",
     "source": "bam",
     "parameters": [
       {
@@ -796,7 +796,7 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
   },
   {
     "mcp_tool": "bam_list_people",
-    "description": "List people across EVERY org the caller belongs to (a SuperUser sees all non-deleted orgs), deduped, with per-(person, org) capability flags. This is the People Manager v2 surface — broader than `list_members`, which is limited to the caller's single active org. Visibility is scoped: a caller never sees a person who shares no org with them. Each membership row carries `caps` (manage_role, disable, remove, reset_password, manage_projects, manage_keys, transfer_ownership, delete_account) computed server-side from the caller's role in that org and rank vs. the person — use them to decide which follow-up mutation tools (e.g. bam_admin_reset_password) will be permitted. Pass `user_id` to fetch a single person (with their in-scope memberships + caps); a `user_id` outside the caller's visible scope returns an empty list. Supports search (email + display name, case-insensitive), is_active / role / org_id filters, and opaque cursor pagination (limit default 50, max 200).",
+    "description": "List people across EVERY org the caller belongs to (a SuperUser sees all non-deleted orgs), deduped, with per-(person, org) capability flags. This is the People Manager v2 surface - broader than `list_members`, which is limited to the caller's single active org. Visibility is scoped: a caller never sees a person who shares no org with them. Each membership row carries `caps` (manage_role, disable, remove, reset_password, manage_projects, manage_keys, transfer_ownership, delete_account) computed server-side from the caller's role in that org and rank vs. the person - use them to decide which follow-up mutation tools (e.g. bam_admin_reset_password) will be permitted. Pass `user_id` to fetch a single person (with their in-scope memberships + caps); a `user_id` outside the caller's visible scope returns an empty list. Supports search (email + display name, case-insensitive), is_active / role / org_id filters, and opaque cursor pagination (limit default 50, max 200).",
     "source": "bam",
     "parameters": [
       {
@@ -892,7 +892,7 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
   },
   {
     "mcp_tool": "bam_remove_member_from_org",
-    "description": "Org-admin: remove a member from the caller's active org (drops their org membership and project memberships in this org; does NOT delete the user account, which keeps authored content intact). Durable membership management, not a credential/account-deletion op. The caller must be org admin/owner (or SuperUser), must outrank the target, and cannot remove themselves. Requires confirm_action=true to proceed — call once without it to preview, then again with confirm_action:true to actually remove. 404 if the user is not a member of the active org.",
+    "description": "Org-admin: remove a member from the caller's active org (drops their org membership and project memberships in this org; does NOT delete the user account, which keeps authored content intact). Durable membership management, not a credential/account-deletion op. The caller must be org admin/owner (or SuperUser), must outrank the target, and cannot remove themselves. Requires confirm_action=true to proceed - call once without it to preview, then again with confirm_action:true to actually remove. 404 if the user is not a member of the active org.",
     "source": "bam",
     "parameters": [
       {
@@ -937,7 +937,7 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
   },
   {
     "mcp_tool": "bam_send_password_reset_link",
-    "description": "Org-admin: mint a one-time password-reset token for another user and email them a 60-minute reset link. The caller must outrank the target (or be a SuperUser). The response reports `email_sent` and `smtp_configured` so the caller knows whether the email actually went out — if SMTP is not configured the token is still minted, but no email is sent and the caller must hand the link off out-of-band (or call `bam_admin_reset_password` instead). This is the gentler alternative to `bam_admin_reset_password` because the operator never sees the password.",
+    "description": "Org-admin: mint a one-time password-reset token for another user and email them a 60-minute reset link. The caller must outrank the target (or be a SuperUser). The response reports `email_sent` and `smtp_configured` so the caller knows whether the email actually went out - if SMTP is not configured the token is still minted, but no email is sent and the caller must hand the link off out-of-band (or call `bam_admin_reset_password` instead). This is the gentler alternative to `bam_admin_reset_password` because the operator never sees the password.",
     "source": "bam",
     "parameters": [
       {
@@ -952,7 +952,7 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
   },
   {
     "mcp_tool": "bam_update_member_role",
-    "description": "Org-admin: change a member's organization role (member / admin / viewer) in the caller's active org. Durable membership management, not a credential operation. The caller must be org admin/owner (or SuperUser) and must outrank both the current and target role. 'owner' is not settable here — use the transfer-ownership flow (UI/CLI) instead. Optionally pass `version` for optimistic concurrency: a stale version returns 409 VERSION_CONFLICT echoing the current version. 404 if the user is not a member of the active org.",
+    "description": "Org-admin: change a member's organization role (member / admin / viewer) in the caller's active org. Durable membership management, not a credential operation. The caller must be org admin/owner (or SuperUser) and must outrank both the current and target role. 'owner' is not settable here - use the transfer-ownership flow (UI/CLI) instead. Optionally pass `version` for optimistic concurrency: a stale version returns 409 VERSION_CONFLICT echoing the current version. 404 if the user is not a member of the active org.",
     "source": "bam",
     "parameters": [
       {
@@ -1469,7 +1469,7 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
         "type": "string",
         "required": false,
         "nullable": true,
-        "description": "Assignee — UUID, email address, or display name"
+        "description": "Assignee - UUID, email address, or display name"
       },
       {
         "name": "priority",
@@ -1498,7 +1498,7 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
         "type": "array",
         "required": false,
         "nullable": false,
-        "description": "Labels to attach — each entry may be a label name or UUID"
+        "description": "Labels to attach - each entry may be a label name or UUID"
       },
       {
         "name": "epic_id",
@@ -1648,7 +1648,7 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
   },
   {
     "mcp_tool": "delete_comment",
-    "description": "Delete one of your OWN comments (destructive). Decrements the parent task's comment_count. The API rejects deleting another author's comment with 403. Requires confirm:true — the first call without it returns a confirmation prompt and changes nothing.",
+    "description": "Delete one of your OWN comments (destructive). Decrements the parent task's comment_count. The API rejects deleting another author's comment with 403. Requires confirm:true - the first call without it returns a confirmation prompt and changes nothing.",
     "source": "bam",
     "parameters": [
       {
@@ -1670,7 +1670,7 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
   },
   {
     "mcp_tool": "delete_custom_field",
-    "description": "Delete a custom-field definition (destructive). Requires confirm:true — the first call without it returns a confirmation prompt and changes nothing.",
+    "description": "Delete a custom-field definition (destructive). Requires confirm:true - the first call without it returns a confirmation prompt and changes nothing.",
     "source": "bam",
     "parameters": [
       {
@@ -1692,7 +1692,7 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
   },
   {
     "mcp_tool": "delete_label",
-    "description": "Delete a label (destructive). Requires confirm:true — the first call without it returns a confirmation prompt and changes nothing.",
+    "description": "Delete a label (destructive). Requires confirm:true - the first call without it returns a confirmation prompt and changes nothing.",
     "source": "bam",
     "parameters": [
       {
@@ -1714,7 +1714,7 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
   },
   {
     "mcp_tool": "delete_phase",
-    "description": "Delete a phase (destructive). Optionally migrate any tasks in it to another phase first via migrate_to (strongly recommended — tasks left orphaned will reference a missing phase). Requires confirm:true.",
+    "description": "Delete a phase (destructive). Optionally migrate any tasks in it to another phase first via migrate_to (strongly recommended - tasks left orphaned will reference a missing phase). Requires confirm:true.",
     "source": "bam",
     "parameters": [
       {
@@ -1766,7 +1766,7 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
   },
   {
     "mcp_tool": "delete_template",
-    "description": "Delete a task template by UUID (destructive). Tasks previously created from it are unaffected. Requires confirm:true — the first call without it returns a confirmation prompt and changes nothing.",
+    "description": "Delete a task template by UUID (destructive). Tasks previously created from it are unaffected. Requires confirm:true - the first call without it returns a confirmation prompt and changes nothing.",
     "source": "bam",
     "parameters": [
       {
@@ -1810,7 +1810,7 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
   },
   {
     "mcp_tool": "disconnect_github_integration",
-    "description": "Remove the GitHub integration from a project. This is destructive — it deletes the webhook config and all linked commit/PR references. Requires project admin or org admin role.",
+    "description": "Remove the GitHub integration from a project. This is destructive - it deletes the webhook config and all linked commit/PR references. Requires project admin or org admin role.",
     "source": "bam",
     "parameters": [
       {
@@ -1970,7 +1970,7 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
   },
   {
     "mcp_tool": "get_my_org",
-    "description": "Read the caller's active organization metadata — name, slug, plan, logo, free-form settings JSONB, plus live counts (active_owner_count, member_count) used by the People UI. This is the org-level analog of get_me: it tells you which org downstream calls are scoped to and basic facts about it. Read-only; use platform_get_org (SuperUser) for a different org by id, or switch_active_org first to change scope.",
+    "description": "Read the caller's active organization metadata - name, slug, plan, logo, free-form settings JSONB, plus live counts (active_owner_count, member_count) used by the People UI. This is the org-level analog of get_me: it tells you which org downstream calls are scoped to and basic facts about it. Read-only; use platform_get_org (SuperUser) for a different org by id, or switch_active_org first to change scope.",
     "source": "bam",
     "parameters": []
   },
@@ -2065,7 +2065,7 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
   },
   {
     "mcp_tool": "get_platform_settings",
-    "description": "SuperUser only. Fetch platform-wide settings. As of B3 Frndo Launch the response contains two independent signup kill switches: `public_signup_disabled` gates the BigBlueBam internal /auth/register endpoint; `helpdesk_signup_disabled` gates the Helpdesk customer /helpdesk/auth/register endpoint. The flags are deliberately decoupled — closing internal signup during beta should not also block customers from filing tickets.",
+    "description": "SuperUser only. Fetch platform-wide settings. As of B3 Frndo Launch the response contains two independent signup kill switches: `public_signup_disabled` gates the BigBlueBam internal /auth/register endpoint; `helpdesk_signup_disabled` gates the Helpdesk customer /helpdesk/auth/register endpoint. The flags are deliberately decoupled - closing internal signup during beta should not also block customers from filing tickets.",
     "source": "bam",
     "parameters": []
   },
@@ -2086,7 +2086,7 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
   },
   {
     "mcp_tool": "get_public_config",
-    "description": "SuperUser only (MCP gate). Read the unauthenticated /public/config — currently returns whether public signup is disabled. The underlying endpoint is public, but we gate MCP access to SuperUsers since this is part of the platform-admin surface.",
+    "description": "SuperUser only (MCP gate). Read the unauthenticated /public/config - currently returns whether public signup is disabled. The underlying endpoint is public, but we gate MCP access to SuperUsers since this is part of the platform-admin surface.",
     "source": "bam",
     "parameters": []
   },
@@ -2341,7 +2341,7 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
   },
   {
     "mcp_tool": "list_comment_revisions",
-    "description": "List the edit history of a comment — every superseded body, newest first, with who revised it and when. Readable by anyone who can read the comment.",
+    "description": "List the edit history of a comment - every superseded body, newest first, with who revised it and when. Readable by anyone who can read the comment.",
     "source": "bam",
     "parameters": [
       {
@@ -2626,7 +2626,7 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
   },
   {
     "mcp_tool": "logout",
-    "description": "Invalidate the current session cookie. Note: API-key callers are not affected — this only logs out cookie sessions.",
+    "description": "Invalidate the current session cookie. Note: API-key callers are not affected - this only logs out cookie sessions.",
     "source": "bam",
     "parameters": []
   },
@@ -2697,13 +2697,13 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
         "type": "string",
         "required": false,
         "nullable": true,
-        "description": "Optionally change sprint — name or UUID"
+        "description": "Optionally change sprint - name or UUID"
       }
     ]
   },
   {
     "mcp_tool": "platform_create_org",
-    "description": "SuperUser only. Create a brand-new organization. The slug is auto-derived from the name (lowercased, non-alphanumeric collapsed to '-'). Does NOT create a membership for the caller — use switch_active_org or the /superuser/context/switch endpoint to enter the new org afterwards.",
+    "description": "SuperUser only. Create a brand-new organization. The slug is auto-derived from the name (lowercased, non-alphanumeric collapsed to '-'). Does NOT create a membership for the caller - use switch_active_org or the /superuser/context/switch endpoint to enter the new org afterwards.",
     "source": "bam",
     "parameters": [
       {
@@ -2724,7 +2724,7 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
   },
   {
     "mcp_tool": "platform_delete_org",
-    "description": "SuperUser only. Soft-delete an organization: it is stamped deleted and hidden from every read path (list, get, the org switcher), its memberships are dropped and member sessions revoked so no one can access it, but the org row and all authored content are kept for audit (a hard delete is impossible — the FK web into users.id is NO ACTION/RESTRICT). Requires confirm_action=true to proceed.",
+    "description": "SuperUser only. Soft-delete an organization: it is stamped deleted and hidden from every read path (list, get, the org switcher), its memberships are dropped and member sessions revoked so no one can access it, but the org row and all authored content are kept for audit (a hard delete is impossible - the FK web into users.id is NO ACTION/RESTRICT). Requires confirm_action=true to proceed.",
     "source": "bam",
     "parameters": [
       {
@@ -2791,7 +2791,7 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
   },
   {
     "mcp_tool": "platform_update_org",
-    "description": "SuperUser only. Update an organization. Renaming regenerates the slug. settings is a shallow JSONB replacement — pass the full object you want stored.",
+    "description": "SuperUser only. Update an organization. Renaming regenerates the slug. settings is a shallow JSONB replacement - pass the full object you want stored.",
     "source": "bam",
     "parameters": [
       {
@@ -2939,7 +2939,7 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
   },
   {
     "mcp_tool": "set_helpdesk_signup_disabled",
-    "description": "SuperUser only. Toggle the Helpdesk customer signup kill switch. When true, POST /helpdesk/auth/register returns 403 SIGNUP_DISABLED and the Helpdesk login page hides 'Create one'. Independent of `set_public_signup_disabled` — closing BigBlueBam internal signup during beta should not also block customers from filing tickets. Both flags are returned in the response so the caller can see the resulting state.",
+    "description": "SuperUser only. Toggle the Helpdesk customer signup kill switch. When true, POST /helpdesk/auth/register returns 403 SIGNUP_DISABLED and the Helpdesk login page hides 'Create one'. Independent of `set_public_signup_disabled` - closing BigBlueBam internal signup during beta should not also block customers from filing tickets. Both flags are returned in the response so the caller can see the resulting state.",
     "source": "bam",
     "parameters": [
       {
@@ -2981,7 +2981,7 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
   },
   {
     "mcp_tool": "set_public_signup_disabled",
-    "description": "SuperUser only. Toggle the BigBlueBam (internal) public signup kill switch. When true, POST /auth/register returns 403 SIGNUP_DISABLED and the /b3/login page's 'Create one' link routes to the beta-gate. Does NOT affect Helpdesk customer signup — use `set_helpdesk_signup_disabled` for that. Both flags are returned in the response so the caller can see the resulting state of the platform settings row.",
+    "description": "SuperUser only. Toggle the BigBlueBam (internal) public signup kill switch. When true, POST /auth/register returns 403 SIGNUP_DISABLED and the /b3/login page's 'Create one' link routes to the beta-gate. Does NOT affect Helpdesk customer signup - use `set_helpdesk_signup_disabled` for that. Both flags are returned in the response so the caller can see the resulting state of the platform settings row.",
     "source": "bam",
     "parameters": [
       {
@@ -3070,13 +3070,13 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
         "format": "uuid",
         "required": true,
         "nullable": false,
-        "description": "Target organization ID — must be one of the caller's memberships."
+        "description": "Target organization ID - must be one of the caller's memberships."
       }
     ]
   },
   {
     "mcp_tool": "task_upsert_by_external_id",
-    "description": "Idempotent create-or-update of a task by (project_id, external_id). Natural key is the partial unique index on (project_id, external_id). On insert, allocates a new human_id and accepts the full create payload. On update, patches the supplied fields; human_id is preserved. Returns { data, created, idempotency_key } — `created` is true on insert, false on update.",
+    "description": "Idempotent create-or-update of a task by (project_id, external_id). Natural key is the partial unique index on (project_id, external_id). On insert, allocates a new human_id and accepts the full create payload. On update, patches the supplied fields; human_id is preserved. Returns { data, created, idempotency_key } - `created` is true on insert, false on update.",
     "source": "bam",
     "parameters": [
       {
@@ -3590,7 +3590,7 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
         "type": "string",
         "required": false,
         "nullable": true,
-        "description": "New assignee — UUID, email, or display name"
+        "description": "New assignee - UUID, email, or display name"
       },
       {
         "name": "priority",
@@ -3619,7 +3619,7 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
         "type": "string",
         "required": false,
         "nullable": true,
-        "description": "New sprint — name or UUID"
+        "description": "New sprint - name or UUID"
       },
       {
         "name": "state_id",
@@ -3764,7 +3764,7 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
   },
   {
     "mcp_tool": "banter_add_channel_members",
-    "description": "Add one or more members to a Banter channel. Accepts a channel UUID, name, or #name, and each user may be a UUID, email, or @handle — mixed lists are supported.",
+    "description": "Add one or more members to a Banter channel. Accepts a channel UUID, name, or #name, and each user may be a UUID, email, or @handle - mixed lists are supported.",
     "source": "banter",
     "parameters": [
       {
@@ -3807,7 +3807,7 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
   },
   {
     "mcp_tool": "banter_archive_channel",
-    "description": "Archive a Banter channel (reversible). Accepts a channel UUID, a bare channel name, or #name — no need to resolve the id first.",
+    "description": "Archive a Banter channel (reversible). Accepts a channel UUID, a bare channel name, or #name - no need to resolve the id first.",
     "source": "banter",
     "parameters": [
       {
@@ -3865,7 +3865,7 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
   },
   {
     "mcp_tool": "banter_create_bookmark",
-    "description": "Bookmark a Banter message for the calling user, with an optional note. Idempotent — bookmarking an already-bookmarked message is a no-op.",
+    "description": "Bookmark a Banter message for the calling user, with an optional note. Idempotent - bookmarking an already-bookmarked message is a no-op.",
     "source": "banter",
     "parameters": [
       {
@@ -3965,7 +3965,7 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
   },
   {
     "mcp_tool": "banter_delete_bookmark",
-    "description": "Remove a Banter bookmark for the calling user. Pass either the bookmark id (bookmark_id) or the bookmarked message id (message_id) — exactly one is required.",
+    "description": "Remove a Banter bookmark for the calling user. Pass either the bookmark id (bookmark_id) or the bookmarked message id (message_id) - exactly one is required.",
     "source": "banter",
     "parameters": [
       {
@@ -4097,7 +4097,7 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
   },
   {
     "mcp_tool": "banter_feed_dismiss",
-    "description": "Dismiss a single feed entry — it is excluded from future reads entirely.",
+    "description": "Dismiss a single feed entry - it is excluded from future reads entirely.",
     "source": "banter",
     "parameters": [
       {
@@ -4294,7 +4294,7 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
   },
   {
     "mcp_tool": "banter_find_user_by_handle",
-    "description": "Find a Banter user by handle (accepts \"@alice\" or \"alice\"). Banter users do not have a dedicated handle column — matching falls back to a slugified form of display_name (lower-cased, whitespace collapsed to hyphens). Returns the user or null.",
+    "description": "Find a Banter user by handle (accepts \"@alice\" or \"alice\"). Banter users do not have a dedicated handle column - matching falls back to a slugified form of display_name (lower-cased, whitespace collapsed to hyphens). Returns the user or null.",
     "source": "banter",
     "parameters": [
       {
@@ -4815,7 +4815,7 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
   },
   {
     "mcp_tool": "banter_mark_read",
-    "description": "Mark a Banter channel read up to a given message — advances the caller's last-read cursor and clears any unified notifications for that channel. Accepts a channel UUID, name, or #name.",
+    "description": "Mark a Banter channel read up to a given message - advances the caller's last-read cursor and clears any unified notifications for that channel. Accepts a channel UUID, name, or #name.",
     "source": "banter",
     "parameters": [
       {
@@ -5224,7 +5224,7 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
   },
   {
     "mcp_tool": "banter_send_group_dm",
-    "description": "Send a group direct message (creates or reuses existing group DM). Each recipient may be a UUID, email, or @handle — mixed lists are supported.",
+    "description": "Send a group direct message (creates or reuses existing group DM). Each recipient may be a UUID, email, or @handle - mixed lists are supported.",
     "source": "banter",
     "parameters": [
       {
@@ -5245,7 +5245,7 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
   },
   {
     "mcp_tool": "banter_set_presence",
-    "description": "Set the authenticated user's presence status in Banter. The status is ephemeral — it auto-expires via a Redis TTL, so callers should not treat it as persistent.",
+    "description": "Set the authenticated user's presence status in Banter. The status is ephemeral - it auto-expires via a Redis TTL, so callers should not treat it as persistent.",
     "source": "banter",
     "parameters": [
       {
@@ -7515,7 +7515,7 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
   },
   {
     "mcp_tool": "bay_decision_set",
-    "description": "Set (upsert) the caller's review decision on a Bay version — one decision per reviewer per version. decision is approved/rejected/changes_requested/pending. An agent setting a decision is a first-class reviewer; an agent-proposed FINAL approval that a different human must ratify should instead route through proposal_create.",
+    "description": "Set (upsert) the caller's review decision on a Bay version - one decision per reviewer per version. decision is approved/rejected/changes_requested/pending. An agent setting a decision is a first-class reviewer; an agent-proposed FINAL approval that a different human must ratify should instead route through proposal_create.",
     "source": "bay",
     "parameters": [
       {
@@ -7580,7 +7580,7 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
   },
   {
     "mcp_tool": "bay_review_resolve",
-    "description": "Open (find-or-create) the Bay review for a Bin media asset. Given the Bin asset id (and optionally its content_type/name/current bin_version_id), returns the Bay review asset — creating it + an initial version on first call, idempotent thereafter. This is how a media file in Bin is opened for review in Bay.",
+    "description": "Open (find-or-create) the Bay review for a Bin media asset. Given the Bin asset id (and optionally its content_type/name/current bin_version_id), returns the Bay review asset - creating it + an initial version on first call, idempotent thereafter. This is how a media file in Bin is opened for review in Bay.",
     "source": "bay",
     "parameters": [
       {
@@ -7891,7 +7891,7 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
         "type": "string",
         "required": false,
         "nullable": false,
-        "description": "Project scope (if project-level) — accepts a UUID or project name"
+        "description": "Project scope (if project-level) - accepts a UUID or project name"
       }
     ]
   },
@@ -8418,7 +8418,7 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
   },
   {
     "mcp_tool": "beacon_search_context",
-    "description": "Structured retrieval optimized for agent consumption — richer metadata, linked Beacons pre-fetched.",
+    "description": "Structured retrieval optimized for agent consumption - richer metadata, linked Beacons pre-fetched.",
     "source": "beacon",
     "parameters": [
       {
@@ -8611,7 +8611,7 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
   },
   {
     "mcp_tool": "beacon_upsert_by_slug",
-    "description": "Idempotent create-or-update of a Beacon entry by slug. Natural key is the slug within your organization (another org may use the same slug; its entry is never touched). On update, bumps version and writes a beacon_versions snapshot. Returns { data, created, idempotency_key } — `created` is true on insert, false on update.",
+    "description": "Idempotent create-or-update of a Beacon entry by slug. Natural key is the slug within your organization (another org may use the same slug; its entry is never touched). On update, bumps version and writes a beacon_versions snapshot. Returns { data, created, idempotency_key } - `created` is true on insert, false on update.",
     "source": "beacon",
     "parameters": [
       {
@@ -8619,7 +8619,7 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
         "type": "string",
         "required": true,
         "nullable": false,
-        "description": "Slug — idempotency key (must be a URL-safe string)"
+        "description": "Slug - idempotency key (must be a URL-safe string)"
       },
       {
         "name": "title",
@@ -8933,7 +8933,7 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
   },
   {
     "mcp_tool": "bearing_goal_unwatch",
-    "description": "Remove a watcher from a goal. `id` accepts a UUID or goal title; `user_id` accepts a UUID or email address. You may remove yourself, or — if you are the goal owner or an org admin/owner — remove another user.",
+    "description": "Remove a watcher from a goal. `id` accepts a UUID or goal title; `user_id` accepts a UUID or email address. You may remove yourself, or - if you are the goal owner or an org admin/owner - remove another user.",
     "source": "bearing",
     "parameters": [
       {
@@ -9208,7 +9208,7 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
   },
   {
     "mcp_tool": "bearing_kr_delete",
-    "description": "Delete a key result. `id` accepts a UUID or the KR title — if the title is shared across multiple goals the tool fails and asks for disambiguation.",
+    "description": "Delete a key result. `id` accepts a UUID or the KR title - if the title is shared across multiple goals the tool fails and asks for disambiguation.",
     "source": "bearing",
     "parameters": [
       {
@@ -9222,7 +9222,7 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
   },
   {
     "mcp_tool": "bearing_kr_get",
-    "description": "Get a single key result. `id` accepts a UUID or the KR title — if the title is shared across multiple goals the tool fails and asks for disambiguation.",
+    "description": "Get a single key result. `id` accepts a UUID or the KR title - if the title is shared across multiple goals the tool fails and asks for disambiguation.",
     "source": "bearing",
     "parameters": [
       {
@@ -9357,7 +9357,7 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
   },
   {
     "mcp_tool": "bearing_kr_update",
-    "description": "Update a key result value or metadata. When current_value is provided, also records a value check-in. `id` accepts either a UUID or the KR title — if multiple KRs share the title the tool fails and asks for disambiguation.",
+    "description": "Update a key result value or metadata. When current_value is provided, also records a value check-in. `id` accepts either a UUID or the KR title - if multiple KRs share the title the tool fails and asks for disambiguation.",
     "source": "bearing",
     "parameters": [
       {
@@ -10148,7 +10148,7 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
   },
   {
     "mcp_tool": "bench_get_data_source",
-    "description": "Get the detailed schema for one data source entity — its available measures, dimensions, and filterable fields. Use this after bench_list_data_sources to learn valid field names for a query.",
+    "description": "Get the detailed schema for one data source entity - its available measures, dimensions, and filterable fields. Use this after bench_list_data_sources to learn valid field names for a query.",
     "source": "bench",
     "parameters": [
       {
@@ -10883,7 +10883,7 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
         "type": "string",
         "required": false,
         "nullable": false,
-        "description": "Link to a Bam project — UUID or exact project name"
+        "description": "Link to a Bam project - UUID or exact project name"
       },
       {
         "name": "tax_rate",
@@ -10903,7 +10903,7 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
   },
   {
     "mcp_tool": "bill_create_invoice_from_deal",
-    "description": "Generate a draft invoice from a Bond CRM deal, pulling deal value and contact info. NOTE: deal_id must be a UUID — Bond deal title search is not reachable from this tool. In a Bolt rule, pass `{{ event.deal.id }}` from the triggering deal.* event.",
+    "description": "Generate a draft invoice from a Bond CRM deal, pulling deal value and contact info. NOTE: deal_id must be a UUID - Bond deal title search is not reachable from this tool. In a Bolt rule, pass `{{ event.deal.id }}` from the triggering deal.* event.",
     "source": "bill",
     "parameters": [
       {
@@ -10919,7 +10919,7 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
         "type": "string",
         "required": true,
         "nullable": false,
-        "description": "Billing client — UUID, exact client name, or client email"
+        "description": "Billing client - UUID, exact client name, or client email"
       }
     ]
   },
@@ -10933,14 +10933,14 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
         "type": "string",
         "required": true,
         "nullable": false,
-        "description": "Bam project — UUID or exact project name"
+        "description": "Bam project - UUID or exact project name"
       },
       {
         "name": "client_id",
         "type": "string",
         "required": true,
         "nullable": false,
-        "description": "Billing client — UUID, exact client name, or client email"
+        "description": "Billing client - UUID, exact client name, or client email"
       },
       {
         "name": "date_from",
@@ -11032,7 +11032,7 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
         "type": "string",
         "required": true,
         "nullable": false,
-        "description": "Billing client — UUID, exact client name, or client email"
+        "description": "Billing client - UUID, exact client name, or client email"
       },
       {
         "name": "name",
@@ -11059,7 +11059,7 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
         "type": "string",
         "required": false,
         "nullable": false,
-        "description": "Link to a Bam project — UUID or exact project name"
+        "description": "Link to a Bam project - UUID or exact project name"
       },
       {
         "name": "auto_finalize",
@@ -11243,7 +11243,7 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
   },
   {
     "mcp_tool": "bill_finalize_invoice",
-    "description": "Finalize a draft invoice — assigns an invoice number and locks edits.",
+    "description": "Finalize a draft invoice - assigns an invoice number and locks edits.",
     "source": "bill",
     "parameters": [
       {
@@ -11378,7 +11378,7 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
   },
   {
     "mcp_tool": "bill_list_clients",
-    "description": "List billing clients for the organization, with optional fuzzy search across name, email, and linked Bond company name. Returns id, name, email, company_id, company_name, currency (org default), and default_payment_terms_days — the resolver surface every \"bill client X\" rule needs.",
+    "description": "List billing clients for the organization, with optional fuzzy search across name, email, and linked Bond company name. Returns id, name, email, company_id, company_name, currency (org default), and default_payment_terms_days - the resolver surface every \"bill client X\" rule needs.",
     "source": "bill",
     "parameters": [
       {
@@ -11507,7 +11507,7 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
   },
   {
     "mcp_tool": "bill_pause_recurring_invoice",
-    "description": "Pause a recurring schedule — stops invoice generation until resumed.",
+    "description": "Pause a recurring schedule - stops invoice generation until resumed.",
     "source": "bill",
     "parameters": [
       {
@@ -11613,7 +11613,7 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
   },
   {
     "mcp_tool": "bill_resume_recurring_invoice",
-    "description": "Resume a paused recurring schedule — generation continues at next_run_at.",
+    "description": "Resume a paused recurring schedule - generation continues at next_run_at.",
     "source": "bill",
     "parameters": [
       {
@@ -12253,7 +12253,7 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
   },
   {
     "mcp_tool": "bill_void_invoice",
-    "description": "Void a finalized invoice — marks it void without deleting the record.",
+    "description": "Void a finalized invoice - marks it void without deleting the record.",
     "source": "bill",
     "parameters": [
       {
@@ -12339,7 +12339,7 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
   },
   {
     "mcp_tool": "bin_asset_delete",
-    "description": "Hard-delete a Bin asset: removes the catalog entry AND its stored bytes (all versions + derived proxy/poster). Irreversible — unlike bin_asset_archive, nothing is retained. Missing bytes are not an error (the row is deleted regardless). Two-step confirm: call with confirm_action omitted/false to preview, then again with confirm_action:true to proceed.",
+    "description": "Hard-delete a Bin asset: removes the catalog entry AND its stored bytes (all versions + derived proxy/poster). Irreversible - unlike bin_asset_archive, nothing is retained. Missing bytes are not an error (the row is deleted regardless). Two-step confirm: call with confirm_action omitted/false to preview, then again with confirm_action:true to proceed.",
     "source": "bin",
     "parameters": [
       {
@@ -13625,7 +13625,7 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
   },
   {
     "mcp_tool": "blast_draft_campaign",
-    "description": "Create a campaign in draft status with template, segment, and schedule. `template_id` and `segment_id` accept either a UUID or the entity name — exact match preferred, single fuzzy match acceptable.",
+    "description": "Create a campaign in draft status with template, segment, and schedule. `template_id` and `segment_id` accept either a UUID or the entity name - exact match preferred, single fuzzy match acceptable.",
     "source": "blast",
     "parameters": [
       {
@@ -13731,7 +13731,7 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
   },
   {
     "mcp_tool": "blast_evaluate_segment",
-    "description": "Run the full recipient evaluation for a segment (the resolved send list a campaign would target). Read-only — does not send anything. `id` accepts either a UUID or the segment name.",
+    "description": "Run the full recipient evaluation for a segment (the resolved send list a campaign would target). Read-only - does not send anything. `id` accepts either a UUID or the segment name.",
     "source": "blast",
     "parameters": [
       {
@@ -13987,7 +13987,7 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
   },
   {
     "mcp_tool": "blast_preview_template",
-    "description": "Render a template with sample merge data to preview the resulting subject and HTML. Read-only — does not send anything. `id` accepts either a UUID or the template name.",
+    "description": "Render a template with sample merge data to preview the resulting subject and HTML. Read-only - does not send anything. `id` accepts either a UUID or the template name.",
     "source": "blast",
     "parameters": [
       {
@@ -15423,7 +15423,7 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
   },
   {
     "mcp_tool": "blueprint_add_collaborator",
-    "description": "Grant a user explicit access to a Blueprint diagram at a given role. `role` is one of owner / editor / commenter / viewer (defaults to editor). Idempotent: re-adding an existing collaborator updates their role rather than erroring. `user_id` must be a Bam user UUID — resolve emails/names first via find_user_by_email / find_user_by_name.",
+    "description": "Grant a user explicit access to a Blueprint diagram at a given role. `role` is one of owner / editor / commenter / viewer (defaults to editor). Idempotent: re-adding an existing collaborator updates their role rather than erroring. `user_id` must be a Bam user UUID - resolve emails/names first via find_user_by_email / find_user_by_name.",
     "source": "blueprint",
     "parameters": [
       {
@@ -15583,7 +15583,7 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
   },
   {
     "mcp_tool": "blueprint_add_node",
-    "description": "Add a node to a Blueprint diagram. `shape` is a free-form tag the renderer maps to a visual (e.g. 'rounded', 'rectangle', 'diamond', 'circle', 'cylinder', 'subroutine', 'actor'). Set `parent_node_id` to nest the node inside a container/swimlane. Set `ref_entity_type` + `ref_entity_id` to back-link the node to a cross-product entity (e.g. ref_entity_type='bam.task', ref_entity_id=<task uuid>). Positions are optional — if omitted, blueprint_apply_layout will place the node.",
+    "description": "Add a node to a Blueprint diagram. `shape` is a free-form tag the renderer maps to a visual (e.g. 'rounded', 'rectangle', 'diamond', 'circle', 'cylinder', 'subroutine', 'actor'). Set `parent_node_id` to nest the node inside a container/swimlane. Set `ref_entity_type` + `ref_entity_id` to back-link the node to a cross-product entity (e.g. ref_entity_type='bam.task', ref_entity_id=<task uuid>). Positions are optional - if omitted, blueprint_apply_layout will place the node.",
     "source": "blueprint",
     "parameters": [
       {
@@ -15628,14 +15628,14 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
         "type": "number",
         "required": false,
         "nullable": false,
-        "description": "X position (px) — optional; auto-layout will place if omitted"
+        "description": "X position (px) - optional; auto-layout will place if omitted"
       },
       {
         "name": "position_y",
         "type": "number",
         "required": false,
         "nullable": false,
-        "description": "Y position (px) — optional; auto-layout will place if omitted"
+        "description": "Y position (px) - optional; auto-layout will place if omitted"
       },
       {
         "name": "width",
@@ -15758,7 +15758,7 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
   },
   {
     "mcp_tool": "blueprint_archive",
-    "description": "Archive a Blueprint diagram (soft delete — sets is_archived=true on blueprint_diagrams). Destructive — requires confirm_action=true to actually proceed. Call once with confirm_action: false (or omit) to preview the action, then call again with confirm_action: true to commit. Requires the caller's API key scope to include `admin`.",
+    "description": "Archive a Blueprint diagram (soft delete - sets is_archived=true on blueprint_diagrams). Destructive - requires confirm_action=true to actually proceed. Call once with confirm_action: false (or omit) to preview the action, then call again with confirm_action: true to commit. Requires the caller's API key scope to include `admin`.",
     "source": "blueprint",
     "parameters": [
       {
@@ -15857,7 +15857,7 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
   },
   {
     "mcp_tool": "blueprint_delete_edge",
-    "description": "Delete an edge from a Blueprint diagram. Destructive — requires confirm_action=true to actually proceed. Call once with confirm_action: false (or omit) to preview, then call again with true to commit.",
+    "description": "Delete an edge from a Blueprint diagram. Destructive - requires confirm_action=true to actually proceed. Call once with confirm_action: false (or omit) to preview, then call again with true to commit.",
     "source": "blueprint",
     "parameters": [
       {
@@ -15887,7 +15887,7 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
   },
   {
     "mcp_tool": "blueprint_delete_node",
-    "description": "Delete a node from a Blueprint diagram. CASCADE-deletes every edge that references the node as source or target. Destructive — requires confirm_action=true to actually proceed. Call once with confirm_action: false (or omit) to preview, then call again with true to commit.",
+    "description": "Delete a node from a Blueprint diagram. CASCADE-deletes every edge that references the node as source or target. Destructive - requires confirm_action=true to actually proceed. Call once with confirm_action: false (or omit) to preview, then call again with true to commit.",
     "source": "blueprint",
     "parameters": [
       {
@@ -15917,7 +15917,7 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
   },
   {
     "mcp_tool": "blueprint_duplicate_node",
-    "description": "Duplicate a Blueprint node in the same diagram. The clone copies every visual attribute (label, shape, dimensions, style, data, cross-product entity ref) and is offset from the original so it doesn't sit on top of it — defaults to +32px down-right. Containment (parent_node_id), pinned state, and z-index are preserved. Edges to/from the source are NOT duplicated; connect the clone yourself if you need it wired in. Broadcasts a blueprint.node.created event.",
+    "description": "Duplicate a Blueprint node in the same diagram. The clone copies every visual attribute (label, shape, dimensions, style, data, cross-product entity ref) and is offset from the original so it doesn't sit on top of it - defaults to +32px down-right. Containment (parent_node_id), pinned state, and z-index are preserved. Edges to/from the source are NOT duplicated; connect the clone yourself if you need it wired in. Broadcasts a blueprint.node.created event.",
     "source": "blueprint",
     "parameters": [
       {
@@ -15954,7 +15954,7 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
   },
   {
     "mcp_tool": "blueprint_export",
-    "description": "Export a Blueprint diagram in the requested format. `json` is the canonical structured payload; `mermaid` produces a Mermaid source string useful for re-embedding in Briefs or LLM context; `svg` and `png` produce rendered artifacts (large graphs may be queued via a worker job — the response surfaces whatever the api returns).",
+    "description": "Export a Blueprint diagram in the requested format. `json` is the canonical structured payload; `mermaid` produces a Mermaid source string useful for re-embedding in Briefs or LLM context; `svg` and `png` produce rendered artifacts (large graphs may be queued via a worker job - the response surfaces whatever the api returns).",
     "source": "blueprint",
     "parameters": [
       {
@@ -16019,7 +16019,7 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
         "type": "boolean",
         "required": false,
         "nullable": false,
-        "description": "Wipe the existing graph first (default false — appends)"
+        "description": "Wipe the existing graph first (default false - appends)"
       }
     ]
   },
@@ -16126,7 +16126,7 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
         "type": "boolean",
         "required": false,
         "nullable": false,
-        "description": "Wipe the existing graph before importing (default false — appends)"
+        "description": "Wipe the existing graph before importing (default false - appends)"
       }
     ]
   },
@@ -16170,7 +16170,7 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
   },
   {
     "mcp_tool": "blueprint_list",
-    "description": "List Blueprint diagrams visible to the caller, optionally filtered by project, diagram type, starred-by-me, or include-archived. Blueprint diagrams are typed graphs (nodes, edges, ports) backed by relational tables — distinct from Board (freeform whiteboard). Returns metadata only; use blueprint_get / blueprint_read_nodes / blueprint_read_edges for the graph payload.",
+    "description": "List Blueprint diagrams visible to the caller, optionally filtered by project, diagram type, starred-by-me, or include-archived. Blueprint diagrams are typed graphs (nodes, edges, ports) backed by relational tables - distinct from Board (freeform whiteboard). Returns metadata only; use blueprint_get / blueprint_read_nodes / blueprint_read_edges for the graph payload.",
     "source": "blueprint",
     "parameters": [
       {
@@ -16242,7 +16242,7 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
   },
   {
     "mcp_tool": "blueprint_list_versions",
-    "description": "List the saved version snapshots of a Blueprint diagram, newest first. Each version is an immutable point-in-time snapshot of the full graph (nodes + edges), captured by blueprint_snapshot_version or by the SPA. Use the version_number with blueprint_restore_version to roll the live diagram back. Returns metadata only — the snapshot payload is not inlined here.",
+    "description": "List the saved version snapshots of a Blueprint diagram, newest first. Each version is an immutable point-in-time snapshot of the full graph (nodes + edges), captured by blueprint_snapshot_version or by the SPA. Use the version_number with blueprint_restore_version to roll the live diagram back. Returns metadata only - the snapshot payload is not inlined here.",
     "source": "blueprint",
     "parameters": [
       {
@@ -16301,7 +16301,7 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
   },
   {
     "mcp_tool": "blueprint_promote_graph_to_tasks",
-    "description": "Compile a Blueprint diagram into a Bam-tasks-creation plan. Returns the structured list of tasks to create (one per node) plus parent/child links to set up (one per edge), under the chosen edge-direction convention. The blueprint-api deliberately does NOT create the tasks itself — the caller (SPA or agent) drives the actual `create_task` / `bam_add_task_parent` calls so attribution stays on the caller. After tasks land, the caller should also patch each blueprint_node with ref_entity_type='bam.task' + ref_entity_id=<new task id> via blueprint_link_entity so the two-way sync hook fires. Edge-direction options: 'source-parent' (A->B means A parents B, default for mindmaps/decision trees), 'target-parent' (A->B means B parents A, for dependency graphs), 'none' (skip parent links).",
+    "description": "Compile a Blueprint diagram into a Bam-tasks-creation plan. Returns the structured list of tasks to create (one per node) plus parent/child links to set up (one per edge), under the chosen edge-direction convention. The blueprint-api deliberately does NOT create the tasks itself - the caller (SPA or agent) drives the actual `create_task` / `bam_add_task_parent` calls so attribution stays on the caller. After tasks land, the caller should also patch each blueprint_node with ref_entity_type='bam.task' + ref_entity_id=<new task id> via blueprint_link_entity so the two-way sync hook fires. Edge-direction options: 'source-parent' (A->B means A parents B, default for mindmaps/decision trees), 'target-parent' (A->B means B parents A, for dependency graphs), 'none' (skip parent links).",
     "source": "blueprint",
     "parameters": [
       {
@@ -16352,7 +16352,7 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
   },
   {
     "mcp_tool": "blueprint_promote_node_to_task",
-    "description": "Generate a Bam-task payload from a Blueprint node and suggest back-linking the node to the new task. Returns a structured payload the caller can POST to /b3/api/projects/:id/tasks (the second hop is not yet executed server-side — wire-up is on the Wave 5 roadmap). Use this when a node represents work to be tracked in Bam (e.g. a swimlane step or a deliverable).",
+    "description": "Generate a Bam-task payload from a Blueprint node and suggest back-linking the node to the new task. Returns a structured payload the caller can POST to /b3/api/projects/:id/tasks (the second hop is not yet executed server-side - wire-up is on the Wave 5 roadmap). Use this when a node represents work to be tracked in Bam (e.g. a swimlane step or a deliverable).",
     "source": "blueprint",
     "parameters": [
       {
@@ -16436,7 +16436,7 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
   },
   {
     "mcp_tool": "blueprint_remove_collaborator",
-    "description": "Revoke a user's explicit collaborator grant on a Blueprint diagram. This removes only the direct share grant — the user may still see the diagram via project- or org-level visibility. Destructive — requires confirm_action=true to actually proceed. Call once with confirm_action: false (or omit) to preview, then call again with true to commit.",
+    "description": "Revoke a user's explicit collaborator grant on a Blueprint diagram. This removes only the direct share grant - the user may still see the diagram via project- or org-level visibility. Destructive - requires confirm_action=true to actually proceed. Call once with confirm_action: false (or omit) to preview, then call again with true to commit.",
     "source": "blueprint",
     "parameters": [
       {
@@ -16466,7 +16466,7 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
   },
   {
     "mcp_tool": "blueprint_restore_version",
-    "description": "Roll a Blueprint diagram's live graph back to a previously-snapshotted version, identified by its version_number (see blueprint_list_versions). Restoring replaces the current nodes and edges with the snapshot's contents — destructive to the current graph state. Take a fresh blueprint_snapshot_version first if you might want to undo the restore. Returns the restored graph payload.",
+    "description": "Roll a Blueprint diagram's live graph back to a previously-snapshotted version, identified by its version_number (see blueprint_list_versions). Restoring replaces the current nodes and edges with the snapshot's contents - destructive to the current graph state. Take a fresh blueprint_snapshot_version first if you might want to undo the restore. Returns the restored graph payload.",
     "source": "blueprint",
     "parameters": [
       {
@@ -16525,7 +16525,7 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
   },
   {
     "mcp_tool": "blueprint_snapshot_version",
-    "description": "Capture the current graph (nodes + edges) of a Blueprint diagram as a new immutable version snapshot, auto-numbered one higher than the latest. An optional `label` annotates the snapshot (e.g. \"before agent rewrite\", \"approved v2\"). Snapshotting does not change the live diagram — it just records a restore point. Pair with blueprint_restore_version to roll back later.",
+    "description": "Capture the current graph (nodes + edges) of a Blueprint diagram as a new immutable version snapshot, auto-numbered one higher than the latest. An optional `label` annotates the snapshot (e.g. \"before agent rewrite\", \"approved v2\"). Snapshotting does not change the live diagram - it just records a restore point. Pair with blueprint_restore_version to roll back later.",
     "source": "blueprint",
     "parameters": [
       {
@@ -16547,7 +16547,7 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
   },
   {
     "mcp_tool": "blueprint_star",
-    "description": "Star a Blueprint diagram for the calling user, so it surfaces in their starred list (blueprint_list with starred=true). Idempotent — starring an already-starred diagram is a no-op. Personal bookmark only; does not affect other users.",
+    "description": "Star a Blueprint diagram for the calling user, so it surfaces in their starred list (blueprint_list with starred=true). Idempotent - starring an already-starred diagram is a no-op. Personal bookmark only; does not affect other users.",
     "source": "blueprint",
     "parameters": [
       {
@@ -16562,7 +16562,7 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
   },
   {
     "mcp_tool": "blueprint_unstar",
-    "description": "Remove the calling user's star from a Blueprint diagram. Idempotent — unstarring a diagram that was not starred is a no-op. Personal bookmark only; does not affect other users.",
+    "description": "Remove the calling user's star from a Blueprint diagram. Idempotent - unstarring a diagram that was not starred is a no-op. Personal bookmark only; does not affect other users.",
     "source": "blueprint",
     "parameters": [
       {
@@ -16654,7 +16654,7 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
   },
   {
     "mcp_tool": "blueprint_update_comment",
-    "description": "Edit a Blueprint comment's text or toggle its resolved state. Provide only the fields to change: pass `resolved: true` to resolve a review thread (or `false` to reopen it), and/or `body`/`body_plain` to edit the text. This is the resolve mechanism — there is no separate resolve endpoint.",
+    "description": "Edit a Blueprint comment's text or toggle its resolved state. Provide only the fields to change: pass `resolved: true` to resolve a review thread (or `false` to reopen it), and/or `body`/`body_plain` to edit the text. This is the resolve mechanism - there is no separate resolve endpoint.",
     "source": "blueprint",
     "parameters": [
       {
@@ -16777,7 +16777,7 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
   },
   {
     "mcp_tool": "blueprint_update_node",
-    "description": "Update fields on a Blueprint node. Provide only the fields to change. Does NOT update position — use blueprint_move_node for that. To re-target the cross-product link, prefer blueprint_link_entity (single-purpose tool with cleaner semantics).",
+    "description": "Update fields on a Blueprint node. Provide only the fields to change. Does NOT update position - use blueprint_move_node for that. To re-target the cross-product link, prefer blueprint_link_entity (single-purpose tool with cleaner semantics).",
     "source": "blueprint",
     "parameters": [
       {
@@ -17171,7 +17171,7 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
   },
   {
     "mcp_tool": "board_delete_permanent",
-    "description": "Permanently hard-delete a board and ALL of its elements, collaborators, stars, and versions (cascade). This is irreversible — distinct from board_archive which only soft-deletes. `id` accepts either a UUID or a board name.",
+    "description": "Permanently hard-delete a board and ALL of its elements, collaborators, stars, and versions (cascade). This is irreversible - distinct from board_archive which only soft-deletes. `id` accepts either a UUID or a board name.",
     "source": "board",
     "parameters": [
       {
@@ -18071,7 +18071,7 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
   },
   {
     "mcp_tool": "bolt_explain",
-    "description": "Explain an automation definition in plain English using the org's configured LLM provider. Pass the automation shape (name, trigger_source, trigger_event, conditions, actions) — for an existing automation, fetch it with bolt_get first. Returns a natural-language explanation. Requires an LLM provider to be configured (returns AI_NOT_CONFIGURED otherwise).",
+    "description": "Explain an automation definition in plain English using the org's configured LLM provider. Pass the automation shape (name, trigger_source, trigger_event, conditions, actions) - for an existing automation, fetch it with bolt_get first. Returns a natural-language explanation. Requires an LLM provider to be configured (returns AI_NOT_CONFIGURED otherwise).",
     "source": "bolt",
     "parameters": [
       {
@@ -18093,7 +18093,7 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
   },
   {
     "mcp_tool": "bolt_generate",
-    "description": "Generate a draft automation definition from a natural-language prompt using the org's configured LLM provider. Returns a proposed automation object (name, trigger, conditions, actions) plus a confidence score; it does NOT persist anything — pass the result to bolt_create to save it. Requires an LLM provider to be configured (returns AI_NOT_CONFIGURED otherwise).",
+    "description": "Generate a draft automation definition from a natural-language prompt using the org's configured LLM provider. Returns a proposed automation object (name, trigger, conditions, actions) plus a confidence score; it does NOT persist anything - pass the result to bolt_create to save it. Requires an LLM provider to be configured (returns AI_NOT_CONFIGURED otherwise).",
     "source": "bolt",
     "parameters": [
       {
@@ -18272,7 +18272,7 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
   },
   {
     "mcp_tool": "bolt_list_executions",
-    "description": "List execution history across all automations in the org (not scoped to a single automation — use bolt_executions for that). Org-admin scoped.",
+    "description": "List execution history across all automations in the org (not scoped to a single automation - use bolt_executions for that). Org-admin scoped.",
     "source": "bolt",
     "parameters": [
       {
@@ -18328,7 +18328,7 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
   },
   {
     "mcp_tool": "bolt_patch",
-    "description": "Partial metadata update of an automation. Only touches name, description, and/or enabled — does not modify the trigger, conditions, or actions (use bolt_update for those). Provide only the fields to change.",
+    "description": "Partial metadata update of an automation. Only touches name, description, and/or enabled - does not modify the trigger, conditions, or actions (use bolt_update for those). Provide only the fields to change.",
     "source": "bolt",
     "parameters": [
       {
@@ -18415,7 +18415,7 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
   },
   {
     "mcp_tool": "bolt_test",
-    "description": "Dry-run an automation against a simulated event payload. This evaluates ONLY the automation's conditions against the event — it does NOT execute the actions. Use it to check whether a given event would (or would not) trigger the automation. Returns `passed` (would the actions run), a per-condition `log`, and a human-readable `message`. To actually run actions, the automation must fire on a real ingested event.",
+    "description": "Dry-run an automation against a simulated event payload. This evaluates ONLY the automation's conditions against the event - it does NOT execute the actions. Use it to check whether a given event would (or would not) trigger the automation. Returns `passed` (would the actions run), a per-condition `log`, and a human-readable `message`. To actually run actions, the automation must fire on a real ingested event.",
     "source": "bolt",
     "parameters": [
       {
@@ -18594,14 +18594,14 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
         "type": "string",
         "required": true,
         "nullable": false,
-        "description": "Deal — accepts a UUID or a unique deal title fragment"
+        "description": "Deal - accepts a UUID or a unique deal title fragment"
       },
       {
         "name": "contact_id",
         "type": "string",
         "required": true,
         "nullable": false,
-        "description": "Contact — accepts a UUID, email, or unique name fragment"
+        "description": "Contact - accepts a UUID, email, or unique name fragment"
       },
       {
         "name": "role",
@@ -18622,7 +18622,7 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
         "type": "string",
         "required": true,
         "nullable": false,
-        "description": "Deal — accepts a UUID or unique deal title fragment"
+        "description": "Deal - accepts a UUID or unique deal title fragment"
       },
       {
         "name": "close_reason",
@@ -18650,7 +18650,7 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
         "type": "string",
         "required": true,
         "nullable": false,
-        "description": "Deal — accepts a UUID or unique deal title fragment"
+        "description": "Deal - accepts a UUID or unique deal title fragment"
       },
       {
         "name": "close_reason",
@@ -18854,14 +18854,14 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
         "type": "string",
         "required": false,
         "nullable": false,
-        "description": "Owner — accepts a user UUID or email address"
+        "description": "Owner - accepts a user UUID or email address"
       },
       {
         "name": "company_id",
         "type": "string",
         "required": false,
         "nullable": false,
-        "description": "Primary company to associate — accepts a company UUID or name"
+        "description": "Primary company to associate - accepts a company UUID or name"
       },
       {
         "name": "address_line1",
@@ -19004,14 +19004,14 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
         "type": "string",
         "required": true,
         "nullable": false,
-        "description": "Pipeline — accepts a UUID or exact pipeline name"
+        "description": "Pipeline - accepts a UUID or exact pipeline name"
       },
       {
         "name": "stage_id",
         "type": "string",
         "required": false,
         "nullable": false,
-        "description": "Initial stage — accepts a UUID or exact stage name (scoped to the resolved pipeline). Defaults to the first stage in the pipeline."
+        "description": "Initial stage - accepts a UUID or exact stage name (scoped to the resolved pipeline). Defaults to the first stage in the pipeline."
       },
       {
         "name": "value",
@@ -19055,21 +19055,21 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
         "type": "string",
         "required": false,
         "nullable": false,
-        "description": "Deal owner — accepts a user UUID or email"
+        "description": "Deal owner - accepts a user UUID or email"
       },
       {
         "name": "company_id",
         "type": "string",
         "required": false,
         "nullable": false,
-        "description": "Primary company — accepts a company UUID or name"
+        "description": "Primary company - accepts a company UUID or name"
       },
       {
         "name": "contact_ids",
         "type": "array",
         "required": false,
         "nullable": false,
-        "description": "Contacts to associate — each entry accepts a UUID or email"
+        "description": "Contacts to associate - each entry accepts a UUID or email"
       },
       {
         "name": "custom_fields",
@@ -19241,7 +19241,7 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
         "type": "string",
         "required": true,
         "nullable": false,
-        "description": "Pipeline — accepts a UUID or exact pipeline name"
+        "description": "Pipeline - accepts a UUID or exact pipeline name"
       },
       {
         "name": "name",
@@ -19320,7 +19320,7 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
         "type": "string",
         "required": true,
         "nullable": false,
-        "description": "Company — accepts a UUID or a unique company name"
+        "description": "Company - accepts a UUID or a unique company name"
       }
     ]
   },
@@ -19334,7 +19334,7 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
         "type": "string",
         "required": true,
         "nullable": false,
-        "description": "Contact — accepts a UUID, email address, or unique name fragment"
+        "description": "Contact - accepts a UUID, email address, or unique name fragment"
       }
     ]
   },
@@ -19363,7 +19363,7 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
         "type": "string",
         "required": true,
         "nullable": false,
-        "description": "Deal — accepts a UUID or a unique deal title fragment"
+        "description": "Deal - accepts a UUID or a unique deal title fragment"
       }
     ]
   },
@@ -19377,7 +19377,7 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
         "type": "string",
         "required": true,
         "nullable": false,
-        "description": "Pipeline — accepts a UUID or exact pipeline name"
+        "description": "Pipeline - accepts a UUID or exact pipeline name"
       }
     ]
   },
@@ -19406,14 +19406,14 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
         "type": "string",
         "required": true,
         "nullable": false,
-        "description": "Pipeline — accepts a UUID or exact pipeline name"
+        "description": "Pipeline - accepts a UUID or exact pipeline name"
       },
       {
         "name": "stage_id",
         "type": "string",
         "required": true,
         "nullable": false,
-        "description": "Stage — accepts a UUID or an exact stage name within the pipeline"
+        "description": "Stage - accepts a UUID or an exact stage name within the pipeline"
       }
     ]
   },
@@ -19427,7 +19427,7 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
         "type": "string",
         "required": true,
         "nullable": false,
-        "description": "Deal — accepts a UUID or a unique deal title fragment"
+        "description": "Deal - accepts a UUID or a unique deal title fragment"
       }
     ]
   },
@@ -19545,7 +19545,7 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
         "type": "string",
         "required": true,
         "nullable": false,
-        "description": "Deal — accepts a UUID or a unique deal title fragment"
+        "description": "Deal - accepts a UUID or a unique deal title fragment"
       }
     ]
   },
@@ -19559,7 +19559,7 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
         "type": "string",
         "required": true,
         "nullable": false,
-        "description": "Deal — accepts a UUID or a unique deal title fragment"
+        "description": "Deal - accepts a UUID or a unique deal title fragment"
       }
     ]
   },
@@ -19603,7 +19603,7 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
         "type": "string",
         "required": true,
         "nullable": false,
-        "description": "Pipeline — accepts a UUID or exact pipeline name"
+        "description": "Pipeline - accepts a UUID or exact pipeline name"
       }
     ]
   },
@@ -19818,7 +19818,7 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
         "type": "string",
         "required": true,
         "nullable": false,
-        "description": "Company — accepts a UUID or a unique company name"
+        "description": "Company - accepts a UUID or a unique company name"
       }
     ]
   },
@@ -19832,7 +19832,7 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
         "type": "string",
         "required": true,
         "nullable": false,
-        "description": "Company — accepts a UUID or a unique company name"
+        "description": "Company - accepts a UUID or a unique company name"
       },
       {
         "name": "limit",
@@ -19980,7 +19980,7 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
         "type": "string",
         "required": true,
         "nullable": false,
-        "description": "Deal — accepts a UUID or a unique deal title fragment"
+        "description": "Deal - accepts a UUID or a unique deal title fragment"
       }
     ]
   },
@@ -19994,7 +19994,7 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
         "type": "string",
         "required": true,
         "nullable": false,
-        "description": "Deal — accepts a UUID or a unique deal title fragment"
+        "description": "Deal - accepts a UUID or a unique deal title fragment"
       }
     ]
   },
@@ -20156,7 +20156,7 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
         "type": "string",
         "required": true,
         "nullable": false,
-        "description": "Pipeline — accepts a UUID or exact pipeline name"
+        "description": "Pipeline - accepts a UUID or exact pipeline name"
       }
     ]
   },
@@ -20187,21 +20187,21 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
         "type": "string",
         "required": false,
         "nullable": false,
-        "description": "Contact — accepts a UUID, email, or unique name fragment"
+        "description": "Contact - accepts a UUID, email, or unique name fragment"
       },
       {
         "name": "deal_id",
         "type": "string",
         "required": false,
         "nullable": false,
-        "description": "Deal — accepts a UUID or unique deal title fragment"
+        "description": "Deal - accepts a UUID or unique deal title fragment"
       },
       {
         "name": "company_id",
         "type": "string",
         "required": false,
         "nullable": false,
-        "description": "Company — accepts a UUID or unique company name"
+        "description": "Company - accepts a UUID or unique company name"
       },
       {
         "name": "subject",
@@ -20266,14 +20266,14 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
         "type": "string",
         "required": true,
         "nullable": false,
-        "description": "Deal — accepts a UUID or unique deal title fragment"
+        "description": "Deal - accepts a UUID or unique deal title fragment"
       },
       {
         "name": "stage_id",
         "type": "string",
         "required": true,
         "nullable": false,
-        "description": "Target stage — accepts a UUID or exact stage name (resolved within the deal's pipeline)"
+        "description": "Target stage - accepts a UUID or exact stage name (resolved within the deal's pipeline)"
       }
     ]
   },
@@ -20287,14 +20287,14 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
         "type": "string",
         "required": true,
         "nullable": false,
-        "description": "Deal — accepts a UUID or a unique deal title fragment"
+        "description": "Deal - accepts a UUID or a unique deal title fragment"
       },
       {
         "name": "contact_id",
         "type": "string",
         "required": true,
         "nullable": false,
-        "description": "Contact — accepts a UUID, email, or unique name fragment"
+        "description": "Contact - accepts a UUID, email, or unique name fragment"
       }
     ]
   },
@@ -20308,7 +20308,7 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
         "type": "string",
         "required": true,
         "nullable": false,
-        "description": "Pipeline — accepts a UUID or exact pipeline name"
+        "description": "Pipeline - accepts a UUID or exact pipeline name"
       },
       {
         "name": "stage_ids",
@@ -20600,7 +20600,7 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
         "type": "string",
         "required": true,
         "nullable": false,
-        "description": "Contact — accepts a UUID, email address, or unique name fragment"
+        "description": "Contact - accepts a UUID, email address, or unique name fragment"
       },
       {
         "name": "first_name",
@@ -20667,7 +20667,7 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
         "type": "string",
         "required": false,
         "nullable": false,
-        "description": "Updated owner — accepts a user UUID or email address"
+        "description": "Updated owner - accepts a user UUID or email address"
       },
       {
         "name": "address_line1",
@@ -20792,7 +20792,7 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
         "type": "string",
         "required": true,
         "nullable": false,
-        "description": "Deal — accepts a UUID or unique deal title fragment"
+        "description": "Deal - accepts a UUID or unique deal title fragment"
       },
       {
         "name": "name",
@@ -20843,14 +20843,14 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
         "type": "string",
         "required": false,
         "nullable": false,
-        "description": "Updated owner — accepts a user UUID or email"
+        "description": "Updated owner - accepts a user UUID or email"
       },
       {
         "name": "company_id",
         "type": "string",
         "required": false,
         "nullable": false,
-        "description": "Updated primary company — accepts a company UUID or name"
+        "description": "Updated primary company - accepts a company UUID or name"
       },
       {
         "name": "custom_fields",
@@ -20871,7 +20871,7 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
         "type": "string",
         "required": true,
         "nullable": false,
-        "description": "Pipeline — accepts a UUID or exact pipeline name"
+        "description": "Pipeline - accepts a UUID or exact pipeline name"
       },
       {
         "name": "name",
@@ -20989,14 +20989,14 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
         "type": "string",
         "required": true,
         "nullable": false,
-        "description": "Pipeline — accepts a UUID or exact pipeline name"
+        "description": "Pipeline - accepts a UUID or exact pipeline name"
       },
       {
         "name": "stage_id",
         "type": "string",
         "required": true,
         "nullable": false,
-        "description": "Stage — accepts a UUID or an exact stage name within the pipeline"
+        "description": "Stage - accepts a UUID or an exact stage name within the pipeline"
       },
       {
         "name": "name",
@@ -21066,7 +21066,7 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
   },
   {
     "mcp_tool": "bond_upsert_contact",
-    "description": "Idempotent create-or-update of a CRM contact by email. Natural key is (organization_id, lower(email)). Soft-deleted matches are resurrected. Returns { data, created, idempotency_key } — `created` is true on insert, false on update.",
+    "description": "Idempotent create-or-update of a CRM contact by email. Natural key is (organization_id, lower(email)). Soft-deleted matches are resurrected. Returns { data, created, idempotency_key } - `created` is true on insert, false on update.",
     "source": "bond",
     "parameters": [
       {
@@ -21075,7 +21075,7 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
         "format": "email",
         "required": true,
         "nullable": false,
-        "description": "Email address — idempotency key (case-insensitive)"
+        "description": "Email address - idempotency key (case-insensitive)"
       },
       {
         "name": "first_name",
@@ -21664,14 +21664,14 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
         "type": "string",
         "required": true,
         "nullable": false,
-        "description": "ISO 8601 date — events ending after this time"
+        "description": "ISO 8601 date - events ending after this time"
       },
       {
         "name": "start_before",
         "type": "string",
         "required": true,
         "nullable": false,
-        "description": "ISO 8601 date — events starting before this time"
+        "description": "ISO 8601 date - events starting before this time"
       },
       {
         "name": "calendar_ids",
@@ -21718,7 +21718,7 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
   },
   {
     "mcp_tool": "book_set_working_hours",
-    "description": "Replace the caller's weekly working-hours schedule. `day_of_week` is 0 (Sunday) through 6 (Saturday); times are HH:MM or HH:MM:SS. This is a full replace — include every day you want available.",
+    "description": "Replace the caller's weekly working-hours schedule. `day_of_week` is 0 (Sunday) through 6 (Saturday); times are HH:MM or HH:MM:SS. This is a full replace - include every day you want available.",
     "source": "book",
     "parameters": [
       {
@@ -23978,7 +23978,7 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
   },
   {
     "mcp_tool": "bureau_assign_office",
-    "description": "Assign a Bureau room (office) to a user as its owner — the user becomes the room's occupant and knock target. Org admins/owners only (gated server-side; non-admins get 403). The target user must be an active member of the org. Assignment is org-scoped; any non-archived room can be assigned (the floor designer may repurpose a huddle as an office), though the admin offices view only surfaces type='office' rooms.",
+    "description": "Assign a Bureau room (office) to a user as its owner - the user becomes the room's occupant and knock target. Org admins/owners only (gated server-side; non-admins get 403). The target user must be an active member of the org. Assignment is org-scoped; any non-archived room can be assigned (the floor designer may repurpose a huddle as an office), though the admin offices view only surfaces type='office' rooms.",
     "source": "bureau",
     "parameters": [
       {
@@ -24001,7 +24001,7 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
   },
   {
     "mcp_tool": "bureau_book_room",
-    "description": "Reserve a Bureau room for a time window. The booking writes a bureau_bookings row, anchors it to a Book event (best-effort — falls back to a self-minted uuid if book-api is down), and schedules two BullMQ jobs: one at starts_at that flips the room privacy override to 'private' and emits room.booked, one at ends_at that clears the override. `access: 'locked'` keeps the room private for the booking; `access: 'open'` lets anyone wander in. HIGH-IMPACT — requires confirm_action=true to actually proceed. Call once with confirm_action: false (or omit) to preview the booking, then call again with true to commit.",
+    "description": "Reserve a Bureau room for a time window. The booking writes a bureau_bookings row, anchors it to a Book event (best-effort - falls back to a self-minted uuid if book-api is down), and schedules two BullMQ jobs: one at starts_at that flips the room privacy override to 'private' and emits room.booked, one at ends_at that clears the override. `access: 'locked'` keeps the room private for the booking; `access: 'open'` lets anyone wander in. HIGH-IMPACT - requires confirm_action=true to actually proceed. Call once with confirm_action: false (or omit) to preview the booking, then call again with true to commit.",
     "source": "bureau",
     "parameters": [
       {
@@ -24063,7 +24063,7 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
   },
   {
     "mcp_tool": "bureau_cancel_booking",
-    "description": "Cancel a Bureau booking (sets cancelled_at, removes the lifecycle jobs, best-effort cancels the linked Book event). Cancellation is a soft delete — the row stays for auditability. Requires confirm_action=true to actually cancel. Call once with confirm_action: false (or omit) to preview, then call again with true. This affects calendar invites and may notify attendees via Book.",
+    "description": "Cancel a Bureau booking (sets cancelled_at, removes the lifecycle jobs, best-effort cancels the linked Book event). Cancellation is a soft delete - the row stays for auditability. Requires confirm_action=true to actually cancel. Call once with confirm_action: false (or omit) to preview, then call again with true. This affects calendar invites and may notify attendees via Book.",
     "source": "bureau",
     "parameters": [
       {
@@ -24085,7 +24085,7 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
   },
   {
     "mcp_tool": "bureau_create_floor",
-    "description": "Create a new Bureau floor. Org admins/owners only (gated server-side; non-admins receive 403). `slug` is the URL-safe identifier — lowercase alphanumeric with dashes, 1-140 chars. `is_default: true` marks the floor as the org's landing floor (only one can be default at a time). `layout` is a free-form JSON describing the floor's wallpaper/rooms-arrangement for the Canvas2D floor view; pass {} for an empty layout that admins fill in via the UI.",
+    "description": "Create a new Bureau floor. Org admins/owners only (gated server-side; non-admins receive 403). `slug` is the URL-safe identifier - lowercase alphanumeric with dashes, 1-140 chars. `is_default: true` marks the floor as the org's landing floor (only one can be default at a time). `layout` is a free-form JSON describing the floor's wallpaper/rooms-arrangement for the Canvas2D floor view; pass {} for an empty layout that admins fill in via the UI.",
     "source": "bureau",
     "parameters": [
       {
@@ -24100,7 +24100,7 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
         "type": "string",
         "required": true,
         "nullable": false,
-        "description": "URL slug — lowercase alphanumeric with dashes"
+        "description": "URL slug - lowercase alphanumeric with dashes"
       },
       {
         "name": "layout",
@@ -24210,7 +24210,7 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
         "type": "string",
         "required": true,
         "nullable": false,
-        "description": "Zone identifier within the floor — groups rooms for layout / Canvas2D rendering"
+        "description": "Zone identifier within the floor - groups rooms for layout / Canvas2D rendering"
       },
       {
         "name": "owner_id",
@@ -24231,7 +24231,7 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
   },
   {
     "mcp_tool": "bureau_delete_floor",
-    "description": "Soft-delete (archive) a Bureau floor. Org admins/owners only (gated server-side). This is a soft delete — the row stays and can be restored with bureau_update_floor (archived_at: null). Archiving a floor hides it and its rooms from the floor view. Requires confirm_action=true to actually delete. Call once with confirm_action: false (or omit) to preview, then call again with true.",
+    "description": "Soft-delete (archive) a Bureau floor. Org admins/owners only (gated server-side). This is a soft delete - the row stays and can be restored with bureau_update_floor (archived_at: null). Archiving a floor hides it and its rooms from the floor view. Requires confirm_action=true to actually delete. Call once with confirm_action: false (or omit) to preview, then call again with true.",
     "source": "bureau",
     "parameters": [
       {
@@ -24253,7 +24253,7 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
   },
   {
     "mcp_tool": "bureau_delete_room",
-    "description": "Soft-delete (archive) a Bureau room. Org admins/owners only (gated server-side). This is a soft delete — the row is retained for auditability but the room disappears from the floor and can no longer be entered, booked, or knocked on. Requires confirm_action=true to actually delete. Call once with confirm_action: false (or omit) to preview, then call again with true.",
+    "description": "Soft-delete (archive) a Bureau room. Org admins/owners only (gated server-side). This is a soft delete - the row is retained for auditability but the room disappears from the floor and can no longer be entered, booked, or knocked on. Requires confirm_action=true to actually delete. Call once with confirm_action: false (or omit) to preview, then call again with true.",
     "source": "bureau",
     "parameters": [
       {
@@ -24346,7 +24346,7 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
   },
   {
     "mcp_tool": "bureau_knock",
-    "description": "Knock on an office door — creates a pending bureau_knocks row, emits a knock.requested Bolt event, and schedules a 30s timeout that flips the knock to 'timed_out' if the owner does not respond. Only callable on type='office' rooms with an owner; callers cannot knock on their own office. If the owner is currently in DND the call returns 423 Locked with a 'leave a note' follow-up endpoint pointer — agents should surface that to the caller rather than retry blindly.",
+    "description": "Knock on an office door - creates a pending bureau_knocks row, emits a knock.requested Bolt event, and schedules a 30s timeout that flips the knock to 'timed_out' if the owner does not respond. Only callable on type='office' rooms with an owner; callers cannot knock on their own office. If the owner is currently in DND the call returns 423 Locked with a 'leave a note' follow-up endpoint pointer - agents should surface that to the caller rather than retry blindly.",
     "source": "bureau",
     "parameters": [
       {
@@ -24368,13 +24368,13 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
   },
   {
     "mcp_tool": "bureau_knock_inbox",
-    "description": "List the pending knocks where the caller is the office owner — i.e. visitors currently waiting at the caller's door. Newest first. Resolve each with bureau_respond_knock (admit/defer/decline). Knocks that timed out (no response within 30s) are not pending and won't appear here.",
+    "description": "List the pending knocks where the caller is the office owner - i.e. visitors currently waiting at the caller's door. Newest first. Resolve each with bureau_respond_knock (admit/defer/decline). Knocks that timed out (no response within 30s) are not pending and won't appear here.",
     "source": "bureau",
     "parameters": []
   },
   {
     "mcp_tool": "bureau_leave_note",
-    "description": "Leave a note for an office owner who is in Do Not Disturb — the DND fallback for bureau_knock (which returns 423 Locked when the owner is in DND). Delivers the message as a Banter DM to the owner, prefixed '[Bureau knock note] '. Only valid for type='office' rooms with an owner; you cannot leave a note on your own office. Returns { delivered: true } when the DM was posted, or { delivered: false } (HTTP 202) if Banter was unreachable and the note was dropped — surface that to the caller rather than assuming success.",
+    "description": "Leave a note for an office owner who is in Do Not Disturb - the DND fallback for bureau_knock (which returns 423 Locked when the owner is in DND). Delivers the message as a Banter DM to the owner, prefixed '[Bureau knock note] '. Only valid for type='office' rooms with an owner; you cannot leave a note on your own office. Returns { delivered: true } when the DM was posted, or { delivered: false } (HTTP 202) if Banter was unreachable and the note was dropped - surface that to the caller rather than assuming success.",
     "source": "bureau",
     "parameters": [
       {
@@ -24425,7 +24425,7 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
   },
   {
     "mcp_tool": "bureau_list_chats",
-    "description": "List the Bureau room-chat threads the caller participated in (the recovery half of room chat — the live half is WS-only). Optional `search` filters by thread. Use the returned room keys with bureau_get_chat_messages to read a transcript.",
+    "description": "List the Bureau room-chat threads the caller participated in (the recovery half of room chat - the live half is WS-only). Optional `search` filters by thread. Use the returned room keys with bureau_get_chat_messages to read a transcript.",
     "source": "bureau",
     "parameters": [
       {
@@ -24488,7 +24488,7 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
   },
   {
     "mcp_tool": "bureau_move_self",
-    "description": "Move the caller into a Bureau room: mints a LiveKit access token for `bureau-room-{id}` and records the session on the server. This is the canonical 'enter a room' tool — calling it is what makes the caller appear in bureau_who_is_in_room and bureau_get_presence. Returns { token, room_name, ws_url } so the client can connect to LiveKit. Token TTL is 3600s. The bureau-api gates the call by privacy (open / knock / private) and ACL; private rooms without an ACL entry return 403.",
+    "description": "Move the caller into a Bureau room: mints a LiveKit access token for `bureau-room-{id}` and records the session on the server. This is the canonical 'enter a room' tool - calling it is what makes the caller appear in bureau_who_is_in_room and bureau_get_presence. Returns { token, room_name, ws_url } so the client can connect to LiveKit. Token TTL is 3600s. The bureau-api gates the call by privacy (open / knock / private) and ACL; private rooms without an ACL entry return 403.",
     "source": "bureau",
     "parameters": [
       {
@@ -24509,7 +24509,7 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
   },
   {
     "mcp_tool": "bureau_respond_knock",
-    "description": "Resolve a pending knock as the office owner: 'admit' (visitor is allowed in — visitor gets a WS push with a fresh LiveKit token), 'defer' (owner is busy now, the knock is parked but visitor is told), or 'decline' (visitor sees a polite rejection). Only the owner_id on the knock row may patch it. Setting status emits knock.resolved on Bolt.",
+    "description": "Resolve a pending knock as the office owner: 'admit' (visitor is allowed in - visitor gets a WS push with a fresh LiveKit token), 'defer' (owner is busy now, the knock is parked but visitor is told), or 'decline' (visitor sees a polite rejection). Only the owner_id on the knock row may patch it. Setting status emits knock.resolved on Bolt.",
     "source": "bureau",
     "parameters": [
       {
@@ -24592,7 +24592,7 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
   },
   {
     "mcp_tool": "bureau_set_floor_background",
-    "description": "Set a Bureau floor's background image URL. Org admins/owners only (gated server-side). This only stores the URL string on the floor row — uploading the image to object storage is a separate concern handled by the UI. Use bureau_update_floor with background_url: null to clear it.",
+    "description": "Set a Bureau floor's background image URL. Org admins/owners only (gated server-side). This only stores the URL string on the floor row - uploading the image to object storage is a separate concern handled by the UI. Use bureau_update_floor with background_url: null to clear it.",
     "source": "bureau",
     "parameters": [
       {
@@ -24614,7 +24614,7 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
   },
   {
     "mcp_tool": "bureau_set_status",
-    "description": "Set AND persist the caller's Bureau presence status: 'available', 'busy', 'away', or 'dnd' (Do Not Disturb — knocks are rejected with 423 Locked and the leave-a-note follow-up). The status is stored durably (it survives reconnects and applies even when the caller has no live web session — e.g. an agent setting its own status over MCP) and is fanned out to every live session immediately so the floor view and the floating presence widget repaint at once. Returns { status, live_sessions, persisted } where live_sessions is how many live sessions were updated (0 is normal for an agent with no open floor view; the durable status still persisted). Read it back with bureau_get_presence or bureau_locate_user.",
+    "description": "Set AND persist the caller's Bureau presence status: 'available', 'busy', 'away', or 'dnd' (Do Not Disturb - knocks are rejected with 423 Locked and the leave-a-note follow-up). The status is stored durably (it survives reconnects and applies even when the caller has no live web session - e.g. an agent setting its own status over MCP) and is fanned out to every live session immediately so the floor view and the floating presence widget repaint at once. Returns { status, live_sessions, persisted } where live_sessions is how many live sessions were updated (0 is normal for an agent with no open floor view; the durable status still persisted). Read it back with bureau_get_presence or bureau_locate_user.",
     "source": "bureau",
     "parameters": [
       {
@@ -24634,7 +24634,7 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
   },
   {
     "mcp_tool": "bureau_summon",
-    "description": "Summon every eligible occupant of the caller's current Bureau room to a URL in another product (Board, Brief, Bond, etc.). The bureau-api runs cross-app access checks for each recipient against the target_url so denied users are NOT pinged with a dead-link; their ids land on the denied list so the summoner can offer §4.4 'grant access' as a follow-up via bureau_summon's denied_count. HIGH IMPACT — this DMs every eligible co-occupant in real time. Requires confirm_action=true to actually summon. Call once with confirm_action: false (or omit) to preview, then call again with true. The caller MUST be in a Bureau room or the call fails with 400.",
+    "description": "Summon every eligible occupant of the caller's current Bureau room to a URL in another product (Board, Brief, Bond, etc.). The bureau-api runs cross-app access checks for each recipient against the target_url so denied users are NOT pinged with a dead-link; their ids land on the denied list so the summoner can offer §4.4 'grant access' as a follow-up via bureau_summon's denied_count. HIGH IMPACT - this DMs every eligible co-occupant in real time. Requires confirm_action=true to actually summon. Call once with confirm_action: false (or omit) to preview, then call again with true. The caller MUST be in a Bureau room or the call fails with 400.",
     "source": "bureau",
     "parameters": [
       {
@@ -24676,7 +24676,7 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
   },
   {
     "mcp_tool": "bureau_summon_grant_access",
-    "description": "§4.4 grant-and-summon follow-up: for users who were DENIED on a prior summon (because they lacked access to the target URL), grant them access AND re-summon them in one step. Only the original summoner may call this on their own summon. Get the summon id and the denied user ids from bureau_get_summon. HIGH IMPACT — this grants cross-app access to the target resource AND DMs each user a real-time summon. Requires confirm_action=true to proceed. Call once with confirm_action: false (or omit) to preview, then call again with true.",
+    "description": "§4.4 grant-and-summon follow-up: for users who were DENIED on a prior summon (because they lacked access to the target URL), grant them access AND re-summon them in one step. Only the original summoner may call this on their own summon. Get the summon id and the denied user ids from bureau_get_summon. HIGH IMPACT - this grants cross-app access to the target resource AND DMs each user a real-time summon. Requires confirm_action=true to proceed. Call once with confirm_action: false (or omit) to preview, then call again with true.",
     "source": "bureau",
     "parameters": [
       {
@@ -24752,7 +24752,7 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
   },
   {
     "mcp_tool": "bureau_update_floor",
-    "description": "Update a Bureau floor's metadata. Provide only the fields to change. Org admins/owners only (gated server-side; non-admins get 403). To UNARCHIVE a soft-deleted floor, pass archived_at: null — that is the only PATCH that can target an archived floor, and it is the symmetric undo of bureau_delete_floor. Any field-only PATCH (name/layout/etc.) requires the floor to be live. `slug` and `building_id` are immutable here (set them at create time).",
+    "description": "Update a Bureau floor's metadata. Provide only the fields to change. Org admins/owners only (gated server-side; non-admins get 403). To UNARCHIVE a soft-deleted floor, pass archived_at: null - that is the only PATCH that can target an archived floor, and it is the symmetric undo of bureau_delete_floor. Any field-only PATCH (name/layout/etc.) requires the floor to be live. `slug` and `building_id` are immutable here (set them at create time).",
     "source": "bureau",
     "parameters": [
       {
@@ -24810,7 +24810,7 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
   },
   {
     "mcp_tool": "bureau_update_room",
-    "description": "Update fields on a Bureau room. Provide only the fields to change. Server-side gate: org admins/owners, the office's owner_id (for type='office'), or a room manager via bureau_room_acl. To change the live door state use bureau_set_door_state instead — this tool only updates the durable defaults.",
+    "description": "Update fields on a Bureau room. Provide only the fields to change. Server-side gate: org admins/owners, the office's owner_id (for type='office'), or a room manager via bureau_room_acl. To change the live door state use bureau_set_door_state instead - this tool only updates the durable defaults.",
     "source": "bureau",
     "parameters": [
       {
@@ -24960,7 +24960,7 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
   },
   {
     "mcp_tool": "bureau_who_is_here",
-    "description": "Co-presence by URL: list OTHER users currently on the same content surface (the given canonical URL) according to their live Bureau session — for the 'X others here' chip and starting a huddle. Deduped by user (multiple devices collapse to one), excludes the caller, and access-filtered: if the CALLER cannot see the destination URL the result is empty. This reads live, ephemeral presence state; an empty list means nobody else is reporting that exact URL right now.",
+    "description": "Co-presence by URL: list OTHER users currently on the same content surface (the given canonical URL) according to their live Bureau session - for the 'X others here' chip and starting a huddle. Deduped by user (multiple devices collapse to one), excludes the caller, and access-filtered: if the CALLER cannot see the destination URL the result is empty. This reads live, ephemeral presence state; an empty list means nobody else is reporting that exact URL right now.",
     "source": "bureau",
     "parameters": [
       {
@@ -26590,7 +26590,7 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
   },
   {
     "mcp_tool": "bam_delete_epic",
-    "description": "Delete an epic (destructive). Tasks previously linked to the epic are not deleted; their epic_id is cleared by the FK. Requires confirm:true to proceed — the first call without it returns a confirmation prompt and changes nothing.",
+    "description": "Delete an epic (destructive). Tasks previously linked to the epic are not deleted; their epic_id is cleared by the FK. Requires confirm:true to proceed - the first call without it returns a confirmation prompt and changes nothing.",
     "source": "epic",
     "parameters": [
       {
@@ -26627,7 +26627,7 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
   },
   {
     "mcp_tool": "bam_list_epic_tasks",
-    "description": "List every task linked to an epic (both parents and subtasks), ordered by sprint then board position with backlog tasks last. Each row carries human_id, title, sprint/phase names, state_category, completion, and story_points — enough to render the epic detail list or compute a burnup.",
+    "description": "List every task linked to an epic (both parents and subtasks), ordered by sprint then board position with backlog tasks last. Each row carries human_id, title, sprint/phase names, state_category, completion, and story_points - enough to render the epic detail list or compute a burnup.",
     "source": "epic",
     "parameters": [
       {
@@ -26757,7 +26757,7 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
   },
   {
     "mcp_tool": "helpdesk_get_settings",
-    "description": "Get full helpdesk configuration. Requires admin authentication — the caller's API key must belong to an org admin or owner.",
+    "description": "Get full helpdesk configuration. Requires admin authentication - the caller's API key must belong to an org admin or owner.",
     "source": "helpdesk",
     "parameters": []
   },
@@ -26785,7 +26785,7 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
         "type": "string",
         "required": true,
         "nullable": false,
-        "description": "Search text — matched case-insensitively against ticket subject and body"
+        "description": "Search text - matched case-insensitively against ticket subject and body"
       },
       {
         "name": "status",
@@ -26885,7 +26885,7 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
         "format": "email",
         "required": true,
         "nullable": false,
-        "description": "Email address — idempotency key (lowercased server-side)"
+        "description": "Email address - idempotency key (lowercased server-side)"
       },
       {
         "name": "display_name",
@@ -26899,7 +26899,7 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
         "type": "string",
         "required": false,
         "nullable": false,
-        "description": "Password — honored ONLY on the insert path. On update this field is silently ignored."
+        "description": "Password - honored ONLY on the insert path. On update this field is silently ignored."
       },
       {
         "name": "email_verified",
@@ -27308,7 +27308,7 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
   },
   {
     "mcp_tool": "find_user_by_email",
-    "description": "Find a user by exact email address (case-insensitive) within the caller's active organization. Returns the user object `{ id, email, name, display_name, avatar_url, role }` or `null` if no match. Use this whenever a rule, workflow, or prompt mentions a user by email and you need their user_id to pass to another tool. Works identically for any app (Bam, Banter, Bolt, Bond, etc.) — the underlying users table is shared.",
+    "description": "Find a user by exact email address (case-insensitive) within the caller's active organization. Returns the user object `{ id, email, name, display_name, avatar_url, role }` or `null` if no match. Use this whenever a rule, workflow, or prompt mentions a user by email and you need their user_id to pass to another tool. Works identically for any app (Bam, Banter, Bolt, Bond, etc.) - the underlying users table is shared.",
     "source": "user-resolver",
     "parameters": [
       {

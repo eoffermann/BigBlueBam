@@ -115,7 +115,7 @@ export function registerCommentTools(server: McpServer, api: ApiClient): void {
 
   registerTool(server, {
     name: 'list_comment_revisions',
-    description: 'List the edit history of a comment — every superseded body, newest first, with who revised it and when. Readable by anyone who can read the comment.',
+    description: 'List the edit history of a comment - every superseded body, newest first, with who revised it and when. Readable by anyone who can read the comment.',
     input: {
       comment_id: z.string().uuid().describe('The comment UUID'),
     },
@@ -151,7 +151,7 @@ export function registerCommentTools(server: McpServer, api: ApiClient): void {
   registerTool(server, {
     name: 'delete_comment',
     description:
-      "Delete one of your OWN comments (destructive). Decrements the parent task's comment_count. The API rejects deleting another author's comment with 403. Requires confirm:true — the first call without it returns a confirmation prompt and changes nothing.",
+      "Delete one of your OWN comments (destructive). Decrements the parent task's comment_count. The API rejects deleting another author's comment with 403. Requires confirm:true - the first call without it returns a confirmation prompt and changes nothing.",
     input: {
       comment_id: z.string().uuid().describe('The comment UUID to delete'),
       confirm: z.boolean().describe('Must be true to confirm deletion'),

@@ -165,7 +165,7 @@ export function registerBureauTools(
   const client = createBureauClient(bureauApiUrl, api);
 
   // ============================================================
-  // PERCEPTION (5) — read-only, no confirmation required
+  // PERCEPTION (5) - read-only, no confirmation required
   // ============================================================
 
   registerTool(server, {
@@ -289,7 +289,7 @@ export function registerBureauTools(
   registerTool(server, {
     name: 'bureau_move_self',
     description:
-      "Move the caller into a Bureau room: mints a LiveKit access token for `bureau-room-{id}` and records the session on the server. This is the canonical 'enter a room' tool — calling it is what makes the caller appear in bureau_who_is_in_room and bureau_get_presence. Returns { token, room_name, ws_url } so the client can connect to LiveKit. Token TTL is 3600s. The bureau-api gates the call by privacy (open / knock / private) and ACL; private rooms without an ACL entry return 403.",
+      "Move the caller into a Bureau room: mints a LiveKit access token for `bureau-room-{id}` and records the session on the server. This is the canonical 'enter a room' tool - calling it is what makes the caller appear in bureau_who_is_in_room and bureau_get_presence. Returns { token, room_name, ws_url } so the client can connect to LiveKit. Token TTL is 3600s. The bureau-api gates the call by privacy (open / knock / private) and ACL; private rooms without an ACL entry return 403.",
     input: {
       id: z.string().uuid().describe('Target room id'),
     },
@@ -303,7 +303,7 @@ export function registerBureauTools(
   registerTool(server, {
     name: 'bureau_set_status',
     description:
-      "Set AND persist the caller's Bureau presence status: 'available', 'busy', 'away', or 'dnd' (Do Not Disturb — knocks are rejected with 423 Locked and the leave-a-note follow-up). The status is stored durably (it survives reconnects and applies even when the caller has no live web session — e.g. an agent setting its own status over MCP) and is fanned out to every live session immediately so the floor view and the floating presence widget repaint at once. Returns { status, live_sessions, persisted } where live_sessions is how many live sessions were updated (0 is normal for an agent with no open floor view; the durable status still persisted). Read it back with bureau_get_presence or bureau_locate_user.",
+      "Set AND persist the caller's Bureau presence status: 'available', 'busy', 'away', or 'dnd' (Do Not Disturb - knocks are rejected with 423 Locked and the leave-a-note follow-up). The status is stored durably (it survives reconnects and applies even when the caller has no live web session - e.g. an agent setting its own status over MCP) and is fanned out to every live session immediately so the floor view and the floating presence widget repaint at once. Returns { status, live_sessions, persisted } where live_sessions is how many live sessions were updated (0 is normal for an agent with no open floor view; the durable status still persisted). Read it back with bureau_get_presence or bureau_locate_user.",
     input: {
       status: z
         .enum(['available', 'busy', 'away', 'dnd'])
@@ -346,7 +346,7 @@ export function registerBureauTools(
   registerTool(server, {
     name: 'bureau_knock',
     description:
-      "Knock on an office door — creates a pending bureau_knocks row, emits a knock.requested Bolt event, and schedules a 30s timeout that flips the knock to 'timed_out' if the owner does not respond. Only callable on type='office' rooms with an owner; callers cannot knock on their own office. If the owner is currently in DND the call returns 423 Locked with a 'leave a note' follow-up endpoint pointer — agents should surface that to the caller rather than retry blindly.",
+      "Knock on an office door - creates a pending bureau_knocks row, emits a knock.requested Bolt event, and schedules a 30s timeout that flips the knock to 'timed_out' if the owner does not respond. Only callable on type='office' rooms with an owner; callers cannot knock on their own office. If the owner is currently in DND the call returns 423 Locked with a 'leave a note' follow-up endpoint pointer - agents should surface that to the caller rather than retry blindly.",
     input: {
       room_id: z.string().uuid().describe('Office room id to knock on'),
       message: z.string().max(1000).optional().describe('Optional visitor message shown to the office owner'),
@@ -361,7 +361,7 @@ export function registerBureauTools(
   registerTool(server, {
     name: 'bureau_respond_knock',
     description:
-      "Resolve a pending knock as the office owner: 'admit' (visitor is allowed in — visitor gets a WS push with a fresh LiveKit token), 'defer' (owner is busy now, the knock is parked but visitor is told), or 'decline' (visitor sees a polite rejection). Only the owner_id on the knock row may patch it. Setting status emits knock.resolved on Bolt.",
+      "Resolve a pending knock as the office owner: 'admit' (visitor is allowed in - visitor gets a WS push with a fresh LiveKit token), 'defer' (owner is busy now, the knock is parked but visitor is told), or 'decline' (visitor sees a polite rejection). Only the owner_id on the knock row may patch it. Setting status emits knock.resolved on Bolt.",
     input: {
       id: z.string().uuid().describe('Knock id'),
       decision: z.enum(['admit', 'defer', 'decline']).describe('Knock resolution'),
@@ -374,14 +374,14 @@ export function registerBureauTools(
   });
 
   // ============================================================
-  // BOOKING (3) — bureau_book_room + bureau_cancel_booking use confirm_action
+  // BOOKING (3) - bureau_book_room + bureau_cancel_booking use confirm_action
   // ============================================================
 
   registerTool(server, {
     name: 'bureau_book_room',
     description:
-      "Reserve a Bureau room for a time window. The booking writes a bureau_bookings row, anchors it to a Book event (best-effort — falls back to a self-minted uuid if book-api is down), and schedules two BullMQ jobs: one at starts_at that flips the room privacy override to 'private' and emits room.booked, one at ends_at that clears the override. `access: 'locked'` keeps the room private for the booking; `access: 'open'` lets anyone wander in. " +
-      "HIGH-IMPACT — requires confirm_action=true to actually proceed. Call once with confirm_action: false (or omit) to preview the booking, then call again with true to commit.",
+      "Reserve a Bureau room for a time window. The booking writes a bureau_bookings row, anchors it to a Book event (best-effort - falls back to a self-minted uuid if book-api is down), and schedules two BullMQ jobs: one at starts_at that flips the room privacy override to 'private' and emits room.booked, one at ends_at that clears the override. `access: 'locked'` keeps the room private for the booking; `access: 'open'` lets anyone wander in. " +
+      "HIGH-IMPACT - requires confirm_action=true to actually proceed. Call once with confirm_action: false (or omit) to preview the booking, then call again with true to commit.",
     input: {
       id: z.string().uuid().describe('Room id to book'),
       title: z.string().min(1).max(200).describe('Booking title shown in calendars'),
@@ -425,7 +425,7 @@ export function registerBureauTools(
   registerTool(server, {
     name: 'bureau_cancel_booking',
     description:
-      "Cancel a Bureau booking (sets cancelled_at, removes the lifecycle jobs, best-effort cancels the linked Book event). Cancellation is a soft delete — the row stays for auditability. " +
+      "Cancel a Bureau booking (sets cancelled_at, removes the lifecycle jobs, best-effort cancels the linked Book event). Cancellation is a soft delete - the row stays for auditability. " +
       "Requires confirm_action=true to actually cancel. Call once with confirm_action: false (or omit) to preview, then call again with true. This affects calendar invites and may notify attendees via Book.",
     input: {
       id: z.string().uuid().describe('Booking id to cancel'),
@@ -448,17 +448,17 @@ export function registerBureauTools(
   });
 
   // ============================================================
-  // TELEPORT (1) — HIGH IMPACT, confirm_action
+  // TELEPORT (1) - HIGH IMPACT, confirm_action
   // ============================================================
 
   registerTool(server, {
     name: 'bureau_summon',
     description:
       "Summon every eligible occupant of the caller's current Bureau room to a URL in another product (Board, Brief, Bond, etc.). The bureau-api runs cross-app access checks for each recipient against the target_url so denied users are NOT pinged with a dead-link; their ids land on the denied list so the summoner can offer §4.4 'grant access' as a follow-up via bureau_summon's denied_count. " +
-      "HIGH IMPACT — this DMs every eligible co-occupant in real time. Requires confirm_action=true to actually summon. Call once with confirm_action: false (or omit) to preview, then call again with true. The caller MUST be in a Bureau room or the call fails with 400.",
+      "HIGH IMPACT - this DMs every eligible co-occupant in real time. Requires confirm_action=true to actually summon. Call once with confirm_action: false (or omit) to preview, then call again with true. The caller MUST be in a Bureau room or the call fails with 400.",
     input: {
       target_url: z.string().describe("Destination URL the summoned users will be jumped to (e.g. https://app/board/abc?lkRoom=board-room-xyz)"),
-      target_app: z.string().min(1).max(24).describe("App slug — 'board' | 'brief' | 'bond' | 'banter' | etc. Used by the recipient client to choose the right dock and authorization preflight."),
+      target_app: z.string().min(1).max(24).describe("App slug - 'board' | 'brief' | 'bond' | 'banter' | etc. Used by the recipient client to choose the right dock and authorization preflight."),
       target_label: z.string().max(200).optional().describe('Human-friendly label shown in the incoming-summon toast (e.g. "Q3 Roadmap")'),
       lk_room_hint: z.string().max(96).optional().describe('Optional LiveKit room hint so the recipient can join the same room without a second negotiation hop'),
       confirm_action: z.boolean().describe('Must be true to actually summon. Call once with false (or omit) to preview the planned recipients, then call again with true.'),
@@ -479,16 +479,16 @@ export function registerBureauTools(
   });
 
   // ============================================================
-  // ADMINISTRATION (3) — admin/owner gated server-side
+  // ADMINISTRATION (3) - admin/owner gated server-side
   // ============================================================
 
   registerTool(server, {
     name: 'bureau_create_floor',
     description:
-      "Create a new Bureau floor. Org admins/owners only (gated server-side; non-admins receive 403). `slug` is the URL-safe identifier — lowercase alphanumeric with dashes, 1-140 chars. `is_default: true` marks the floor as the org's landing floor (only one can be default at a time). `layout` is a free-form JSON describing the floor's wallpaper/rooms-arrangement for the Canvas2D floor view; pass {} for an empty layout that admins fill in via the UI.",
+      "Create a new Bureau floor. Org admins/owners only (gated server-side; non-admins receive 403). `slug` is the URL-safe identifier - lowercase alphanumeric with dashes, 1-140 chars. `is_default: true` marks the floor as the org's landing floor (only one can be default at a time). `layout` is a free-form JSON describing the floor's wallpaper/rooms-arrangement for the Canvas2D floor view; pass {} for an empty layout that admins fill in via the UI.",
     input: {
       name: z.string().min(1).max(120).describe('Display name'),
-      slug: z.string().min(1).max(140).regex(/^[a-z0-9-]+$/).describe('URL slug — lowercase alphanumeric with dashes'),
+      slug: z.string().min(1).max(140).regex(/^[a-z0-9-]+$/).describe('URL slug - lowercase alphanumeric with dashes'),
       layout: z.record(z.unknown()).optional().describe('Free-form Canvas2D layout payload (rooms-arrangement, wallpaper, etc.)'),
       background_url: z.string().max(2048).nullable().optional().describe('Optional floor background image URL'),
       building_id: z.string().uuid().nullable().optional().describe('Optional building this floor belongs to (for multi-building orgs)'),
@@ -515,7 +515,7 @@ export function registerBureauTools(
       capacity: z.number().int().min(1).nullable().optional().describe('Static capacity ceiling; live occupancy is enforced separately'),
       privacy_default: z.enum(['open', 'knock', 'private']).optional().describe("Default door privacy (default 'open')"),
       bookable: z.boolean().optional().describe('Whether the room can be reserved via bureau_book_room (default false)'),
-      zone_id: z.string().min(1).max(64).describe('Zone identifier within the floor — groups rooms for layout / Canvas2D rendering'),
+      zone_id: z.string().min(1).max(64).describe('Zone identifier within the floor - groups rooms for layout / Canvas2D rendering'),
       owner_id: z.string().uuid().nullable().optional().describe("For type='office', the user who occupies it (knock target). Null for shared rooms."),
       metadata: z.record(z.unknown()).optional().describe('Arbitrary structured metadata attached to the room'),
     },
@@ -529,7 +529,7 @@ export function registerBureauTools(
   registerTool(server, {
     name: 'bureau_update_room',
     description:
-      "Update fields on a Bureau room. Provide only the fields to change. Server-side gate: org admins/owners, the office's owner_id (for type='office'), or a room manager via bureau_room_acl. To change the live door state use bureau_set_door_state instead — this tool only updates the durable defaults.",
+      "Update fields on a Bureau room. Provide only the fields to change. Server-side gate: org admins/owners, the office's owner_id (for type='office'), or a room manager via bureau_room_acl. To change the live door state use bureau_set_door_state instead - this tool only updates the durable defaults.",
     input: {
       id: z.string().uuid().describe('Room id'),
       name: z.string().min(1).max(120).optional().describe('Updated display name'),
@@ -552,13 +552,13 @@ export function registerBureauTools(
   });
 
   // ============================================================
-  // FLOORS — additional (update / background / delete)
+  // FLOORS - additional (update / background / delete)
   // ============================================================
 
   registerTool(server, {
     name: 'bureau_update_floor',
     description:
-      "Update a Bureau floor's metadata. Provide only the fields to change. Org admins/owners only (gated server-side; non-admins get 403). To UNARCHIVE a soft-deleted floor, pass archived_at: null — that is the only PATCH that can target an archived floor, and it is the symmetric undo of bureau_delete_floor. Any field-only PATCH (name/layout/etc.) requires the floor to be live. `slug` and `building_id` are immutable here (set them at create time).",
+      "Update a Bureau floor's metadata. Provide only the fields to change. Org admins/owners only (gated server-side; non-admins get 403). To UNARCHIVE a soft-deleted floor, pass archived_at: null - that is the only PATCH that can target an archived floor, and it is the symmetric undo of bureau_delete_floor. Any field-only PATCH (name/layout/etc.) requires the floor to be live. `slug` and `building_id` are immutable here (set them at create time).",
     input: {
       id: z.string().uuid().describe('Floor id'),
       name: z.string().min(1).max(120).optional().describe('Updated display name'),
@@ -578,7 +578,7 @@ export function registerBureauTools(
   registerTool(server, {
     name: 'bureau_set_floor_background',
     description:
-      "Set a Bureau floor's background image URL. Org admins/owners only (gated server-side). This only stores the URL string on the floor row — uploading the image to object storage is a separate concern handled by the UI. Use bureau_update_floor with background_url: null to clear it.",
+      "Set a Bureau floor's background image URL. Org admins/owners only (gated server-side). This only stores the URL string on the floor row - uploading the image to object storage is a separate concern handled by the UI. Use bureau_update_floor with background_url: null to clear it.",
     input: {
       id: z.string().uuid().describe('Floor id'),
       background_url: z.string().min(1).max(2048).describe('Background image URL to store on the floor'),
@@ -593,7 +593,7 @@ export function registerBureauTools(
   registerTool(server, {
     name: 'bureau_delete_floor',
     description:
-      "Soft-delete (archive) a Bureau floor. Org admins/owners only (gated server-side). This is a soft delete — the row stays and can be restored with bureau_update_floor (archived_at: null). Archiving a floor hides it and its rooms from the floor view. " +
+      "Soft-delete (archive) a Bureau floor. Org admins/owners only (gated server-side). This is a soft delete - the row stays and can be restored with bureau_update_floor (archived_at: null). Archiving a floor hides it and its rooms from the floor view. " +
       "Requires confirm_action=true to actually delete. Call once with confirm_action: false (or omit) to preview, then call again with true.",
     input: {
       id: z.string().uuid().describe('Floor id to archive'),
@@ -616,13 +616,13 @@ export function registerBureauTools(
   });
 
   // ============================================================
-  // ROOMS — additional (delete)
+  // ROOMS - additional (delete)
   // ============================================================
 
   registerTool(server, {
     name: 'bureau_delete_room',
     description:
-      "Soft-delete (archive) a Bureau room. Org admins/owners only (gated server-side). This is a soft delete — the row is retained for auditability but the room disappears from the floor and can no longer be entered, booked, or knocked on. " +
+      "Soft-delete (archive) a Bureau room. Org admins/owners only (gated server-side). This is a soft delete - the row is retained for auditability but the room disappears from the floor and can no longer be entered, booked, or knocked on. " +
       "Requires confirm_action=true to actually delete. Call once with confirm_action: false (or omit) to preview, then call again with true.",
     input: {
       id: z.string().uuid().describe('Room id to archive'),
@@ -645,7 +645,7 @@ export function registerBureauTools(
   });
 
   // ============================================================
-  // BOOKING — additional (update window)
+  // BOOKING - additional (update window)
   // ============================================================
 
   registerTool(server, {
@@ -667,7 +667,7 @@ export function registerBureauTools(
   });
 
   // ============================================================
-  // OFFICES (3) — personal-office assignment + lookup
+  // OFFICES (3) - personal-office assignment + lookup
   // ============================================================
 
   registerTool(server, {
@@ -694,7 +694,7 @@ export function registerBureauTools(
   registerTool(server, {
     name: 'bureau_assign_office',
     description:
-      "Assign a Bureau room (office) to a user as its owner — the user becomes the room's occupant and knock target. Org admins/owners only (gated server-side; non-admins get 403). The target user must be an active member of the org. Assignment is org-scoped; any non-archived room can be assigned (the floor designer may repurpose a huddle as an office), though the admin offices view only surfaces type='office' rooms.",
+      "Assign a Bureau room (office) to a user as its owner - the user becomes the room's occupant and knock target. Org admins/owners only (gated server-side; non-admins get 403). The target user must be an active member of the org. Assignment is org-scoped; any non-archived room can be assigned (the floor designer may repurpose a huddle as an office), though the admin offices view only surfaces type='office' rooms.",
     input: {
       room_id: z.string().uuid().describe('Room id to assign'),
       user_id: z.string().uuid().describe('User id to make the owner/occupant'),
@@ -719,13 +719,13 @@ export function registerBureauTools(
   });
 
   // ============================================================
-  // KNOCKS — additional (inbox / leave-note)
+  // KNOCKS - additional (inbox / leave-note)
   // ============================================================
 
   registerTool(server, {
     name: 'bureau_knock_inbox',
     description:
-      "List the pending knocks where the caller is the office owner — i.e. visitors currently waiting at the caller's door. Newest first. Resolve each with bureau_respond_knock (admit/defer/decline). Knocks that timed out (no response within 30s) are not pending and won't appear here.",
+      "List the pending knocks where the caller is the office owner - i.e. visitors currently waiting at the caller's door. Newest first. Resolve each with bureau_respond_knock (admit/defer/decline). Knocks that timed out (no response within 30s) are not pending and won't appear here.",
     input: {},
     returns: z.object({ data: z.array(knockShape) }),
     handler: async () => {
@@ -737,7 +737,7 @@ export function registerBureauTools(
   registerTool(server, {
     name: 'bureau_leave_note',
     description:
-      "Leave a note for an office owner who is in Do Not Disturb — the DND fallback for bureau_knock (which returns 423 Locked when the owner is in DND). Delivers the message as a Banter DM to the owner, prefixed '[Bureau knock note] '. Only valid for type='office' rooms with an owner; you cannot leave a note on your own office. Returns { delivered: true } when the DM was posted, or { delivered: false } (HTTP 202) if Banter was unreachable and the note was dropped — surface that to the caller rather than assuming success.",
+      "Leave a note for an office owner who is in Do Not Disturb - the DND fallback for bureau_knock (which returns 423 Locked when the owner is in DND). Delivers the message as a Banter DM to the owner, prefixed '[Bureau knock note] '. Only valid for type='office' rooms with an owner; you cannot leave a note on your own office. Returns { delivered: true } when the DM was posted, or { delivered: false } (HTTP 202) if Banter was unreachable and the note was dropped - surface that to the caller rather than assuming success.",
     input: {
       room_id: z.string().uuid().describe('Office room id whose owner should receive the note'),
       message: z.string().min(1).max(2000).describe('The note text to DM the owner'),
@@ -750,13 +750,13 @@ export function registerBureauTools(
   });
 
   // ============================================================
-  // PRESENCE — real endpoints (co-presence by URL / locate a user)
+  // PRESENCE - real endpoints (co-presence by URL / locate a user)
   // ============================================================
 
   registerTool(server, {
     name: 'bureau_who_is_here',
     description:
-      "Co-presence by URL: list OTHER users currently on the same content surface (the given canonical URL) according to their live Bureau session — for the 'X others here' chip and starting a huddle. Deduped by user (multiple devices collapse to one), excludes the caller, and access-filtered: if the CALLER cannot see the destination URL the result is empty. This reads live, ephemeral presence state; an empty list means nobody else is reporting that exact URL right now.",
+      "Co-presence by URL: list OTHER users currently on the same content surface (the given canonical URL) according to their live Bureau session - for the 'X others here' chip and starting a huddle. Deduped by user (multiple devices collapse to one), excludes the caller, and access-filtered: if the CALLER cannot see the destination URL the result is empty. This reads live, ephemeral presence state; an empty list means nobody else is reporting that exact URL right now.",
     input: {
       url: z.string().min(1).max(2048).describe('Canonical surface URL to check co-presence on (must match what the SDK reports)'),
     },
@@ -794,7 +794,7 @@ export function registerBureauTools(
   });
 
   // ============================================================
-  // SUMMON — additional (audit lookup / grant-access follow-up)
+  // SUMMON - additional (audit lookup / grant-access follow-up)
   // ============================================================
 
   registerTool(server, {
@@ -815,7 +815,7 @@ export function registerBureauTools(
     name: 'bureau_summon_grant_access',
     description:
       "§4.4 grant-and-summon follow-up: for users who were DENIED on a prior summon (because they lacked access to the target URL), grant them access AND re-summon them in one step. Only the original summoner may call this on their own summon. Get the summon id and the denied user ids from bureau_get_summon. " +
-      "HIGH IMPACT — this grants cross-app access to the target resource AND DMs each user a real-time summon. Requires confirm_action=true to proceed. Call once with confirm_action: false (or omit) to preview, then call again with true.",
+      "HIGH IMPACT - this grants cross-app access to the target resource AND DMs each user a real-time summon. Requires confirm_action=true to proceed. Call once with confirm_action: false (or omit) to preview, then call again with true.",
     input: {
       id: z.string().uuid().describe('Summon id to grant access on'),
       user_ids: z.array(z.string().uuid()).min(1).max(100).describe('User ids (from the summon\'s denied list) to grant access and re-summon'),
@@ -837,13 +837,13 @@ export function registerBureauTools(
   });
 
   // ============================================================
-  // CHAT (3) — room-chat recovery + retention
+  // CHAT (3) - room-chat recovery + retention
   // ============================================================
 
   registerTool(server, {
     name: 'bureau_list_chats',
     description:
-      "List the Bureau room-chat threads the caller participated in (the recovery half of room chat — the live half is WS-only). Optional `search` filters by thread. Use the returned room keys with bureau_get_chat_messages to read a transcript.",
+      "List the Bureau room-chat threads the caller participated in (the recovery half of room chat - the live half is WS-only). Optional `search` filters by thread. Use the returned room keys with bureau_get_chat_messages to read a transcript.",
     input: {
       search: z.string().max(255).optional().describe('Optional search filter over the caller\'s chat threads'),
     },
@@ -887,7 +887,7 @@ export function registerBureauTools(
   });
 
   // ============================================================
-  // SETTINGS (2) — org Bureau preferences
+  // SETTINGS (2) - org Bureau preferences
   // ============================================================
 
   registerTool(server, {

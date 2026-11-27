@@ -17,7 +17,7 @@
 | `bench_export_dashboard` | Queue a dashboard export render (PDF). Returns the queued job descriptor; the rendered artifact is delivered out of band. | `id` |
 | `bench_generate_report` | Trigger immediate generation and delivery of a scheduled report. | `report_id` |
 | `bench_get_dashboard` | Get a dashboard with all its widget configurations and layout. | `id` |
-| `bench_get_data_source` | Get the detailed schema for one data source entity — its available measures, dimensions, and filterable fields. Use this after bench_list_data_sources to learn valid field names for a query. | `product`, `entity` |
+| `bench_get_data_source` | Get the detailed schema for one data source entity - its available measures, dimensions, and filterable fields. Use this after bench_list_data_sources to learn valid field names for a query. | `product`, `entity` |
 | `bench_get_saved_query` | Get a single saved query by ID, including its full query config. | `id` |
 | `bench_get_widget` | Get a single widget configuration by ID (data source, entity, query config, visualization). | `id` |
 | `bench_list_dashboards` | List available analytics dashboards for the current organization. Supports filtering by project and visibility. | `project_id`, `visibility` |

@@ -30,14 +30,14 @@
 | `beacon_restore` | Restore an Archived Beacon back to Active status. | `id` |
 | `beacon_retire` | Retire (soft-delete) a Beacon. | `id` |
 | `beacon_search` | Hybrid semantic + keyword + graph search across Beacons. | `query`, `filters`, `project_ids`, `tags`, `status`, `visibility_max`, `expires_after`, `options`, `include_graph_expansion`, `include_tag_expansion`, `include_fulltext_fallback`, `top_k`, `cursor` |
-| `beacon_search_context` | Structured retrieval optimized for agent consumption — richer metadata, linked Beacons pre-fetched. | `query`, `filters`, `project_ids`, `tags`, `status`, `top_k` |
+| `beacon_search_context` | Structured retrieval optimized for agent consumption - richer metadata, linked Beacons pre-fetched. | `query`, `filters`, `project_ids`, `tags`, `status`, `top_k` |
 | `beacon_stats` | Org-wide Beacon statistics (counts by status, staleness, verification) for the active scope. | `project_id` |
 | `beacon_suggest` | Typeahead suggestions from the Beacon title/tag index. | `q`, `limit` |
 | `beacon_tag_add` | Add one or more tags to a Beacon. | `id`, `tags` |
 | `beacon_tag_remove` | Remove a tag from a Beacon. | `id`, `tag` |
 | `beacon_tags_list` | List all tags in scope with usage counts. | `project_id`, `cursor`, `limit` |
 | `beacon_update` | Update a Beacon (creates a new version). Provide only the fields to change. | `id`, `title`, `summary`, `body_markdown`, `visibility`, `change_note` |
-| `beacon_upsert_by_slug` | Idempotent create-or-update of a Beacon entry by slug. Natural key is the slug within your organization (another org may use the same slug; its entry is never touched). On update, bumps version and writes a beacon_versions snapshot. Returns { data, created, idempotency_key } — `created` is true on insert, false on update. | `slug`, `title`, `summary`, `body_markdown`, `body_html`, `visibility`, `project_id`, `metadata`, `change_note` |
+| `beacon_upsert_by_slug` | Idempotent create-or-update of a Beacon entry by slug. Natural key is the slug within your organization (another org may use the same slug; its entry is never touched). On update, bumps version and writes a beacon_versions snapshot. Returns { data, created, idempotency_key } - `created` is true on insert, false on update. | `slug`, `title`, `summary`, `body_markdown`, `body_html`, `visibility`, `project_id`, `metadata`, `change_note` |
 | `beacon_verify` | Record a verification event on a Beacon (confirms content is still accurate). | `id`, `verification_type`, `outcome`, `confidence_score`, `notes` |
 | `beacon_version_get` | Get a specific version of a Beacon. | `id`, `version` |
 | `beacon_versions` | List the version history of a Beacon. | `id` |

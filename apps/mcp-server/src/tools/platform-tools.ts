@@ -6,12 +6,12 @@ import { registerTool } from '../lib/register-tool.js';
 
 /**
  * SuperUser-gated tools:
- *   - The first group (/superuser/*) is already gated at the API layer —
+ *   - The first group (/superuser/*) is already gated at the API layer -
  *     the server returns 403 to non-SuperUsers. We just pass through.
  *   - The second group wraps PUBLIC endpoints (/public/config,
  *     /public/beta-signup) that don't need auth on the HTTP surface but
  *     that we only want reachable from MCP by SuperUsers, since they
- *     aren't a normal-user feature — they're part of the beta-gate
+ *     aren't a normal-user feature - they're part of the beta-gate
  *     flow. We check `is_superuser` via /auth/me before proxying.
  */
 
@@ -40,7 +40,7 @@ export function registerPlatformTools(server: McpServer, api: ApiClient): void {
   registerTool(server, {
     name: 'get_platform_settings',
     description:
-      'SuperUser only. Fetch platform-wide settings. As of B3 Frndo Launch the response contains two independent signup kill switches: `public_signup_disabled` gates the BigBlueBam internal /auth/register endpoint; `helpdesk_signup_disabled` gates the Helpdesk customer /helpdesk/auth/register endpoint. The flags are deliberately decoupled — closing internal signup during beta should not also block customers from filing tickets.',
+      'SuperUser only. Fetch platform-wide settings. As of B3 Frndo Launch the response contains two independent signup kill switches: `public_signup_disabled` gates the BigBlueBam internal /auth/register endpoint; `helpdesk_signup_disabled` gates the Helpdesk customer /helpdesk/auth/register endpoint. The flags are deliberately decoupled - closing internal signup during beta should not also block customers from filing tickets.',
     input: {},
     returns: z
       .object({
@@ -63,7 +63,7 @@ export function registerPlatformTools(server: McpServer, api: ApiClient): void {
   registerTool(server, {
     name: 'set_public_signup_disabled',
     description:
-      "SuperUser only. Toggle the BigBlueBam (internal) public signup kill switch. When true, POST /auth/register returns 403 SIGNUP_DISABLED and the /b3/login page's 'Create one' link routes to the beta-gate. Does NOT affect Helpdesk customer signup — use `set_helpdesk_signup_disabled` for that. Both flags are returned in the response so the caller can see the resulting state of the platform settings row.",
+      "SuperUser only. Toggle the BigBlueBam (internal) public signup kill switch. When true, POST /auth/register returns 403 SIGNUP_DISABLED and the /b3/login page's 'Create one' link routes to the beta-gate. Does NOT affect Helpdesk customer signup - use `set_helpdesk_signup_disabled` for that. Both flags are returned in the response so the caller can see the resulting state of the platform settings row.",
     input: {
       public_signup_disabled: z.boolean().describe('true to freeze BigBlueBam new-account creation; false to open it back up.'),
     },
@@ -88,7 +88,7 @@ export function registerPlatformTools(server: McpServer, api: ApiClient): void {
   registerTool(server, {
     name: 'set_helpdesk_signup_disabled',
     description:
-      "SuperUser only. Toggle the Helpdesk customer signup kill switch. When true, POST /helpdesk/auth/register returns 403 SIGNUP_DISABLED and the Helpdesk login page hides 'Create one'. Independent of `set_public_signup_disabled` — closing BigBlueBam internal signup during beta should not also block customers from filing tickets. Both flags are returned in the response so the caller can see the resulting state.",
+      "SuperUser only. Toggle the Helpdesk customer signup kill switch. When true, POST /helpdesk/auth/register returns 403 SIGNUP_DISABLED and the Helpdesk login page hides 'Create one'. Independent of `set_public_signup_disabled` - closing BigBlueBam internal signup during beta should not also block customers from filing tickets. Both flags are returned in the response so the caller can see the resulting state.",
     input: {
       helpdesk_signup_disabled: z.boolean().describe('true to freeze Helpdesk customer signup; false to open it back up.'),
     },
@@ -157,7 +157,7 @@ export function registerPlatformTools(server: McpServer, api: ApiClient): void {
 
   registerTool(server, {
     name: 'platform_create_org',
-    description: "SuperUser only. Create a brand-new organization. The slug is auto-derived from the name (lowercased, non-alphanumeric collapsed to '-'). Does NOT create a membership for the caller — use switch_active_org or the /superuser/context/switch endpoint to enter the new org afterwards.",
+    description: "SuperUser only. Create a brand-new organization. The slug is auto-derived from the name (lowercased, non-alphanumeric collapsed to '-'). Does NOT create a membership for the caller - use switch_active_org or the /superuser/context/switch endpoint to enter the new org afterwards.",
     input: {
       name: z.string().trim().min(1).max(255).describe('Display name of the organization.'),
       plan: z.string().trim().max(50).optional().describe("Billing plan identifier; defaults to 'free'."),
@@ -198,7 +198,7 @@ export function registerPlatformTools(server: McpServer, api: ApiClient): void {
 
   registerTool(server, {
     name: 'platform_update_org',
-    description: 'SuperUser only. Update an organization. Renaming regenerates the slug. settings is a shallow JSONB replacement — pass the full object you want stored.',
+    description: 'SuperUser only. Update an organization. Renaming regenerates the slug. settings is a shallow JSONB replacement - pass the full object you want stored.',
     input: {
       org_id: z.string().uuid().describe('Organization id.'),
       name: z.string().trim().min(1).max(255).optional().describe('New display name. Slug is regenerated from this.'),
@@ -220,7 +220,7 @@ export function registerPlatformTools(server: McpServer, api: ApiClient): void {
 
   registerTool(server, {
     name: 'platform_delete_org',
-    description: 'SuperUser only. Soft-delete an organization: it is stamped deleted and hidden from every read path (list, get, the org switcher), its memberships are dropped and member sessions revoked so no one can access it, but the org row and all authored content are kept for audit (a hard delete is impossible — the FK web into users.id is NO ACTION/RESTRICT). Requires confirm_action=true to proceed.',
+    description: 'SuperUser only. Soft-delete an organization: it is stamped deleted and hidden from every read path (list, get, the org switcher), its memberships are dropped and member sessions revoked so no one can access it, but the org row and all authored content are kept for audit (a hard delete is impossible - the FK web into users.id is NO ACTION/RESTRICT). Requires confirm_action=true to proceed.',
     input: {
       org_id: z.string().uuid().describe('Organization id to delete.'),
       confirm_action: z.boolean().describe('Must be true to actually delete. Call once with false (or omit) to preview the action, then call again with true.'),
@@ -231,7 +231,7 @@ export function registerPlatformTools(server: McpServer, api: ApiClient): void {
         return {
           content: [{
             type: 'text' as const,
-            text: `Are you sure you want to delete organization ${org_id}? This soft-deletes it — hidden everywhere and members lose access, but the data is retained for audit. Call platform_delete_org again with confirm_action: true to proceed.`,
+            text: `Are you sure you want to delete organization ${org_id}? This soft-deletes it - hidden everywhere and members lose access, but the data is retained for audit. Call platform_delete_org again with confirm_action: true to proceed.`,
           }],
         };
       }
@@ -349,7 +349,7 @@ export function registerPlatformTools(server: McpServer, api: ApiClient): void {
 
   registerTool(server, {
     name: 'get_public_config',
-    description: 'SuperUser only (MCP gate). Read the unauthenticated /public/config — currently returns whether public signup is disabled. The underlying endpoint is public, but we gate MCP access to SuperUsers since this is part of the platform-admin surface.',
+    description: 'SuperUser only (MCP gate). Read the unauthenticated /public/config - currently returns whether public signup is disabled. The underlying endpoint is public, but we gate MCP access to SuperUsers since this is part of the platform-admin surface.',
     input: {},
     returns: z.object({ public_signup_disabled: z.boolean().optional() }).passthrough(),
     handler: async () => {

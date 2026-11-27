@@ -494,7 +494,7 @@ export function registerBenchTools(server: McpServer, api: ApiClient, benchApiUr
     },
   });
 
-  // ===== DASHBOARDS — CRUD =====
+  // ===== DASHBOARDS - CRUD =====
 
   // ===== bench_create_dashboard =====
   registerTool(server, {
@@ -579,7 +579,7 @@ export function registerBenchTools(server: McpServer, api: ApiClient, benchApiUr
     },
   });
 
-  // ===== WIDGETS — CRUD =====
+  // ===== WIDGETS - CRUD =====
 
   // ===== bench_add_widget =====
   registerTool(server, {
@@ -667,7 +667,7 @@ export function registerBenchTools(server: McpServer, api: ApiClient, benchApiUr
     },
   });
 
-  // ===== SCHEDULED REPORTS — CRUD =====
+  // ===== SCHEDULED REPORTS - CRUD =====
 
   // ===== bench_create_scheduled_report =====
   registerTool(server, {
@@ -725,7 +725,7 @@ export function registerBenchTools(server: McpServer, api: ApiClient, benchApiUr
     },
   });
 
-  // ===== SAVED QUERIES — CRUD =====
+  // ===== SAVED QUERIES - CRUD =====
 
   // ===== bench_list_saved_queries =====
   registerTool(server, {
@@ -809,7 +809,7 @@ export function registerBenchTools(server: McpServer, api: ApiClient, benchApiUr
   // ===== bench_get_data_source =====
   registerTool(server, {
     name: 'bench_get_data_source',
-    description: 'Get the detailed schema for one data source entity — its available measures, dimensions, and filterable fields. Use this after bench_list_data_sources to learn valid field names for a query.',
+    description: 'Get the detailed schema for one data source entity - its available measures, dimensions, and filterable fields. Use this after bench_list_data_sources to learn valid field names for a query.',
     input: {
       product: z.string().describe('Product name (e.g., "bam", "bond", "blast")'),
       entity: z.string().describe('Entity name (e.g., "tasks", "deals", "campaigns")'),

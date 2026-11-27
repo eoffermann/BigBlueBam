@@ -125,7 +125,7 @@ export function registerProjectTools(server: McpServer, api: ApiClient): void {
 
   registerTool(server, {
     name: 'disconnect_github_integration',
-    description: 'Remove the GitHub integration from a project. This is destructive — it deletes the webhook config and all linked commit/PR references. Requires project admin or org admin role.',
+    description: 'Remove the GitHub integration from a project. This is destructive - it deletes the webhook config and all linked commit/PR references. Requires project admin or org admin role.',
     input: {
       project_id: z.string().uuid().describe('The project ID'),
       confirm: z.boolean().describe('Must be true to proceed with the destructive action.'),
@@ -187,7 +187,7 @@ export function registerProjectTools(server: McpServer, api: ApiClient): void {
 
   registerTool(server, {
     name: 'archive_project',
-    description: 'Archive a project (destructive — the project disappears from active lists). Requires project admin (or org owner/admin). Requires confirm:true — the first call without it returns a confirmation prompt and changes nothing.',
+    description: 'Archive a project (destructive - the project disappears from active lists). Requires project admin (or org owner/admin). Requires confirm:true - the first call without it returns a confirmation prompt and changes nothing.',
     input: {
       project_id: z.string().uuid().describe('The project ID to archive'),
       confirm: z.boolean().describe('Must be true to confirm archiving'),
@@ -387,7 +387,7 @@ export function registerProjectTools(server: McpServer, api: ApiClient): void {
 
   registerTool(server, {
     name: 'delete_custom_field',
-    description: 'Delete a custom-field definition (destructive). Requires confirm:true — the first call without it returns a confirmation prompt and changes nothing.',
+    description: 'Delete a custom-field definition (destructive). Requires confirm:true - the first call without it returns a confirmation prompt and changes nothing.',
     input: {
       custom_field_id: z.string().uuid().describe('The custom-field definition UUID to delete'),
       confirm: z.boolean().describe('Must be true to confirm deletion'),
@@ -492,7 +492,7 @@ export function registerProjectTools(server: McpServer, api: ApiClient): void {
 
   registerTool(server, {
     name: 'delete_label',
-    description: 'Delete a label (destructive). Requires confirm:true — the first call without it returns a confirmation prompt and changes nothing.',
+    description: 'Delete a label (destructive). Requires confirm:true - the first call without it returns a confirmation prompt and changes nothing.',
     input: {
       label_id: z.string().uuid().describe('The label UUID to delete'),
       confirm: z.boolean().describe('Must be true to confirm deletion'),
@@ -609,7 +609,7 @@ export function registerProjectTools(server: McpServer, api: ApiClient): void {
 
   registerTool(server, {
     name: 'delete_phase',
-    description: 'Delete a phase (destructive). Optionally migrate any tasks in it to another phase first via migrate_to (strongly recommended — tasks left orphaned will reference a missing phase). Requires confirm:true.',
+    description: 'Delete a phase (destructive). Optionally migrate any tasks in it to another phase first via migrate_to (strongly recommended - tasks left orphaned will reference a missing phase). Requires confirm:true.',
     input: {
       phase_id: z.string().uuid().describe('The phase UUID to delete'),
       migrate_to: z.string().uuid().optional().describe('Phase UUID to move this phase\'s tasks into before deleting'),
@@ -621,7 +621,7 @@ export function registerProjectTools(server: McpServer, api: ApiClient): void {
         return {
           content: [{
             type: 'text' as const,
-            text: `Are you sure you want to delete phase ${phase_id}? ${migrate_to ? `Tasks will be migrated to ${migrate_to}. ` : 'No migrate_to was supplied — tasks in this phase will be orphaned. '}Call this tool again with confirm: true to proceed.`,
+            text: `Are you sure you want to delete phase ${phase_id}? ${migrate_to ? `Tasks will be migrated to ${migrate_to}. ` : 'No migrate_to was supplied - tasks in this phase will be orphaned. '}Call this tool again with confirm: true to proceed.`,
           }],
         };
       }

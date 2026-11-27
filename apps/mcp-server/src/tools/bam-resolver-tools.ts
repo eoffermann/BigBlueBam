@@ -4,7 +4,7 @@ import type { ApiClient } from '../middleware/api-client.js';
 import { registerTool } from '../lib/register-tool.js';
 
 /**
- * Bam resolver / list tools — Phase C, Tier 2 of the Bolt ID-mapping
+ * Bam resolver / list tools - Phase C, Tier 2 of the Bolt ID-mapping
  * strategy. These are read-only lookups that let MCP consumers translate
  * human-friendly references (phase name, label name, state category,
  * epic name, etc.) into the canonical UUIDs the mutating Bam tools

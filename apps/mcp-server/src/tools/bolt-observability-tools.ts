@@ -14,7 +14,7 @@ import { registerTool } from '../lib/register-tool.js';
  * bolt_event_trace returns every automation that evaluated the ingest event
  * plus per-rule condition outcomes and action outcomes, so a caller can
  * explain "why did (or didn't) rule X fire for event Y". bolt_recent_events
- * is the live-ish inspection counterpart — the last N ingest events the
+ * is the live-ish inspection counterpart - the last N ingest events the
  * caller's org saw, with source/event filters.
  *
  * Both tools share the same lightweight auth-forwarding fetch wrapper as

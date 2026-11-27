@@ -86,7 +86,7 @@ async function resolveBillClientId(
 /**
  * Resolve a Bam project identifier (UUID or name) to a UUID by listing
  * projects the caller can see and matching case-insensitively. Mirrors the
- * pattern in task-tools.ts — there is no dedicated `/projects/by-name`
+ * pattern in task-tools.ts - there is no dedicated `/projects/by-name`
  * endpoint, so we list and filter client-side.
  */
 async function resolveBamProjectId(
@@ -188,12 +188,12 @@ export function registerBillTools(server: McpServer, api: ApiClient, billApiUrl:
       client_id: z
         .string()
         .describe(
-          'Billing client — UUID, exact client name, or client email (resolved via bill_list_clients search)',
+          'Billing client - UUID, exact client name, or client email (resolved via bill_list_clients search)',
         ),
       project_id: z
         .string()
         .optional()
-        .describe('Link to a Bam project — UUID or exact project name'),
+        .describe('Link to a Bam project - UUID or exact project name'),
       tax_rate: z.number().min(0).max(100).optional().describe('Tax rate percentage'),
       notes: z.string().optional().describe('Internal notes'),
     },
@@ -231,10 +231,10 @@ export function registerBillTools(server: McpServer, api: ApiClient, billApiUrl:
     input: {
       project_id: z
         .string()
-        .describe('Bam project — UUID or exact project name'),
+        .describe('Bam project - UUID or exact project name'),
       client_id: z
         .string()
-        .describe('Billing client — UUID, exact client name, or client email'),
+        .describe('Billing client - UUID, exact client name, or client email'),
       date_from: z.string().describe('Start date (YYYY-MM-DD)'),
       date_to: z.string().describe('End date (YYYY-MM-DD)'),
     },
@@ -255,18 +255,18 @@ export function registerBillTools(server: McpServer, api: ApiClient, billApiUrl:
   registerTool(server, {
     name: 'bill_create_invoice_from_deal',
     description: 'Generate a draft invoice from a Bond CRM deal, pulling deal value and contact info. ' +
-      'NOTE: deal_id must be a UUID — Bond deal title search is not reachable from this tool. ' +
+      'NOTE: deal_id must be a UUID - Bond deal title search is not reachable from this tool. ' +
       'In a Bolt rule, pass `{{ event.deal.id }}` from the triggering deal.* event.',
     input: {
       deal_id: z
         .string()
         .uuid()
         .describe(
-          'Bond deal UUID (required). In a Bolt rule, pass `{{ event.deal.id }}` from a deal.* event — deal title lookup is not supported here.',
+          'Bond deal UUID (required). In a Bolt rule, pass `{{ event.deal.id }}` from a deal.* event - deal title lookup is not supported here.',
         ),
       client_id: z
         .string()
-        .describe('Billing client — UUID, exact client name, or client email'),
+        .describe('Billing client - UUID, exact client name, or client email'),
     },
     returns: invoiceShape,
     handler: async (params) => {
@@ -301,7 +301,7 @@ export function registerBillTools(server: McpServer, api: ApiClient, billApiUrl:
   // ===== 6. bill_finalize_invoice =====
   registerTool(server, {
     name: 'bill_finalize_invoice',
-    description: 'Finalize a draft invoice — assigns an invoice number and locks edits.',
+    description: 'Finalize a draft invoice - assigns an invoice number and locks edits.',
     input: {
       invoice_id: z.string().uuid().describe('Invoice UUID'),
     },
@@ -437,7 +437,7 @@ export function registerBillTools(server: McpServer, api: ApiClient, billApiUrl:
   // ===== 15. bill_list_clients =====
   registerTool(server, {
     name: 'bill_list_clients',
-    description: 'List billing clients for the organization, with optional fuzzy search across name, email, and linked Bond company name. Returns id, name, email, company_id, company_name, currency (org default), and default_payment_terms_days — the resolver surface every "bill client X" rule needs.',
+    description: 'List billing clients for the organization, with optional fuzzy search across name, email, and linked Bond company name. Returns id, name, email, company_id, company_name, currency (org default), and default_payment_terms_days - the resolver surface every "bill client X" rule needs.',
     input: {
       search: z.string().optional().describe('Optional fuzzy search across client name, email, and Bond company name'),
     },
@@ -618,7 +618,7 @@ export function registerBillTools(server: McpServer, api: ApiClient, billApiUrl:
   // ===== 23. bill_void_invoice =====
   registerTool(server, {
     name: 'bill_void_invoice',
-    description: 'Void a finalized invoice — marks it void without deleting the record.',
+    description: 'Void a finalized invoice - marks it void without deleting the record.',
     input: {
       invoice_id: z.string().uuid().describe('Invoice UUID'),
     },
@@ -945,12 +945,12 @@ export function registerBillTools(server: McpServer, api: ApiClient, billApiUrl:
     input: {
       client_id: z
         .string()
-        .describe('Billing client — UUID, exact client name, or client email'),
+        .describe('Billing client - UUID, exact client name, or client email'),
       name: z.string().min(1).max(255).describe('Schedule name (e.g. "Acme monthly retainer")'),
       cadence: z
         .enum(['weekly', 'monthly', 'quarterly', 'annually'])
         .describe('How often to generate an invoice'),
-      project_id: z.string().optional().describe('Link to a Bam project — UUID or exact project name'),
+      project_id: z.string().optional().describe('Link to a Bam project - UUID or exact project name'),
       auto_finalize: z
         .boolean()
         .optional()
@@ -1016,7 +1016,7 @@ export function registerBillTools(server: McpServer, api: ApiClient, billApiUrl:
   // ===== 43. bill_pause_recurring_invoice =====
   registerTool(server, {
     name: 'bill_pause_recurring_invoice',
-    description: 'Pause a recurring schedule — stops invoice generation until resumed.',
+    description: 'Pause a recurring schedule - stops invoice generation until resumed.',
     input: {
       recurring_id: z.string().uuid().describe('Recurring schedule UUID'),
     },
@@ -1030,7 +1030,7 @@ export function registerBillTools(server: McpServer, api: ApiClient, billApiUrl:
   // ===== 44. bill_resume_recurring_invoice =====
   registerTool(server, {
     name: 'bill_resume_recurring_invoice',
-    description: 'Resume a paused recurring schedule — generation continues at next_run_at.',
+    description: 'Resume a paused recurring schedule - generation continues at next_run_at.',
     input: {
       recurring_id: z.string().uuid().describe('Recurring schedule UUID'),
     },

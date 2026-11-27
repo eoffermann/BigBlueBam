@@ -219,7 +219,7 @@ export function registerMemberTools(server: McpServer, api: ApiClient): void {
   registerTool(server, {
     name: 'bam_list_people',
     description:
-      "List people across EVERY org the caller belongs to (a SuperUser sees all non-deleted orgs), deduped, with per-(person, org) capability flags. This is the People Manager v2 surface — broader than `list_members`, which is limited to the caller's single active org. Visibility is scoped: a caller never sees a person who shares no org with them. Each membership row carries `caps` (manage_role, disable, remove, reset_password, manage_projects, manage_keys, transfer_ownership, delete_account) computed server-side from the caller's role in that org and rank vs. the person — use them to decide which follow-up mutation tools (e.g. bam_admin_reset_password) will be permitted. Pass `user_id` to fetch a single person (with their in-scope memberships + caps); a `user_id` outside the caller's visible scope returns an empty list. Supports search (email + display name, case-insensitive), is_active / role / org_id filters, and opaque cursor pagination (limit default 50, max 200).",
+      "List people across EVERY org the caller belongs to (a SuperUser sees all non-deleted orgs), deduped, with per-(person, org) capability flags. This is the People Manager v2 surface - broader than `list_members`, which is limited to the caller's single active org. Visibility is scoped: a caller never sees a person who shares no org with them. Each membership row carries `caps` (manage_role, disable, remove, reset_password, manage_projects, manage_keys, transfer_ownership, delete_account) computed server-side from the caller's role in that org and rank vs. the person - use them to decide which follow-up mutation tools (e.g. bam_admin_reset_password) will be permitted. Pass `user_id` to fetch a single person (with their in-scope memberships + caps); a `user_id` outside the caller's visible scope returns an empty list. Supports search (email + display name, case-insensitive), is_active / role / org_id filters, and opaque cursor pagination (limit default 50, max 200).",
     input: {
       search: z
         .string()
@@ -292,13 +292,13 @@ export function registerMemberTools(server: McpServer, api: ApiClient): void {
   registerTool(server, {
     name: 'bam_invite_member',
     description:
-      "Invite a user to the caller's active org. Reuses an existing user by email if one already exists (`was_existing=true`); otherwise creates a brand-new user. Optionally adds the user to one or more projects in the same org at the same time (`project_ids`). When SMTP is configured, the user receives an invitation email — for brand-new users the email carries a 7-day password-onboarding link via the password-reset token machinery; for existing users it's just a 'you have new access' notice. The response reports `email_sent` so the caller knows whether the email actually went out. Errors: 409 ALREADY_MEMBER, 400 CROSS_ORG_PROJECT (one or more project_ids belong to another org).",
+      "Invite a user to the caller's active org. Reuses an existing user by email if one already exists (`was_existing=true`); otherwise creates a brand-new user. Optionally adds the user to one or more projects in the same org at the same time (`project_ids`). When SMTP is configured, the user receives an invitation email - for brand-new users the email carries a 7-day password-onboarding link via the password-reset token machinery; for existing users it's just a 'you have new access' notice. The response reports `email_sent` so the caller knows whether the email actually went out. Errors: 409 ALREADY_MEMBER, 400 CROSS_ORG_PROJECT (one or more project_ids belong to another org).",
     input: {
       email: z.string().email().max(320).describe("Invitee's email address."),
       role: z
         .enum(['member', 'admin'])
         .optional()
-        .describe("Org role to grant (default 'member'; 'owner' isn't invitable — use transfer-ownership instead)."),
+        .describe("Org role to grant (default 'member'; 'owner' isn't invitable - use transfer-ownership instead)."),
       display_name: z
         .string()
         .max(100)
@@ -340,7 +340,7 @@ export function registerMemberTools(server: McpServer, api: ApiClient): void {
   registerTool(server, {
     name: 'bam_admin_reset_password',
     description:
-      "Org-admin: reset another user's password to a freshly generated 16-character password (or one you supply via `password`). All of that user's active sessions are invalidated in the same transaction. The new password is returned in the response so the operator can hand it off — there is no second chance to retrieve it. The caller must be an org admin/owner or a SuperUser, and must outrank the target. Prefer `bam_send_password_reset_link` when the user can be reached by email; this tool is the right choice when SMTP is unconfigured or the user is locked out without email access.",
+      "Org-admin: reset another user's password to a freshly generated 16-character password (or one you supply via `password`). All of that user's active sessions are invalidated in the same transaction. The new password is returned in the response so the operator can hand it off - there is no second chance to retrieve it. The caller must be an org admin/owner or a SuperUser, and must outrank the target. Prefer `bam_send_password_reset_link` when the user can be reached by email; this tool is the right choice when SMTP is unconfigured or the user is locked out without email access.",
     input: {
       user_id: z.string().uuid().describe('Target user UUID (must be a member of the caller\'s active org).'),
       password: z
@@ -378,7 +378,7 @@ export function registerMemberTools(server: McpServer, api: ApiClient): void {
   registerTool(server, {
     name: 'bam_send_password_reset_link',
     description:
-      "Org-admin: mint a one-time password-reset token for another user and email them a 60-minute reset link. The caller must outrank the target (or be a SuperUser). The response reports `email_sent` and `smtp_configured` so the caller knows whether the email actually went out — if SMTP is not configured the token is still minted, but no email is sent and the caller must hand the link off out-of-band (or call `bam_admin_reset_password` instead). This is the gentler alternative to `bam_admin_reset_password` because the operator never sees the password.",
+      "Org-admin: mint a one-time password-reset token for another user and email them a 60-minute reset link. The caller must outrank the target (or be a SuperUser). The response reports `email_sent` and `smtp_configured` so the caller knows whether the email actually went out - if SMTP is not configured the token is still minted, but no email is sent and the caller must hand the link off out-of-band (or call `bam_admin_reset_password` instead). This is the gentler alternative to `bam_admin_reset_password` because the operator never sees the password.",
     input: {
       user_id: z.string().uuid().describe('Target user UUID (must be a member of the caller\'s active org).'),
     },
@@ -409,8 +409,8 @@ export function registerMemberTools(server: McpServer, api: ApiClient): void {
   // ─── Org membership management (durable, non-credential) ─────────────────
   //
   // These wrap the org-admin member surface in org.routes.ts. They manage
-  // *durable membership* — who is in the org, what role they hold, which
-  // projects they belong to — NOT credentials/secrets/sessions (those stay
+  // *durable membership* - who is in the org, what role they hold, which
+  // projects they belong to - NOT credentials/secrets/sessions (those stay
   // UI/CLI-only by design). All require org admin/owner scope (or SuperUser)
   // and a rank check vs. the target, enforced server-side.
 
@@ -462,7 +462,7 @@ export function registerMemberTools(server: McpServer, api: ApiClient): void {
   registerTool(server, {
     name: 'bam_list_member_projects',
     description:
-      "Org-admin: list the projects a given member belongs to within the caller's active org, with the member's per-project role and join date. Read-only — pair with bam_add_member_to_projects to grant access. Requires org admin/owner scope (or SuperUser). 404 if the user is not a member of the active org.",
+      "Org-admin: list the projects a given member belongs to within the caller's active org, with the member's per-project role and join date. Read-only - pair with bam_add_member_to_projects to grant access. Requires org admin/owner scope (or SuperUser). 404 if the user is not a member of the active org.",
     input: {
       user_id: z.string().uuid().describe('Target user UUID (must be a member of the caller\'s active org).'),
     },
@@ -493,7 +493,7 @@ export function registerMemberTools(server: McpServer, api: ApiClient): void {
   registerTool(server, {
     name: 'bam_get_member_activity',
     description:
-      "Org-admin: read a member's activity feed (their authored task/project actions within the caller's active org), newest first, cursor-paginated. Read-only audit view — for cross-app activity prefer activity_by_actor. Requires org admin/owner scope (or SuperUser) and that the caller outranks the target.",
+      "Org-admin: read a member's activity feed (their authored task/project actions within the caller's active org), newest first, cursor-paginated. Read-only audit view - for cross-app activity prefer activity_by_actor. Requires org admin/owner scope (or SuperUser) and that the caller outranks the target.",
     input: {
       user_id: z.string().uuid().describe('Target user UUID (must be a member of the caller\'s active org).'),
       cursor: z.string().optional().describe('Opaque pagination cursor from a prior response.'),
@@ -532,7 +532,7 @@ export function registerMemberTools(server: McpServer, api: ApiClient): void {
   registerTool(server, {
     name: 'bam_update_member_role',
     description:
-      "Org-admin: change a member's organization role (member / admin / viewer) in the caller's active org. Durable membership management, not a credential operation. The caller must be org admin/owner (or SuperUser) and must outrank both the current and target role. 'owner' is not settable here — use the transfer-ownership flow (UI/CLI) instead. Optionally pass `version` for optimistic concurrency: a stale version returns 409 VERSION_CONFLICT echoing the current version. 404 if the user is not a member of the active org.",
+      "Org-admin: change a member's organization role (member / admin / viewer) in the caller's active org. Durable membership management, not a credential operation. The caller must be org admin/owner (or SuperUser) and must outrank both the current and target role. 'owner' is not settable here - use the transfer-ownership flow (UI/CLI) instead. Optionally pass `version` for optimistic concurrency: a stale version returns 409 VERSION_CONFLICT echoing the current version. 404 if the user is not a member of the active org.",
     input: {
       user_id: z.string().uuid().describe('Target user UUID (must be a member of the caller\'s active org).'),
       role: z.enum(['member', 'admin', 'viewer']).describe("New org role. 'owner' is intentionally not settable here."),
@@ -595,7 +595,7 @@ export function registerMemberTools(server: McpServer, api: ApiClient): void {
   registerTool(server, {
     name: 'bam_remove_member_from_org',
     description:
-      "Org-admin: remove a member from the caller's active org (drops their org membership and project memberships in this org; does NOT delete the user account, which keeps authored content intact). Durable membership management, not a credential/account-deletion op. The caller must be org admin/owner (or SuperUser), must outrank the target, and cannot remove themselves. Requires confirm_action=true to proceed — call once without it to preview, then again with confirm_action:true to actually remove. 404 if the user is not a member of the active org.",
+      "Org-admin: remove a member from the caller's active org (drops their org membership and project memberships in this org; does NOT delete the user account, which keeps authored content intact). Durable membership management, not a credential/account-deletion op. The caller must be org admin/owner (or SuperUser), must outrank the target, and cannot remove themselves. Requires confirm_action=true to proceed - call once without it to preview, then again with confirm_action:true to actually remove. 404 if the user is not a member of the active org.",
     input: {
       user_id: z.string().uuid().describe('Target user UUID (must be a member of the caller\'s active org).'),
       confirm_action: z

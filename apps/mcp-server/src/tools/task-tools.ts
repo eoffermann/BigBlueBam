@@ -28,7 +28,7 @@ interface NamedRow {
 
 async function resolveProjectId(api: ApiClient, nameOrId: string): Promise<string | null> {
   if (isUuid(nameOrId)) return nameOrId;
-  // No dedicated by-name endpoint for projects — list and filter client-side.
+  // No dedicated by-name endpoint for projects - list and filter client-side.
   // `/projects` returns every project the caller can see in their active org.
   const result = await api.get('/projects');
   if (!result.ok) return null;
@@ -61,7 +61,7 @@ async function resolveLabelIds(
   // handful of labels so looping the round-trip would be wasteful.
   const result = await api.get(`/projects/${projectId}/labels`);
   if (!result.ok) {
-    // Fall back to whatever was already a UUID — anything non-UUID is dropped
+    // Fall back to whatever was already a UUID - anything non-UUID is dropped
     // because we can't verify it exists.
     return namesOrIds.filter((item) => isUuid(item));
   }
@@ -307,13 +307,13 @@ export function registerTaskTools(server: McpServer, api: ApiClient): void {
         .string()
         .nullable()
         .optional()
-        .describe('Assignee — UUID, email address, or display name'),
+        .describe('Assignee - UUID, email address, or display name'),
       priority: z.enum(['critical', 'high', 'medium', 'low', 'none']).optional().describe('Priority level'),
       story_points: z.number().int().positive().nullable().optional().describe('Story point estimate'),
       label_ids: z
         .array(z.string())
         .optional()
-        .describe('Labels to attach — each entry may be a label name or UUID'),
+        .describe('Labels to attach - each entry may be a label name or UUID'),
       epic_id: z.string().uuid().nullable().optional().describe('Epic to link to'),
       parent_task_id: z.string().uuid().nullable().optional().describe('Parent task for sub-tasks'),
     },
@@ -327,7 +327,7 @@ export function registerTaskTools(server: McpServer, api: ApiClient): void {
         );
       }
 
-      // Resolve all project-scoped lookups in parallel — they're independent
+      // Resolve all project-scoped lookups in parallel - they're independent
       // and hit different REST endpoints.
       const [
         resolvedPhaseId,
@@ -397,18 +397,18 @@ export function registerTaskTools(server: McpServer, api: ApiClient): void {
         .string()
         .nullable()
         .optional()
-        .describe('New assignee — UUID, email, or display name'),
+        .describe('New assignee - UUID, email, or display name'),
       priority: z.enum(['critical', 'high', 'medium', 'low', 'none']).optional().describe('New priority'),
       story_points: z.number().int().positive().nullable().optional().describe('New story points'),
       sprint_id: z
         .string()
         .nullable()
         .optional()
-        .describe('New sprint — name or UUID'),
+        .describe('New sprint - name or UUID'),
       state_id: z
         .string()
         .optional()
-        .describe("New state — name (e.g. 'Done'), category, or UUID"),
+        .describe("New state - name (e.g. 'Done'), category, or UUID"),
       epic_id: z
         .string()
         .uuid()
@@ -515,7 +515,7 @@ export function registerTaskTools(server: McpServer, api: ApiClient): void {
         .string()
         .nullable()
         .optional()
-        .describe('Optionally change sprint — name or UUID'),
+        .describe('Optionally change sprint - name or UUID'),
     },
     returns: taskShape,
     handler: async ({ task_id, phase_id, position, sprint_id }) => {
@@ -777,7 +777,7 @@ export function registerTaskTools(server: McpServer, api: ApiClient): void {
   // upstream system has its own stable identifier and retries are common.
   registerTool(server, {
     name: 'task_upsert_by_external_id',
-    description: 'Idempotent create-or-update of a task by (project_id, external_id). Natural key is the partial unique index on (project_id, external_id). On insert, allocates a new human_id and accepts the full create payload. On update, patches the supplied fields; human_id is preserved. Returns { data, created, idempotency_key } — `created` is true on insert, false on update.',
+    description: 'Idempotent create-or-update of a task by (project_id, external_id). Natural key is the partial unique index on (project_id, external_id). On insert, allocates a new human_id and accepts the full create payload. On update, patches the supplied fields; human_id is preserved. Returns { data, created, idempotency_key } - `created` is true on insert, false on update.',
     input: {
       project_id: z.string().uuid().describe('Project UUID'),
       external_id: z.string().min(1).max(256).describe('External idempotency key (e.g. upstream ticket id). Globally unique within the project.'),
@@ -842,7 +842,7 @@ export function registerTaskTools(server: McpServer, api: ApiClient): void {
     description:
       "Attach an existing task as a parent of another task. Establishes a many-to-many parent/subtask link in the task_parent_links join table, so a subtask can serve multiple parents (each genuinely dependent on it). Idempotent: re-adding an existing link returns { already_linked: true } without changing state. Refuses self-loops (400 SELF_LOOP) and cycles up to depth 16 (409 CYCLE). Bumps the parent's subtask_count when the link is genuinely new.",
     input: {
-      task_id: z.string().uuid().describe('The subtask UUID — the task being attached.'),
+      task_id: z.string().uuid().describe('The subtask UUID - the task being attached.'),
       parent_task_id: z.string().uuid().describe('The parent task UUID.'),
     },
     returns: z.object({ already_linked: z.boolean() }),

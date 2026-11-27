@@ -12,7 +12,7 @@ import {
  * Ingest-time deduplication MCP tool (AGENTIC_TODO §19, Wave 5).
  *
  * Tools:
- *   - ingest_fingerprint_check  — atomic SET NX EX against a Redis key
+ *   - ingest_fingerprint_check - atomic SET NX EX against a Redis key
  *     scoped to (org_id, source, fingerprint). Returns first_seen=true if
  *     the caller is the first to submit this fingerprint in the window;
  *     returns first_seen=false with seen_at + ttl_remaining otherwise.

@@ -159,7 +159,7 @@ export function registerHelpdeskTools(server: McpServer, api: ApiClient, helpdes
     name: 'helpdesk_search_tickets',
     description: 'Fuzzy search helpdesk tickets by subject and body within the caller\'s org. Returns up to 20 matches as a compact projection ({ id, number, subject, status, priority, requester_email, requester_name, assignee_id, assignee_name }), ordered by most recently updated. Optional filters narrow by status and by the linked task\'s assignee_id. Intended as a resolver for natural-language ticket lookups where only a fragment of the subject/body is known.',
     input: {
-      query: z.string().min(1).max(500).describe('Search text — matched case-insensitively against ticket subject and body'),
+      query: z.string().min(1).max(500).describe('Search text - matched case-insensitively against ticket subject and body'),
       status: z.enum(['open', 'in_progress', 'waiting_on_customer', 'resolved', 'closed']).optional().describe('Optional status filter'),
       assignee_id: z.string().uuid().optional().describe('Optional assignee filter (matches the linked task\'s assignee)'),
     },
@@ -283,7 +283,7 @@ export function registerHelpdeskTools(server: McpServer, api: ApiClient, helpdes
 
   registerTool(server, {
     name: 'helpdesk_get_settings',
-    description: 'Get full helpdesk configuration. Requires admin authentication — the caller\'s API key must belong to an org admin or owner.',
+    description: 'Get full helpdesk configuration. Requires admin authentication - the caller\'s API key must belong to an org admin or owner.',
     input: {},
     returns: z.object({}).passthrough(),
     handler: async () => {
@@ -450,9 +450,9 @@ export function registerHelpdeskTools(server: McpServer, api: ApiClient, helpdes
     description: 'Idempotent create-or-update of a helpdesk end-user by email. Natural key is (org_id, email); the tool resolves the org via the provided org_slug. Returns { data, created, idempotency_key }. SECURITY: the update path ignores the password field, so calling this tool on an existing email cannot change that user\'s credentials.',
     input: {
       org_slug: z.string().min(1).max(128).describe('Organization slug (sent as X-Org-Slug header)'),
-      email: z.string().email().max(320).describe('Email address — idempotency key (lowercased server-side)'),
+      email: z.string().email().max(320).describe('Email address - idempotency key (lowercased server-side)'),
       display_name: z.string().min(1).max(100).describe('Display name'),
-      password: z.string().min(12).max(256).optional().describe('Password — honored ONLY on the insert path. On update this field is silently ignored.'),
+      password: z.string().min(12).max(256).optional().describe('Password - honored ONLY on the insert path. On update this field is silently ignored.'),
       email_verified: z.boolean().optional().describe('Whether the email address has been verified'),
       is_active: z.boolean().optional().describe('Whether the account is active'),
     },

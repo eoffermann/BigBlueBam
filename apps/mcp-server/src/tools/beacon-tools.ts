@@ -30,7 +30,7 @@ async function resolveProjectId(api: ApiClient, nameOrId: string): Promise<strin
 
 /**
  * Helper to make requests to the beacon-api service.
- * Same pattern as helpdesk-tools.ts / banter-tools.ts — a lightweight fetch
+ * Same pattern as helpdesk-tools.ts / banter-tools.ts - a lightweight fetch
  * wrapper that targets the beacon-api base URL and forwards the user's auth token.
  */
 function createBeaconClient(beaconApiUrl: string, api: ApiClient) {
@@ -128,7 +128,7 @@ export function registerBeaconTools(server: McpServer, api: ApiClient, beaconApi
       project_id: z
         .string()
         .optional()
-        .describe('Project scope (if project-level) — accepts a UUID or project name'),
+        .describe('Project scope (if project-level) - accepts a UUID or project name'),
     },
     returns: beaconShape,
     handler: async (params) => {
@@ -204,9 +204,9 @@ export function registerBeaconTools(server: McpServer, api: ApiClient, beaconApi
   // §14 Wave 4: idempotent create-or-update by slug.
   registerTool(server, {
     name: 'beacon_upsert_by_slug',
-    description: 'Idempotent create-or-update of a Beacon entry by slug. Natural key is the slug within your organization (another org may use the same slug; its entry is never touched). On update, bumps version and writes a beacon_versions snapshot. Returns { data, created, idempotency_key } — `created` is true on insert, false on update.',
+    description: 'Idempotent create-or-update of a Beacon entry by slug. Natural key is the slug within your organization (another org may use the same slug; its entry is never touched). On update, bumps version and writes a beacon_versions snapshot. Returns { data, created, idempotency_key } - `created` is true on insert, false on update.',
     input: {
-      slug: z.string().min(1).max(256).describe('Slug — idempotency key (must be a URL-safe string)'),
+      slug: z.string().min(1).max(256).describe('Slug - idempotency key (must be a URL-safe string)'),
       title: z.string().min(1).max(512).describe('Entry title'),
       summary: z.string().max(500).nullable().optional().describe('Short summary (plain text)'),
       body_markdown: z.string().min(1).max(500_000).describe('Entry body (Markdown)'),
@@ -350,7 +350,7 @@ export function registerBeaconTools(server: McpServer, api: ApiClient, beaconApi
         tags: z.array(z.string()).optional().describe('Filter by tags'),
         status: z.array(z.string()).optional().describe('Filter by status (e.g. Active, PendingReview)'),
         visibility_max: z.enum(['Public', 'Organization', 'Project', 'Private']).optional().describe('Visibility ceiling'),
-        expires_after: z.string().optional().describe('ISO timestamp — only Beacons expiring after this date'),
+        expires_after: z.string().optional().describe('ISO timestamp - only Beacons expiring after this date'),
       }).optional().describe('Search filters'),
       options: z.object({
         include_graph_expansion: z.boolean().optional().describe('Follow beacon_links from top results'),
@@ -383,7 +383,7 @@ export function registerBeaconTools(server: McpServer, api: ApiClient, beaconApi
 
   registerTool(server, {
     name: 'beacon_search_context',
-    description: 'Structured retrieval optimized for agent consumption — richer metadata, linked Beacons pre-fetched.',
+    description: 'Structured retrieval optimized for agent consumption - richer metadata, linked Beacons pre-fetched.',
     input: {
       query: z.string().describe('Search query text'),
       filters: z.object({
@@ -649,7 +649,7 @@ export function registerBeaconTools(server: McpServer, api: ApiClient, beaconApi
   //
   // Read + comment/link/attachment management endpoints that previously had no
   // MCP tool. The multipart attachment UPLOAD (POST /beacons/:id/attachments)
-  // is intentionally NOT exposed — binary multipart upload is not an
+  // is intentionally NOT exposed - binary multipart upload is not an
   // agent-appropriate surface; agents reference existing attachments via the
   // cross-cutting attachment_get / attachment_list tools. `GET /beacons/by-slug/:slug`
   // is also not a standalone tool: it is the slug resolver that resolveBeaconId
@@ -672,7 +672,7 @@ export function registerBeaconTools(server: McpServer, api: ApiClient, beaconApi
     input: {
       project_id: z.string().uuid().optional().describe('Optional project scope filter'),
     },
-    returns: z.object({}).passthrough().describe('Aggregated stats — shape varies'),
+    returns: z.object({}).passthrough().describe('Aggregated stats - shape varies'),
     handler: async (params) => {
       const result = await client.request('GET', `/beacons/stats${buildQs(params)}`);
       return result.ok ? ok(result.data) : err('getting beacon stats', result.data);

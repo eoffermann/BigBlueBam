@@ -188,8 +188,47 @@ if (staleCounts.length > 0) {
   console.error('');
 }
 
+// --- Check 4 (issue #410): no em dash in tool source or in the docs generated from it ---
+// Tool descriptions and input .describe() strings are copied verbatim into
+// mcp-tools.md, the per-app guide.md tables, the /docs catalog, the Manual and
+// the bolt-api tool-schema snapshot. The house rule is no em dashes in published
+// docs, and a generated file cannot be fixed by hand, so the rule is enforced at
+// the source (every file in the tools directory) and re-checked on the outputs.
+const EM_DASH = '—';
+const emDashOffenders = [];
+function scanEmDash(rel) {
+  const lines = readFileSync(join(ROOT, rel), 'utf8').split('\n');
+  for (let i = 0; i < lines.length; i++) {
+    if (lines[i].includes(EM_DASH)) emDashOffenders.push(`${rel}:${i + 1}`);
+  }
+}
+for (const f of readdirSync(TOOLS_DIR).filter((x) => x.endsWith('.ts')).sort()) {
+  scanEmDash(`apps/mcp-server/src/tools/${f}`);
+}
+const GENERATED_FROM_TOOLS = [
+  'README.md',
+  'site/src/content/docs-catalog.generated.json',
+  'site/src/content/manual.generated.json',
+  'apps/bolt-api/src/services/mcp-tool-schemas.generated.ts',
+];
+const APPS_DOCS = join(ROOT, 'docs/apps');
+for (const dir of readdirSync(APPS_DOCS, { withFileTypes: true }).filter((d) => d.isDirectory())) {
+  for (const f of ['guide.md', 'mcp-tools.md']) {
+    const rel = `docs/apps/${dir.name}/${f}`;
+    if (readdirSync(join(APPS_DOCS, dir.name)).includes(f)) GENERATED_FROM_TOOLS.push(rel);
+  }
+}
+for (const rel of GENERATED_FROM_TOOLS) scanEmDash(rel);
+console.log(`em dashes:             ${emDashOffenders.length} (expected 0)`);
+if (emDashOffenders.length > 0) {
+  failed = true;
+  console.error('FAIL: em dash (U+2014) in MCP tool source or in a doc generated from it. Reword with a comma, colon, or " - ":');
+  for (const loc of emDashOffenders) console.error(`  ${loc}`);
+  console.error('');
+}
+
 if (!failed) {
-  console.log('PASS: All tools use registerTool() with a returns: schema, and published counts match.');
+  console.log('PASS: All tools use registerTool() with a returns: schema, published counts match, and no em dashes.');
 }
 
 process.exit(failed ? 1 : 0);

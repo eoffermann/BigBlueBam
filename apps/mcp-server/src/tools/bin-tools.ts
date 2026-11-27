@@ -185,7 +185,7 @@ export function registerBinTools(server: McpServer, api: ApiClient, binApiUrl: s
   registerTool(server, {
     name: 'bin_asset_delete',
     description:
-      'Hard-delete a Bin asset: removes the catalog entry AND its stored bytes (all versions + derived proxy/poster). Irreversible — unlike bin_asset_archive, nothing is retained. Missing bytes are not an error (the row is deleted regardless). Two-step confirm: call with confirm_action omitted/false to preview, then again with confirm_action:true to proceed.',
+      'Hard-delete a Bin asset: removes the catalog entry AND its stored bytes (all versions + derived proxy/poster). Irreversible - unlike bin_asset_archive, nothing is retained. Missing bytes are not an error (the row is deleted regardless). Two-step confirm: call with confirm_action omitted/false to preview, then again with confirm_action:true to proceed.',
     input: {
       id: z.string().uuid().describe('Asset ID'),
       confirm_action: z.boolean().optional().describe('Set true to actually delete'),

@@ -12,7 +12,7 @@
 | `board_create_template` | Create a board template, optionally seeded from an existing board's scene. `board_id` (if provided) accepts a UUID or a board name to capture as the template. | `category`, `icon`, `board_id` |
 | `board_create_version` | Capture a named snapshot of a board's current scene that can later be restored. `board_id` accepts either a UUID or a board name. | `board_id` |
 | `board_delete_link` | Delete a single element-to-task link by its link UUID (get it from board_list_links). This does not delete the underlying task or element, only the association. | `link_id` |
-| `board_delete_permanent` | Permanently hard-delete a board and ALL of its elements, collaborators, stars, and versions (cascade). This is irreversible — distinct from board_archive which only soft-deletes. `id` accepts either a UUID or a board name. | `id` |
+| `board_delete_permanent` | Permanently hard-delete a board and ALL of its elements, collaborators, stars, and versions (cascade). This is irreversible - distinct from board_archive which only soft-deletes. `id` accepts either a UUID or a board name. | `id` |
 | `board_delete_template` | Delete a board template. `id` accepts either a UUID or a template name. | `id` |
 | `board_duplicate` | Duplicate a board, copying its elements into a new board. `id` accepts either a UUID or a board name. | `id` |
 | `board_export` | Export a board as SVG or PNG. `id` accepts either a UUID or a board name. | `id`, `format` |

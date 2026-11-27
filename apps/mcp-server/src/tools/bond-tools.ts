@@ -6,7 +6,7 @@ import { isUuid } from '../middleware/resolve-helpers.js';
 
 /**
  * Helper to make requests to the bond-api service.
- * Same pattern as bolt-tools.ts — a lightweight fetch wrapper that targets
+ * Same pattern as bolt-tools.ts - a lightweight fetch wrapper that targets
  * the bond-api base URL and forwards the user's auth token.
  */
 function createBondClient(bondApiUrl: string, api: ApiClient) {
@@ -79,9 +79,9 @@ function buildQs(params: Record<string, unknown>): string {
 // the wrong record.
 //
 // We intentionally use only endpoints that already exist in bond-api:
-//   - GET /pipelines                   (listPipelines — returns {data:[{id,name,...}]})
-//   - GET /pipelines/:id/stages        (listStages    — returns {data:[{id,name,...}]})
-//   - GET /deals?search=&limit=2       (listDeals     — returns {data:[{id,name,pipeline_id,...}]})
+//   - GET /pipelines                   (listPipelines - returns {data:[{id,name,...}]})
+//   - GET /pipelines/:id/stages        (listStages - returns {data:[{id,name,...}]})
+//   - GET /deals?search=&limit=2       (listDeals - returns {data:[{id,name,pipeline_id,...}]})
 //   - GET /contacts/search?q=&limit=2  (searchContacts)
 //   - GET /companies?search=&limit=2   (listCompanies)
 // Owner resolution hits the main Bam api `/users/by-email` / `/users/search`
@@ -132,7 +132,7 @@ async function resolveStageId(
 /**
  * Resolve a deal identifier that may be either a UUID or a deal name (fuzzy
  * substring match via the list endpoint's `search` filter). We ask for two
- * results and only return a UUID when exactly one row comes back — anything
+ * results and only return a UUID when exactly one row comes back - anything
  * else is treated as ambiguous so the caller can surface a clear error
  * instead of mutating the wrong deal.
  *
@@ -187,7 +187,7 @@ async function resolveContactId(
 
 /**
  * Resolve a company identifier that may be a UUID or a company name (or
- * domain — the bond-api `search` filter matches both). Single-match-only.
+ * domain - the bond-api `search` filter matches both). Single-match-only.
  */
 async function resolveCompanyId(
   bond: BondClient,
@@ -315,8 +315,8 @@ export function registerBondTools(server: McpServer, api: ApiClient, bondApiUrl:
       title: z.string().max(150).optional().describe('Job title'),
       lifecycle_stage: z.enum(['subscriber', 'lead', 'marketing_qualified', 'sales_qualified', 'opportunity', 'customer', 'evangelist', 'other']).optional().describe('Lifecycle stage (default "lead")'),
       lead_source: z.string().max(60).optional().describe('Lead source (e.g., "website", "referral", "express_interest")'),
-      owner_id: z.string().optional().describe('Owner — accepts a user UUID or email address'),
-      company_id: z.string().optional().describe('Primary company to associate — accepts a company UUID or name'),
+      owner_id: z.string().optional().describe('Owner - accepts a user UUID or email address'),
+      company_id: z.string().optional().describe('Primary company to associate - accepts a company UUID or name'),
       address_line1: z.string().max(255).optional().describe('Address line 1'),
       address_line2: z.string().max(255).optional().describe('Address line 2'),
       city: z.string().max(100).optional().describe('City'),
@@ -334,7 +334,7 @@ export function registerBondTools(server: McpServer, api: ApiClient, bondApiUrl:
         const resolved = await resolveOwnerId(api, owner_id);
         if (!resolved) {
           return err('creating contact', {
-            error: `Could not resolve owner_id "${owner_id}" — pass a user UUID or an email that matches a user in this org.`,
+            error: `Could not resolve owner_id "${owner_id}" - pass a user UUID or an email that matches a user in this org.`,
           });
         }
         body.owner_id = resolved;
@@ -343,7 +343,7 @@ export function registerBondTools(server: McpServer, api: ApiClient, bondApiUrl:
         const resolved = await resolveCompanyId(client, company_id);
         if (!resolved) {
           return err('creating contact', {
-            error: `Could not resolve company_id "${company_id}" — pass a company UUID, or a company name that matches exactly one record.`,
+            error: `Could not resolve company_id "${company_id}" - pass a company UUID, or a company name that matches exactly one record.`,
           });
         }
         body.company_id = resolved;
@@ -358,7 +358,7 @@ export function registerBondTools(server: McpServer, api: ApiClient, bondApiUrl:
     name: 'bond_update_contact',
     description: 'Update an existing contact. Provide only the fields to change. `id` accepts a contact UUID, an email, or a name fragment (single-match only). `owner_id` accepts a user UUID or email.',
     input: {
-      id: z.string().describe('Contact — accepts a UUID, email address, or unique name fragment'),
+      id: z.string().describe('Contact - accepts a UUID, email address, or unique name fragment'),
       first_name: z.string().max(100).optional().describe('Updated first name'),
       last_name: z.string().max(100).optional().describe('Updated last name'),
       email: z.string().email().max(255).optional().describe('Updated email'),
@@ -366,7 +366,7 @@ export function registerBondTools(server: McpServer, api: ApiClient, bondApiUrl:
       title: z.string().max(150).optional().describe('Updated job title'),
       lifecycle_stage: z.enum(['subscriber', 'lead', 'marketing_qualified', 'sales_qualified', 'opportunity', 'customer', 'evangelist', 'other']).optional().describe('Updated lifecycle stage'),
       lead_source: z.string().max(60).optional().describe('Updated lead source'),
-      owner_id: z.string().optional().describe('Updated owner — accepts a user UUID or email address'),
+      owner_id: z.string().optional().describe('Updated owner - accepts a user UUID or email address'),
       address_line1: z.string().max(255).optional().describe('Updated address line 1'),
       address_line2: z.string().max(255).optional().describe('Updated address line 2'),
       city: z.string().max(100).optional().describe('Updated city'),
@@ -380,7 +380,7 @@ export function registerBondTools(server: McpServer, api: ApiClient, bondApiUrl:
       const resolvedId = await resolveContactId(client, id);
       if (!resolvedId) {
         return err('updating contact', {
-          error: `Could not resolve contact "${id}" — pass a contact UUID, an email, or a name that matches exactly one record.`,
+          error: `Could not resolve contact "${id}" - pass a contact UUID, an email, or a name that matches exactly one record.`,
         });
       }
 
@@ -389,7 +389,7 @@ export function registerBondTools(server: McpServer, api: ApiClient, bondApiUrl:
         const resolvedOwner = await resolveOwnerId(api, owner_id);
         if (!resolvedOwner) {
           return err('updating contact', {
-            error: `Could not resolve owner_id "${owner_id}" — pass a user UUID or an email that matches a user in this org.`,
+            error: `Could not resolve owner_id "${owner_id}" - pass a user UUID or an email that matches a user in this org.`,
           });
         }
         body.owner_id = resolvedOwner;
@@ -418,9 +418,9 @@ export function registerBondTools(server: McpServer, api: ApiClient, bondApiUrl:
 
   registerTool(server, {
     name: 'bond_upsert_contact',
-    description: 'Idempotent create-or-update of a CRM contact by email. Natural key is (organization_id, lower(email)). Soft-deleted matches are resurrected. Returns { data, created, idempotency_key } — `created` is true on insert, false on update.',
+    description: 'Idempotent create-or-update of a CRM contact by email. Natural key is (organization_id, lower(email)). Soft-deleted matches are resurrected. Returns { data, created, idempotency_key } - `created` is true on insert, false on update.',
     input: {
-      email: z.string().email().max(255).describe('Email address — idempotency key (case-insensitive)'),
+      email: z.string().email().max(255).describe('Email address - idempotency key (case-insensitive)'),
       first_name: z.string().max(100).optional().describe('First name'),
       last_name: z.string().max(100).optional().describe('Last name'),
       phone: z.string().max(50).optional().describe('Phone number'),
@@ -582,16 +582,16 @@ export function registerBondTools(server: McpServer, api: ApiClient, bondApiUrl:
     description: 'Create a new deal in a pipeline. `pipeline_id` accepts a pipeline UUID or exact name; `stage_id` accepts a stage UUID or exact name (within the resolved pipeline); `owner_id` accepts a user UUID or email; `company_id` accepts a company UUID or name; `contact_ids` entries each accept a contact UUID or email.',
     input: {
       name: z.string().max(255).describe('Deal name'),
-      pipeline_id: z.string().describe('Pipeline — accepts a UUID or exact pipeline name'),
-      stage_id: z.string().optional().describe('Initial stage — accepts a UUID or exact stage name (scoped to the resolved pipeline). Defaults to the first stage in the pipeline.'),
+      pipeline_id: z.string().describe('Pipeline - accepts a UUID or exact pipeline name'),
+      stage_id: z.string().optional().describe('Initial stage - accepts a UUID or exact stage name (scoped to the resolved pipeline). Defaults to the first stage in the pipeline.'),
       value: z.number().int().optional().describe('Deal value in cents'),
       currency: z.string().length(3).optional().describe('Currency code (default "USD")'),
       expected_close_date: z.string().optional().describe('Expected close date (ISO date)'),
       probability_pct: z.number().int().min(0).max(100).optional().describe('Win probability override (0-100)'),
       description: z.string().max(5000).optional().describe('Deal description'),
-      owner_id: z.string().optional().describe('Deal owner — accepts a user UUID or email'),
-      company_id: z.string().optional().describe('Primary company — accepts a company UUID or name'),
-      contact_ids: z.array(z.string()).optional().describe('Contacts to associate — each entry accepts a UUID or email'),
+      owner_id: z.string().optional().describe('Deal owner - accepts a user UUID or email'),
+      company_id: z.string().optional().describe('Primary company - accepts a company UUID or name'),
+      contact_ids: z.array(z.string()).optional().describe('Contacts to associate - each entry accepts a UUID or email'),
       custom_fields: z.record(z.unknown()).optional().describe('Custom field values'),
     },
     returns: dealShape,
@@ -605,11 +605,11 @@ export function registerBondTools(server: McpServer, api: ApiClient, bondApiUrl:
         ...rest
       } = params;
 
-      // 1. Pipeline must resolve first — stage resolution depends on it.
+      // 1. Pipeline must resolve first - stage resolution depends on it.
       const resolvedPipelineId = await resolvePipelineId(client, pipeline_id);
       if (!resolvedPipelineId) {
         return err('creating deal', {
-          error: `Could not resolve pipeline_id "${pipeline_id}" — pass a pipeline UUID or an exact pipeline name.`,
+          error: `Could not resolve pipeline_id "${pipeline_id}" - pass a pipeline UUID or an exact pipeline name.`,
         });
       }
 
@@ -636,24 +636,24 @@ export function registerBondTools(server: McpServer, api: ApiClient, bondApiUrl:
 
       if (stage_id !== undefined && !resolvedStageId) {
         return err('creating deal', {
-          error: `Could not resolve stage_id "${stage_id}" inside pipeline "${pipeline_id}" — pass a stage UUID or an exact stage name.`,
+          error: `Could not resolve stage_id "${stage_id}" inside pipeline "${pipeline_id}" - pass a stage UUID or an exact stage name.`,
         });
       }
       if (owner_id !== undefined && !resolvedOwnerId) {
         return err('creating deal', {
-          error: `Could not resolve owner_id "${owner_id}" — pass a user UUID or an email that matches a user in this org.`,
+          error: `Could not resolve owner_id "${owner_id}" - pass a user UUID or an email that matches a user in this org.`,
         });
       }
       if (company_id !== undefined && !resolvedCompanyId) {
         return err('creating deal', {
-          error: `Could not resolve company_id "${company_id}" — pass a company UUID, or a company name that matches exactly one record.`,
+          error: `Could not resolve company_id "${company_id}" - pass a company UUID, or a company name that matches exactly one record.`,
         });
       }
       if (contact_ids !== undefined && resolvedContactIds) {
         const failedIdx = resolvedContactIds.findIndex((r) => r === null);
         if (failedIdx !== -1) {
           return err('creating deal', {
-            error: `Could not resolve contact_ids[${failedIdx}] "${contact_ids[failedIdx]}" — pass a contact UUID, email, or unique name fragment.`,
+            error: `Could not resolve contact_ids[${failedIdx}] "${contact_ids[failedIdx]}" - pass a contact UUID, email, or unique name fragment.`,
           });
         }
       }
@@ -678,15 +678,15 @@ export function registerBondTools(server: McpServer, api: ApiClient, bondApiUrl:
     name: 'bond_update_deal',
     description: 'Update an existing deal. Provide only the fields to change. `id` accepts a deal UUID or a unique title fragment (single-match only). `owner_id` accepts a user UUID or email; `company_id` accepts a company UUID or name.',
     input: {
-      id: z.string().describe('Deal — accepts a UUID or unique deal title fragment'),
+      id: z.string().describe('Deal - accepts a UUID or unique deal title fragment'),
       name: z.string().max(255).optional().describe('Updated name'),
       value: z.number().int().optional().describe('Updated value in cents'),
       currency: z.string().length(3).optional().describe('Updated currency'),
       expected_close_date: z.string().optional().describe('Updated expected close date'),
       probability_pct: z.number().int().min(0).max(100).optional().describe('Updated win probability'),
       description: z.string().max(5000).optional().describe('Updated description'),
-      owner_id: z.string().optional().describe('Updated owner — accepts a user UUID or email'),
-      company_id: z.string().optional().describe('Updated primary company — accepts a company UUID or name'),
+      owner_id: z.string().optional().describe('Updated owner - accepts a user UUID or email'),
+      company_id: z.string().optional().describe('Updated primary company - accepts a company UUID or name'),
       custom_fields: z.record(z.unknown()).optional().describe('Updated custom field values'),
     },
     returns: dealShape,
@@ -694,7 +694,7 @@ export function registerBondTools(server: McpServer, api: ApiClient, bondApiUrl:
       const resolvedId = await resolveDealId(client, id);
       if (!resolvedId) {
         return err('updating deal', {
-          error: `Could not resolve deal "${id}" — pass a deal UUID or a title fragment that matches exactly one deal.`,
+          error: `Could not resolve deal "${id}" - pass a deal UUID or a title fragment that matches exactly one deal.`,
         });
       }
 
@@ -703,7 +703,7 @@ export function registerBondTools(server: McpServer, api: ApiClient, bondApiUrl:
         const resolvedOwner = await resolveOwnerId(api, owner_id);
         if (!resolvedOwner) {
           return err('updating deal', {
-            error: `Could not resolve owner_id "${owner_id}" — pass a user UUID or an email that matches a user in this org.`,
+            error: `Could not resolve owner_id "${owner_id}" - pass a user UUID or an email that matches a user in this org.`,
           });
         }
         body.owner_id = resolvedOwner;
@@ -712,7 +712,7 @@ export function registerBondTools(server: McpServer, api: ApiClient, bondApiUrl:
         const resolvedCompany = await resolveCompanyId(client, company_id);
         if (!resolvedCompany) {
           return err('updating deal', {
-            error: `Could not resolve company_id "${company_id}" — pass a company UUID or a unique company name.`,
+            error: `Could not resolve company_id "${company_id}" - pass a company UUID or a unique company name.`,
           });
         }
         body.company_id = resolvedCompany;
@@ -727,16 +727,16 @@ export function registerBondTools(server: McpServer, api: ApiClient, bondApiUrl:
     name: 'bond_move_deal_stage',
     description: 'Move a deal to a new pipeline stage. Records stage history and emits a deal.stage_changed event for Bolt automations. `id` accepts a deal UUID or a unique title fragment; `stage_id` accepts a stage UUID or exact stage name (stage name is resolved within the deal\'s pipeline).',
     input: {
-      id: z.string().describe('Deal — accepts a UUID or unique deal title fragment'),
-      stage_id: z.string().describe('Target stage — accepts a UUID or exact stage name (resolved within the deal\'s pipeline)'),
+      id: z.string().describe('Deal - accepts a UUID or unique deal title fragment'),
+      stage_id: z.string().describe('Target stage - accepts a UUID or exact stage name (resolved within the deal\'s pipeline)'),
     },
     returns: dealShape,
     handler: async ({ id, stage_id }) => {
-      // 1. Resolve the deal first — we need its pipeline_id to scope the stage lookup.
+      // 1. Resolve the deal first - we need its pipeline_id to scope the stage lookup.
       const resolvedDeal = await resolveDeal(client, id);
       if (!resolvedDeal) {
         return err('moving deal stage', {
-          error: `Could not resolve deal "${id}" — pass a deal UUID or a title fragment that matches exactly one deal.`,
+          error: `Could not resolve deal "${id}" - pass a deal UUID or a title fragment that matches exactly one deal.`,
         });
       }
 
@@ -755,7 +755,7 @@ export function registerBondTools(server: McpServer, api: ApiClient, bondApiUrl:
           .data?.pipeline_id;
         if (!pipelineId) {
           return err('moving deal stage', {
-            error: `Deal "${id}" has no pipeline_id — cannot resolve target stage.`,
+            error: `Deal "${id}" has no pipeline_id - cannot resolve target stage.`,
           });
         }
       }
@@ -764,7 +764,7 @@ export function registerBondTools(server: McpServer, api: ApiClient, bondApiUrl:
       const resolvedStageId = await resolveStageId(client, pipelineId, stage_id);
       if (!resolvedStageId) {
         return err('moving deal stage', {
-          error: `Could not resolve stage_id "${stage_id}" inside the deal's pipeline — pass a stage UUID or an exact stage name.`,
+          error: `Could not resolve stage_id "${stage_id}" inside the deal's pipeline - pass a stage UUID or an exact stage name.`,
         });
       }
 
@@ -781,7 +781,7 @@ export function registerBondTools(server: McpServer, api: ApiClient, bondApiUrl:
     name: 'bond_close_deal_won',
     description: 'Mark a deal as won. Sets closed_at, moves to the won stage, and emits a deal.won event for Bolt automations. `id` accepts a deal UUID or a unique title fragment.',
     input: {
-      id: z.string().describe('Deal — accepts a UUID or unique deal title fragment'),
+      id: z.string().describe('Deal - accepts a UUID or unique deal title fragment'),
       close_reason: z.string().max(2000).optional().describe('Reason for winning the deal'),
     },
     returns: dealShape,
@@ -789,7 +789,7 @@ export function registerBondTools(server: McpServer, api: ApiClient, bondApiUrl:
       const resolvedId = await resolveDealId(client, id);
       if (!resolvedId) {
         return err('closing deal as won', {
-          error: `Could not resolve deal "${id}" — pass a deal UUID or a title fragment that matches exactly one deal.`,
+          error: `Could not resolve deal "${id}" - pass a deal UUID or a title fragment that matches exactly one deal.`,
         });
       }
       const result = await client.request('POST', `/deals/${resolvedId}/won`, body);
@@ -801,7 +801,7 @@ export function registerBondTools(server: McpServer, api: ApiClient, bondApiUrl:
     name: 'bond_close_deal_lost',
     description: 'Mark a deal as lost. Sets closed_at, close_reason, and optionally the competitor who won. Emits a deal.lost event for Bolt automations. `id` accepts a deal UUID or a unique title fragment.',
     input: {
-      id: z.string().describe('Deal — accepts a UUID or unique deal title fragment'),
+      id: z.string().describe('Deal - accepts a UUID or unique deal title fragment'),
       close_reason: z.string().max(2000).optional().describe('Reason for losing the deal'),
       lost_to_competitor: z.string().max(255).optional().describe('Competitor who won the deal'),
     },
@@ -810,7 +810,7 @@ export function registerBondTools(server: McpServer, api: ApiClient, bondApiUrl:
       const resolvedId = await resolveDealId(client, id);
       if (!resolvedId) {
         return err('closing deal as lost', {
-          error: `Could not resolve deal "${id}" — pass a deal UUID or a title fragment that matches exactly one deal.`,
+          error: `Could not resolve deal "${id}" - pass a deal UUID or a title fragment that matches exactly one deal.`,
         });
       }
       const result = await client.request('POST', `/deals/${resolvedId}/lost`, body);
@@ -828,9 +828,9 @@ export function registerBondTools(server: McpServer, api: ApiClient, bondApiUrl:
         'note', 'email_sent', 'email_received', 'call', 'meeting',
         'task', 'form_submission', 'custom',
       ]).describe('Type of activity'),
-      contact_id: z.string().optional().describe('Contact — accepts a UUID, email, or unique name fragment'),
-      deal_id: z.string().optional().describe('Deal — accepts a UUID or unique deal title fragment'),
-      company_id: z.string().optional().describe('Company — accepts a UUID or unique company name'),
+      contact_id: z.string().optional().describe('Contact - accepts a UUID, email, or unique name fragment'),
+      deal_id: z.string().optional().describe('Deal - accepts a UUID or unique deal title fragment'),
+      company_id: z.string().optional().describe('Company - accepts a UUID or unique company name'),
       subject: z.string().max(255).optional().describe('Activity subject/title'),
       body: z.string().max(10000).optional().describe('Activity body/notes'),
       performed_at: z.string().optional().describe('When the activity occurred (ISO datetime, defaults to now)'),
@@ -858,17 +858,17 @@ export function registerBondTools(server: McpServer, api: ApiClient, bondApiUrl:
 
       if (contact_id !== undefined && !resolvedContactId) {
         return err('logging activity', {
-          error: `Could not resolve contact_id "${contact_id}" — pass a contact UUID, email, or unique name fragment.`,
+          error: `Could not resolve contact_id "${contact_id}" - pass a contact UUID, email, or unique name fragment.`,
         });
       }
       if (deal_id !== undefined && !resolvedDealId) {
         return err('logging activity', {
-          error: `Could not resolve deal_id "${deal_id}" — pass a deal UUID or a title fragment that matches exactly one deal.`,
+          error: `Could not resolve deal_id "${deal_id}" - pass a deal UUID or a title fragment that matches exactly one deal.`,
         });
       }
       if (company_id !== undefined && !resolvedCompanyId) {
         return err('logging activity', {
-          error: `Could not resolve company_id "${company_id}" — pass a company UUID or a unique company name.`,
+          error: `Could not resolve company_id "${company_id}" - pass a company UUID or a unique company name.`,
         });
       }
 
@@ -972,20 +972,20 @@ export function registerBondTools(server: McpServer, api: ApiClient, bondApiUrl:
     },
   });
 
-  // ===== CONTACTS — additional (delete / restore) =====
+  // ===== CONTACTS - additional (delete / restore) =====
 
   registerTool(server, {
     name: 'bond_delete_contact',
     description: 'Soft-delete a contact. `id` accepts a contact UUID, an email, or a unique name fragment (single-match only). Use bond_restore_contact to undo.',
     input: {
-      id: z.string().describe('Contact — accepts a UUID, email address, or unique name fragment'),
+      id: z.string().describe('Contact - accepts a UUID, email address, or unique name fragment'),
     },
     returns: z.object({ deleted: z.literal(true), id: z.string().uuid() }),
     handler: async ({ id }) => {
       const resolvedId = await resolveContactId(client, id);
       if (!resolvedId) {
         return err('deleting contact', {
-          error: `Could not resolve contact "${id}" — pass a contact UUID, an email, or a name that matches exactly one record.`,
+          error: `Could not resolve contact "${id}" - pass a contact UUID, an email, or a name that matches exactly one record.`,
         });
       }
       const result = await client.request('DELETE', `/contacts/${resolvedId}`);
@@ -1006,20 +1006,20 @@ export function registerBondTools(server: McpServer, api: ApiClient, bondApiUrl:
     },
   });
 
-  // ===== COMPANIES — additional (delete / restore / contacts / deals) =====
+  // ===== COMPANIES - additional (delete / restore / contacts / deals) =====
 
   registerTool(server, {
     name: 'bond_delete_company',
     description: 'Soft-delete a company. `id` accepts a company UUID or an exact/unique company name. Use bond_restore_company to undo.',
     input: {
-      id: z.string().describe('Company — accepts a UUID or a unique company name'),
+      id: z.string().describe('Company - accepts a UUID or a unique company name'),
     },
     returns: z.object({ deleted: z.literal(true), id: z.string().uuid() }),
     handler: async ({ id }) => {
       const resolvedId = await resolveCompanyId(client, id);
       if (!resolvedId) {
         return err('deleting company', {
-          error: `Could not resolve company "${id}" — pass a company UUID or a company name that matches exactly one record.`,
+          error: `Could not resolve company "${id}" - pass a company UUID or a company name that matches exactly one record.`,
         });
       }
       const result = await client.request('DELETE', `/companies/${resolvedId}`);
@@ -1044,14 +1044,14 @@ export function registerBondTools(server: McpServer, api: ApiClient, bondApiUrl:
     name: 'bond_list_company_contacts',
     description: 'List the contacts associated with a company. `id` accepts a company UUID or a unique company name.',
     input: {
-      id: z.string().describe('Company — accepts a UUID or a unique company name'),
+      id: z.string().describe('Company - accepts a UUID or a unique company name'),
     },
     returns: z.object({ data: z.array(contactShape) }),
     handler: async ({ id }) => {
       const resolvedId = await resolveCompanyId(client, id);
       if (!resolvedId) {
         return err('listing company contacts', {
-          error: `Could not resolve company "${id}" — pass a company UUID or a unique company name.`,
+          error: `Could not resolve company "${id}" - pass a company UUID or a unique company name.`,
         });
       }
       const result = await client.request('GET', `/companies/${resolvedId}/contacts`);
@@ -1063,7 +1063,7 @@ export function registerBondTools(server: McpServer, api: ApiClient, bondApiUrl:
     name: 'bond_list_company_deals',
     description: 'List the deals attached to a company (paginated). `id` accepts a company UUID or a unique company name.',
     input: {
-      id: z.string().describe('Company — accepts a UUID or a unique company name'),
+      id: z.string().describe('Company - accepts a UUID or a unique company name'),
       limit: z.number().int().positive().max(100).optional().describe('Page size (default unspecified, max 100)'),
       offset: z.number().int().min(0).optional().describe('Pagination offset'),
       sort: z.string().max(60).optional().describe('Sort field with optional - prefix (e.g., "-value")'),
@@ -1073,7 +1073,7 @@ export function registerBondTools(server: McpServer, api: ApiClient, bondApiUrl:
       const resolvedId = await resolveCompanyId(client, id);
       if (!resolvedId) {
         return err('listing company deals', {
-          error: `Could not resolve company "${id}" — pass a company UUID or a unique company name.`,
+          error: `Could not resolve company "${id}" - pass a company UUID or a unique company name.`,
         });
       }
       const result = await client.request('GET', `/companies/${resolvedId}/deals${buildQs(query)}`);
@@ -1081,20 +1081,20 @@ export function registerBondTools(server: McpServer, api: ApiClient, bondApiUrl:
     },
   });
 
-  // ===== DEALS — additional (delete / restore / duplicate / contacts / history / related) =====
+  // ===== DEALS - additional (delete / restore / duplicate / contacts / history / related) =====
 
   registerTool(server, {
     name: 'bond_delete_deal',
     description: 'Soft-delete a deal. `id` accepts a deal UUID or a unique title fragment (single-match only). Use bond_restore_deal to undo.',
     input: {
-      id: z.string().describe('Deal — accepts a UUID or a unique deal title fragment'),
+      id: z.string().describe('Deal - accepts a UUID or a unique deal title fragment'),
     },
     returns: z.object({ deleted: z.literal(true), id: z.string().uuid() }),
     handler: async ({ id }) => {
       const resolvedId = await resolveDealId(client, id);
       if (!resolvedId) {
         return err('deleting deal', {
-          error: `Could not resolve deal "${id}" — pass a deal UUID or a title fragment that matches exactly one deal.`,
+          error: `Could not resolve deal "${id}" - pass a deal UUID or a title fragment that matches exactly one deal.`,
         });
       }
       const result = await client.request('DELETE', `/deals/${resolvedId}`);
@@ -1119,14 +1119,14 @@ export function registerBondTools(server: McpServer, api: ApiClient, bondApiUrl:
     name: 'bond_duplicate_deal',
     description: 'Duplicate a deal (creates a copy in the same pipeline/stage). `id` accepts a deal UUID or a unique title fragment.',
     input: {
-      id: z.string().describe('Deal — accepts a UUID or a unique deal title fragment'),
+      id: z.string().describe('Deal - accepts a UUID or a unique deal title fragment'),
     },
     returns: dealShape,
     handler: async ({ id }) => {
       const resolvedId = await resolveDealId(client, id);
       if (!resolvedId) {
         return err('duplicating deal', {
-          error: `Could not resolve deal "${id}" — pass a deal UUID or a title fragment that matches exactly one deal.`,
+          error: `Could not resolve deal "${id}" - pass a deal UUID or a title fragment that matches exactly one deal.`,
         });
       }
       const result = await client.request('POST', `/deals/${resolvedId}/duplicate`);
@@ -1138,14 +1138,14 @@ export function registerBondTools(server: McpServer, api: ApiClient, bondApiUrl:
     name: 'bond_list_deal_contacts',
     description: 'List the contacts associated with a deal (with their per-deal role). `id` accepts a deal UUID or a unique title fragment.',
     input: {
-      id: z.string().describe('Deal — accepts a UUID or a unique deal title fragment'),
+      id: z.string().describe('Deal - accepts a UUID or a unique deal title fragment'),
     },
     returns: z.object({ data: z.array(contactShape) }),
     handler: async ({ id }) => {
       const resolvedId = await resolveDealId(client, id);
       if (!resolvedId) {
         return err('listing deal contacts', {
-          error: `Could not resolve deal "${id}" — pass a deal UUID or a title fragment that matches exactly one deal.`,
+          error: `Could not resolve deal "${id}" - pass a deal UUID or a title fragment that matches exactly one deal.`,
         });
       }
       const result = await client.request('GET', `/deals/${resolvedId}/contacts`);
@@ -1157,8 +1157,8 @@ export function registerBondTools(server: McpServer, api: ApiClient, bondApiUrl:
     name: 'bond_add_deal_contact',
     description: 'Associate a contact with a deal, optionally tagging the contact\'s role (e.g. "decision_maker", "champion"). `id` accepts a deal UUID or title fragment; `contact_id` accepts a contact UUID, email, or unique name fragment.',
     input: {
-      id: z.string().describe('Deal — accepts a UUID or a unique deal title fragment'),
-      contact_id: z.string().describe('Contact — accepts a UUID, email, or unique name fragment'),
+      id: z.string().describe('Deal - accepts a UUID or a unique deal title fragment'),
+      contact_id: z.string().describe('Contact - accepts a UUID, email, or unique name fragment'),
       role: z.string().max(60).optional().describe('Role of the contact on this deal'),
     },
     returns: z.object({ deal_id: z.string().uuid(), contact_id: z.string().uuid() }).passthrough(),
@@ -1166,13 +1166,13 @@ export function registerBondTools(server: McpServer, api: ApiClient, bondApiUrl:
       const resolvedDealId = await resolveDealId(client, id);
       if (!resolvedDealId) {
         return err('adding deal contact', {
-          error: `Could not resolve deal "${id}" — pass a deal UUID or a title fragment that matches exactly one deal.`,
+          error: `Could not resolve deal "${id}" - pass a deal UUID or a title fragment that matches exactly one deal.`,
         });
       }
       const resolvedContactId = await resolveContactId(client, contact_id);
       if (!resolvedContactId) {
         return err('adding deal contact', {
-          error: `Could not resolve contact "${contact_id}" — pass a contact UUID, email, or unique name fragment.`,
+          error: `Could not resolve contact "${contact_id}" - pass a contact UUID, email, or unique name fragment.`,
         });
       }
       const body: Record<string, unknown> = { contact_id: resolvedContactId };
@@ -1186,21 +1186,21 @@ export function registerBondTools(server: McpServer, api: ApiClient, bondApiUrl:
     name: 'bond_remove_deal_contact',
     description: 'Remove a contact association from a deal. `id` accepts a deal UUID or title fragment; `contact_id` accepts a contact UUID, email, or unique name fragment.',
     input: {
-      id: z.string().describe('Deal — accepts a UUID or a unique deal title fragment'),
-      contact_id: z.string().describe('Contact — accepts a UUID, email, or unique name fragment'),
+      id: z.string().describe('Deal - accepts a UUID or a unique deal title fragment'),
+      contact_id: z.string().describe('Contact - accepts a UUID, email, or unique name fragment'),
     },
     returns: z.object({ deleted: z.literal(true), deal_id: z.string().uuid(), contact_id: z.string().uuid() }),
     handler: async ({ id, contact_id }) => {
       const resolvedDealId = await resolveDealId(client, id);
       if (!resolvedDealId) {
         return err('removing deal contact', {
-          error: `Could not resolve deal "${id}" — pass a deal UUID or a title fragment that matches exactly one deal.`,
+          error: `Could not resolve deal "${id}" - pass a deal UUID or a title fragment that matches exactly one deal.`,
         });
       }
       const resolvedContactId = await resolveContactId(client, contact_id);
       if (!resolvedContactId) {
         return err('removing deal contact', {
-          error: `Could not resolve contact "${contact_id}" — pass a contact UUID, email, or unique name fragment.`,
+          error: `Could not resolve contact "${contact_id}" - pass a contact UUID, email, or unique name fragment.`,
         });
       }
       const result = await client.request('DELETE', `/deals/${resolvedDealId}/contacts/${resolvedContactId}`);
@@ -1214,14 +1214,14 @@ export function registerBondTools(server: McpServer, api: ApiClient, bondApiUrl:
     name: 'bond_get_deal_stage_history',
     description: 'Get the stage transition history for a deal (each move with timestamp and actor). `id` accepts a deal UUID or a unique title fragment.',
     input: {
-      id: z.string().describe('Deal — accepts a UUID or a unique deal title fragment'),
+      id: z.string().describe('Deal - accepts a UUID or a unique deal title fragment'),
     },
     returns: z.object({ data: z.array(z.object({ stage_id: z.string().uuid().optional() }).passthrough()) }),
     handler: async ({ id }) => {
       const resolvedId = await resolveDealId(client, id);
       if (!resolvedId) {
         return err('getting deal stage history', {
-          error: `Could not resolve deal "${id}" — pass a deal UUID or a title fragment that matches exactly one deal.`,
+          error: `Could not resolve deal "${id}" - pass a deal UUID or a title fragment that matches exactly one deal.`,
         });
       }
       const result = await client.request('GET', `/deals/${resolvedId}/stage-history`);
@@ -1233,14 +1233,14 @@ export function registerBondTools(server: McpServer, api: ApiClient, bondApiUrl:
     name: 'bond_list_deal_activities',
     description: 'List the activity timeline for a deal (notes, calls, emails, meetings, stage changes). `id` accepts a deal UUID or a unique title fragment.',
     input: {
-      id: z.string().describe('Deal — accepts a UUID or a unique deal title fragment'),
+      id: z.string().describe('Deal - accepts a UUID or a unique deal title fragment'),
     },
     returns: z.object({ data: z.array(z.object({ id: z.string().uuid(), activity_type: z.string() }).passthrough()) }).passthrough(),
     handler: async ({ id }) => {
       const resolvedId = await resolveDealId(client, id);
       if (!resolvedId) {
         return err('listing deal activities', {
-          error: `Could not resolve deal "${id}" — pass a deal UUID or a title fragment that matches exactly one deal.`,
+          error: `Could not resolve deal "${id}" - pass a deal UUID or a title fragment that matches exactly one deal.`,
         });
       }
       const result = await client.request('GET', `/deals/${resolvedId}/activities`);
@@ -1252,14 +1252,14 @@ export function registerBondTools(server: McpServer, api: ApiClient, bondApiUrl:
     name: 'bond_get_deal_related',
     description: 'Get cross-product records linked to a deal: invoices (Bill), events (Book), and tasks (Bam). Each section is best-effort and returns an empty array if its source is unavailable. `id` accepts a deal UUID or a unique title fragment.',
     input: {
-      id: z.string().describe('Deal — accepts a UUID or a unique deal title fragment'),
+      id: z.string().describe('Deal - accepts a UUID or a unique deal title fragment'),
     },
     returns: z.object({ data: z.object({ invoices: z.array(z.unknown()), events: z.array(z.unknown()), tasks: z.array(z.unknown()) }).passthrough() }),
     handler: async ({ id }) => {
       const resolvedId = await resolveDealId(client, id);
       if (!resolvedId) {
         return err('getting deal related records', {
-          error: `Could not resolve deal "${id}" — pass a deal UUID or a title fragment that matches exactly one deal.`,
+          error: `Could not resolve deal "${id}" - pass a deal UUID or a title fragment that matches exactly one deal.`,
         });
       }
       const result = await client.request('GET', `/deals/${resolvedId}/related`);
@@ -1267,7 +1267,7 @@ export function registerBondTools(server: McpServer, api: ApiClient, bondApiUrl:
     },
   });
 
-  // ===== ACTIVITIES — additional (list / get / update / delete) =====
+  // ===== ACTIVITIES - additional (list / get / update / delete) =====
 
   registerTool(server, {
     name: 'bond_list_activities',
@@ -1346,13 +1346,13 @@ export function registerBondTools(server: McpServer, api: ApiClient, bondApiUrl:
     name: 'bond_get_pipeline',
     description: 'Get a single pipeline with its stages. `id` accepts a pipeline UUID or an exact pipeline name.',
     input: {
-      id: z.string().describe('Pipeline — accepts a UUID or exact pipeline name'),
+      id: z.string().describe('Pipeline - accepts a UUID or exact pipeline name'),
     },
     returns: z.object({ id: z.string().uuid(), name: z.string(), stages: z.array(z.object({ id: z.string().uuid(), name: z.string() }).passthrough()).optional() }).passthrough(),
     handler: async ({ id }) => {
       const pipelineId = await resolvePipelineId(client, id);
       if (!pipelineId) {
-        return err('getting pipeline', { error: `Could not resolve pipeline "${id}" — pass a pipeline UUID or an exact pipeline name.` });
+        return err('getting pipeline', { error: `Could not resolve pipeline "${id}" - pass a pipeline UUID or an exact pipeline name.` });
       }
       const result = await client.request('GET', `/pipelines/${pipelineId}`);
       return result.ok ? ok(result.data) : err('getting pipeline', result.data);
@@ -1387,7 +1387,7 @@ export function registerBondTools(server: McpServer, api: ApiClient, bondApiUrl:
     name: 'bond_update_pipeline',
     description: 'Update a pipeline\'s metadata. Requires admin scope. Provide only the fields to change. `id` accepts a pipeline UUID or an exact name.',
     input: {
-      id: z.string().describe('Pipeline — accepts a UUID or exact pipeline name'),
+      id: z.string().describe('Pipeline - accepts a UUID or exact pipeline name'),
       name: z.string().min(1).max(255).optional().describe('Updated name'),
       description: z.string().max(2000).optional().describe('Updated description'),
       is_default: z.boolean().optional().describe('Set as org default'),
@@ -1397,7 +1397,7 @@ export function registerBondTools(server: McpServer, api: ApiClient, bondApiUrl:
     handler: async ({ id, ...body }) => {
       const pipelineId = await resolvePipelineId(client, id);
       if (!pipelineId) {
-        return err('updating pipeline', { error: `Could not resolve pipeline "${id}" — pass a pipeline UUID or an exact pipeline name.` });
+        return err('updating pipeline', { error: `Could not resolve pipeline "${id}" - pass a pipeline UUID or an exact pipeline name.` });
       }
       const result = await client.request('PATCH', `/pipelines/${pipelineId}`, body);
       return result.ok ? ok(result.data) : err('updating pipeline', result.data);
@@ -1408,13 +1408,13 @@ export function registerBondTools(server: McpServer, api: ApiClient, bondApiUrl:
     name: 'bond_delete_pipeline',
     description: 'Delete a pipeline. Requires admin scope. `id` accepts a pipeline UUID or an exact name.',
     input: {
-      id: z.string().describe('Pipeline — accepts a UUID or exact pipeline name'),
+      id: z.string().describe('Pipeline - accepts a UUID or exact pipeline name'),
     },
     returns: z.object({ deleted: z.literal(true), id: z.string().uuid() }),
     handler: async ({ id }) => {
       const pipelineId = await resolvePipelineId(client, id);
       if (!pipelineId) {
-        return err('deleting pipeline', { error: `Could not resolve pipeline "${id}" — pass a pipeline UUID or an exact pipeline name.` });
+        return err('deleting pipeline', { error: `Could not resolve pipeline "${id}" - pass a pipeline UUID or an exact pipeline name.` });
       }
       const result = await client.request('DELETE', `/pipelines/${pipelineId}`);
       return result.ok ? ok({ deleted: true, id: pipelineId }) : err('deleting pipeline', result.data);
@@ -1425,13 +1425,13 @@ export function registerBondTools(server: McpServer, api: ApiClient, bondApiUrl:
     name: 'bond_list_stages',
     description: 'List the ordered stages of a pipeline. `pipeline_id` accepts a pipeline UUID or an exact name.',
     input: {
-      pipeline_id: z.string().describe('Pipeline — accepts a UUID or exact pipeline name'),
+      pipeline_id: z.string().describe('Pipeline - accepts a UUID or exact pipeline name'),
     },
     returns: z.object({ data: z.array(z.object({ id: z.string().uuid(), name: z.string(), stage_type: z.string().optional() }).passthrough()) }),
     handler: async ({ pipeline_id }) => {
       const pipelineId = await resolvePipelineId(client, pipeline_id);
       if (!pipelineId) {
-        return err('listing stages', { error: `Could not resolve pipeline "${pipeline_id}" — pass a pipeline UUID or an exact pipeline name.` });
+        return err('listing stages', { error: `Could not resolve pipeline "${pipeline_id}" - pass a pipeline UUID or an exact pipeline name.` });
       }
       const result = await client.request('GET', `/pipelines/${pipelineId}/stages`);
       return result.ok ? ok(result.data) : err('listing stages', result.data);
@@ -1442,7 +1442,7 @@ export function registerBondTools(server: McpServer, api: ApiClient, bondApiUrl:
     name: 'bond_create_stage',
     description: 'Add a stage to a pipeline. Requires admin scope. `pipeline_id` accepts a pipeline UUID or an exact name.',
     input: {
-      pipeline_id: z.string().describe('Pipeline — accepts a UUID or exact pipeline name'),
+      pipeline_id: z.string().describe('Pipeline - accepts a UUID or exact pipeline name'),
       name: z.string().min(1).max(100).describe('Stage name'),
       sort_order: z.number().int().optional().describe('Display order'),
       stage_type: z.enum(['active', 'won', 'lost']).optional().describe('Stage semantics'),
@@ -1454,7 +1454,7 @@ export function registerBondTools(server: McpServer, api: ApiClient, bondApiUrl:
     handler: async ({ pipeline_id, ...body }) => {
       const pipelineId = await resolvePipelineId(client, pipeline_id);
       if (!pipelineId) {
-        return err('creating stage', { error: `Could not resolve pipeline "${pipeline_id}" — pass a pipeline UUID or an exact pipeline name.` });
+        return err('creating stage', { error: `Could not resolve pipeline "${pipeline_id}" - pass a pipeline UUID or an exact pipeline name.` });
       }
       const result = await client.request('POST', `/pipelines/${pipelineId}/stages`, body);
       return result.ok ? ok(result.data) : err('creating stage', result.data);
@@ -1465,8 +1465,8 @@ export function registerBondTools(server: McpServer, api: ApiClient, bondApiUrl:
     name: 'bond_update_stage',
     description: 'Update a pipeline stage. Requires admin scope. `pipeline_id` accepts a pipeline UUID or an exact name; `stage_id` accepts a stage UUID or an exact stage name within that pipeline. Provide only the fields to change.',
     input: {
-      pipeline_id: z.string().describe('Pipeline — accepts a UUID or exact pipeline name'),
-      stage_id: z.string().describe('Stage — accepts a UUID or an exact stage name within the pipeline'),
+      pipeline_id: z.string().describe('Pipeline - accepts a UUID or exact pipeline name'),
+      stage_id: z.string().describe('Stage - accepts a UUID or an exact stage name within the pipeline'),
       name: z.string().min(1).max(100).optional().describe('Updated stage name'),
       sort_order: z.number().int().optional().describe('Updated display order'),
       stage_type: z.enum(['active', 'won', 'lost']).optional().describe('Updated stage semantics'),
@@ -1478,11 +1478,11 @@ export function registerBondTools(server: McpServer, api: ApiClient, bondApiUrl:
     handler: async ({ pipeline_id, stage_id, ...body }) => {
       const pipelineId = await resolvePipelineId(client, pipeline_id);
       if (!pipelineId) {
-        return err('updating stage', { error: `Could not resolve pipeline "${pipeline_id}" — pass a pipeline UUID or an exact pipeline name.` });
+        return err('updating stage', { error: `Could not resolve pipeline "${pipeline_id}" - pass a pipeline UUID or an exact pipeline name.` });
       }
       const stageId = await resolveStageId(client, pipelineId, stage_id);
       if (!stageId) {
-        return err('updating stage', { error: `Could not resolve stage "${stage_id}" inside pipeline "${pipeline_id}" — pass a stage UUID or an exact stage name.` });
+        return err('updating stage', { error: `Could not resolve stage "${stage_id}" inside pipeline "${pipeline_id}" - pass a stage UUID or an exact stage name.` });
       }
       const result = await client.request('PATCH', `/pipelines/${pipelineId}/stages/${stageId}`, body);
       return result.ok ? ok(result.data) : err('updating stage', result.data);
@@ -1493,18 +1493,18 @@ export function registerBondTools(server: McpServer, api: ApiClient, bondApiUrl:
     name: 'bond_delete_stage',
     description: 'Delete a stage from a pipeline. Requires admin scope. `pipeline_id` accepts a pipeline UUID or exact name; `stage_id` accepts a stage UUID or exact stage name within the pipeline.',
     input: {
-      pipeline_id: z.string().describe('Pipeline — accepts a UUID or exact pipeline name'),
-      stage_id: z.string().describe('Stage — accepts a UUID or an exact stage name within the pipeline'),
+      pipeline_id: z.string().describe('Pipeline - accepts a UUID or exact pipeline name'),
+      stage_id: z.string().describe('Stage - accepts a UUID or an exact stage name within the pipeline'),
     },
     returns: z.object({ deleted: z.literal(true), pipeline_id: z.string().uuid(), stage_id: z.string().uuid() }),
     handler: async ({ pipeline_id, stage_id }) => {
       const pipelineId = await resolvePipelineId(client, pipeline_id);
       if (!pipelineId) {
-        return err('deleting stage', { error: `Could not resolve pipeline "${pipeline_id}" — pass a pipeline UUID or an exact pipeline name.` });
+        return err('deleting stage', { error: `Could not resolve pipeline "${pipeline_id}" - pass a pipeline UUID or an exact pipeline name.` });
       }
       const stageId = await resolveStageId(client, pipelineId, stage_id);
       if (!stageId) {
-        return err('deleting stage', { error: `Could not resolve stage "${stage_id}" inside pipeline "${pipeline_id}" — pass a stage UUID or an exact stage name.` });
+        return err('deleting stage', { error: `Could not resolve stage "${stage_id}" inside pipeline "${pipeline_id}" - pass a stage UUID or an exact stage name.` });
       }
       const result = await client.request('DELETE', `/pipelines/${pipelineId}/stages/${stageId}`);
       return result.ok
@@ -1517,14 +1517,14 @@ export function registerBondTools(server: McpServer, api: ApiClient, bondApiUrl:
     name: 'bond_reorder_stages',
     description: 'Reorder a pipeline\'s stages. Requires admin scope. `pipeline_id` accepts a pipeline UUID or an exact name; `stage_ids` is the full ordered list of stage UUIDs.',
     input: {
-      pipeline_id: z.string().describe('Pipeline — accepts a UUID or exact pipeline name'),
+      pipeline_id: z.string().describe('Pipeline - accepts a UUID or exact pipeline name'),
       stage_ids: z.array(z.string().uuid()).min(1).describe('Stage UUIDs in the desired order'),
     },
     returns: z.object({ data: z.array(z.object({ id: z.string().uuid(), name: z.string() }).passthrough()) }),
     handler: async ({ pipeline_id, stage_ids }) => {
       const pipelineId = await resolvePipelineId(client, pipeline_id);
       if (!pipelineId) {
-        return err('reordering stages', { error: `Could not resolve pipeline "${pipeline_id}" — pass a pipeline UUID or an exact pipeline name.` });
+        return err('reordering stages', { error: `Could not resolve pipeline "${pipeline_id}" - pass a pipeline UUID or an exact pipeline name.` });
       }
       const result = await client.request('POST', `/pipelines/${pipelineId}/stages/reorder`, { stage_ids });
       return result.ok ? ok(result.data) : err('reordering stages', result.data);
@@ -1674,7 +1674,7 @@ export function registerBondTools(server: McpServer, api: ApiClient, bondApiUrl:
     },
   });
 
-  // ===== ANALYTICS — additional (conversion / velocity / win-loss) =====
+  // ===== ANALYTICS - additional (conversion / velocity / win-loss) =====
 
   registerTool(server, {
     name: 'bond_get_conversion_rates',

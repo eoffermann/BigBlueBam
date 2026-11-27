@@ -10,7 +10,7 @@ import {
 
 /**
  * Helper to make requests to the brief-api service.
- * Same pattern as beacon-tools.ts — a lightweight fetch wrapper that targets
+ * Same pattern as beacon-tools.ts - a lightweight fetch wrapper that targets
  * the brief-api base URL and forwards the user's auth token.
  */
 function createBriefClient(briefApiUrl: string, api: ApiClient) {
@@ -452,7 +452,7 @@ export function registerBriefTools(server: McpServer, api: ApiClient, briefApiUr
     },
   });
 
-  // ===== DOCUMENTS — additional reads & lifecycle =====
+  // ===== DOCUMENTS - additional reads & lifecycle =====
 
   registerTool(server, {
     name: 'brief_recent',
@@ -552,7 +552,7 @@ export function registerBriefTools(server: McpServer, api: ApiClient, briefApiUr
     },
   });
 
-  // ===== COMMENTS — additional (edit / delete / reactions) =====
+  // ===== COMMENTS - additional (edit / delete / reactions) =====
 
   registerTool(server, {
     name: 'brief_comment_edit',
@@ -612,7 +612,7 @@ export function registerBriefTools(server: McpServer, api: ApiClient, briefApiUr
     },
   });
 
-  // ===== VERSIONS — additional (create snapshot / diff) =====
+  // ===== VERSIONS - additional (create snapshot / diff) =====
 
   registerTool(server, {
     name: 'brief_version_create',
@@ -651,7 +651,7 @@ export function registerBriefTools(server: McpServer, api: ApiClient, briefApiUr
     },
   });
 
-  // ===== LINKS — additional (list / beacon link / remove) =====
+  // ===== LINKS - additional (list / beacon link / remove) =====
 
   registerTool(server, {
     name: 'brief_links_list',
@@ -771,7 +771,7 @@ export function registerBriefTools(server: McpServer, api: ApiClient, briefApiUr
     },
   });
 
-  // ===== EMBEDS (list / delete) — upload-metadata POST is intentionally omitted =====
+  // ===== EMBEDS (list / delete) - upload-metadata POST is intentionally omitted =====
 
   registerTool(server, {
     name: 'brief_embeds_list',

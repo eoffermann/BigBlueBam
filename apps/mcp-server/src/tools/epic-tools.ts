@@ -13,7 +13,7 @@ import { registerTool } from '../lib/register-tool.js';
  * return the standard `{ data: … }` envelope.
  *
  * Idempotency note for importers: `bam_list_epics` + `bam_create_epic` are
- * the canonical pair — list the project's epics, match by name, and only
+ * the canonical pair - list the project's epics, match by name, and only
  * call `bam_create_epic` when no existing epic matches.
  */
 
@@ -132,7 +132,7 @@ export function registerEpicTools(server: McpServer, api: ApiClient): void {
   registerTool(server, {
     name: 'bam_list_epic_tasks',
     description:
-      'List every task linked to an epic (both parents and subtasks), ordered by sprint then board position with backlog tasks last. Each row carries human_id, title, sprint/phase names, state_category, completion, and story_points — enough to render the epic detail list or compute a burnup.',
+      'List every task linked to an epic (both parents and subtasks), ordered by sprint then board position with backlog tasks last. Each row carries human_id, title, sprint/phase names, state_category, completion, and story_points - enough to render the epic detail list or compute a burnup.',
     input: {
       epic_id: z.string().uuid().describe('The epic UUID'),
     },
@@ -168,7 +168,7 @@ export function registerEpicTools(server: McpServer, api: ApiClient): void {
   registerTool(server, {
     name: 'bam_delete_epic',
     description:
-      'Delete an epic (destructive). Tasks previously linked to the epic are not deleted; their epic_id is cleared by the FK. Requires confirm:true to proceed — the first call without it returns a confirmation prompt and changes nothing.',
+      'Delete an epic (destructive). Tasks previously linked to the epic are not deleted; their epic_id is cleared by the FK. Requires confirm:true to proceed - the first call without it returns a confirmation prompt and changes nothing.',
     input: {
       epic_id: z.string().uuid().describe('The epic UUID to delete'),
       confirm: z.boolean().describe('Must be true to confirm deletion'),

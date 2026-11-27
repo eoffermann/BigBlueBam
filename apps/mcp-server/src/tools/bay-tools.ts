@@ -65,7 +65,7 @@ export function registerBayTools(server: McpServer, api: ApiClient, bayApiUrl: s
   registerTool(server, {
     name: 'bay_review_resolve',
     description:
-      'Open (find-or-create) the Bay review for a Bin media asset. Given the Bin asset id (and optionally its content_type/name/current bin_version_id), returns the Bay review asset — creating it + an initial version on first call, idempotent thereafter. This is how a media file in Bin is opened for review in Bay.',
+      'Open (find-or-create) the Bay review for a Bin media asset. Given the Bin asset id (and optionally its content_type/name/current bin_version_id), returns the Bay review asset - creating it + an initial version on first call, idempotent thereafter. This is how a media file in Bin is opened for review in Bay.',
     input: {
       bin_asset_id: z.string().uuid().describe('The Bin asset holding the media bytes'),
       bin_version_id: z.string().uuid().nullable().optional(),
@@ -244,7 +244,7 @@ export function registerBayTools(server: McpServer, api: ApiClient, bayApiUrl: s
   registerTool(server, {
     name: 'bay_decision_set',
     description:
-      "Set (upsert) the caller's review decision on a Bay version — one decision per reviewer per version. decision is approved/rejected/changes_requested/pending. An agent setting a decision is a first-class reviewer; an agent-proposed FINAL approval that a different human must ratify should instead route through proposal_create.",
+      "Set (upsert) the caller's review decision on a Bay version - one decision per reviewer per version. decision is approved/rejected/changes_requested/pending. An agent setting a decision is a first-class reviewer; an agent-proposed FINAL approval that a different human must ratify should instead route through proposal_create.",
     input: {
       version_id: z.string().uuid(),
       decision: z.enum(DECISIONS),

@@ -3,21 +3,21 @@
 
 | Tool | Description | Parameters |
 |------|-------------|------------|
-| `banter_add_channel_members` | Add one or more members to a Banter channel. Accepts a channel UUID, name, or #name, and each user may be a UUID, email, or @handle — mixed lists are supported. | `channel_id`, `user_ids` |
+| `banter_add_channel_members` | Add one or more members to a Banter channel. Accepts a channel UUID, name, or #name, and each user may be a UUID, email, or @handle - mixed lists are supported. | `channel_id`, `user_ids` |
 | `banter_add_group_members` | Add members to a user group | `group_id`, `user_ids` |
-| `banter_archive_channel` | Archive a Banter channel (reversible). Accepts a channel UUID, a bare channel name, or #name — no need to resolve the id first. | `channel_id` |
+| `banter_archive_channel` | Archive a Banter channel (reversible). Accepts a channel UUID, a bare channel name, or #name - no need to resolve the id first. | `channel_id` |
 | `banter_browse_channels` | Browse available Banter channels (including unjoined public channels) | `q`, `cursor`, `limit` |
 | `banter_cancel_scheduled_message` | Cancel a pending scheduled Banter post. Only the original author or an org owner/admin may cancel, and only while the post is still pending (fails 409 otherwise). | `scheduled_message_id` |
-| `banter_create_bookmark` | Bookmark a Banter message for the calling user, with an optional note. Idempotent — bookmarking an already-bookmarked message is a no-op. | `message_id`, `note` |
+| `banter_create_bookmark` | Bookmark a Banter message for the calling user, with an optional note. Idempotent - bookmarking an already-bookmarked message is a no-op. | `message_id`, `note` |
 | `banter_create_channel` | Create a new Banter channel | `topic`, `is_private`, `group_id` |
 | `banter_create_user_group` | Create a new user group (e.g. @backend-team) | `handle`, `user_ids` |
-| `banter_delete_bookmark` | Remove a Banter bookmark for the calling user. Pass either the bookmark id (bookmark_id) or the bookmarked message id (message_id) — exactly one is required. | `bookmark_id`, `message_id` |
+| `banter_delete_bookmark` | Remove a Banter bookmark for the calling user. Pass either the bookmark id (bookmark_id) or the bookmarked message id (message_id) - exactly one is required. | `bookmark_id`, `message_id` |
 | `banter_delete_channel` | Delete a Banter channel (destructive - requires confirmation) | `channel_id`, `confirm_action` |
 | `banter_delete_message` | Delete a Banter message (destructive - requires confirmation) | `message_id`, `confirm` |
 | `banter_delete_user_group` | Delete a Banter user group (destructive - requires confirmation). Accepts a group UUID or @handle. Requires org owner/admin privileges. | `group_id`, `confirm` |
 | `banter_edit_message` | Edit an existing Banter message | `message_id`, `content` |
 | `banter_end_call` | End an active call (destructive - requires confirmation) | `call_id`, `confirm` |
-| `banter_feed_dismiss` | Dismiss a single feed entry — it is excluded from future reads entirely. | none |
+| `banter_feed_dismiss` | Dismiss a single feed entry - it is excluded from future reads entirely. | none |
 | `banter_feed_explain` | Return the full score breakdown for one feed entry (recency, weight, affinity, interaction, engagement, multipliers). For tuning and debugging. | none |
 | `banter_feed_mark_seen` | Mark feed entries as seen (they sink in the ranking but do not vanish). Provide either entry_ids or a before_seq watermark. | `entry_ids`, `before_seq` |
 | `banter_feed_query` | The caller's ranked Banter Feed: posts in followed channels, replies on threads they are in, and cross-app activity that concerns them, most-relevant first. Filter by category/source; set explain=true for score breakdowns. | `cursor`, `limit`, `category`, `source`, `unseen`, `explain` |
@@ -26,7 +26,7 @@
 | `banter_feed_weights_get` | Effective feed ranking weights for the caller's org (merged platform defaults + org overrides), plus the raw overrides at each level. | none |
 | `banter_feed_weights_set_org` | Set this org's feed ranking weight overrides (org admin/owner). Send only the knobs to override (categories map, gravity, recency_offset, engagement_weight, interaction_boost, affinity_boost, seen_multiplier, candidate_window_days, must_see_floor); the rest inherit. Bumps the version so the change is live on the next read. Platform-level defaults are not agent-editable. | none |
 | `banter_find_user_by_email` | Find a Banter user by email (case-insensitive exact match). Returns {id, email, name, display_name, avatar_url} or null if no match. | `email` |
-| `banter_find_user_by_handle` | Find a Banter user by handle (accepts "@alice" or "alice"). Banter users do not have a dedicated handle column — matching falls back to a slugified form of display_name (lower-cased, whitespace collapsed to hyphens). Returns the user or null. | `handle` |
+| `banter_find_user_by_handle` | Find a Banter user by handle (accepts "@alice" or "alice"). Banter users do not have a dedicated handle column - matching falls back to a slugified form of display_name (lower-cased, whitespace collapsed to hyphens). Returns the user or null. | `handle` |
 | `banter_get_active_huddle` | Check if a channel has an active huddle and get its details | `channel_id` |
 | `banter_get_call` | Get details about a specific call | `call_id` |
 | `banter_get_channel` | Get detailed information about a Banter channel | `channel_id` |
@@ -58,7 +58,7 @@
 | `banter_list_thread_replies` | List replies in a Banter message thread | `message_id`, `cursor`, `limit` |
 | `banter_list_user_groups` | List all user groups in the organization | `cursor`, `limit` |
 | `banter_list_users` | Fuzzy search Banter users by name, display name, or email. Returns up to 20 users in the active org ordered by relevance. If no query is supplied, returns the 20 most recently created users. | `query` |
-| `banter_mark_read` | Mark a Banter channel read up to a given message — advances the caller's last-read cursor and clears any unified notifications for that channel. Accepts a channel UUID, name, or #name. | `channel_id`, `message_id` |
+| `banter_mark_read` | Mark a Banter channel read up to a given message - advances the caller's last-read cursor and clears any unified notifications for that channel. Accepts a channel UUID, name, or #name. | `channel_id`, `message_id` |
 | `banter_pin_message` | Pin a message in a Banter channel. Accepts a channel UUID, name, or #name. | `channel_id`, `message_id` |
 | `banter_post_call_text` | Post a text message in a call channel with a call reference (for text-mode AI participation) | `channel_id`, `call_id`, `content` |
 | `banter_post_message` | Post a new message to a Banter channel. Accepts a channel UUID, a bare channel name, or #name. §13 Wave 4: optionally accepts scheduled_at (ISO-8601, max 30 days out), defer_if_quiet (convert to scheduled if channel is in quiet hours), and urgency_override (bypass quiet hours when both caller and channel policy consent). When a post is scheduled or deferred, the tool returns a scheduled envelope ({ scheduled: true, scheduled_message_id, scheduled_at, defer_reason }) instead of an immediate message. | `channel_id`, `content`, `attachment_ids`, `scheduled_at`, `defer_if_quiet`, `urgency_override` |
@@ -71,8 +71,8 @@
 | `banter_search_messages` | Search messages across Banter channels | `q`, `channel_id`, `from_user_id`, `before`, `after`, `cursor`, `limit` |
 | `banter_search_transcripts` | Search call transcripts across Banter (placeholder - returns available transcripts) | `q`, `channel_id`, `cursor`, `limit` |
 | `banter_send_dm` | Send a direct message to another user (creates or reuses existing DM channel). Accepts a user UUID, email address, or @handle. | `to_user_id`, `content` |
-| `banter_send_group_dm` | Send a group direct message (creates or reuses existing group DM). Each recipient may be a UUID, email, or @handle — mixed lists are supported. | `user_ids`, `content` |
-| `banter_set_presence` | Set the authenticated user's presence status in Banter. The status is ephemeral — it auto-expires via a Redis TTL, so callers should not treat it as persistent. | `status`, `status_text`, `status_emoji` |
+| `banter_send_group_dm` | Send a group direct message (creates or reuses existing group DM). Each recipient may be a UUID, email, or @handle - mixed lists are supported. | `user_ids`, `content` |
+| `banter_set_presence` | Set the authenticated user's presence status in Banter. The status is ephemeral - it auto-expires via a Redis TTL, so callers should not treat it as persistent. | `status`, `status_text`, `status_emoji` |
 | `banter_share_sprint` | Share a BigBlueBam sprint summary as a rich embed in a Banter channel. Accepts a channel UUID, name, or #name. | `channel_id`, `sprint_id`, `comment` |
 | `banter_share_task` | Share a BigBlueBam task as a rich embed in a Banter channel. Accepts a channel UUID, name, or #name. | `channel_id`, `task_id`, `comment` |
 | `banter_share_ticket` | Share a Helpdesk ticket as a rich embed in a Banter channel. Accepts a channel UUID, name, or #name. | `channel_id`, `ticket_id`, `comment` |

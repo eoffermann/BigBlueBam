@@ -19,7 +19,7 @@ import { registerTool } from '../lib/register-tool.js';
  * agent_policy_set returns `confirmation_required: true` when the write
  * would flip an already-enabled policy to `enabled: false`; the caller is
  * expected to route through `confirm_action` before committing the kill.
- * The service row is already updated when that flag is returned — the flag
+ * The service row is already updated when that flag is returned - the flag
  * is an advisory signal, not a transactional gate. The authoritative
  * two-step confirmation lives at the UI layer; agents driving this tool
  * through an LLM chain should fetch the token, re-call agent_policy_set
@@ -77,7 +77,7 @@ export function registerAgentPolicyTools(server: McpServer, api: ApiClient): voi
   registerTool(server, {
     name: 'agent_policy_set',
     description:
-      "Upsert the policy row for an agent/service user. Patch any subset of enabled, allowed_tools, channel_subscriptions, rate_limit_override, notes. allowed_tools uses glob-prefix matching: a single entry '*' allows every tool; entries like 'banter.*' or 'banter_*' allow any tool starting with the prefix; bare entries are exact match. Returns confirmation_required:true when the call flips enabled from true to false on a live agent — the caller is expected to route through confirm_action before committing the kill. 400 if the target is not an agent/service user; 403 if the target is in a different org.",
+      "Upsert the policy row for an agent/service user. Patch any subset of enabled, allowed_tools, channel_subscriptions, rate_limit_override, notes. allowed_tools uses glob-prefix matching: a single entry '*' allows every tool; entries like 'banter.*' or 'banter_*' allow any tool starting with the prefix; bare entries are exact match. Returns confirmation_required:true when the call flips enabled from true to false on a live agent - the caller is expected to route through confirm_action before committing the kill. 400 if the target is not an agent/service user; 403 if the target is in a different org.",
     input: {
       agent_user_id: z
         .string()

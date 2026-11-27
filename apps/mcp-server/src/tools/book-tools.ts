@@ -160,8 +160,8 @@ export function registerBookTools(server: McpServer, api: ApiClient, bookApiUrl:
     name: 'book_list_events',
     description: 'List calendar events in a date range, optionally filtered by calendar IDs.',
     input: {
-      start_after: z.string().describe('ISO 8601 date — events ending after this time'),
-      start_before: z.string().describe('ISO 8601 date — events starting before this time'),
+      start_after: z.string().describe('ISO 8601 date - events ending after this time'),
+      start_before: z.string().describe('ISO 8601 date - events starting before this time'),
       calendar_ids: z.string().optional().describe('Comma-separated calendar UUIDs'),
       limit: z.number().int().positive().max(500).optional().describe('Page size (default 100)'),
     },
@@ -203,7 +203,7 @@ export function registerBookTools(server: McpServer, api: ApiClient, bookApiUrl:
       // Resolve each attendee.user_id (UUID or email) in parallel. Attendees
       // that pass an email-only user_id are looked up via the Bam user store;
       // if resolution fails we drop the user_id rather than fail the whole
-      // create — the calendar invite still works via the email field alone.
+      // create - the calendar invite still works via the email field alone.
       let resolvedAttendees: typeof params.attendees = params.attendees;
       if (params.attendees && params.attendees.length > 0) {
         resolvedAttendees = await Promise.all(
@@ -651,7 +651,7 @@ export function registerBookTools(server: McpServer, api: ApiClient, bookApiUrl:
   // ===== 20. book_set_working_hours =====
   registerTool(server, {
     name: 'book_set_working_hours',
-    description: "Replace the caller's weekly working-hours schedule. `day_of_week` is 0 (Sunday) through 6 (Saturday); times are HH:MM or HH:MM:SS. This is a full replace — include every day you want available.",
+    description: "Replace the caller's weekly working-hours schedule. `day_of_week` is 0 (Sunday) through 6 (Saturday); times are HH:MM or HH:MM:SS. This is a full replace - include every day you want available.",
     input: {
       hours: z.array(z.object({
         day_of_week: z.number().int().min(0).max(6).describe('0 = Sunday … 6 = Saturday'),

@@ -153,7 +153,7 @@ export function registerAgentTools(server: McpServer, api: ApiClient): void {
   registerTool(server, {
     name: 'agent_self_report',
     description:
-      "Service-account only. Append a self-report entry (action='agent.self_report') to activity_log under the given project. project_id is REQUIRED — the platform does not create sentinel projects in Wave 1. Callers that are not service accounts get 403 NOT_A_SERVICE_ACCOUNT.",
+      "Service-account only. Append a self-report entry (action='agent.self_report') to activity_log under the given project. project_id is REQUIRED - the platform does not create sentinel projects in Wave 1. Callers that are not service accounts get 403 NOT_A_SERVICE_ACCOUNT.",
     input: {
       summary: z
         .string()

@@ -7,7 +7,7 @@ import { handleScopeError } from '../middleware/scope-check.js';
 
 /**
  * Helper to make requests to the banter-api service.
- * Similar pattern to helpdesk-tools.ts — a lightweight fetch wrapper
+ * Similar pattern to helpdesk-tools.ts - a lightweight fetch wrapper
  * that targets the banter-api base URL and forwards the user's auth token.
  */
 function createBanterClient(banterApiUrl: string, api: ApiClient) {
@@ -63,7 +63,7 @@ function createBanterClient(banterApiUrl: string, api: ApiClient) {
 
 /**
  * Minimal client shape the resolver helpers need. Matches the object returned
- * by `createBanterClient` above — we only want `get` here since every resolver
+ * by `createBanterClient` above - we only want `get` here since every resolver
  * endpoint is read-only.
  */
 type BanterClient = ReturnType<typeof createBanterClient>;
@@ -73,7 +73,7 @@ type BanterClient = ReturnType<typeof createBanterClient>;
  *
  * Accepts a UUID (short-circuited with no extra HTTP call), a bare channel
  * name / slug ("general"), or a `#name` form. Returns `null` if the channel
- * is not visible to the current caller — callers should surface a clean
+ * is not visible to the current caller - callers should surface a clean
  * "Channel not found" error in that case. This lets automation rules refer
  * to channels by their human-friendly name so "#general" never has to be
  * typed as a UUID in a rule step.
@@ -288,7 +288,7 @@ export function registerBanterTools(server: McpServer, api: ApiClient, banterApi
 
   registerTool(server, {
     name: 'banter_archive_channel',
-    description: 'Archive a Banter channel (reversible). Accepts a channel UUID, a bare channel name, or #name — no need to resolve the id first.',
+    description: 'Archive a Banter channel (reversible). Accepts a channel UUID, a bare channel name, or #name - no need to resolve the id first.',
     input: {
       channel_id: z
         .string()
@@ -365,7 +365,7 @@ export function registerBanterTools(server: McpServer, api: ApiClient, banterApi
 
   registerTool(server, {
     name: 'banter_add_channel_members',
-    description: 'Add one or more members to a Banter channel. Accepts a channel UUID, name, or #name, and each user may be a UUID, email, or @handle — mixed lists are supported.',
+    description: 'Add one or more members to a Banter channel. Accepts a channel UUID, name, or #name, and each user may be a UUID, email, or @handle - mixed lists are supported.',
     input: {
       channel_id: z
         .string()
@@ -452,7 +452,7 @@ export function registerBanterTools(server: McpServer, api: ApiClient, banterApi
     },
   });
 
-  // §13 Wave 4 scheduled banter — shape for the scheduled-envelope branch of
+  // §13 Wave 4 scheduled banter - shape for the scheduled-envelope branch of
   // the banter_post_message union return.
   const scheduledEnvelopeShape = z.object({
     scheduled: z.literal(true),
@@ -497,7 +497,7 @@ export function registerBanterTools(server: McpServer, api: ApiClient, banterApi
     },
   });
 
-  // §13 Wave 4 scheduled banter — dedicated scheduling alias.
+  // §13 Wave 4 scheduled banter - dedicated scheduling alias.
   registerTool(server, {
     name: 'banter_schedule_post',
     description: 'Schedule a Banter post for future delivery. Thin wrapper over banter_post_message with scheduled_at REQUIRED. Returns the scheduled envelope { scheduled: true, scheduled_message_id, scheduled_at, defer_reason }. If respect_quiet_hours is true (default) the scheduled_at is honored as-is; if the channel is in quiet hours at fire time, the worker still delivers because scheduled posts are explicit. Use defer_if_quiet on banter_post_message to instead reschedule around a quiet-hours window at request time.',
@@ -769,7 +769,7 @@ export function registerBanterTools(server: McpServer, api: ApiClient, banterApi
 
   registerTool(server, {
     name: 'banter_send_group_dm',
-    description: 'Send a group direct message (creates or reuses existing group DM). Each recipient may be a UUID, email, or @handle — mixed lists are supported.',
+    description: 'Send a group direct message (creates or reuses existing group DM). Each recipient may be a UUID, email, or @handle - mixed lists are supported.',
     input: {
       user_ids: z
         .array(z.string().min(1))
@@ -805,7 +805,7 @@ export function registerBanterTools(server: McpServer, api: ApiClient, banterApi
   });
 
   // ---------------------------------------------------------------------------
-  // User resolver tools (3) — read-only lookups for translating a human
+  // User resolver tools (3) - read-only lookups for translating a human
   // identifier (email, handle, fuzzy name) into a stable user id. Banter
   // does not own its user table; these resolve against the shared Bam
   // users table and are scoped to the caller's active org.
@@ -827,7 +827,7 @@ export function registerBanterTools(server: McpServer, api: ApiClient, banterApi
 
   registerTool(server, {
     name: 'banter_find_user_by_handle',
-    description: 'Find a Banter user by handle (accepts "@alice" or "alice"). Banter users do not have a dedicated handle column — matching falls back to a slugified form of display_name (lower-cased, whitespace collapsed to hyphens). Returns the user or null.',
+    description: 'Find a Banter user by handle (accepts "@alice" or "alice"). Banter users do not have a dedicated handle column - matching falls back to a slugified form of display_name (lower-cased, whitespace collapsed to hyphens). Returns the user or null.',
     input: {
       handle: z.string().min(1).describe('The user handle. A leading "@" is accepted and stripped.'),
     },
@@ -1269,7 +1269,7 @@ export function registerBanterTools(server: McpServer, api: ApiClient, banterApi
 
   registerTool(server, {
     name: 'banter_set_presence',
-    description: 'Set the authenticated user\'s presence status in Banter. The status is ephemeral — it auto-expires via a Redis TTL, so callers should not treat it as persistent.',
+    description: 'Set the authenticated user\'s presence status in Banter. The status is ephemeral - it auto-expires via a Redis TTL, so callers should not treat it as persistent.',
     input: {
       status: z.enum(['online', 'idle', 'dnd', 'offline']).describe('Presence status.'),
       status_text: z.string().max(128).optional().describe('Custom status text.'),
@@ -1319,7 +1319,7 @@ export function registerBanterTools(server: McpServer, api: ApiClient, banterApi
 
   registerTool(server, {
     name: 'banter_mark_read',
-    description: 'Mark a Banter channel read up to a given message — advances the caller\'s last-read cursor and clears any unified notifications for that channel. Accepts a channel UUID, name, or #name.',
+    description: 'Mark a Banter channel read up to a given message - advances the caller\'s last-read cursor and clears any unified notifications for that channel. Accepts a channel UUID, name, or #name.',
     input: {
       channel_id: z
         .string()
@@ -1460,7 +1460,7 @@ export function registerBanterTools(server: McpServer, api: ApiClient, banterApi
 
   registerTool(server, {
     name: 'banter_create_bookmark',
-    description: 'Bookmark a Banter message for the calling user, with an optional note. Idempotent — bookmarking an already-bookmarked message is a no-op.',
+    description: 'Bookmark a Banter message for the calling user, with an optional note. Idempotent - bookmarking an already-bookmarked message is a no-op.',
     input: {
       message_id: z.string().uuid().describe('The message ID to bookmark'),
       note: z.string().max(500).optional().describe('Optional note to attach to the bookmark'),
@@ -1474,7 +1474,7 @@ export function registerBanterTools(server: McpServer, api: ApiClient, banterApi
 
   registerTool(server, {
     name: 'banter_delete_bookmark',
-    description: 'Remove a Banter bookmark for the calling user. Pass either the bookmark id (bookmark_id) or the bookmarked message id (message_id) — exactly one is required.',
+    description: 'Remove a Banter bookmark for the calling user. Pass either the bookmark id (bookmark_id) or the bookmarked message id (message_id) - exactly one is required.',
     input: {
       bookmark_id: z.string().uuid().optional().describe('The bookmark ID to remove'),
       message_id: z.string().uuid().optional().describe('Remove the caller\'s bookmark for this message ID'),
@@ -1644,7 +1644,7 @@ export function registerBanterTools(server: McpServer, api: ApiClient, banterApi
   });
 
   // ---------------------------------------------------------------------------
-  // Banter Feed tools (8) — docs/plans/banter-feed-design-document.md §14.
+  // Banter Feed tools (8) - docs/plans/banter-feed-design-document.md §14.
   // Agents are first-class feed users (§15): an agent reads its own ranked feed
   // to catch up on what concerns it. Platform weight writes stay UI/SuperUser
   // only and are deliberately not exposed here.
@@ -1691,7 +1691,7 @@ export function registerBanterTools(server: McpServer, api: ApiClient, banterApi
 
   registerTool(server, {
     name: 'banter_feed_dismiss',
-    description: 'Dismiss a single feed entry — it is excluded from future reads entirely.',
+    description: 'Dismiss a single feed entry - it is excluded from future reads entirely.',
     input: { entry_id: z.string().uuid().describe('The feed entry id to dismiss') },
     returns: z.object({ data: z.object({ success: z.boolean() }).passthrough() }),
     handler: async ({ entry_id }) => {

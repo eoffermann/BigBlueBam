@@ -96,7 +96,7 @@ export function registerTemplateTools(server: McpServer, api: ApiClient): void {
         `/projects/${resolvedProjectId}/task-templates/${resolvedTemplateId}/apply`,
         // The apply route parses request.body directly against its override
         // schema (flat fields: { title, assignee_id, priority, ... }), NOT a
-        // nested { overrides } envelope — send the fields at top level or they
+        // nested { overrides } envelope - send the fields at top level or they
         // are silently dropped.
         overrides ?? {},
       );
@@ -163,7 +163,7 @@ export function registerTemplateTools(server: McpServer, api: ApiClient): void {
   registerTool(server, {
     name: 'delete_template',
     description:
-      'Delete a task template by UUID (destructive). Tasks previously created from it are unaffected. Requires confirm:true — the first call without it returns a confirmation prompt and changes nothing.',
+      'Delete a task template by UUID (destructive). Tasks previously created from it are unaffected. Requires confirm:true - the first call without it returns a confirmation prompt and changes nothing.',
     input: {
       template_id: z.string().uuid().describe('The task-template UUID to delete'),
       confirm: z.boolean().describe('Must be true to confirm deletion'),

@@ -14,7 +14,7 @@ import { registerTool } from '../lib/register-tool.js';
  * know the UUID, and there was no `find_user_by_email` anywhere in the MCP
  * surface.
  *
- * These tools complement (and overlap with) the per-app tools — e.g. Bam's
+ * These tools complement (and overlap with) the per-app tools - e.g. Bam's
  * forthcoming `bam_find_user_by_email`. Both can coexist: namespace-free
  * tools live here, app-scoped tools live in their app's tool file. All share
  * the same underlying postgres `users` table, so a user resolved via this
@@ -38,7 +38,7 @@ const userShape = z.object({
 export function registerUserResolverTools(server: McpServer, api: ApiClient): void {
   registerTool(server, {
     name: 'find_user_by_email',
-    description: 'Find a user by exact email address (case-insensitive) within the caller\'s active organization. Returns the user object `{ id, email, name, display_name, avatar_url, role }` or `null` if no match. Use this whenever a rule, workflow, or prompt mentions a user by email and you need their user_id to pass to another tool. Works identically for any app (Bam, Banter, Bolt, Bond, etc.) — the underlying users table is shared.',
+    description: 'Find a user by exact email address (case-insensitive) within the caller\'s active organization. Returns the user object `{ id, email, name, display_name, avatar_url, role }` or `null` if no match. Use this whenever a rule, workflow, or prompt mentions a user by email and you need their user_id to pass to another tool. Works identically for any app (Bam, Banter, Bolt, Bond, etc.) - the underlying users table is shared.',
     input: {
       email: z.string().email().describe('Exact email address to look up (case-insensitive)'),
     },

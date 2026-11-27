@@ -6,7 +6,7 @@ import { isUuid } from '../middleware/resolve-helpers.js';
 
 /**
  * Helper to make requests to the bearing-api service.
- * Same pattern as bolt-tools.ts — a lightweight fetch wrapper that targets
+ * Same pattern as bolt-tools.ts - a lightweight fetch wrapper that targets
  * the bearing-api base URL and forwards the user's auth token.
  */
 function createBearingClient(bearingApiUrl: string, api: ApiClient) {
@@ -78,9 +78,9 @@ function buildQs(params: Record<string, unknown>): string {
 // Name-or-ID resolvers (Phase D / Tier 3)
 // ---------------------------------------------------------------------------
 //
-// Rule authors write Bearing rules in terms of what a human recognizes —
+// Rule authors write Bearing rules in terms of what a human recognizes -
 // "bump the Revenue KR", "update the Q2 2026 planning goal", "assign to
-// alice@example.com" — not opaque UUIDs. These resolvers let the canonical
+// alice@example.com" - not opaque UUIDs. These resolvers let the canonical
 // action tools take either a UUID (fast path, zero extra HTTP) or a
 // human-readable identifier (single lookup via the existing list endpoints).
 //
@@ -128,7 +128,7 @@ async function resolveGoalId(
  * typical org's active period) to avoid unbounded latency. A UUID input
  * short-circuits before any HTTP call, so existing rules pay nothing.
  *
- * Returns null if not found, or if multiple KRs match the needle — the
+ * Returns null if not found, or if multiple KRs match the needle - the
  * caller should surface a "disambiguate please" error in that case.
  */
 async function resolveKeyResultId(
@@ -146,7 +146,7 @@ async function resolveKeyResultId(
 
   // Walk each goal's KRs and collect matches.
   // We do these sequentially rather than in parallel to keep the blast
-  // radius of a mistyped title small — if the first goal has a KR with the
+  // radius of a mistyped title small - if the first goal has a KR with the
   // exact title we stop immediately.
   const exactMatches: Array<{ id: string; title: string }> = [];
   const fuzzyMatches: Array<{ id: string; title: string }> = [];
@@ -164,7 +164,7 @@ async function resolveKeyResultId(
       }
     }
     // Short-circuit on a unique exact match as soon as we've walked enough
-    // to be confident — if we've already seen >1 exact match we know we
+    // to be confident - if we've already seen >1 exact match we know we
     // need to fail with disambiguation regardless.
     if (exactMatches.length > 1) return null;
   }
@@ -198,7 +198,7 @@ async function resolvePeriodId(
 /**
  * Resolve a user identifier (UUID, email, or free-text name) to a UUID via
  * the shared Bam users table. Uses the main `api` client, not the bearing
- * client, because bearing-api has no user endpoint — users live in the Bam
+ * client, because bearing-api has no user endpoint - users live in the Bam
  * API and are shared across all apps in the suite.
  */
 async function resolveOwnerId(api: ApiClient, idOrEmail: string): Promise<string | null> {
@@ -417,7 +417,7 @@ export function registerBearingTools(server: McpServer, api: ApiClient, bearingA
 
   registerTool(server, {
     name: 'bearing_kr_update',
-    description: 'Update a key result value or metadata. When current_value is provided, also records a value check-in. `id` accepts either a UUID or the KR title — if multiple KRs share the title the tool fails and asks for disambiguation.',
+    description: 'Update a key result value or metadata. When current_value is provided, also records a value check-in. `id` accepts either a UUID or the KR title - if multiple KRs share the title the tool fails and asks for disambiguation.',
     input: {
       id: z.string().describe('Key result UUID or KR title'),
       current_value: z.number().optional().describe('New current value (also posts a value check-in)'),
@@ -510,7 +510,7 @@ export function registerBearingTools(server: McpServer, api: ApiClient, bearingA
       user_id: z.string().uuid().optional().describe('User ID (required for owner reports)'),
       format: z.enum(['markdown', 'json']).optional().describe('Output format (default json)'),
     },
-    returns: z.object({}).passthrough().describe('Report data — shape varies by report_type'),
+    returns: z.object({}).passthrough().describe('Report data - shape varies by report_type'),
     handler: async ({ report_type, period_id, user_id, format }) => {
       let path: string;
       const qs = buildQs({ format });
@@ -549,7 +549,7 @@ export function registerBearingTools(server: McpServer, api: ApiClient, bearingA
     },
   });
 
-  // ===== GOALS — additional (delete / status override / updates / watchers / history) =====
+  // ===== GOALS - additional (delete / status override / updates / watchers / history) =====
 
   registerTool(server, {
     name: 'bearing_goal_delete',
@@ -639,7 +639,7 @@ export function registerBearingTools(server: McpServer, api: ApiClient, bearingA
 
   registerTool(server, {
     name: 'bearing_goal_unwatch',
-    description: 'Remove a watcher from a goal. `id` accepts a UUID or goal title; `user_id` accepts a UUID or email address. You may remove yourself, or — if you are the goal owner or an org admin/owner — remove another user.',
+    description: 'Remove a watcher from a goal. `id` accepts a UUID or goal title; `user_id` accepts a UUID or email address. You may remove yourself, or - if you are the goal owner or an org admin/owner - remove another user.',
     input: {
       id: z.string().describe('Goal UUID or goal title'),
       user_id: z.string().describe('Watcher to remove: user UUID or email address'),
@@ -676,7 +676,7 @@ export function registerBearingTools(server: McpServer, api: ApiClient, bearingA
     },
   });
 
-  // ===== KEY RESULTS — additional (list / get / delete / links / history) =====
+  // ===== KEY RESULTS - additional (list / get / delete / links / history) =====
 
   registerTool(server, {
     name: 'bearing_kr_list',
@@ -697,7 +697,7 @@ export function registerBearingTools(server: McpServer, api: ApiClient, bearingA
 
   registerTool(server, {
     name: 'bearing_kr_get',
-    description: 'Get a single key result. `id` accepts a UUID or the KR title — if the title is shared across multiple goals the tool fails and asks for disambiguation.',
+    description: 'Get a single key result. `id` accepts a UUID or the KR title - if the title is shared across multiple goals the tool fails and asks for disambiguation.',
     input: {
       id: z.string().describe('Key result UUID or KR title'),
     },
@@ -716,7 +716,7 @@ export function registerBearingTools(server: McpServer, api: ApiClient, bearingA
 
   registerTool(server, {
     name: 'bearing_kr_delete',
-    description: 'Delete a key result. `id` accepts a UUID or the KR title — if the title is shared across multiple goals the tool fails and asks for disambiguation.',
+    description: 'Delete a key result. `id` accepts a UUID or the KR title - if the title is shared across multiple goals the tool fails and asks for disambiguation.',
     input: {
       id: z.string().describe('Key result UUID or KR title'),
     },
@@ -793,7 +793,7 @@ export function registerBearingTools(server: McpServer, api: ApiClient, bearingA
     },
   });
 
-  // ===== PERIODS — additional (create / update / delete / activate / complete) =====
+  // ===== PERIODS - additional (create / update / delete / activate / complete) =====
 
   registerTool(server, {
     name: 'bearing_period_create',

@@ -6,7 +6,7 @@ import { isUuid, resolveProjectId } from '../middleware/resolve-helpers.js';
 
 /**
  * Helper to make requests to the board-api service.
- * Same pattern as bolt-tools.ts — a lightweight fetch wrapper that targets
+ * Same pattern as bolt-tools.ts - a lightweight fetch wrapper that targets
  * the board-api base URL and forwards the user's auth token.
  */
 function createBoardClient(boardApiUrl: string, api: ApiClient) {
@@ -121,8 +121,8 @@ async function resolvePhaseId(
 
 /**
  * Resolve a user identifier (UUID, email, or free-text name) to a UUID via the
- * shared Bam users table. board-api has no user endpoint — users live in the
- * Bam API and are shared across the suite — so this routes through the main
+ * shared Bam users table. board-api has no user endpoint - users live in the
+ * Bam API and are shared across the suite - so this routes through the main
  * `api` client, mirroring the bearing/bond owner resolvers. Returns `null` on
  * miss so the caller can surface a clean "user not found" error.
  */
@@ -491,7 +491,7 @@ export function registerBoardTools(server: McpServer, api: ApiClient, boardApiUr
     },
   });
 
-  // ===== BOARD DISCOVERY — additional reads (3) =====
+  // ===== BOARD DISCOVERY - additional reads (3) =====
 
   registerTool(server, {
     name: 'board_list_recent',
@@ -543,7 +543,7 @@ export function registerBoardTools(server: McpServer, api: ApiClient, boardApiUr
     },
   });
 
-  // ===== BOARD LIFECYCLE — additional (5) =====
+  // ===== BOARD LIFECYCLE - additional (5) =====
 
   registerTool(server, {
     name: 'board_duplicate',
@@ -581,7 +581,7 @@ export function registerBoardTools(server: McpServer, api: ApiClient, boardApiUr
 
   registerTool(server, {
     name: 'board_delete_permanent',
-    description: 'Permanently hard-delete a board and ALL of its elements, collaborators, stars, and versions (cascade). This is irreversible — distinct from board_archive which only soft-deletes. `id` accepts either a UUID or a board name.',
+    description: 'Permanently hard-delete a board and ALL of its elements, collaborators, stars, and versions (cascade). This is irreversible - distinct from board_archive which only soft-deletes. `id` accepts either a UUID or a board name.',
     input: {
       id: z.string().describe('Board UUID or name to permanently delete'),
     },

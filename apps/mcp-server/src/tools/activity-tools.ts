@@ -17,7 +17,7 @@ import { registerTool } from '../lib/register-tool.js';
  * actor_type in the returned rows is the platform vocabulary
  * ('human' | 'agent' | 'service'). Helpdesk rows whose raw actor_type
  * was 'agent' (meaning HUMAN support agent) are remapped to 'human'
- * server-side — see the migration 0129 header for the full landmine
+ * server-side - see the migration 0129 header for the full landmine
  * note. Agents filtering for "AI agent activity" should look for
  * actor_type='agent', not rely on any source_app marker.
  */

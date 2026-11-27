@@ -1,23 +1,11 @@
 {
-  "generated_at": "2026-11-27T17:27:43.544Z",
+  "generated_at": "2026-11-27T17:49:43.664Z",
   "changed": [
-    {
-      "app": "bam",
-      "reason": "src_hash_changed",
-      "prev_hash": "6a0dfa4d99895e9f7449b58db2fcff71182a7056dc2e025a1835167ebe1112d9",
-      "new_hash": "c0b02f527cf38be4e29cf5523ce6e6adcd57739d48a346d57ae5287d17d69758"
-    },
     {
       "app": "bolt",
       "reason": "src_hash_changed",
-      "prev_hash": "28697aa656aa70805bfe8c84e2292b98881a22d76bf46ba19248c81ad1c6945c",
-      "new_hash": "a1e6b4f4204e92825a6d66b4136a69d4d2acb3ea10deed8ce42465b0f9a0686f"
-    },
-    {
-      "app": "bastion",
-      "reason": "src_hash_changed",
-      "prev_hash": "2715f54562f5c61c19cc5853c6e8fea06ec221b081c7d5f4836e060184199a9a",
-      "new_hash": "426ed1d4ee0ef769d8bfb9cd33e1a4aa33b2a36662acc3d757cb2526b21f6f49"
+      "prev_hash": "a1e6b4f4204e92825a6d66b4136a69d4d2acb3ea10deed8ce42465b0f9a0686f",
+      "new_hash": "effe1f095d952270996cd8ed29b60cde49ae337aa8ec5a493bc74c080a84bfea"
     }
   ]
 }

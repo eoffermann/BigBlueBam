@@ -266,7 +266,7 @@ export function registerImportTools(
         ),
     },
     returns: z.object({
-      // Either a staging response, a preview report, or a commit result —
+      // Either a staging response, a preview report, or a commit result -
       // surfaced as a JSON text block.
       status: z.string().optional(),
       data: z.unknown().optional(),

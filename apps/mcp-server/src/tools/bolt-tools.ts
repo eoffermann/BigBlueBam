@@ -7,7 +7,7 @@ import { isUuid } from '../middleware/resolve-helpers.js';
 
 /**
  * Helper to make requests to the bolt-api service.
- * Same pattern as brief-tools.ts — a lightweight fetch wrapper that targets
+ * Same pattern as brief-tools.ts - a lightweight fetch wrapper that targets
  * the bolt-api base URL and forwards the user's auth token.
  */
 function createBoltClient(boltApiUrl: string, api: ApiClient) {
@@ -266,7 +266,7 @@ export function registerBoltTools(server: McpServer, api: ApiClient, boltApiUrl:
   registerTool(server, {
     name: 'bolt_test',
     description:
-      'Dry-run an automation against a simulated event payload. This evaluates ONLY the automation\'s conditions against the event — it does NOT execute the actions. Use it to check whether a given event would (or would not) trigger the automation. Returns `passed` (would the actions run), a per-condition `log`, and a human-readable `message`. To actually run actions, the automation must fire on a real ingested event.',
+      'Dry-run an automation against a simulated event payload. This evaluates ONLY the automation\'s conditions against the event - it does NOT execute the actions. Use it to check whether a given event would (or would not) trigger the automation. Returns `passed` (would the actions run), a per-condition `log`, and a human-readable `message`. To actually run actions, the automation must fire on a real ingested event.',
     input: {
       id: z.string().min(1).describe('Automation UUID or exact automation name to test'),
       event: z.record(z.unknown()).describe('Simulated event payload object'),
@@ -379,7 +379,7 @@ export function registerBoltTools(server: McpServer, api: ApiClient, boltApiUrl:
 
   registerTool(server, {
     name: 'bolt_patch',
-    description: 'Partial metadata update of an automation. Only touches name, description, and/or enabled — does not modify the trigger, conditions, or actions (use bolt_update for those). Provide only the fields to change.',
+    description: 'Partial metadata update of an automation. Only touches name, description, and/or enabled - does not modify the trigger, conditions, or actions (use bolt_update for those). Provide only the fields to change.',
     input: {
       id: z.string().min(1).describe('Automation UUID or exact automation name'),
       name: z.string().min(1).max(255).optional().describe('Updated name'),
@@ -449,7 +449,7 @@ export function registerBoltTools(server: McpServer, api: ApiClient, boltApiUrl:
 
   registerTool(server, {
     name: 'bolt_list_executions',
-    description: 'List execution history across all automations in the org (not scoped to a single automation — use bolt_executions for that). Org-admin scoped.',
+    description: 'List execution history across all automations in the org (not scoped to a single automation - use bolt_executions for that). Org-admin scoped.',
     input: {
       status: z.enum(['running', 'success', 'partial', 'failed', 'skipped']).optional().describe('Filter by execution status'),
       cursor: z.string().optional().describe('Pagination cursor'),
@@ -510,7 +510,7 @@ export function registerBoltTools(server: McpServer, api: ApiClient, boltApiUrl:
 
   registerTool(server, {
     name: 'bolt_generate',
-    description: 'Generate a draft automation definition from a natural-language prompt using the org\'s configured LLM provider. Returns a proposed automation object (name, trigger, conditions, actions) plus a confidence score; it does NOT persist anything — pass the result to bolt_create to save it. Requires an LLM provider to be configured (returns AI_NOT_CONFIGURED otherwise).',
+    description: 'Generate a draft automation definition from a natural-language prompt using the org\'s configured LLM provider. Returns a proposed automation object (name, trigger, conditions, actions) plus a confidence score; it does NOT persist anything - pass the result to bolt_create to save it. Requires an LLM provider to be configured (returns AI_NOT_CONFIGURED otherwise).',
     input: {
       prompt: z.string().min(1).max(2000).describe('Natural-language description of the desired automation'),
       context: z.record(z.unknown()).optional().describe('Optional context object to ground the generation'),
@@ -525,7 +525,7 @@ export function registerBoltTools(server: McpServer, api: ApiClient, boltApiUrl:
 
   registerTool(server, {
     name: 'bolt_explain',
-    description: 'Explain an automation definition in plain English using the org\'s configured LLM provider. Pass the automation shape (name, trigger_source, trigger_event, conditions, actions) — for an existing automation, fetch it with bolt_get first. Returns a natural-language explanation. Requires an LLM provider to be configured (returns AI_NOT_CONFIGURED otherwise).',
+    description: 'Explain an automation definition in plain English using the org\'s configured LLM provider. Pass the automation shape (name, trigger_source, trigger_event, conditions, actions) - for an existing automation, fetch it with bolt_get first. Returns a natural-language explanation. Requires an LLM provider to be configured (returns AI_NOT_CONFIGURED otherwise).',
     input: {
       automation: z.object({
         name: z.string().max(255).describe('Automation name'),
