@@ -38,7 +38,7 @@
 <p align="center">
   <img src="https://img.shields.io/badge/tests-900%2B%20passing-brightgreen" alt="Tests" />
   <img src="https://img.shields.io/badge/MCP%20tools-951-blue" alt="MCP Tools" />
-  <img src="https://img.shields.io/badge/apps-24-blueviolet" alt="Apps" />
+  <img src="https://img.shields.io/badge/apps-25-blueviolet" alt="Apps" />
   <img src="https://img.shields.io/badge/license-MIT-green" alt="License" />
 </p>
 
@@ -60,7 +60,7 @@ This is made possible by **951 MCP tools** that give AI assistants (Claude, Clau
 
 ## The Suite at a Glance
 
-24 apps, one workspace. If you've used the tools on the right you already know most of how each app works - the twist is that all 24 live under the same auth, the same org and project permissions, and the same 951-tool MCP surface. No integration glue, no per-tool API keys, no glue-code tax: an agent that can move a card can also close a deal, publish an article, and send an invoice.
+25 apps, one workspace. If you've used the tools on the right you already know most of how each app works - the twist is that all 25 live under the same auth, the same org and project permissions, and the same 951-tool MCP surface. No integration glue, no per-tool API keys, no glue-code tax: an agent that can move a card can also close a deal, publish an article, and send an invoice.
 
 | App | What it is | Comparable to |
 |-----|------------|---------------|
@@ -387,7 +387,7 @@ This is the part most work suites bolt on as an afterthought. BigBlueBam exposes
 
 ### MCP Tools Reference
 
-**951 tools** across the 24 apps plus cross-cutting agentic platform surfaces:
+**951 tools** across the 25 apps plus cross-cutting agentic platform surfaces:
 
 | Category | Count | What they cover |
 |----------|------:|-----------------|

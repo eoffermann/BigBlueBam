@@ -9,12 +9,12 @@ generated: "2026-11-26T07:04:55.473Z"
 
 # BigBlueBam - The integrated suite
 
-BigBlueBam is twenty-four applications that behave like one product. Project
+BigBlueBam is twenty-five applications that behave like one product. Project
 management, chat, a CRM, a help desk, documents, a whiteboard, knowledge,
 scheduling, invoicing, analytics, forms, automation, goals, diagrams, email
 campaigns, a virtual office, a file store with media review, telemetry and logs,
 governed metric definitions, customer identity, contract obligations, project
-scope and margin, and vendor procurement all share one login, one organization
+scope and margin, vendor procurement, and compliance readiness all share one login, one organization
 and user model, and one set of permissions. Work moves between them without re-keying:
 a deal becomes a project, a sticky note becomes a task, a won deal becomes an
 invoice. It is built for small-to-medium teams, it is open source, and it is
@@ -25,8 +25,8 @@ designed so AI agents can do real work on the same surfaces as the people.
 - **One organization across every app** - a single sign-in, the same teammates,
   and one role and permission model everywhere, so switching apps never means
   switching accounts
-- **Twenty-four genuinely deep apps** - each strong enough to stand alone (Bam for
-  projects, Bond for CRM, Banter for chat, Beacon for knowledge, and twenty
+- **Twenty-five genuinely deep apps** - each strong enough to stand alone (Bam for
+  projects, Bond for CRM, Banter for chat, Beacon for knowledge, and twenty-one
   more) and better for living next to the others
 - **Real cross-app connections** - help desk tickets spawn project tasks,
   bookings create CRM contacts, documents graduate into the knowledge base, and
@@ -98,6 +98,7 @@ apps.
 | Bam | plan sprints, create and move tasks, run reports | 128 |
 | Banter | post, reply, react, and manage channels | 80 |
 | Bond | manage contacts, companies, deals, and pipelines | 69 |
+| Bastion | check controls, gather evidence, answer questionnaires, share with auditors | 66 |
 | Brief | create and co-edit documents, manage versions | 48 |
 | Bill | create invoices, record payments, run billing | 47 |
 | Board | add and arrange canvas elements, promote to tasks | 40 |
