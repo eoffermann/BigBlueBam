@@ -111,6 +111,7 @@ export default async function summonsRoutes(fastify: FastifyInstance) {
         targetLabel: target_label,
         lkRoomHint: lk_room_hint,
         recipients: plan.eligibleRecipients,
+        denied: plan.deniedRecipients,
         logger: fastify.log,
       });
 
