@@ -1,8 +1,8 @@
 {
   "counts": {
-    "total": 1571,
+    "total": 1569,
     "mcp_tools_scanned": 951,
-    "rest_routes_scanned": 890,
+    "rest_routes_scanned": 888,
     "read_permissions": 608,
     "destructive_permissions": 148
   },
@@ -4533,40 +4533,6 @@
           "source": "rest",
           "ref": "GET /superuser/system-errors",
           "file": "superuser-logs.routes.ts"
-        }
-      ]
-    },
-    {
-      "id": "bam.system_error_record_browser.create",
-      "app": "bam",
-      "resource": "system_error_record_browser",
-      "verb": "create",
-      "is_destructive": false,
-      "is_read": false,
-      "requires_confirmation": false,
-      "requires_superuser": false,
-      "sources": [
-        {
-          "source": "rest",
-          "ref": "POST /system-errors/record-browser",
-          "file": "internal-system-errors.routes.ts"
-        }
-      ]
-    },
-    {
-      "id": "bam.system_error_record.create",
-      "app": "bam",
-      "resource": "system_error_record",
-      "verb": "create",
-      "is_destructive": false,
-      "is_read": false,
-      "requires_confirmation": false,
-      "requires_superuser": false,
-      "sources": [
-        {
-          "source": "rest",
-          "ref": "POST /system-errors/record",
-          "file": "internal-system-errors.routes.ts"
         }
       ]
     },
