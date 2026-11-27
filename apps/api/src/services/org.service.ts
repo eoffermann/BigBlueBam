@@ -13,7 +13,7 @@ import { projectMemberships } from '../db/schema/project-memberships.js';
 import { apiKeys } from '../db/schema/api-keys.js';
 import { activityLog } from '../db/schema/activity-log.js';
 import { accountGroupMemberships, permissionGroups } from '../db/schema/permissions.js';
-import { resolveUserOrgRole, setUserOrgRole } from './role-resolver.js';
+import { reconcileOrgApiKeys, resolveUserOrgRole, setUserOrgRole } from './role-resolver.js';
 import { generatePassword } from './password-generator.service.js';
 
 export async function getOrganization(orgId: string) {
@@ -593,17 +593,20 @@ export async function removeMember(
   // may still be a member of other orgs. Deleting the user row outright
   // would have cascade-deleted their sessions, API keys, and every other
   // org's membership of the same user.
-  const [deleted] = await db
-    .delete(organizationMemberships)
-    .where(
-      and(
-        eq(organizationMemberships.user_id, userId),
-        eq(organizationMemberships.org_id, orgId),
-      ),
-    )
-    .returning();
-
-  return deleted ?? null;
+  return await db.transaction(async (tx) => {
+    const [deleted] = await tx
+      .delete(organizationMemberships)
+      .where(
+        and(
+          eq(organizationMemberships.user_id, userId),
+          eq(organizationMemberships.org_id, orgId),
+        ),
+      )
+      .returning();
+    // #336: an API key bound to this org must not outlive the membership.
+    if (deleted) await reconcileOrgApiKeys(userId, orgId, null, tx);
+    return deleted ?? null;
+  });
 }
 
 /** Detailed view of a single member in the current org, including the

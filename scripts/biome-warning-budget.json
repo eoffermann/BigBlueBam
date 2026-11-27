@@ -1,7 +1,7 @@
 {
-  "@bigbluebam/api": 807,
+  "@bigbluebam/api": 797,
   "@bigbluebam/banter": 153,
-  "@bigbluebam/banter-api": 121,
+  "@bigbluebam/banter-api": 119,
   "@bigbluebam/basis": 15,
   "@bigbluebam/basis-api": 22,
   "@bigbluebam/bastion": 0,
@@ -29,7 +29,7 @@
   "@bigbluebam/board": 84,
   "@bigbluebam/board-api": 146,
   "@bigbluebam/bolt": 108,
-  "@bigbluebam/bolt-api": 95,
+  "@bigbluebam/bolt-api": 90,
   "@bigbluebam/bond": 53,
   "@bigbluebam/bond-api": 145,
   "@bigbluebam/book": 92,

@@ -1,4 +1,5 @@
 import { eq } from 'drizzle-orm';
+import { safeFetch } from '@bigbluebam/egress-guard';
 import { db } from '../db/index.js';
 import { slackIntegrations } from '../db/schema/slack-integrations.js';
 import { taskUrl } from '../lib/urls.js';
@@ -64,7 +65,8 @@ export async function postToSlack(
     const body: Record<string, unknown> = { text: message.text };
     if (message.blocks) body.blocks = message.blocks;
 
-    const res = await fetch(integration.webhook_url, {
+    // Org-admin-controlled URL: SSRF-guarded at send time, not just at save (#328).
+    const res = await safeFetch(integration.webhook_url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
