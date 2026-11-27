@@ -17,8 +17,8 @@
 // with can_access on every citation for the person who started the autofill.
 
 import type { BastionDraftAnswer, BastionQuestionnaireSlice } from '@bigbluebam/shared';
-import { type EngineDeps, orgTx, type Tx } from '../engine/context.js';
-import { LLM_SLICE_START_CUTOFF_MS, MAX_RESUMES, STALE_HEARTBEAT_MS } from '../engine/budgets.js';
+import { type EngineDeps, isTransientDbError, orgTx, sqlstateOf, type Tx } from '../engine/context.js';
+import { LLM_SLICE_START_CUTOFF_MS, MAX_RESUMES, STALE_HEARTBEAT_MS, TRANSIENT_RELEASE_LIMIT } from '../engine/budgets.js';
 import { RunLeaseHeldError, RunNotFoundError } from '../engine/evaluator.js';
 import { loadControlStates } from '../engine/numbers.js';
 import { enqueueBastionEvent } from '../engine/outbox.js';
@@ -450,6 +450,19 @@ export async function autofillSlice(d: AutofillDeps, body: { organization_id: st
         d.engine.log.info({ questionnaire_id: id }, 'bastion-autofill: slice stopped; another slice owns the questionnaire now');
         return;
       }
+      // Same rule as the compile (#295): a transient database error (reset connection, deadlock,
+      // timeout) gives the questionnaire back without spending a resume, up to
+      // TRANSIENT_RELEASE_LIMIT, so a database blip cannot send undrafted rows to "Needs an expert".
+      if (isTransientDbError(err)) {
+        const t = await releaseQTransient(d, mine, fence).catch(() => null);
+        if (t !== null) {
+          d.engine.log.warn(
+            { questionnaire_id: id, err: (err as Error).message, sqlstate: sqlstateOf(err), transient_releases: t },
+            `bastion-autofill: slice interrupted by a transient database error; released to resume where it left off (${t} of ${TRANSIENT_RELEASE_LIMIT} free retries)`,
+          );
+          return;
+        }
+      }
       // Same bound as the compile (#241): a slice that throws gives the questionnaire back with
       // resume_count + 1, and at MAX_RESUMES the undrafted rows go to review as "Needs an expert",
       // instead of the next poll re-driving (and re-paying for) the same failing row forever.
@@ -510,6 +523,22 @@ async function releaseQ(d: AutofillDeps, q: QRow, f: QFence): Promise<void> {
       RETURNING resume_count`;
     if (r[0] && Number(r[0].resume_count) >= MAX_RESUMES) await parkQuestionnaire(tx, q.organization_id, q.id);
   });
+}
+
+/**
+ * Give the questionnaire back after a transient database error (#295): released, resume_count
+ * untouched; the count of such releases lives in column_map.transient_releases. Null once
+ * TRANSIENT_RELEASE_LIMIT is reached (or the fence is lost); the caller then counts a resume.
+ */
+async function releaseQTransient(d: AutofillDeps, q: QRow, f: QFence): Promise<number | null> {
+  const r = await orgTx(d.engine.sql, q.organization_id, (tx) => tx`
+    UPDATE bastion_questionnaires
+       SET claimed_by = NULL, heartbeat_at = NULL, slice_token = NULL,
+           column_map = jsonb_set(column_map, '{transient_releases}', to_jsonb(coalesce((column_map->>'transient_releases')::int, 0) + 1))
+     WHERE id = ${q.id} AND organization_id = ${q.organization_id} AND claimed_by = ${f.claimant} AND slice_token = ${f.token} AND status = 'answering'
+       AND coalesce((column_map->>'transient_releases')::int, 0) < ${TRANSIENT_RELEASE_LIMIT}
+    RETURNING (column_map->>'transient_releases')::int AS n`);
+  return r[0] ? Number(r[0].n) : null;
 }
 
 /** After three releases: every undrafted row becomes "Needs an expert" and the questionnaire goes to review. */

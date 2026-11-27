@@ -1403,7 +1403,8 @@ starting LLM calls, lets the current call finish, and releases its claims (statu
 `resume_count` incremented). Compose sets **`stop_grace_period: 75s`** on bastion-api (Docker's
 default 10 s would kill a 60 s LLM call), and Railway gets the equivalent
 `RAILWAY_DEPLOYMENT_DRAINING_SECONDS=75` as a `literal` hint. Every release increments
-`resume_count`, and every re-enqueue uses `jobId = run.id + ':' + resume_count`, so it is never
+`resume_count` (build decision #295: except an LLM slice released after a transient database
+error, which is free up to 10 times per run and downgrades no control), and every re-enqueue uses `jobId = run.id + ':' + resume_count`, so it is never
 deduplicated against a completed job still retained by `removeOnComplete`. The tick re-enqueues
 any `queued` run idle for more than 2 minutes, so a released run is never orphaned and never
 holds the partial unique index against tomorrow's nightly run. Completed items are kept and

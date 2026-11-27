@@ -178,6 +178,54 @@ describe.skipIf(!DATABASE_URL)('batch 11: AI compile slices (live database)', ()
     }
   });
 
+  it('a transient database error mid-control releases the run without downgrading the control or spending a resume (#295)', async () => {
+    const s = await setUp('slice-transient');
+    const engine = makeDeps(sql, { clock: clock() });
+    const replica = await import('../../src/services/compile-ai.service.js?replica=t295');
+    const calls: string[] = [];
+    const llm: LlmChat = async ({ messages }) => {
+      const key = controlKeyOf(messages);
+      calls.push(key);
+      return recorded(key);
+    };
+    const d: CompileAiDeps = { engine, llm, permits: openPermits, sliceLock: redisDown, background: false, sliceCutoffMs: 0 };
+    // The per-call count UPDATE hits a deadlock exactly once (a sequence is not rolled back with
+    // the failed statement, so it fires once), as a reset connection or deadlock would in production.
+    const tag = s.runId.replace(/-/g, '');
+    await sql.unsafe(`CREATE SEQUENCE b295_seq_${tag}`);
+    await sql.unsafe(`
+      CREATE OR REPLACE FUNCTION b295_fail_${tag}() RETURNS trigger LANGUAGE plpgsql AS $f$
+      BEGIN
+        IF NEW.id = '${s.runId}'::uuid AND NEW.llm_calls_used <> OLD.llm_calls_used AND nextval('b295_seq_${tag}') = 1 THEN
+          RAISE EXCEPTION 'deadlock detected (test)' USING ERRCODE = '40P01';
+        END IF;
+        RETURN NEW;
+      END $f$`);
+    await sql.unsafe(`CREATE TRIGGER b295_fail_${tag} BEFORE UPDATE ON bastion_compile_runs FOR EACH ROW EXECUTE FUNCTION b295_fail_${tag}()`);
+    try {
+      const body = { organization_id: s.org, run_id: s.runId, claimant: 'worker:W' };
+      let last = await replica.compileSlice(d, body);
+      const first = (await sql`SELECT status, resume_count, drop_reasons FROM bastion_compile_runs WHERE id = ${s.runId}`)[0]!;
+      expect(first.status).toBe('queued');
+      expect(Number(first.resume_count)).toBe(0);
+      expect((first.drop_reasons as { retry_with_library?: string[] }).retry_with_library ?? []).toEqual([]);
+      for (let i = 0; i < 8 && !last.done; i++) last = await replica.compileSlice(d, body);
+      expect(last).toMatchObject({ done: true, status: 'succeeded', controls_done: 3 });
+      const run = (await sql`SELECT resume_count, error, drop_reasons FROM bastion_compile_runs WHERE id = ${s.runId}`)[0]!;
+      const reasons = run.drop_reasons as { retry_with_library: string[]; fallback_keys: string[]; transient_releases: number };
+      // The interrupted control was asked of the AI again and kept its AI answer.
+      expect(calls.filter((k) => k === 'auth.mfa')).toHaveLength(2);
+      expect(reasons.retry_with_library).toEqual([]);
+      expect(reasons.fallback_keys).not.toContain('auth.mfa');
+      expect(reasons.transient_releases).toBe(1);
+      expect(Number(run.resume_count)).toBe(0);
+    } finally {
+      await sql.unsafe(`DROP TRIGGER IF EXISTS b295_fail_${tag} ON bastion_compile_runs`);
+      await sql.unsafe(`DROP FUNCTION IF EXISTS b295_fail_${tag}()`);
+      await sql.unsafe(`DROP SEQUENCE IF EXISTS b295_seq_${tag}`);
+    }
+  });
+
   it('a control that can never be written parks the run as partial after MAX_RESUMES slices (#241)', async () => {
     const s = await setUp('slice-park');
     const engine = makeDeps(sql, { clock: clock() });
