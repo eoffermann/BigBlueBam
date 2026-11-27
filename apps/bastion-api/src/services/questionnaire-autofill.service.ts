@@ -590,17 +590,17 @@ async function releaseQ(d: AutofillDeps, q: QRow, f: QFence): Promise<void> {
 
 /**
  * Give the questionnaire back after a transient database error (#295): released, resume_count
- * untouched; the count of such releases lives in column_map.transient_releases. Null once
- * TRANSIENT_RELEASE_LIMIT is reached (or the fence is lost); the caller then counts a resume.
+ * untouched; the count of such releases is the run-state column transient_releases, reset by every
+ * autofill start (#329). Null once TRANSIENT_RELEASE_LIMIT is reached in this run (or the fence is
+ * lost); the caller then counts a resume.
  */
 async function releaseQTransient(d: AutofillDeps, q: QRow, f: QFence): Promise<number | null> {
   const r = await orgTx(d.engine.sql, q.organization_id, (tx) => tx`
     UPDATE bastion_questionnaires
-       SET claimed_by = NULL, heartbeat_at = NULL, slice_token = NULL,
-           column_map = jsonb_set(column_map, '{transient_releases}', to_jsonb(coalesce((column_map->>'transient_releases')::int, 0) + 1))
+       SET claimed_by = NULL, heartbeat_at = NULL, slice_token = NULL, transient_releases = transient_releases + 1
      WHERE id = ${q.id} AND organization_id = ${q.organization_id} AND claimed_by = ${f.claimant} AND slice_token = ${f.token} AND status = 'answering'
-       AND coalesce((column_map->>'transient_releases')::int, 0) < ${TRANSIENT_RELEASE_LIMIT}
-    RETURNING (column_map->>'transient_releases')::int AS n`);
+       AND transient_releases < ${TRANSIENT_RELEASE_LIMIT}
+    RETURNING transient_releases AS n`);
   return r[0] ? Number(r[0].n) : null;
 }
 

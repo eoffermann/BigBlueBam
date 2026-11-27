@@ -24,6 +24,7 @@ export const FAULT_TARGETS = [
   { table: 'bastion_assertions', op: 'INSERT' },
   { table: 'bastion_compile_runs', op: 'UPDATE' },
   { table: 'bastion_ingest_events', op: 'UPDATE' },
+  { table: 'bastion_questionnaire_items', op: 'UPDATE' },
 ] as const;
 export type FaultTarget = (typeof FAULT_TARGETS)[number];
 
@@ -109,3 +110,4 @@ export async function injectFault(sql: postgres.Sql, spec: FaultSpec): Promise<(
 export const ASSERTION_INSERT = FAULT_TARGETS[0];
 export const COMPILE_RUN_UPDATE = FAULT_TARGETS[1];
 export const INGEST_EVENT_UPDATE = FAULT_TARGETS[2];
+export const QUESTIONNAIRE_ITEM_UPDATE = FAULT_TARGETS[3];

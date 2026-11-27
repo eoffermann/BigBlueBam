@@ -35,6 +35,8 @@ export const bastionQuestionnaires = pgTable(
     llm_calls_used: integer('llm_calls_used').default(0).notNull(),
     autofill_generation: integer('autofill_generation').default(0).notNull(),
     ai_failure_streak: integer('ai_failure_streak').default(0).notNull(),
+    // Free releases after a transient database error in the current autofill run (0316, #329).
+    transient_releases: integer('transient_releases').default(0).notNull(),
     last_ai_failure: varchar('last_ai_failure', { length: 512 }),
     autofill_use_ai: boolean('autofill_use_ai').default(true).notNull(),
     source_grid: jsonb('source_grid'),

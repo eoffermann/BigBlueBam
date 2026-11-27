@@ -33,6 +33,8 @@ import { rewordFixDraft } from '../../src/services/fixes.service.js';
 import type { DecisionDeps } from '../../src/services/decisions.service.js';
 import type { Viewer } from '../../src/services/types.js';
 import { clock, DATABASE_URL, fakeBucket, makeDeps, seedOrg, wipeOrg } from './engine-harness.js';
+import { injectFault, QUESTIONNAIRE_ITEM_UPDATE } from './fault-injection.js';
+import { TRANSIENT_RELEASE_LIMIT } from '../../src/engine/budgets.js';
 
 /**
  * M8 gates against a real migrated database and the real service code (spec 2.7, 2.4, 7.3):
@@ -337,6 +339,45 @@ describe.skipIf(!DATABASE_URL)('M8 questionnaires (live database)', () => {
 
   it('a transient AI failure leaves the row undrafted and retries it; it is never banded "Needs an expert" for it (#260)', async () => {
     const s = await setUp('flaky');
+  it('each autofill run has its own free releases for database blips; a later run is not charged for an earlier one (#329)', async () => {
+    const s = await setUp('blips');
+    await provider(s.org, s.owner);
+    const owner = viewer(s.org, s.owner);
+    const d = qdeps(s.engine);
+    const q = (await createQuestionnaire(d, owner, { title: 'Blips', source: { kind: 'pasted', text: PASTED, format: 'tsv' } })).data as unknown as { id: string };
+    await startAutofill(d, owner, q.id, { redraft: false, use_ai: true });
+    const body = { organization_id: s.org, questionnaire_id: q.id, claimant: 'w1' };
+    const deps = adeps(s.engine);
+    const resumes = async () => Number((await sql`SELECT resume_count FROM bastion_questionnaires WHERE id = ${q.id}`)[0]!.resume_count);
+    const blip = { target: QUESTIONNAIRE_ITEM_UPDATE, match: { questionnaire_id: q.id }, changedCol: 'confidence_band', sqlstate: '40P01', message: 'deadlock detected (test)' };
+
+    // Run 1: every draft write deadlocks until the run's free releases are spent; the next one costs a resume.
+    let restore = await injectFault(sql, blip);
+    try {
+      for (let i = 0; i < TRANSIENT_RELEASE_LIMIT; i++) await autofillSlice(deps, body);
+      expect(await resumes()).toBe(0);
+      await autofillSlice(deps, body);
+      expect(await resumes()).toBe(1);
+    } finally {
+      await restore();
+    }
+    for (let i = 0; i < 5 && (await qState(q.id)).status === 'answering'; i++) await autofillSlice(deps, body);
+    expect((await qState(q.id)).status).toBe('in_review');
+
+    // Run 2 (a redraft) meets one blip: it is free again, so no resume is spent.
+    await startAutofill(d, owner, q.id, { redraft: true, use_ai: true });
+    restore = await injectFault(sql, { ...blip, once: true });
+    try {
+      await autofillSlice(deps, body);
+    } finally {
+      await restore();
+    }
+    expect(await resumes()).toBe(0);
+    expect(Number((await sql`SELECT transient_releases FROM bastion_questionnaires WHERE id = ${q.id}`)[0]!.transient_releases)).toBe(1);
+    for (let i = 0; i < 5 && (await qState(q.id)).status === 'answering'; i++) await autofillSlice(deps, body);
+    expect((await qState(q.id)).status).toBe('in_review');
+  });
+
     await provider(s.org, s.owner);
     const owner = viewer(s.org, s.owner);
     const d = qdeps(s.engine);

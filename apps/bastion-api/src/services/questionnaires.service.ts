@@ -346,12 +346,13 @@ export async function startAutofill(d: QuestionnaireDeps, viewer: Viewer, id: st
       SELECT count(*)::int AS n FROM bastion_questionnaire_items WHERE organization_id = ${viewer.org_id} AND questionnaire_id = ${id} AND confidence_band IS NULL`;
     if (Number(left[0]?.n ?? 0) === 0) throw new ConflictError('Every question already has a draft. Ask for new drafts to replace the ones nobody reviewed.', 'NOTHING_TO_DRAFT');
     // The person who asked is the asker for can_access on every citation the worker writes. A new
-    // run starts with no failed AI calls behind it (#260); llm_calls_used is NOT reset: the
+    // run starts with no failed AI calls behind it (#260) and its own TRANSIENT_RELEASE_LIMIT free
+    // releases for database blips (#329); llm_calls_used is NOT reset: the
     // per-questionnaire allowance covers every run, redrafts included (#261).
     await tx`
       UPDATE bastion_questionnaires
          SET status = 'answering', claimed_by = NULL, heartbeat_at = NULL, slice_token = NULL, resume_count = 0,
-             ai_failure_streak = 0, last_ai_failure = NULL, autofill_generation = autofill_generation + 1,
+             ai_failure_streak = 0, last_ai_failure = NULL, transient_releases = 0, autofill_generation = autofill_generation + 1,
              autofill_use_ai = ${body.use_ai !== false},
              column_map = jsonb_set(column_map, '{autofill_requested_by}', to_jsonb(${viewer.id}::text))
        WHERE organization_id = ${viewer.org_id} AND id = ${id}`;
