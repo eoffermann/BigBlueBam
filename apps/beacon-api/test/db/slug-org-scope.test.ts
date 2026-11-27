@@ -204,7 +204,7 @@ describe.skipIf(!DATABASE_URL)('beacon slugs are per-org (#246)', () => {
   // the member's upsert rewrote the row, flipped it to Organization and appended a version.
   it("a member upserting another user's Private or Organization slug changes nothing (#299)", async () => {
     const { upsertEntryBySlug } = await import('../../src/services/entry-upsert.service.js');
-    const [{ id: userC }] = await sql`INSERT INTO users (org_id, email, display_name, password_hash)
+    const [{ id: userC }] = await sql<[{ id: string }]>`INSERT INTO users (org_id, email, display_name, password_hash)
               VALUES (${ORG_A}, ${`c-${run}@slug.test`}, 'C', 'x') RETURNING id`;
     const mallory = { id: String(userC), org_id: ORG_A, role: 'member', is_superuser: false };
 
@@ -263,7 +263,7 @@ describe.skipIf(!DATABASE_URL)('beacon slugs are per-org (#246)', () => {
     ]);
     const [row] = await sql`SELECT verification_count FROM beacon_entries WHERE id = ${b.id}`;
     expect(Number(row!.verification_count)).toBe(2);
-    const [{ n }] = await sql`SELECT count(*)::int AS n FROM beacon_verifications WHERE beacon_id = ${b.id}`;
+    const [{ n }] = await sql<[{ n: number }]>`SELECT count(*)::int AS n FROM beacon_verifications WHERE beacon_id = ${b.id}`;
     expect(n).toBe(2);
   });
 

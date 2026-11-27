@@ -69,13 +69,13 @@ describe('one LLM deadline (#257)', () => {
       json: async () => ({ error: { code: 'UPSTREAM_TIMEOUT' } }),
     }));
     vi.stubGlobal('fetch', fetchMock);
-    const err = await llmChat({ providerId: 'p', messages: [{ role: 'user', content: 'x' }] }).catch((e) => e);
+    const err = await llmChat({ providerId: 'p', messages: [{ role: 'user', content: 'x' }], maxTokens: 100 }).catch((e) => e);
     expect(err).toBeInstanceOf(LlmTimeoutError);
     expect(err).toBeInstanceOf(LlmError);
     const sent = JSON.parse(String((fetchMock.mock.calls[0] as unknown as [string, { body: string }])[1].body));
     expect(sent.timeout_ms).toBe(120_000);
     vi.stubGlobal('fetch', vi.fn(async () => ({ ok: false, status: 502, headers: new Headers(), json: async () => ({ error: { code: 'UPSTREAM_ERROR' } }) })));
-    const other = await llmChat({ providerId: 'p', messages: [{ role: 'user', content: 'x' }] }).catch((e) => e);
+    const other = await llmChat({ providerId: 'p', messages: [{ role: 'user', content: 'x' }], maxTokens: 100 }).catch((e) => e);
     expect(other).toBeInstanceOf(LlmError);
     expect(other).not.toBeInstanceOf(LlmTimeoutError);
   });

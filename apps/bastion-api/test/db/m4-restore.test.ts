@@ -222,7 +222,7 @@ describe.skipIf(!DATABASE_URL)('M4 restore detection (live database)', () => {
     });
     const listed = await evidence.listRestores(booted, viewer(s));
     expect(listed.data).toEqual([]);
-    expect(listed.bucket_only.map((b) => b.id)).toEqual([ident.opened]);
+    expect(listed.bucket_only.map((b) => (b as typeof b & { id?: unknown }).id)).toEqual([ident.opened]);
     expect(listed.bucket_only[0]!.summary).toBe('History lost by restore, epoch 1 seq 2-2');
   });
 

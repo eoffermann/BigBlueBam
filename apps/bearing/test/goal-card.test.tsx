@@ -10,7 +10,7 @@ function makeGoal(overrides: Partial<BearingGoal> = {}): BearingGoal {
     description: null,
     scope: 'organization',
     status: 'on_track',
-    progress: 65,
+    progress: '65',
     expected_progress: 60,
     owner: {
       id: 'user-1',
@@ -20,13 +20,16 @@ function makeGoal(overrides: Partial<BearingGoal> = {}): BearingGoal {
     owner_id: 'user-1',
     period_id: 'period-1',
     period_name: 'Q2 2025',
-    parent_goal_id: null,
+    organization_id: 'org-1',
+    status_override: false,
     project_id: null,
     project_name: null,
-    team_id: null,
     team_name: null,
+    icon: null,
+    color: null,
     key_result_count: 3,
     watcher_count: 2,
+    created_by: 'user-1',
     created_at: '2025-04-01T00:00:00Z',
     updated_at: '2025-04-05T00:00:00Z',
     ...overrides,
@@ -45,7 +48,7 @@ describe('GoalCard', () => {
   });
 
   it('shows progress bar with correct value', () => {
-    render(<GoalCard goal={makeGoal({ progress: 65 })} onNavigate={vi.fn()} />);
+    render(<GoalCard goal={makeGoal({ progress: '65' })} onNavigate={vi.fn()} />);
     expect(screen.getByText('65%')).toBeInTheDocument();
   });
 

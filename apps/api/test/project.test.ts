@@ -130,7 +130,7 @@ describe('Project Service', () => {
 
       // Verify the transaction callback was invoked, and tx.insert was called 4 times:
       // 1. project, 2. membership, 3. task states, 4. phases
-      const txCallback = mockTransaction.mock.calls[0][0];
+      const txCallback = mockTransaction.mock.calls[0]![0];
       const txInsert = vi.fn();
       const insertReturning = vi.fn()
         .mockResolvedValueOnce([fakeProject])
@@ -157,7 +157,7 @@ describe('Project Service', () => {
         // membership
         insertReturning.mockResolvedValueOnce([{}]);
         // states: verify 5 states are created
-        insertReturning.mockImplementationOnce((rows: unknown) => {
+        insertReturning.mockImplementationOnce(() => {
           // This is the states insert - we capture what was passed to values()
           return Promise.resolve(Array.from({ length: 5 }, (_, i) => ({
             id: `state-${i}`,
@@ -179,7 +179,7 @@ describe('Project Service', () => {
       }, 'user-1');
 
       // Get the tx.insert mock and check the third call (states)
-      const txCb = mockDb.transaction.mock.calls[0][0];
+      const txCb = mockDb.transaction.mock.calls[0]![0];
       const txInsert = vi.fn();
       const statesCapture: unknown[] = [];
       const insertReturning = vi.fn();
@@ -260,7 +260,7 @@ describe('Project Service', () => {
       expect(result.id).toBe('proj-1');
 
       // Verify tx.insert was only called 2 times (project + membership), no states/phases
-      const txCb = mockDb.transaction.mock.calls[0][0];
+      const txCb = mockDb.transaction.mock.calls[0]![0];
       const txInsert = vi.fn();
       const insertReturning = vi.fn()
         .mockResolvedValueOnce([fakeProject])

@@ -29,7 +29,7 @@ describe('org-permissions helpers', () => {
 
     it('rejects string "false" for boolean fields (type coercion guard)', () => {
       const perms = getOrgPermissions({
-        // @ts-expect-error intentionally wrong type
+        // intentionally wrong type: permissions is untyped JSONB, so this compiles
         permissions: { members_can_create_projects: 'false' },
       });
       expect(perms.members_can_create_projects).toBe(true); // default preserved

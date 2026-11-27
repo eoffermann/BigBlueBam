@@ -38,7 +38,7 @@ describe('POST /org/smtp-settings/test egress', () => {
     delete process.env.EGRESS_ALLOW_PRIVATE_HOSTS;
     app = Fastify({ logger: false });
     app.decorate('requireCan', () => async () => {});
-    app.decorate('redis', {});
+    app.decorate('redis', {} as FastifyInstance['redis']);
     app.decorateRequest('user', null);
     app.addHook('preHandler', async (req) => {
       (req as unknown as { user: unknown }).user = { id: 'u1', org_id: 'org-1', role: 'admin', is_superuser: false };

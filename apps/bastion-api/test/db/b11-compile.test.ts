@@ -32,6 +32,14 @@ const redisDown: SliceLock = {
   },
 };
 
+type CompileAiModule = typeof import('../../src/services/compile-ai.service.js');
+/**
+ * A fresh compile-ai module instance per `?replica=` query string (each one is a separate
+ * "replica" with its own module state). The path stays a runtime string, so the type comes
+ * from the canonical module.
+ */
+const importReplica = async (path: string): Promise<CompileAiModule> => (await import(path)) as CompileAiModule;
+
 const controlKeyOf = (messages: Array<{ content: string }>) => /"control_key":"([^"]+)"/.exec(messages[1]!.content)?.[1] ?? '';
 const recorded = (key: string) => RECORDED.responses[key] ?? { content: '{"checks":[]}', finish_reason: 'stop' };
 
@@ -90,8 +98,8 @@ describe.skipIf(!DATABASE_URL)('batch 11: AI compile slices (live database)', ()
     };
 
     // Two module instances = two bastion-api processes (each has its own in-process slice map).
-    const replicaA = await import('../../src/services/compile-ai.service.js?replica=a');
-    const replicaB = await import('../../src/services/compile-ai.service.js?replica=b');
+    const replicaA = await importReplica('../../src/services/compile-ai.service.js?replica=a');
+    const replicaB = await importReplica('../../src/services/compile-ai.service.js?replica=b');
     const dA: CompileAiDeps = { engine, llm: llmA, permits: openPermits, sliceLock: redisDown, background: false, sliceCutoffMs: 60_000 };
     const dB: CompileAiDeps = { engine, llm: llmB, permits: openPermits, sliceLock: redisDown, background: false, sliceCutoffMs: 60_000 };
     const body = { organization_id: s.org, run_id: s.runId, claimant: 'worker:W' };
@@ -141,7 +149,7 @@ describe.skipIf(!DATABASE_URL)('batch 11: AI compile slices (live database)', ()
   it('an AI answer the database refuses is counted, released, and the control is retried with the library suggestions (#241)', async () => {
     const s = await setUp('slice-fail');
     const engine = makeDeps(sql, { clock: clock() });
-    const replica = await import('../../src/services/compile-ai.service.js?replica=d');
+    const replica = await importReplica('../../src/services/compile-ai.service.js?replica=d');
     const calls: string[] = [];
     const llm: LlmChat = async ({ messages }) => {
       const key = controlKeyOf(messages);
@@ -176,7 +184,7 @@ describe.skipIf(!DATABASE_URL)('batch 11: AI compile slices (live database)', ()
   it('a transient database error mid-control releases the run without downgrading the control or spending a resume (#295)', async () => {
     const s = await setUp('slice-transient');
     const engine = makeDeps(sql, { clock: clock() });
-    const replica = await import('../../src/services/compile-ai.service.js?replica=t295');
+    const replica = await importReplica('../../src/services/compile-ai.service.js?replica=t295');
     const calls: string[] = [];
     const llm: LlmChat = async ({ messages }) => {
       const key = controlKeyOf(messages);
@@ -219,7 +227,7 @@ describe.skipIf(!DATABASE_URL)('batch 11: AI compile slices (live database)', ()
   it('a control that can never be written parks the run as partial after MAX_RESUMES slices (#241)', async () => {
     const s = await setUp('slice-park');
     const engine = makeDeps(sql, { clock: clock() });
-    const replica = await import('../../src/services/compile-ai.service.js?replica=e');
+    const replica = await importReplica('../../src/services/compile-ai.service.js?replica=e');
     const calls: string[] = [];
     const llm: LlmChat = async ({ messages }) => {
       const key = controlKeyOf(messages);
@@ -253,7 +261,7 @@ describe.skipIf(!DATABASE_URL)('batch 11: AI compile slices (live database)', ()
   it('an AI call past its deadline is counted as timed out, apart from cut-offs and provider errors (#257)', async () => {
     const s = await setUp('timeout');
     const engine = makeDeps(sql, { clock: clock() });
-    const replica = await import('../../src/services/compile-ai.service.js?replica=f');
+    const replica = await importReplica('../../src/services/compile-ai.service.js?replica=f');
     const llm: LlmChat = async ({ messages }) => {
       const key = controlKeyOf(messages);
       if (key === 'keys.rotation') throw new LlmTimeoutError(60_000, 504);
@@ -272,7 +280,7 @@ describe.skipIf(!DATABASE_URL)('batch 11: AI compile slices (live database)', ()
   it('a slice that lost its fence writes nothing for the control it was on (#242)', async () => {
     const s = await setUp('lost');
     const engine = makeDeps(sql, { clock: clock() });
-    const replica = await import('../../src/services/compile-ai.service.js?replica=c');
+    const replica = await importReplica('../../src/services/compile-ai.service.js?replica=c');
     const llm: LlmChat = async ({ messages }) => {
       // Mid-call, another slice takes the row over (a new token, as a takeover would write).
       await sql`UPDATE bastion_compile_runs SET slice_token = gen_random_uuid() WHERE id = ${s.runId}`;

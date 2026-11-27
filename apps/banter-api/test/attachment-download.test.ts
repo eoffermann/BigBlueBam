@@ -104,7 +104,7 @@ async function buildApp() {
   const a = Fastify({ logger: false });
   a.decorate('requireCan', () => async () => undefined);
   a.decorateRequest('user', null);
-  a.setErrorHandler((err, _req, reply) => {
+  a.setErrorHandler((err: Error, _req, reply) => {
     if (err instanceof ZodError) return reply.status(400).send({ error: { code: 'VALIDATION_ERROR' } });
     return reply.status(500).send({ error: { code: 'INTERNAL', message: err.message } });
   });

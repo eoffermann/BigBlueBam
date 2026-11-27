@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { Readable } from 'node:stream';
-import type { ServerResponse } from 'node:http';
+import type { IncomingMessage, ServerResponse } from 'node:http';
 import pino from 'pino';
 import { handleToolsCall, type ToolsCallDeps } from '../src/routes/tools-call.js';
 
@@ -18,7 +18,7 @@ function makeReq(body: unknown, headers: Record<string, string>, remoteAddress =
   req.headers = headers;
   // The TCP peer: by default a compose-network caller (the worker's bolt-execute job).
   Object.defineProperty(req, 'socket', { value: { remoteAddress } });
-  return req;
+  return req as unknown as IncomingMessage;
 }
 
 function makeRes() {

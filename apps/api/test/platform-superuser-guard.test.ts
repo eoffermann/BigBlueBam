@@ -220,7 +220,7 @@ describe('SuperUser route files are guarded with requireCan as a no-op (prod pos
     await sys.register(systemSettingsRoutes);
     await sys.ready();
     try {
-      const privileged: Array<{ method: InjectOptions['method']; url: string; payload?: unknown }> = [
+      const privileged: Array<{ method: InjectOptions['method']; url: string; payload?: InjectOptions['payload'] }> = [
         { method: 'GET', url: '/system-settings' },
         { method: 'PUT', url: '/system-settings/smtp_host', payload: { value: 'attacker.example' } },
         { method: 'POST', url: '/system-settings/smtp/test', payload: {} },

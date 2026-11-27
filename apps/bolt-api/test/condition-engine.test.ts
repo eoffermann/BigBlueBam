@@ -28,7 +28,7 @@ describe('evaluateConditions — single operators', () => {
       { status: 'active' },
     );
     expect(result.passed).toBe(true);
-    expect(result.log[0].result).toBe(true);
+    expect(result.log[0]!.result).toBe(true);
   });
 
   it('equals: should fail when values differ', () => {
@@ -277,6 +277,6 @@ describe('evaluateConditions — edge cases', () => {
       { field: null },
     );
     expect(result.passed).toBe(false);
-    expect(result.log[0].actual).toBeNull();
+    expect(result.log[0]!.actual).toBeNull();
   });
 });

@@ -39,7 +39,7 @@ describe('Error Handler', () => {
     errorHandler(zodError as any, mockRequest as any, mockReply as any);
 
     expect(mockReply.status).toHaveBeenCalledWith(400);
-    const sent = mockReply.send.mock.calls[0][0];
+    const sent = mockReply.send.mock.calls[0]![0];
     expect(sent.error.code).toBe('VALIDATION_ERROR');
     expect(sent.error.message).toBe('Request validation failed');
     expect(sent.error.details).toHaveLength(2);
@@ -68,7 +68,7 @@ describe('Error Handler', () => {
     errorHandler(error as any, mockRequest as any, mockReply as any);
 
     expect(mockReply.status).toHaveBeenCalledWith(400);
-    const sent = mockReply.send.mock.calls[0][0];
+    const sent = mockReply.send.mock.calls[0]![0];
     expect(sent.error.code).toBe('VALIDATION_ERROR');
     expect(sent.error.details).toHaveLength(2);
     expect(sent.error.details[0]).toEqual({
@@ -88,7 +88,7 @@ describe('Error Handler', () => {
     errorHandler(error as any, mockRequest as any, mockReply as any);
 
     expect(mockReply.status).toHaveBeenCalledWith(429);
-    const sent = mockReply.send.mock.calls[0][0];
+    const sent = mockReply.send.mock.calls[0]![0];
     expect(sent.error.code).toBe('RATE_LIMIT_EXCEEDED');
     expect(sent.error.message).toBe('Too many requests, please try again later');
     expect(sent.error.request_id).toBe('req-rate');
@@ -105,7 +105,7 @@ describe('Error Handler', () => {
     errorHandler(error as any, mockRequest as any, mockReply as any);
 
     expect(mockReply.status).toHaveBeenCalledWith(403);
-    const sent = mockReply.send.mock.calls[0][0];
+    const sent = mockReply.send.mock.calls[0]![0];
     expect(sent.error.code).toBe('FORBIDDEN');
     expect(sent.error.message).toBe('Not authorized');
     expect(sent.error.request_id).toBe('req-4xx');
@@ -121,7 +121,7 @@ describe('Error Handler', () => {
     errorHandler(error as any, mockRequest as any, mockReply as any);
 
     expect(mockReply.status).toHaveBeenCalledWith(400);
-    const sent = mockReply.send.mock.calls[0][0];
+    const sent = mockReply.send.mock.calls[0]![0];
     expect(sent.error.code).toBe('CLIENT_ERROR');
   });
 
@@ -134,7 +134,7 @@ describe('Error Handler', () => {
     errorHandler(error as any, mockRequest as any, mockReply as any);
 
     expect(mockReply.status).toHaveBeenCalledWith(500);
-    const sent = mockReply.send.mock.calls[0][0];
+    const sent = mockReply.send.mock.calls[0]![0];
     expect(sent.error.code).toBe('INTERNAL_SERVER_ERROR');
     expect(sent.error.message).toBe('An unexpected error occurred');
     // Must NOT contain the original error message
@@ -148,7 +148,7 @@ describe('Error Handler', () => {
     const error = new Error('cause never leaks') as any;
     errorHandler(error as any, mockRequest as any, mockReply as any);
 
-    const sent = mockReply.send.mock.calls[0][0];
+    const sent = mockReply.send.mock.calls[0]![0];
     expect(sent.error.internal_error_id).toMatch(
       /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
     );
@@ -157,7 +157,7 @@ describe('Error Handler', () => {
     // original error so an operator can grep for it.
     expect(mockRequest.log.error).toHaveBeenCalledTimes(1);
     const logCall = (mockRequest.log.error as ReturnType<typeof vi.fn>).mock.calls[0];
-    const logFields = logCall[0];
+    const logFields = logCall![0];
     expect(logFields.internal_error_id).toBe(sent.error.internal_error_id);
     expect(logFields.request_id).toBe('req-internal-id');
     expect(logFields.err).toBe(error);
@@ -169,7 +169,7 @@ describe('Error Handler', () => {
       const reply = { status: vi.fn().mockReturnThis(), send: vi.fn().mockReturnThis() };
       const request = { id: 'r' + i, log: { error: vi.fn() } };
       errorHandler(new Error('boom') as any, request as any, reply as any);
-      const sent = (reply.send as ReturnType<typeof vi.fn>).mock.calls[0][0];
+      const sent = (reply.send as ReturnType<typeof vi.fn>).mock.calls[0]![0];
       ids.add(sent.error.internal_error_id);
     }
     expect(ids.size).toBe(5);
@@ -177,7 +177,6 @@ describe('Error Handler', () => {
 
   it('always includes request_id in response', () => {
     const requestId = 'unique-req-id-abc';
-    const { mockReply, mockRequest } = createMocks(requestId);
 
     // Test with several error types
     const errors = [
@@ -193,7 +192,7 @@ describe('Error Handler', () => {
 
       errorHandler(error as any, request as any, reply as any);
 
-      const sent = reply.send.mock.calls[0][0];
+      const sent = reply.send.mock.calls[0]![0];
       expect(sent.error.request_id).toBe(requestId);
     }
   });

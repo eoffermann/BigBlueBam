@@ -112,8 +112,9 @@ describe.skipIf(skipReason !== null)('bursar_vendors RLS org isolation', () => {
    * statement runs through this, including the organizations/users fixtures, because under a
    * genuinely NOBYPASSRLS role those tables carry their own org-isolation policies.
    */
-  async function inOrgScope<T>(orgId: string, fn: (tx: postgres.TransactionSql) => Promise<T>) {
-    return sql.begin(async (tx) => {
+  async function inOrgScope<T>(orgId: string, fn: (tx: postgres.Sql) => Promise<T>) {
+    return sql.begin(async (raw) => {
+      const tx = raw as unknown as postgres.Sql;
       await tx`SELECT set_config('app.current_org_id', ${orgId}, true)`;
       return fn(tx);
     }) as Promise<T>;
@@ -175,7 +176,7 @@ describe.skipIf(skipReason !== null)('bursar_vendors RLS org isolation', () => {
     });
 
     expect(rows.map((r) => r.organization_id)).toEqual([ORG_A]);
-    expect(rows[0].display_name).toBe('RLS Vendor A');
+    expect(rows[0]!.display_name).toBe('RLS Vendor A');
   });
 
   it('never leaks rows when the org scope is not bound', async () => {

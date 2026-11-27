@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import postgres from 'postgres';
 import { drizzle } from 'drizzle-orm/postgres-js';
+import type { BastionDb } from '../src/services/bastion-internal.service.js';
 
 // DB-backed tests for the Bastion internal routes' service (APP_DESIGN_bastion.md 2.5, 2.8, 8.4,
 // 11.2): "drift, close the task, drift again: the task is open with a 'Drifted again' comment",
@@ -18,7 +19,8 @@ const run = DB_URL && !DB_URL.includes('test:test@localhost:5432/test') ? descri
 
 run('bastion internal service (real Postgres)', () => {
   const sql = postgres(DB_URL ?? 'postgres://x@localhost/x', { max: 2, onnotice: () => {} });
-  const database = drizzle(sql);
+  // Schema-less drizzle handle: the service only uses the query builder, never db.query.*.
+  const database = drizzle(sql) as unknown as BastionDb;
   const tag = `${Date.now()}`;
   let org = '';
   let other = '';

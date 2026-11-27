@@ -15,7 +15,7 @@ describe('mcp-server docker-compose env coverage', () => {
   function extractApiUrlKeys(source: string): string[] {
     const keys = new Set<string>();
     for (const match of source.matchAll(/^\s*([A-Z][A-Z0-9_]*_API_URL)\s*:/gm)) {
-      keys.add(match[1]);
+      keys.add(match[1]!);
     }
     return [...keys];
   }
@@ -28,10 +28,10 @@ describe('mcp-server docker-compose env coverage', () => {
     if (envStart === -1) throw new Error('mcp-server.environment block not found');
     const keys = new Set<string>();
     for (let i = envStart + 1; i < lines.length; i++) {
-      const line = lines[i];
+      const line = lines[i]!;
       if (/^\s{0,4}\S/.test(line) && !/^\s{6}\S/.test(line)) break;
       const match = line.match(/^\s{6}([A-Z][A-Z0-9_]*)\s*:/);
-      if (match) keys.add(match[1]);
+      if (match) keys.add(match[1]!);
     }
     return keys;
   }

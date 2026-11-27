@@ -91,7 +91,7 @@ describe('Bam task.overdue sweep job', () => {
     expect(publishBoltEvent).toHaveBeenCalledTimes(1);
 
     const [eventType, source, payload, orgId, actorId, actorType] = vi.mocked(publishBoltEvent).mock
-      .calls[0];
+      .calls[0]!;
     expect(eventType).toBe('task.overdue');
     expect(source).toBe('bam');
     expect(orgId).toBe('org-a');
@@ -143,7 +143,7 @@ describe('Bam task.overdue sweep job', () => {
     await processBamTaskOverdueSweepJob(createMockJob(), mockLogger);
 
     expect(publishBoltEvent).toHaveBeenCalledTimes(1);
-    const p = vi.mocked(publishBoltEvent).mock.calls[0][2] as any;
+    const p = vi.mocked(publishBoltEvent).mock.calls[0]![2] as any;
     expect(p.trigger_at).toBe(new Date('2026-07-10').toISOString());
   });
 

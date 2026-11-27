@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import postgres from 'postgres';
+import type { Tx } from '../../src/engine/context.js';
 
 /**
  * The GitHub change-evidence chain, checked where it is consumed (spec 3.1, 8.4): rows shaped
@@ -35,7 +36,7 @@ type ProbeResult = {
   population_unlisted: string[];
 };
 
-async function seed(tx: postgres.TransactionSql, subscribed: string[] | null): Promise<void> {
+async function seed(tx: Tx, subscribed: string[] | null): Promise<void> {
   await tx`INSERT INTO organizations (id, name, slug)
            VALUES (${ORG}, 'Bastion Change Probes', 'bastion-change-probes') ON CONFLICT (id) DO NOTHING`;
   await tx`INSERT INTO projects (id, org_id, name, slug) VALUES (${PROJECT}, ${ORG}, 'Radio', 'radio')`;
@@ -70,7 +71,8 @@ async function run(
 ): Promise<ProbeResult> {
   let out: ProbeResult | null = null;
   try {
-    await sql.begin(async (tx) => {
+    await sql.begin(async (raw) => {
+      const tx = raw as unknown as Tx;
       await seed(tx, subscribed);
       await tx`SELECT set_config('app.current_org_id', ${ORG}, true)`;
       // $2 is bound as text and cast, so postgres.js does not JSON-encode the string a second

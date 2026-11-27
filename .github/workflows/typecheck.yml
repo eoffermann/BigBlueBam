@@ -45,3 +45,11 @@ jobs:
         # Step-level too, so a hang is attributed to this step in the UI (#235).
         timeout-minutes: 15
         run: pnpm -r --parallel --if-present typecheck
+
+      - name: Typecheck test code
+        # Package tsconfigs exclude test/ so builds ship only src; this checks src + test for every
+        # package whose test/ directory its tsconfig leaves out, auto-discovered (#337).
+        timeout-minutes: 15
+        run: |
+          node scripts/typecheck-tests.coverage.test.mjs
+          pnpm typecheck:tests

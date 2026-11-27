@@ -35,7 +35,7 @@ function unguarded(): string[] {
       const asyncAt = src.indexOf('async', m.index);
       const opts = src.slice(m.index, asyncAt);
       if (/requireProject(Access|Role)\(/.test(opts)) continue;
-      const key = `${file} ${m[1].toUpperCase()} ${m[2]}`;
+      const key = `${file} ${m[1]!.toUpperCase()} ${m[2]}`;
       if (!(key in EXCEPTIONS)) out.push(key);
     }
   }

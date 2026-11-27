@@ -12,6 +12,7 @@
     "dev": "turbo run dev",
     "lint": "turbo run lint",
     "typecheck": "turbo run typecheck",
+    "typecheck:tests": "node scripts/typecheck-tests.mjs",
     "test": "turbo run test",
     "test:unit": "turbo run test:unit",
     "test:e2e": "pnpm --filter @bigbluebam/e2e test:playwright",

@@ -149,8 +149,8 @@ describe('MCP response format', () => {
     };
 
     expect(response.content).toHaveLength(1);
-    expect(response.content[0].type).toBe('text');
-    expect(JSON.parse(response.content[0].text)).toEqual(data);
+    expect(response.content[0]!.type).toBe('text');
+    expect(JSON.parse(response.content[0]!.text)).toEqual(data);
   });
 
   it('should produce correct error format', () => {
@@ -160,7 +160,7 @@ describe('MCP response format', () => {
     };
 
     expect(response.isError).toBe(true);
-    expect(response.content[0].text).toContain('Error');
+    expect(response.content[0]!.text).toContain('Error');
   });
 });
 

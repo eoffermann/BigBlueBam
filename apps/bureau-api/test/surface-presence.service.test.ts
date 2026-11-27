@@ -27,7 +27,7 @@ function makeRedis(
   return {
     async smembers(key: string): Promise<string[]> {
       // key shape: bureau:user:{userId}:sessions
-      const userId = key.split(':')[2];
+      const userId = key.split(':')[2]!;
       return userSessions[userId] ?? [];
     },
     pipeline() {

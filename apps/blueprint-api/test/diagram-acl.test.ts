@@ -162,7 +162,7 @@ beforeAll(async () => {
   // The org-wide grant is not what is under test here: let every request
   // through it, so only the per-diagram ACL decides.
   app.decorate('requireCan', () => async () => {});
-  app.decorate('redis', { publish: vi.fn(async () => 1) });
+  app.decorate('redis', { publish: vi.fn(async () => 1) } as unknown as FastifyInstance['redis']);
   const mod = await import('../src/routes/diagrams.routes.js');
   await app.register(mod.default, { prefix: '/v1' });
   const cross = await import('../src/routes/cross-product.routes.js');

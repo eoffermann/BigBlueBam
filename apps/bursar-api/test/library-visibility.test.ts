@@ -49,7 +49,8 @@ describe.skipIf(!DATABASE_URL)('bursar_scope_library globals', () => {
     expect(g).toBeTruthy();
     let raised: unknown = null;
     try {
-      await sql.begin(async (tx) => {
+      await sql.begin(async (raw) => {
+        const tx = raw as unknown as postgres.Sql;
         await tx`SELECT set_config('app.current_org_id', ${ORG}, true)`;
         await tx`UPDATE bursar_scope_library SET title = title || ' (tampered)' WHERE id = ${g!.id}`;
       });
@@ -65,7 +66,8 @@ describe.skipIf(!DATABASE_URL)('bursar_scope_library globals', () => {
       SELECT id FROM bursar_scope_library WHERE is_global LIMIT 1`;
     let raised: unknown = null;
     try {
-      await sql.begin(async (tx) => {
+      await sql.begin(async (raw) => {
+        const tx = raw as unknown as postgres.Sql;
         await tx`SELECT set_config('app.current_org_id', ${ORG}, true)`;
         await tx`DELETE FROM bursar_scope_library WHERE id = ${g!.id}`;
       });

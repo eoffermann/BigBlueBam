@@ -67,7 +67,7 @@ vi.mock('../src/plugins/auth.js', () => ({
 // Stub publishBoltEvent so tests can verify it's called with bare event names
 // and source 'platform'. The real impl is fire-and-forget so these call sites
 // never affect observable test state except through the spy.
-const publishBoltEventSpy = vi.hoisted(() => vi.fn(async () => undefined));
+const publishBoltEventSpy = vi.hoisted(() => vi.fn(async (..._args: unknown[]) => undefined));
 vi.mock('../src/lib/bolt-events.js', () => ({
   publishBoltEvent: publishBoltEventSpy,
 }));
@@ -85,7 +85,6 @@ interface TestUser {
 }
 
 const ORG_A = '11111111-1111-1111-1111-111111111111';
-const ORG_B = '22222222-2222-2222-2222-222222222222';
 
 const HUMAN_USER: TestUser = {
   id: '88888888-8888-8888-8888-888888888888',

@@ -6,7 +6,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 // (2) db.execute(sql`INSERT ...`) to insert the row. We mock both.
 
 const { execute, select, selectChain } = vi.hoisted(() => {
-  const execute = vi.fn(async () => undefined);
+  const execute = vi.fn(async (_query: unknown) => undefined);
   const selectChain = {
     from: vi.fn().mockReturnThis(),
     where: vi.fn().mockReturnThis(),

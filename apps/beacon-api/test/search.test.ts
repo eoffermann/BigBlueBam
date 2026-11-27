@@ -403,6 +403,7 @@ describe('saved-query.service', () => {
       const mockQuery = {
         id: 'q1',
         name: 'My Query',
+        organization_id: orgId,
         owner_id: userId,
         scope: 'Private',
       };
@@ -414,7 +415,7 @@ describe('saved-query.service', () => {
       };
       (db.select as any).mockReturnValue(mockChain);
 
-      const result = await getQuery('q1', userId);
+      const result = await getQuery('q1', userId, orgId);
       expect(result).toEqual(mockQuery);
     });
 
@@ -422,6 +423,7 @@ describe('saved-query.service', () => {
       const mockQuery = {
         id: 'q1',
         name: 'Their Query',
+        organization_id: orgId,
         owner_id: 'other-user',
         scope: 'Private',
       };
@@ -433,7 +435,7 @@ describe('saved-query.service', () => {
       };
       (db.select as any).mockReturnValue(mockChain);
 
-      const result = await getQuery('q1', userId);
+      const result = await getQuery('q1', userId, orgId);
       expect(result).toBeNull();
     });
 
@@ -445,7 +447,7 @@ describe('saved-query.service', () => {
       };
       (db.select as any).mockReturnValue(mockChain);
 
-      const result = await getQuery('nonexistent', userId);
+      const result = await getQuery('nonexistent', userId, orgId);
       expect(result).toBeNull();
     });
 
@@ -453,6 +455,7 @@ describe('saved-query.service', () => {
       const mockQuery = {
         id: 'q1',
         name: 'Org Query',
+        organization_id: orgId,
         owner_id: 'other-user',
         scope: 'Organization',
       };
@@ -464,14 +467,14 @@ describe('saved-query.service', () => {
       };
       (db.select as any).mockReturnValue(mockChain);
 
-      const result = await getQuery('q1', userId);
+      const result = await getQuery('q1', userId, orgId);
       expect(result).toEqual(mockQuery);
     });
   });
 
   describe('deleteQuery', () => {
     it('deletes a query owned by the user', async () => {
-      const mockQuery = { id: 'q1', owner_id: userId };
+      const mockQuery = { id: 'q1', organization_id: orgId, owner_id: userId };
 
       const selectChain = {
         from: vi.fn().mockReturnThis(),
@@ -485,12 +488,12 @@ describe('saved-query.service', () => {
       (db.select as any).mockReturnValue(selectChain);
       (db.delete as any).mockReturnValue(deleteChain);
 
-      const result = await deleteQuery('q1', userId);
+      const result = await deleteQuery('q1', userId, orgId);
       expect(result).toEqual({ deleted: true });
     });
 
     it('throws FORBIDDEN when non-owner tries to delete', async () => {
-      const mockQuery = { id: 'q1', owner_id: 'other-user' };
+      const mockQuery = { id: 'q1', organization_id: orgId, owner_id: 'other-user' };
 
       const selectChain = {
         from: vi.fn().mockReturnThis(),
@@ -499,7 +502,7 @@ describe('saved-query.service', () => {
       };
       (db.select as any).mockReturnValue(selectChain);
 
-      await expect(deleteQuery('q1', userId)).rejects.toThrow('Only the query owner can delete it');
+      await expect(deleteQuery('q1', userId, orgId)).rejects.toThrow('Only the query owner can delete it');
     });
 
     it('throws NOT_FOUND when query does not exist', async () => {
@@ -510,7 +513,7 @@ describe('saved-query.service', () => {
       };
       (db.select as any).mockReturnValue(selectChain);
 
-      await expect(deleteQuery('nonexistent', userId)).rejects.toThrow('Saved query not found');
+      await expect(deleteQuery('nonexistent', userId, orgId)).rejects.toThrow('Saved query not found');
     });
   });
 });

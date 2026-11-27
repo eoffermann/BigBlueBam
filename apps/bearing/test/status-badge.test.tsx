@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { StatusBadge } from '../src/components/goal/StatusBadge';
+import type { GoalStatus } from '../src/hooks/useGoals';
 
 describe('StatusBadge', () => {
   it('renders "On Track" with green styling for on_track', () => {
@@ -36,7 +37,8 @@ describe('StatusBadge', () => {
   });
 
   it('renders "Cancelled" with gray styling for cancelled', () => {
-    render(<StatusBadge status="cancelled" />);
+    // 'cancelled' is not a GoalStatus: this exercises the unknown-status fallback.
+    render(<StatusBadge status={'cancelled' as string as GoalStatus} />);
     expect(screen.getByText('Cancelled')).toBeInTheDocument();
     const badge = screen.getByText('Cancelled').closest('span');
     expect(badge?.className).toContain('bg-zinc-100');

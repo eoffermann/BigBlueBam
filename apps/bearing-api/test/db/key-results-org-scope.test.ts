@@ -42,9 +42,9 @@ describe.skipIf(!DATABASE_URL)('bearing key results are org-scoped (#246)', () =
     await sql`INSERT INTO organizations (id, name, slug) VALUES
               (${ORG_A}, 'KR Org A', ${`kr-a-${run}`}),
               (${ORG_B}, 'KR Org B', ${`kr-b-${run}`})`;
-    const [{ id: userB }] = await sql`INSERT INTO users (org_id, email, display_name, password_hash)
+    const [{ id: userB }] = await sql<[{ id: string }]>`INSERT INTO users (org_id, email, display_name, password_hash)
               VALUES (${ORG_B}, ${`krb-${run}@kr.test`}, 'B', 'x') RETURNING id`;
-    const [{ id: periodB }] = await sql`INSERT INTO bearing_periods
+    const [{ id: periodB }] = await sql<[{ id: string }]>`INSERT INTO bearing_periods
               (organization_id, name, period_type, starts_at, ends_at, created_by)
               VALUES (${ORG_B}, 'Q4', 'quarter', '2026-10-01', '2026-12-31', ${userB}) RETURNING id`;
     [{ id: goalB }] = await sql`INSERT INTO bearing_goals (organization_id, period_id, title, owner_id, created_by)

@@ -73,8 +73,6 @@ function chainable(result: unknown[]) {
 // ---------------------------------------------------------------------------
 
 const ORG_ID = '00000000-0000-0000-0000-000000000001';
-const ORG_ID_2 = '00000000-0000-0000-0000-000000000099';
-const USER_ID = '00000000-0000-0000-0000-000000000003';
 const BOARD_ID = '00000000-0000-0000-0000-000000000010';
 
 function makeElement(overrides: Record<string, unknown> = {}) {

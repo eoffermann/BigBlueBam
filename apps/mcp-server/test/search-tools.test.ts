@@ -55,6 +55,7 @@ const URLS = {
   beaconApiUrl: 'http://beacon.test',
   banterApiUrl: 'http://banter.test',
   boardApiUrl: 'http://board.test',
+  basisApiUrl: 'http://basis.test',
 };
 
 /**

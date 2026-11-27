@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // We need to test the actual ApiClient class, so we import it directly.
 // The module creates a singleton `api`, and also exports ApiError.
@@ -88,7 +88,7 @@ describe('ApiClient', () => {
 
       await api.get('/tasks', { status: 'active', limit: 10 });
 
-      const calledUrl = mockFetch.mock.calls[0][0] as string;
+      const calledUrl = mockFetch.mock.calls[0]![0] as string;
       const url = new URL(calledUrl);
       expect(url.searchParams.get('status')).toBe('active');
       expect(url.searchParams.get('limit')).toBe('10');
@@ -103,7 +103,7 @@ describe('ApiClient', () => {
 
       await api.get('/tasks', { status: 'active', sprint_id: null, assignee: undefined });
 
-      const calledUrl = mockFetch.mock.calls[0][0] as string;
+      const calledUrl = mockFetch.mock.calls[0]![0] as string;
       const url = new URL(calledUrl);
       expect(url.searchParams.get('status')).toBe('active');
       expect(url.searchParams.has('sprint_id')).toBe(false);

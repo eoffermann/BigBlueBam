@@ -120,7 +120,7 @@ export function splitBlanket() {
 export function legitimateSubprice() {
   const nodes = tree(6);
   const prices = [320000, 240000, 180000, 90000, 60000, 150000];
-  const lines = TITLES.slice(0, 6).map(([id, title], i) =>
+  const lines = TITLES.slice(0, 6).map(([, title], i) =>
     line(`L${i}`, `${title} $${(prices[i]! / 100).toLocaleString()}`, { extended_minor: prices[i]! }),
   );
   const answers = new Map<string, AdjudicationAnswer>();

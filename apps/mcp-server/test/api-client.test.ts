@@ -56,7 +56,7 @@ describe('ApiClient', () => {
 
       await client.get('/tasks');
 
-      const callArgs = mockFetch.mock.calls[0][1];
+      const callArgs = mockFetch.mock.calls[0]![1];
       expect(callArgs.body).toBeUndefined();
     });
   });
@@ -168,7 +168,7 @@ describe('ApiClient', () => {
 
       await client.delete('/tasks/task-1');
 
-      const callArgs = mockFetch.mock.calls[0][1];
+      const callArgs = mockFetch.mock.calls[0]![1];
       expect(callArgs.method).toBe('DELETE');
       expect(callArgs.body).toBeUndefined();
     });

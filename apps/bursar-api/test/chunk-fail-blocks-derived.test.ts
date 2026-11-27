@@ -65,12 +65,12 @@ class MemStore implements DerivationStore {
     return { ...this.run, failed_chunks: [...this.run.failed_chunks] };
   }
 
-  async insertNode(orgId: string, runId: string, claimant: string, node: ScopeNodeToInsert) {
+  async insertNode(_orgId: string, _runId: string, claimant: string, node: ScopeNodeToInsert) {
     if (this.run.claimed_by !== claimant || this.run.status !== 'running') return;
     this.nodes.set(node.dedup_key, node);
   }
 
-  async checkpoint(orgId: string, runId: string, claimant: string, cp: DerivationCheckpoint) {
+  async checkpoint(_orgId: string, _runId: string, claimant: string, cp: DerivationCheckpoint) {
     if (this.run.claimed_by !== claimant || this.run.status !== 'running') return false;
     this.run.last_processed_chunk = cp.last_processed_chunk;
     this.run.nodes_extracted = cp.nodes_extracted;
@@ -81,7 +81,7 @@ class MemStore implements DerivationStore {
     return true;
   }
 
-  async finalize(orgId: string, runId: string, requestId: string, claimant: string, outcome: DerivationFinalize) {
+  async finalize(_orgId: string, _runId: string, _requestId: string, claimant: string, outcome: DerivationFinalize) {
     if (this.run.claimed_by !== claimant || this.run.status !== 'running') return false;
     this.run.status = outcome.runStatus;
     this.run.claimed_by = null;
@@ -90,7 +90,7 @@ class MemStore implements DerivationStore {
     return true;
   }
 
-  async release(orgId: string, runId: string, claimant: string) {
+  async release(_orgId: string, _runId: string, claimant: string) {
     if (this.run.claimed_by === claimant) this.run.claimed_by = null;
   }
 }

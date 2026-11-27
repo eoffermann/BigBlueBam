@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeAll, afterAll, beforeEach } from 'vitest';
-import Fastify, { type FastifyInstance } from 'fastify';
+import Fastify, { type FastifyInstance, type FastifyRequest } from 'fastify';
 import { PgDialect } from 'drizzle-orm/pg-core';
 import type { SQL } from 'drizzle-orm';
 import { readFileSync } from 'node:fs';
@@ -59,8 +59,8 @@ describe('helpdesk requireAdminAuth', () => {
   beforeAll(async () => {
     app = Fastify({ logger: false });
     // Stand-ins for @fastify/cookie and the resolve-tenant plugin.
-    app.decorateRequest('cookies', null);
-    app.decorateRequest('tenantContext', null);
+    app.decorateRequest('cookies', null as unknown as FastifyRequest['cookies']);
+    app.decorateRequest('tenantContext', null as unknown as FastifyRequest['tenantContext']);
     app.addHook('onRequest', async (req) => {
       const cookie = req.headers.cookie?.match(/session=([^;]+)/)?.[1];
       (req as unknown as { cookies: Record<string, string> }).cookies = cookie ? { session: cookie } : {};

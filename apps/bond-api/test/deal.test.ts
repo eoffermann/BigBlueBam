@@ -125,28 +125,6 @@ function makeStage(overrides: Record<string, unknown> = {}) {
 }
 
 // ---------------------------------------------------------------------------
-// Transaction mock helper
-// ---------------------------------------------------------------------------
-
-function setupTransaction() {
-  const txInsert = vi.fn();
-  const txUpdate = vi.fn();
-  const txDelete = vi.fn();
-  const txSelect = vi.fn();
-
-  const tx = {
-    insert: txInsert,
-    update: txUpdate,
-    delete: txDelete,
-    select: txSelect,
-  };
-
-  mockTransaction.mockImplementation(async (fn: Function) => fn(tx));
-
-  return { tx, txInsert, txUpdate, txDelete, txSelect };
-}
-
-// ---------------------------------------------------------------------------
 // listDeals
 // ---------------------------------------------------------------------------
 

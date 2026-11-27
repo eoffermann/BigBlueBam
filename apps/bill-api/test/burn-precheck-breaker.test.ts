@@ -219,7 +219,7 @@ describe('burn breaker: half-open probe election', () => {
     for (let i = 0; i < 5; i++) await m.recordBreakerFailure(deps, ORG);
 
     await m.evaluateBreaker(deps, ORG);
-    expect(redis.calls.some((c) => c === `set ${m.BREAKER_PROBE_KEY(ORG)} NX`)).toBe(true);
+    expect(redis.calls.some((c: string) => c === `set ${m.BREAKER_PROBE_KEY(ORG)} NX`)).toBe(true);
     expect(redis.store.has(m.BREAKER_PROBE_KEY(ORG))).toBe(true);
   });
 });

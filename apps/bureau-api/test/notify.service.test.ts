@@ -92,7 +92,7 @@ describe('enqueueBureauNotification', () => {
   });
 
   it('is fire-and-forget: swallows enqueue errors and never throws', async () => {
-    mockQueueAdd['notifications'].mockRejectedValueOnce(new Error('redis down'));
+    mockQueueAdd['notifications']!.mockRejectedValueOnce(new Error('redis down'));
     const warn = vi.fn();
 
     await expect(

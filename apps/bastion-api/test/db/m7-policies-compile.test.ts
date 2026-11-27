@@ -193,7 +193,7 @@ describe.skipIf(!DATABASE_URL)('M7 policies and version-pinned attestation (live
     const s = await setUp('slug');
     const d = deps();
     const owner = viewer(s.org, s.owner);
-    const [{ slug }] = (await sql`SELECT slug FROM beacon_entries WHERE id = ${s.entry}`) as unknown as Array<{ slug: string }>;
+    const [{ slug }] = (await sql`SELECT slug FROM beacon_entries WHERE id = ${s.entry}`) as unknown as [{ slug: string }];
     await expect(createPolicy(d, owner, { beacon_slug: 'no-such-article', audience: { kind: 'all' }, cadence_days: 365 })).rejects.toMatchObject({
       name: 'NotFoundError',
     });

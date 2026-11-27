@@ -179,6 +179,7 @@ describe('MCP Integration Tests', () => {
       beaconApiUrl: 'http://localhost:4004',
       banterApiUrl: 'http://localhost:4002',
       boardApiUrl: 'http://localhost:4008',
+      basisApiUrl: 'http://localhost:4019',
     });
     registerResolveTools(mock.server, api, {
       bondApiUrl: 'http://localhost:4009',

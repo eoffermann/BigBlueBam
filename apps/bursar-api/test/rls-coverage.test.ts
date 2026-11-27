@@ -65,7 +65,7 @@ describe.skipIf(!DATABASE_URL)('bursar_* RLS policy coverage', () => {
       WHERE schemaname = 'public' AND tablename = 'bursar_scope_library'`;
 
     expect(rows.length).toBe(1);
-    const pol = rows[0];
+    const pol = rows[0]!;
     // USING admits global rows.
     expect(pol.qual).toContain('is_global');
     // WITH CHECK forbids an org caller from writing an org-null (global) row.

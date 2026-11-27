@@ -124,8 +124,9 @@ describe.skipIf(skipReason !== null)('burn_cost_rates RLS org isolation', () => 
    * FOR ALL with a USING clause and no separate WITH CHECK, so Postgres reuses USING as
    * the insert check.
    */
-  async function inOrgScope<T>(orgId: string, fn: (tx: postgres.TransactionSql) => Promise<T>) {
-    return sql.begin(async (tx) => {
+  async function inOrgScope<T>(orgId: string, fn: (tx: postgres.Sql) => Promise<T>) {
+    return sql.begin(async (raw) => {
+      const tx = raw as unknown as postgres.Sql;
       await tx`SELECT set_config('app.current_org_id', ${orgId}, true)`;
       return fn(tx);
     }) as Promise<T>;
@@ -187,7 +188,7 @@ describe.skipIf(skipReason !== null)('burn_cost_rates RLS org isolation', () => 
     });
 
     expect(rows.map((r) => r.organization_id)).toEqual([ORG_A]);
-    expect(Number(rows[0].cost_amount)).toBe(19500);
+    expect(Number(rows[0]!.cost_amount)).toBe(19500);
   });
 
   it('never leaks rows when the org scope is not bound', async () => {

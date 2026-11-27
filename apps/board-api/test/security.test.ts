@@ -146,8 +146,6 @@ describe('cross-org board access', () => {
   });
 
   it('should never expose board data across org boundaries', async () => {
-    const board = makeBoard({ organization_id: ORG_ID });
-
     // Query with wrong org returns empty (WHERE includes organization_id)
     mockSelect.mockReturnValue(chainable([]));
 
@@ -403,7 +401,7 @@ describe('error message sanitization', () => {
 
     expect(validationError.error.message).not.toContain('organization_id');
     expect(validationError.error.message).not.toContain('created_by');
-    expect(validationError.error.details[0].field).toBe('name');
+    expect(validationError.error.details[0]!.field).toBe('name');
   });
 });
 

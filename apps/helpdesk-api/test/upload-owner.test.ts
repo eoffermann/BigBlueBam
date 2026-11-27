@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import Fastify from 'fastify';
+import Fastify, { type FastifyRequest } from 'fastify';
 import multipart from '@fastify/multipart';
 
 // #142: a helpdesk/ upload records its owning org so the Bam api's GET /files can refuse every
@@ -22,7 +22,7 @@ describe('POST /helpdesk/upload', () => {
   it('stores the object and records its owner row', async () => {
     const app = Fastify({ logger: false });
     await app.register(multipart);
-    app.decorateRequest('tenantContext', null);
+    app.decorateRequest('tenantContext', null as unknown as FastifyRequest['tenantContext']);
     app.addHook('onRequest', async (req: any) => {
       req.tenantContext = { orgId: '33333333-3333-3333-3333-333333333333', projectId: null };
     });
@@ -47,7 +47,7 @@ describe('POST /helpdesk/upload', () => {
     expect(key).toMatch(/^helpdesk\/[0-9a-f-]{36}-note\.txt$/);
     expect(uploadFile).toHaveBeenCalledTimes(1);
     expect(execute).toHaveBeenCalledTimes(1);
-    const query = execute.mock.calls[0]![0] as unknown as { queryChunks: unknown[] };
+    const query = (execute.mock.calls[0] as unknown[])[0] as { queryChunks: unknown[] };
     expect(JSON.stringify(query.queryChunks)).toContain('file_upload_owners');
     expect(JSON.stringify(query.queryChunks)).toContain(key);
     await app.close();

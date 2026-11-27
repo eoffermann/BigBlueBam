@@ -137,7 +137,6 @@ function createMockDb(
         // Parse channel id and ts roughly from the JSON-stringified params.
         const channelMatch = queryString.match(/"value":"chan-\d+"/);
         const tsMatch = queryString.match(/"ts":"([^"]+)"/);
-        const threadIdx = queryString.indexOf('"slack_source"');
         const parentIdx = queryString.indexOf('thread_parent_id');
         const hasParent = parentIdx > -1 && queryString.indexOf('null', parentIdx) > parentIdx + 50;
         state.insertedMessages.push({

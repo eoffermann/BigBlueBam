@@ -84,7 +84,7 @@ describe.skipIf(!DATABASE_URL)('section 3 live constraints', () => {
         'cls-v1', 'cost-v1', ${PROJECT_ID}, now(),
         now() + interval '90 days', ${opts.minutes}, ${opts.state ?? 'pending'}
       ) RETURNING id, source_epoch, minutes, attribution_state`;
-    return row;
+    return row!;
   }
 
   async function clearWorkItems() {
@@ -113,7 +113,7 @@ describe.skipIf(!DATABASE_URL)('section 3 live constraints', () => {
       const live = await sql`
         SELECT count(*)::int AS n FROM burn_work_items
         WHERE organization_id = ${ORG_ID} AND attribution_state <> 'excluded'`;
-      expect(live[0].n).toBe(1);
+      expect(live[0]!.n).toBe(1);
     });
 
     it('THE REVERT CASE: 60 -> 90 -> 60 yields exactly one live row, correct dollars, no 23505', async () => {
@@ -143,14 +143,14 @@ describe.skipIf(!DATABASE_URL)('section 3 live constraints', () => {
         SELECT id, minutes FROM burn_work_items
         WHERE organization_id = ${ORG_ID} AND attribution_state <> 'excluded'`;
       expect(live).toHaveLength(1);
-      expect(live[0].minutes).toBe(60);
-      expect(live[0].id).toBe(c.id);
+      expect(live[0]!.minutes).toBe(60);
+      expect(live[0]!.id).toBe(c.id);
 
       // And no row is permanently stranded: the two tombstones are the audit trail.
       const excluded = await sql`
         SELECT count(*)::int AS n FROM burn_work_items
         WHERE organization_id = ${ORG_ID} AND attribution_state = 'excluded'`;
-      expect(excluded[0].n).toBe(2);
+      expect(excluded[0]!.n).toBe(2);
     });
 
     it('THE REVERT CASE, opposite ordering: 90 -> 60 -> 90 behaves identically', async () => {
@@ -171,7 +171,7 @@ describe.skipIf(!DATABASE_URL)('section 3 live constraints', () => {
         SELECT minutes FROM burn_work_items
         WHERE organization_id = ${ORG_ID} AND attribution_state <> 'excluded'`;
       expect(live).toHaveLength(1);
-      expect(live[0].minutes).toBe(90);
+      expect(live[0]!.minutes).toBe(90);
       expect(c.minutes).toBe(90);
     });
 
@@ -195,7 +195,7 @@ describe.skipIf(!DATABASE_URL)('section 3 live constraints', () => {
       const live = await sql`
         SELECT count(*)::int AS n FROM burn_work_items
         WHERE organization_id = ${ORG_ID} AND attribution_state <> 'excluded'`;
-      expect(live[0].n).toBe(1);
+      expect(live[0]!.n).toBe(1);
     });
   });
 
@@ -209,15 +209,15 @@ describe.skipIf(!DATABASE_URL)('section 3 live constraints', () => {
       await sql`UPDATE burn_work_items SET cost_epoch = 'cost-v2' WHERE id = ${row.id}`;
       let [after] = await sql`
         SELECT classification_epoch, cost_epoch FROM burn_work_items WHERE id = ${row.id}`;
-      expect(after.cost_epoch).toBe('cost-v2');
-      expect(after.classification_epoch).toBe('cls-v1');
+      expect(after!.cost_epoch).toBe('cost-v2');
+      expect(after!.classification_epoch).toBe('cls-v1');
 
       // And the converse.
       await sql`UPDATE burn_work_items SET classification_epoch = 'cls-v2' WHERE id = ${row.id}`;
       [after] = await sql`
         SELECT classification_epoch, cost_epoch FROM burn_work_items WHERE id = ${row.id}`;
-      expect(after.classification_epoch).toBe('cls-v2');
-      expect(after.cost_epoch).toBe('cost-v2');
+      expect(after!.classification_epoch).toBe('cls-v2');
+      expect(after!.cost_epoch).toBe('cost-v2');
     });
 
     it('does not require a valuation to exist, so an unvalued row is representable', async () => {
@@ -228,9 +228,9 @@ describe.skipIf(!DATABASE_URL)('section 3 live constraints', () => {
       const [r] = await sql`
         SELECT valuation_epoch, valued_at, valuation_basis
         FROM burn_work_items WHERE id = ${row.id}`;
-      expect(r.valuation_epoch).toBeNull();
-      expect(r.valued_at).toBeNull();
-      expect(r.valuation_basis).toBe('none');
+      expect(r!.valuation_epoch).toBeNull();
+      expect(r!.valued_at).toBeNull();
+      expect(r!.valuation_basis).toBe('none');
     });
   });
 
@@ -270,13 +270,13 @@ describe.skipIf(!DATABASE_URL)('section 3 live constraints', () => {
 
     it('permits a base deliverable to be active', async () => {
       const [row] = await insertDeliverable({ dedupKey: `base-${uuid()}`, isActive: true });
-      expect(row.is_active).toBe(true);
+      expect(row!.is_active).toBe(true);
     });
 
     it('REFUSES an amendment deliverable that is_active, at the storage boundary', async () => {
       const [base] = await insertDeliverable({ dedupKey: `base-${uuid()}` });
       await expect(
-        insertDeliverable({ dedupKey: `amd-${uuid()}`, amends: base.id, isActive: true }),
+        insertDeliverable({ dedupKey: `amd-${uuid()}`, amends: base!.id, isActive: true }),
       ).rejects.toMatchObject({ code: '23514' });
     });
 
@@ -288,18 +288,18 @@ describe.skipIf(!DATABASE_URL)('section 3 live constraints', () => {
           amends_deliverable_id, envelope_amount_delta, delta_confirmed_by, delta_confirmed_at
         ) VALUES (
           ${ORG_ID}, ${engagementId}, ${`amd-${uuid()}`}, 'Change order line',
-          ${base.id}, 250000, ${USER_ID}, now()
+          ${base!.id}, 250000, ${USER_ID}, now()
         ) RETURNING id, is_active, envelope_amount_delta, delta_confirmed_at`;
-      expect(amd.is_active).toBe(false);
-      expect(Number(amd.envelope_amount_delta)).toBe(250000);
-      expect(amd.delta_confirmed_at).not.toBeNull();
+      expect(amd!.is_active).toBe(false);
+      expect(Number(amd!.envelope_amount_delta)).toBe(250000);
+      expect(amd!.delta_confirmed_at).not.toBeNull();
     });
 
     it('refuses to delete a base deliverable while an amendment references it (RESTRICT)', async () => {
       const [base] = await insertDeliverable({ dedupKey: `base-${uuid()}` });
-      await insertDeliverable({ dedupKey: `amd-${uuid()}`, amends: base.id });
+      await insertDeliverable({ dedupKey: `amd-${uuid()}`, amends: base!.id });
       await expect(
-        sql`DELETE FROM burn_deliverables WHERE id = ${base.id}`,
+        sql`DELETE FROM burn_deliverables WHERE id = ${base!.id}`,
       ).rejects.toMatchObject({ code: '23503' });
     });
   });
@@ -332,7 +332,7 @@ describe.skipIf(!DATABASE_URL)('section 3 live constraints', () => {
           ${ORG_ID}, 'Internal retros', ${sql.json({ title_pattern: 'retro*' })},
           'non_billable', 'internal', ${USER_ID}
         ) RETURNING id`;
-      expect(row.id).toBeTruthy();
+      expect(row!.id).toBeTruthy();
     });
 
     it('REFUSES an attribute rule with no target deliverable', async () => {
@@ -357,7 +357,7 @@ describe.skipIf(!DATABASE_URL)('section 3 live constraints', () => {
 
     it('accepts a non-retainer rollup with all three period columns null', async () => {
       const [row] = await insertRollup({});
-      expect(row.id).toBeTruthy();
+      expect(row!.id).toBeTruthy();
     });
 
     it('REFUSES a half-specified period (start with no end)', async () => {
@@ -389,7 +389,7 @@ describe.skipIf(!DATABASE_URL)('section 3 live constraints', () => {
         period_end: '2026-07-31',
         period_index: 3,
       });
-      expect(row.id).toBeTruthy();
+      expect(row!.id).toBeTruthy();
     });
 
     it("REFUSES 'suppressed' as a STORED metric_basis (it is a response shape only)", async () => {
@@ -423,16 +423,17 @@ describe.skipIf(!DATABASE_URL)('section 3 live constraints', () => {
       const [first] = await insertPrecheck({ idempotency_key: key });
 
       // The recompute shape: supersede, then insert, in one transaction.
-      const [second] = await sql.begin(async (tx) => {
+      const [second] = await sql.begin(async (raw) => {
+        const tx = raw as unknown as postgres.Sql;
         await tx`
-          UPDATE burn_prechecks SET superseded_at = now() WHERE id = ${first.id}`;
+          UPDATE burn_prechecks SET superseded_at = now() WHERE id = ${first!.id}`;
         return tx`
           INSERT INTO burn_prechecks (
             organization_id, idempotency_key, valid_until, work_ref_type,
             verdict, verdict_reason, mode_at_decision, superseded_by
           ) VALUES (
             ${ORG_ID}, ${key}, now() + interval '5 minutes', 'bill.expense',
-            'deny', 'envelope_would_exceed', 'advisory', ${first.id}
+            'deny', 'envelope_would_exceed', 'advisory', ${first!.id}
           ) RETURNING id`;
       });
 
@@ -444,13 +445,13 @@ describe.skipIf(!DATABASE_URL)('section 3 live constraints', () => {
 
       const live = rows.filter((r) => r.superseded_at === null);
       expect(live).toHaveLength(1);
-      expect(live[0].id).toBe(second.id);
-      expect(live[0].verdict).toBe('deny');
+      expect(live[0]!.id).toBe(second!.id);
+      expect(live[0]!.verdict).toBe('deny');
 
       // The superseded row is RETAINED: it is part of the dispute record, not a dead row.
       const superseded = rows.filter((r) => r.superseded_at !== null);
       expect(superseded).toHaveLength(1);
-      expect(superseded[0].verdict).toBe('allow');
+      expect(superseded[0]!.verdict).toBe('allow');
     });
 
     it('still rejects two LIVE rows for the same key', async () => {
@@ -479,13 +480,13 @@ describe.skipIf(!DATABASE_URL)('section 3 live constraints', () => {
     it('accepts all four envelope bases', async () => {
       for (const basis of ['fixed', 'time_and_materials', 'not_to_exceed']) {
         const [row] = await insertEngagement({ envelope_basis: basis });
-        expect(row.envelope_basis).toBe(basis);
+        expect(row!.envelope_basis).toBe(basis);
       }
       const [retainer] = await insertEngagement({
         envelope_basis: 'retainer',
         period_length_days: 30,
       });
-      expect(retainer.envelope_basis).toBe('retainer');
+      expect(retainer!.envelope_basis).toBe('retainer');
     });
 
     it('REFUSES a retainer with no period_length_days', async () => {
@@ -516,12 +517,12 @@ describe.skipIf(!DATABASE_URL)('section 3 live constraints', () => {
         INSERT INTO burn_org_settings (organization_id) VALUES (${ORG_ID})
         RETURNING gate_mode, embedding_enabled, claim_lease_seconds, attribute_batch_size,
                   overage_bucket_amount, min_contributors_for_cost_aggregate`;
-      expect(row.gate_mode).toBe('advisory');
-      expect(row.embedding_enabled).toBe(false);
-      expect(row.claim_lease_seconds).toBe(300);
-      expect(row.attribute_batch_size).toBe(25);
-      expect(Number(row.overage_bucket_amount)).toBe(10000);
-      expect(row.min_contributors_for_cost_aggregate).toBe(3);
+      expect(row!.gate_mode).toBe('advisory');
+      expect(row!.embedding_enabled).toBe(false);
+      expect(row!.claim_lease_seconds).toBe(300);
+      expect(row!.attribute_batch_size).toBe(25);
+      expect(Number(row!.overage_bucket_amount)).toBe(10000);
+      expect(row!.min_contributors_for_cost_aggregate).toBe(3);
       await sql`DELETE FROM burn_org_settings WHERE organization_id = ${ORG_ID}`;
     });
 
@@ -594,13 +595,13 @@ describe.skipIf(!DATABASE_URL)('section 3 live constraints', () => {
           FROM burn_engagement_rollups
          WHERE organization_id = ${ORG_ID} AND chain_root_id = ${rootId}`;
       // Every figure is the ORIGINAL frozen value, not the zero the recompute would have written.
-      expect(Number(row.attributed_billable)).toBe(50000);
-      expect(Number(row.attributed_cost)).toBe(20000);
-      expect(Number(row.margin_amount)).toBe(30000);
-      expect(Number(row.margin_pct)).toBe(60);
-      expect(Number(row.consumption_pct)).toBe(50);
-      expect(Number(row.contract_value)).toBe(100000);
-      expect(row.metric_basis).toBe('true_margin');
+      expect(Number(row!.attributed_billable)).toBe(50000);
+      expect(Number(row!.attributed_cost)).toBe(20000);
+      expect(Number(row!.margin_amount)).toBe(30000);
+      expect(Number(row!.margin_pct)).toBe(60);
+      expect(Number(row!.consumption_pct)).toBe(50);
+      expect(Number(row!.contract_value)).toBe(100000);
+      expect(row!.metric_basis).toBe('true_margin');
 
       await sql`DELETE FROM burn_engagements WHERE id = ${rootId}`;
     });
@@ -656,9 +657,9 @@ describe.skipIf(!DATABASE_URL)('section 3 live constraints', () => {
         SELECT attributed_billable, margin_state, frozen_at
           FROM burn_engagement_rollups
          WHERE organization_id = ${ORG_ID} AND chain_root_id = ${rootId}`;
-      expect(Number(row.attributed_billable)).toBe(99999);
-      expect(row.margin_state).toBe('final');
-      expect(row.frozen_at).not.toBeNull();
+      expect(Number(row!.attributed_billable)).toBe(99999);
+      expect(row!.margin_state).toBe('final');
+      expect(row!.frozen_at).not.toBeNull();
 
       await sql`DELETE FROM burn_engagements WHERE id = ${rootId}`;
     });
@@ -679,7 +680,7 @@ describe.skipIf(!DATABASE_URL)('section 3 live constraints', () => {
           ${ORG_ID}, 'bam.time_entry', ${sourceId}, 'e', 'cls', 'cost', ${PROJECT_ID}, now(),
           now() + interval '90 days', 60, ${state}
         ) RETURNING id`;
-      return row.id as string;
+      return row!.id as string;
     }
 
     async function redriveScan() {
@@ -700,7 +701,7 @@ describe.skipIf(!DATABASE_URL)('section 3 live constraints', () => {
       const claimedIngest = await sql`
         SELECT count(*)::int AS n FROM burn_ingest_events
          WHERE organization_id = ${ORG_ID} AND status = 'claimed'`;
-      expect(claimedIngest[0].n).toBe(0);
+      expect(claimedIngest[0]!.n).toBe(0);
       await sql`DELETE FROM burn_work_items WHERE organization_id = ${ORG_ID}`;
     });
 
@@ -726,7 +727,7 @@ describe.skipIf(!DATABASE_URL)('section 3 live constraints', () => {
       expect(scan).toContain(id);
       // It must NOT have been marked unscoped by the throttle path.
       const [row] = await sql`SELECT attribution_state FROM burn_work_items WHERE id = ${id}`;
-      expect(row.attribution_state).not.toBe('unscoped');
+      expect(row!.attribution_state).not.toBe('unscoped');
       await sql`DELETE FROM burn_work_items WHERE organization_id = ${ORG_ID}`;
     });
   });
@@ -747,7 +748,7 @@ describe.skipIf(!DATABASE_URL)('section 3 live constraints', () => {
           JOIN project_memberships pm ON pm.project_id = ep.project_id
           WHERE ep.engagement_id = ${id} AND pm.user_id = ${USER_ID}
         ) AS visible`;
-      expect(row.visible).toBe(false);
+      expect(row!.visible).toBe(false);
     });
   });
 });

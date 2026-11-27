@@ -78,7 +78,9 @@ const permits: LlmPermits = { tryAdmit: async () => ({ admitted: true, failOpen:
 const memLock = (): SliceLock => {
   const held = new Set<string>();
   return {
-    acquire: async (k) => (held.has(k) ? false : (held.add(k), true)),
+    // The SliceLock contract: a token when taken, null when held elsewhere (#337: this fake
+    // returned true/false, and false is not null, so "held" read as taken).
+    acquire: async (k) => (held.has(k) ? null : (held.add(k), k)),
     release: async (k) => void held.delete(k),
   };
 };
@@ -189,7 +191,7 @@ describe.skipIf(!DATABASE_URL)('M8 questionnaires (live database)', () => {
     expect(q.row_count).toBe(5);
     expect(q.column_map.guessed).toBe(true);
 
-    await startAutofill(d, owner, q.id, { redraft: false });
+    await startAutofill(d, owner, q.id, { redraft: false, use_ai: true });
     expect(d.enqueued).toEqual([{ organization_id: s.org, questionnaire_id: q.id, resume_count: 0 }]);
 
     // A second claimant cannot take a live claim.
@@ -281,7 +283,7 @@ describe.skipIf(!DATABASE_URL)('M8 questionnaires (live database)', () => {
     expect(row!.source_bin_asset_version_id).toBe(version);
     expect(String(row!.source_sha256)).toMatch(/^[0-9a-f]{64}$/);
 
-    await startAutofill(d, owner, created.id, { redraft: false });
+    await startAutofill(d, owner, created.id, { redraft: false, use_ai: true });
     const denied = new Set([`bastion.control:${s.controls[0]}`]);
     await autofillSlice(adeps(s.engine, { denied }), { organization_id: s.org, questionnaire_id: created.id, claimant: 'w1' });
     const [item] = await sql`SELECT cited_refs, confidence_band, dropped_citation_count FROM bastion_questionnaire_items WHERE questionnaire_id = ${created.id}`;
@@ -309,7 +311,7 @@ describe.skipIf(!DATABASE_URL)('M8 questionnaires (live database)', () => {
     expect(row!.source_truncated).toBe(false);
     expect(q.sheet_preview[0]!.rows[0]).toEqual(['Question', 'Answer']);
 
-    const listed = (await listQuestionnaires(d, owner, { limit: 50 })).data.find((x) => (x as { id: string }).id === q.id) as Record<string, unknown>;
+    const listed = (await listQuestionnaires(d, owner, { limit: 50 })).data.find((x) => (x as unknown as { id: string }).id === q.id) as Record<string, unknown>;
     expect(listed.sheet_preview).toBeUndefined();
     expect(JSON.stringify(listed)).not.toContain('Do you require two-step sign-in');
     expect(listed.column_map).toEqual({ sheets: expect.any(Array), guessed: true });
@@ -337,8 +339,6 @@ describe.skipIf(!DATABASE_URL)('M8 questionnaires (live database)', () => {
   const qState = async (qid: string) =>
     (await sql`SELECT status, rows_done, llm_calls_used, ai_failure_streak, last_ai_failure FROM bastion_questionnaires WHERE id = ${qid}`)[0]!;
 
-  it('a transient AI failure leaves the row undrafted and retries it; it is never banded "Needs an expert" for it (#260)', async () => {
-    const s = await setUp('flaky');
   it('each autofill run has its own free releases for database blips; a later run is not charged for an earlier one (#329)', async () => {
     const s = await setUp('blips');
     await provider(s.org, s.owner);
@@ -378,11 +378,13 @@ describe.skipIf(!DATABASE_URL)('M8 questionnaires (live database)', () => {
     expect((await qState(q.id)).status).toBe('in_review');
   });
 
+  it('a transient AI failure leaves the row undrafted and retries it; it is never banded "Needs an expert" for it (#260)', async () => {
+    const s = await setUp('flaky');
     await provider(s.org, s.owner);
     const owner = viewer(s.org, s.owner);
     const d = qdeps(s.engine);
     const q = (await createQuestionnaire(d, owner, { title: 'Flaky AI', source: { kind: 'pasted', text: PASTED, format: 'tsv' } })).data as unknown as { id: string };
-    await startAutofill(d, owner, q.id, { redraft: false });
+    await startAutofill(d, owner, q.id, { redraft: false, use_ai: true });
     // The proxy is down for the first three calls (connection refused, 502, a timeout), then back.
     let calls = 0;
     const waits: number[] = [];
@@ -416,7 +418,7 @@ describe.skipIf(!DATABASE_URL)('M8 questionnaires (live database)', () => {
     const owner = viewer(s.org, s.owner);
     const d = qdeps(s.engine);
     const q = (await createQuestionnaire(d, owner, { title: 'Outage', source: { kind: 'pasted', text: PASTED, format: 'tsv' } })).data as unknown as { id: string };
-    await startAutofill(d, owner, q.id, { redraft: false });
+    await startAutofill(d, owner, q.id, { redraft: false, use_ai: true });
     const down: LlmChat = async () => {
       throw new LlmError('internal LLM proxy returned 503', 503);
     };
@@ -427,7 +429,7 @@ describe.skipIf(!DATABASE_URL)('M8 questionnaires (live database)', () => {
       expect(r.band_reasons.map((x) => x.code)).toEqual(['ai_unavailable']);
     }
     // A new start begins with a clean streak.
-    await startAutofill(d, owner, q.id, { redraft: true });
+    await startAutofill(d, owner, q.id, { redraft: true, use_ai: true });
     expect((await qState(q.id)).ai_failure_streak).toBe(0);
   });
 
@@ -437,7 +439,7 @@ describe.skipIf(!DATABASE_URL)('M8 questionnaires (live database)', () => {
     const owner = viewer(s.org, s.owner);
     const d = qdeps(s.engine);
     const q = (await createQuestionnaire(d, owner, { title: 'Cut off', source: { kind: 'pasted', text: PASTED, format: 'tsv' } })).data as unknown as { id: string };
-    await startAutofill(d, owner, q.id, { redraft: false });
+    await startAutofill(d, owner, q.id, { redraft: false, use_ai: true });
     const cut: LlmChat = async () => ({ content: '', finish_reason: 'length' });
     await autofillSlice(adeps(s.engine, { llm: cut }), { organization_id: s.org, questionnaire_id: q.id, claimant: 'w1' });
     const rows = await rowsOf(q.id);
@@ -453,7 +455,7 @@ describe.skipIf(!DATABASE_URL)('M8 questionnaires (live database)', () => {
     const d = qdeps(s.engine);
     await sql`UPDATE bastion_org_settings SET max_llm_calls_per_questionnaire = 3 WHERE organization_id = ${s.org}`;
     const q = (await createQuestionnaire(d, owner, { title: 'Budget', source: { kind: 'pasted', text: PASTED, format: 'tsv' } })).data as unknown as { id: string };
-    await startAutofill(d, owner, q.id, { redraft: false });
+    await startAutofill(d, owner, q.id, { redraft: false, use_ai: true });
     // The provider throttles the first call once: that retry is a second charged call.
     let calls = 0;
     const throttledOnce: LlmChat = async (opts) => {
@@ -469,7 +471,7 @@ describe.skipIf(!DATABASE_URL)('M8 questionnaires (live database)', () => {
     expect(out.length).toBeGreaterThanOrEqual(2);
 
     // A redraft gets no fresh allowance: no AI call is made and the rows say why.
-    await startAutofill(d, owner, q.id, { redraft: true });
+    await startAutofill(d, owner, q.id, { redraft: true, use_ai: true });
     await autofillSlice(adeps(s.engine, { llm: throttledOnce }), { organization_id: s.org, questionnaire_id: q.id, claimant: 'w2' });
     expect(calls).toBe(3);
     expect(await qState(q.id)).toMatchObject({ status: 'in_review', llm_calls_used: 3 });
@@ -517,11 +519,11 @@ describe.skipIf(!DATABASE_URL)('M8 questionnaires (live database)', () => {
     const q = (await createQuestionnaire(d, owner, { title: 'Redraft event', source: { kind: 'pasted', text: PASTED, format: 'tsv' } })).data as unknown as { id: string };
     const drafted = async () =>
       (await sql`SELECT idempotency_key FROM bastion_outbox WHERE organization_id = ${s.org} AND payload->>'event_type' = 'questionnaire.drafted' ORDER BY id`).map((r) => String(r.idempotency_key));
-    await startAutofill(d, owner, q.id, { redraft: false });
+    await startAutofill(d, owner, q.id, { redraft: false, use_ai: true });
     await autofillSlice(adeps(s.engine), { organization_id: s.org, questionnaire_id: q.id, claimant: 'w1' });
     expect(await drafted()).toHaveLength(1);
     // Same model, same rows, same counts, no releases: the redraft is a new run and a new event.
-    await startAutofill(d, owner, q.id, { redraft: true });
+    await startAutofill(d, owner, q.id, { redraft: true, use_ai: true });
     await autofillSlice(adeps(s.engine), { organization_id: s.org, questionnaire_id: q.id, claimant: 'w1' });
     const keys = await drafted();
     expect(keys).toHaveLength(2);
@@ -572,7 +574,7 @@ describe.skipIf(!DATABASE_URL)('M8 questionnaires (live database)', () => {
     const owner = viewer(s.org, s.owner);
     const d = qdeps(s.engine);
     const q = (await createQuestionnaire(d, owner, { title: 'Reaper', source: { kind: 'pasted', text: PASTED, format: 'tsv' } })).data as unknown as { id: string };
-    await startAutofill(d, owner, q.id, { redraft: false });
+    await startAutofill(d, owner, q.id, { redraft: false, use_ai: true });
 
     // Shutting down: the slice stops before starting a call and gives the questionnaire back.
     await autofillSlice(adeps(s.engine, { shuttingDown: () => true }), { organization_id: s.org, questionnaire_id: q.id, claimant: 'w1' });

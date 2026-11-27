@@ -131,6 +131,8 @@ describe('compileGraphToRows → projectRowsToGraph round-trip', () => {
         id: fakeId(i),
         automation_id: 'auto-1',
         created_at: new Date(),
+        value: c.value,
+        logic_group: c.logic_group!,
         ...c,
       })),
       actions: actions.map((a, i) => ({

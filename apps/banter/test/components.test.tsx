@@ -237,7 +237,7 @@ describe('MessageItem', () => {
   });
 
   it('does not render avatar when grouped', () => {
-    const { container } = render(
+    render(
       <TestWrapper>
         <MessageItem
           message={sampleMessage}

@@ -291,7 +291,7 @@ describe('bastion-export-packet', () => {
     const before = Date.now();
     await expect(processBastionExportPacketJob(held, silent, { post, storage: driver }, 'lock-token')).rejects.toBeInstanceOf(DelayedError);
     expect(updateData).toHaveBeenCalledWith({ organization_id: ORG, packet_id: PACKET, held_deferrals: 1 });
-    const [[at, token]] = moveToDelayed.mock.calls as unknown as Array<[number, string]>;
+    const [at, token] = (moveToDelayed.mock.calls as unknown as Array<[number, string]>)[0]!;
     expect(at).toBeGreaterThanOrEqual(before + 570_000);
     expect(token).toBe('lock-token');
     expect(objects.size).toBe(0);

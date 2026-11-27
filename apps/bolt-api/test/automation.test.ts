@@ -479,7 +479,6 @@ describe('updateAutomation', () => {
   it('should throw NOT_FOUND when automation does not exist', async () => {
     mockSelect.mockReturnValue(chainable([]));
 
-    const { BoltError } = await import('../src/services/automation.service.js');
     await expect(
       updateAutomation(AUTOMATION_ID, { name: 'New' }, USER_ID, ORG_ID),
     ).rejects.toThrow('Automation not found');

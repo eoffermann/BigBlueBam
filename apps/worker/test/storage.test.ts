@@ -49,6 +49,6 @@ describe('putObjectFromFile', () => {
     // makeBucket must run before the upload, or fPutObject hits NoSuchBucket.
     expect(makeBucket).toHaveBeenCalledOnce();
     expect(fPutObject).toHaveBeenCalledOnce();
-    expect(makeBucket.mock.invocationCallOrder[0]).toBeLessThan(fPutObject.mock.invocationCallOrder[0]);
+    expect(makeBucket.mock.invocationCallOrder[0]).toBeLessThan(fPutObject.mock.invocationCallOrder[0]!);
   });
 });

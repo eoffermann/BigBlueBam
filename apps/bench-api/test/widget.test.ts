@@ -96,7 +96,7 @@ describe('Widget Service', () => {
       mockSelect.mockReturnValue(chainable([{ widget }]));
 
       const { getWidget } = await import('../src/services/widget.service.js');
-      const result = await getWidget(WIDGET_ID);
+      const result = await getWidget(WIDGET_ID, ORG_ID);
 
       expect(result.name).toBe('Task Count by Priority');
     });
@@ -105,7 +105,7 @@ describe('Widget Service', () => {
       mockSelect.mockReturnValue(chainable([]));
 
       const { getWidget } = await import('../src/services/widget.service.js');
-      await expect(getWidget('nonexistent')).rejects.toThrow('Widget not found');
+      await expect(getWidget('nonexistent', ORG_ID)).rejects.toThrow('Widget not found');
     });
   });
 
@@ -154,7 +154,7 @@ describe('Widget Service', () => {
       mockDelete.mockReturnValue(chainable([{ id: WIDGET_ID }]));
 
       const { deleteWidget } = await import('../src/services/widget.service.js');
-      const result = await deleteWidget(WIDGET_ID);
+      const result = await deleteWidget(WIDGET_ID, ORG_ID);
 
       expect(result.id).toBe(WIDGET_ID);
     });

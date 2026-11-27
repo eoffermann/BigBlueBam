@@ -4,10 +4,9 @@ import {
   LevelingLeaseHeldError,
   type LevelingStore,
   type LevelingRunRow,
-  type CoverageClassifier,
 } from '../src/services/engines/leveling.engine.js';
 import type { AdjudicationSettings } from '../src/services/engines/coverage-adjudication.js';
-import type { RawCoverageAnswer } from '../src/services/engines/leveling-classifier.js';
+import type { CoverageClassifier, RawCoverageAnswer } from '../src/services/engines/leveling-classifier.js';
 
 const SETTINGS: AdjudicationSettings & { max_lines_per_window: number; window_overlap_lines: number } = {
   node_term_overlap_floor: 0.25,

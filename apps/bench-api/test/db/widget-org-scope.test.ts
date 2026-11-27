@@ -63,10 +63,12 @@ describe.skipIf(!DATABASE_URL)('bench widgets are org-scoped (#246)', () => {
     await sql`INSERT INTO organizations (id, name, slug) VALUES
               (${ORG_A}, 'Widget Org A', ${`w-a-${run}`}),
               (${ORG_B}, 'Widget Org B', ${`w-b-${run}`})`;
-    const [{ id: userB }] = await sql`INSERT INTO users (org_id, email, display_name, password_hash)
+    const [userRow] = await sql`INSERT INTO users (org_id, email, display_name, password_hash)
               VALUES (${ORG_B}, ${`wb-${run}@w.test`}, 'B', 'x') RETURNING id`;
-    const [{ id: dashB }] = await sql`INSERT INTO bench_dashboards (organization_id, name, created_by)
+    const userB = userRow!.id;
+    const [dashRow] = await sql`INSERT INTO bench_dashboards (organization_id, name, created_by)
               VALUES (${ORG_B}, 'Org B dashboard', ${userB}) RETURNING id`;
+    const dashB = dashRow!.id;
     [{ id: widgetB }] = await sql`INSERT INTO bench_widgets
               (dashboard_id, name, widget_type, data_source, entity, query_config)
               VALUES (${dashB}, 'Org B widget', 'kpi_card', 'bam', 'tasks',

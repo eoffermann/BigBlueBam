@@ -76,7 +76,6 @@ import {
   listTasks,
   getBoardState,
   bulkOperations,
-  getTask,
   TaskError,
 } from '../src/services/task.service.js';
 import { tickets, ticketMessages } from '../src/db/schema/tickets.js';
@@ -99,35 +98,12 @@ function flexibleSelect(rows: unknown[] = []) {
   return { from };
 }
 
-function chainSelect(rows: unknown[]) {
-  const limitFn = vi.fn().mockResolvedValue(rows);
-  const orderByFn = vi.fn().mockReturnValue({ limit: limitFn });
-  const whereFn = vi.fn().mockReturnValue({ limit: limitFn, orderBy: orderByFn });
-  const fromFn = vi.fn().mockReturnValue({ where: whereFn, orderBy: orderByFn });
-  mockDb.select.mockReturnValue({ from: fromFn });
-  return { fromFn, whereFn, limitFn, orderByFn };
-}
-
 function chainUpdate(rows: unknown[]) {
   const returningFn = vi.fn().mockResolvedValue(rows);
   const whereFn = vi.fn().mockReturnValue({ returning: returningFn });
   const setFn = vi.fn().mockReturnValue({ where: whereFn });
   mockDb.update.mockReturnValue({ set: setFn });
   return { setFn, whereFn, returningFn };
-}
-
-function chainInsert(rows: unknown[]) {
-  const returningFn = vi.fn().mockResolvedValue(rows);
-  const valuesFn = vi.fn().mockReturnValue({ returning: returningFn });
-  mockDb.insert.mockReturnValue({ values: valuesFn });
-  return { valuesFn, returningFn };
-}
-
-function chainDelete(rows: unknown[]) {
-  const returningFn = vi.fn().mockResolvedValue(rows);
-  const whereFn = vi.fn().mockReturnValue({ returning: returningFn });
-  mockDb.delete.mockReturnValue({ where: whereFn });
-  return { whereFn, returningFn };
 }
 
 const now = new Date();
@@ -296,7 +272,7 @@ describe('Task Service', () => {
       const insertValues = vi.fn().mockReturnValue({ returning: insertReturning });
       mockDb.insert.mockReturnValue({ values: insertValues });
 
-      const result = await createTask('proj-1', {
+      await createTask('proj-1', {
         title: 'Positioned task',
         phase_id: 'phase-1',
         state_id: 'state-1',
@@ -369,7 +345,7 @@ describe('Task Service', () => {
         expect.objectContaining({ title: 'Updated Title' }),
       );
       // Should NOT contain fields that weren't provided
-      const setArg = setFn.mock.calls[0][0];
+      const setArg = setFn.mock.calls[0]![0];
       expect(setArg).not.toHaveProperty('description');
       expect(setArg).not.toHaveProperty('priority');
       expect(setArg).toHaveProperty('updated_at');

@@ -75,9 +75,7 @@ function chainable(result: unknown[]) {
 // ---------------------------------------------------------------------------
 
 const ORG_ID = '00000000-0000-0000-0000-000000000001';
-const ORG_ID_2 = '00000000-0000-0000-0000-000000000099';
 const USER_ID = '00000000-0000-0000-0000-000000000003';
-const USER_ID_2 = '00000000-0000-0000-0000-000000000004';
 const BOARD_ID = '00000000-0000-0000-0000-000000000010';
 const PROJECT_ID = '00000000-0000-0000-0000-000000000002';
 const TEMPLATE_ID = '00000000-0000-0000-0000-000000000020';
@@ -187,7 +185,6 @@ describe('createBoard', () => {
 
     txInsert.mockReturnValue(chainable([board]));
 
-    const tx = (await mockTransaction.mock.calls.length) || 0;
     await mockTransaction(async (txArg: any) => {
       const [tpl] = await txArg.select().from('board_templates').where('id = ?');
       expect(tpl.name).toBe('Retro Template');

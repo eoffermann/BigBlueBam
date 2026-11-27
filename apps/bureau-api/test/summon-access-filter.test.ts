@@ -250,9 +250,9 @@ describe('planSummon — recipient eligibility', () => {
     expect(eligibleIds).toEqual(['alice', 'charlie']);
     // Denied = bob, with no_access outcome AND the reason from the access service.
     expect(plan!.deniedRecipients).toHaveLength(1);
-    expect(plan!.deniedRecipients[0].userId).toBe('bob');
-    expect(plan!.deniedRecipients[0].outcome).toBe('no_access');
-    expect(plan!.deniedRecipients[0].reason).toBe('private');
+    expect(plan!.deniedRecipients[0]!.userId).toBe('bob');
+    expect(plan!.deniedRecipients[0]!.outcome).toBe('no_access');
+    expect(plan!.deniedRecipients[0]!.reason).toBe('private');
     // Summoner is never enumerated.
     expect(eligibleIds).not.toContain('summ');
     expect(plan!.deniedRecipients.map((r) => r.userId)).not.toContain('summ');
@@ -320,7 +320,7 @@ describe('fanOutSummon — inline publishes to user channels', () => {
     expect(channels).toContain('user:alice');
     expect(channels).toContain('user:charlie');
     // Verify the payload shape is what the SDK expects.
-    const payload = JSON.parse(pubSpy.mock.calls[0][1] as string);
+    const payload = JSON.parse(pubSpy.mock.calls[0]![1] as string);
     expect(payload.type).toBe('summon_incoming');
     expect(payload.data.summonId).toBe('summon-uuid');
     expect(payload.data.summoner.id).toBe('summ');

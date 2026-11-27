@@ -38,7 +38,7 @@ const AWARD = '00000000-0000-0000-0000-0000ba5e0005';
 const ITEM = '00000000-0000-0000-0000-0000ba5e0006';
 
 /** Seed org -> user -> request -> scope node -> award -> one frozen baseline item. */
-async function seed(tx: postgres.TransactionSql): Promise<void> {
+async function seed(tx: postgres.Sql): Promise<void> {
   await tx`INSERT INTO organizations (id, name, slug)
            VALUES (${ORG}, 'Bursar Immutability', 'bursar-immutability')
            ON CONFLICT (id) DO NOTHING`;
@@ -64,10 +64,11 @@ async function seed(tx: postgres.TransactionSql): Promise<void> {
 /** Run a block inside a transaction that always rolls back; return the pg error it raised, or null. */
 async function expectRejected(
   sql: postgres.Sql,
-  act: (tx: postgres.TransactionSql) => Promise<void>,
+  act: (tx: postgres.Sql) => Promise<void>,
 ): Promise<{ message: string; code?: string } | null> {
   try {
-    await sql.begin(async (tx) => {
+    await sql.begin(async (raw) => {
+      const tx = raw as unknown as postgres.Sql;
       await seed(tx);
       await act(tx);
     });
@@ -103,7 +104,8 @@ describe.skipIf(!DATABASE_URL)('bursar_baseline_items four-path immutability', (
     let after: string | null = null;
     let sentinel: string | null = null;
     try {
-      await sql.begin(async (tx) => {
+      await sql.begin(async (raw) => {
+        const tx = raw as unknown as postgres.Sql;
         await seed(tx);
         await tx`UPDATE bursar_baseline_items SET created_at = now() WHERE id = ${ITEM}`;
         const rows = await tx<Array<{ title: string }>>`SELECT title FROM bursar_baseline_items WHERE id = ${ITEM}`;

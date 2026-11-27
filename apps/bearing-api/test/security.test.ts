@@ -68,43 +68,9 @@ function chainable(result: unknown[]) {
 
 const ORG_ID = '00000000-0000-0000-0000-000000000001';
 const ORG_ID_2 = '00000000-0000-0000-0000-000000000099';
-const USER_ID = '00000000-0000-0000-0000-000000000003';
 const PERIOD_ID = '00000000-0000-0000-0000-000000000010';
 const GOAL_ID = '00000000-0000-0000-0000-000000000020';
 const KR_ID = '00000000-0000-0000-0000-000000000030';
-
-function makeGoal(overrides: Record<string, unknown> = {}) {
-  return {
-    id: GOAL_ID,
-    organization_id: ORG_ID,
-    period_id: PERIOD_ID,
-    title: 'Increase Revenue',
-    status: 'on_track',
-    status_override: false,
-    progress: '50.00',
-    owner_id: USER_ID,
-    created_by: USER_ID,
-    created_at: new Date('2026-04-01'),
-    updated_at: new Date('2026-04-01'),
-    ...overrides,
-  };
-}
-
-function makePeriod(overrides: Record<string, unknown> = {}) {
-  return {
-    id: PERIOD_ID,
-    organization_id: ORG_ID,
-    name: 'Q2 2026',
-    period_type: 'quarter',
-    starts_at: '2026-04-01',
-    ends_at: '2026-06-30',
-    status: 'planning',
-    created_by: USER_ID,
-    created_at: new Date('2026-04-01'),
-    updated_at: new Date('2026-04-01'),
-    ...overrides,
-  };
-}
 
 // ---------------------------------------------------------------------------
 // Cross-org goal access

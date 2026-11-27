@@ -102,9 +102,6 @@ function wireDbToStore(): void {
   });
 
   mockDb.insert.mockImplementation(() => {
-    const onConflictDoUpdate = vi.fn(async (_opts: any) => {
-      // Capture handled via .values() below.
-    });
     let pendingKey: string | undefined;
     let pendingValue: unknown;
     const values = vi.fn((rec: any) => {

@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import postgres from 'postgres';
+import type { Tx } from '../../src/engine/context.js';
 
 /**
  * Hardened definer functions (spec 3.1, migrations 0274/0278/0279).
@@ -125,7 +126,8 @@ describe.skipIf(!DATABASE_URL)('bastion_% definer-function hardening', () => {
     const outcomes: string[] = [];
     for (const scope of [null, ORG_B]) {
       try {
-        await sql.begin(async (tx) => {
+        await sql.begin(async (raw) => {
+          const tx = raw as unknown as Tx;
           if (scope) await tx`SELECT set_config('app.current_org_id', ${scope}, true)`;
           await tx`SELECT bastion_probe_keys_max_age_v1(${ORG_A}::uuid, now(), '{}'::jsonb)`;
         });
@@ -139,7 +141,8 @@ describe.skipIf(!DATABASE_URL)('bastion_% definer-function hardening', () => {
 
   it('org guard: a probe runs inside a matching org scope and returns the result contract', async () => {
     let result: Record<string, unknown> | null = null;
-    await sql.begin(async (tx) => {
+    await sql.begin(async (raw) => {
+      const tx = raw as unknown as Tx;
       await tx`SELECT set_config('app.current_org_id', ${ORG_A}, true)`;
       const rows = await tx<Array<{ r: Record<string, unknown> }>>`
         SELECT bastion_probe_keys_max_age_v1(${ORG_A}::uuid, now(), '{"max_age_days": 30}'::jsonb) AS r`;

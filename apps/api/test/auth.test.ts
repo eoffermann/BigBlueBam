@@ -94,7 +94,7 @@ describe('Auth Service', () => {
       // Wave E.F: register now also inserts an organization_memberships row
       // and an account_group_memberships row (the latter via
       // setUserOrgRole, which uses .values().onConflictDoUpdate()).
-      mockDb.transaction.mockImplementation(async (cb: (tx: typeof mockTx) => Promise<unknown>) => {
+      mockDb.transaction.mockImplementation(async (cb: (tx: unknown) => Promise<unknown>) => {
         const txInsertReturning = vi.fn();
         // Each .values() call returns a chain that supports both
         // .returning() (for org/user/session inserts) and
@@ -183,20 +183,6 @@ describe('Auth Service', () => {
       const whereFn = vi.fn().mockReturnValue({ limit: limitFn });
       const innerJoinFn = vi.fn().mockReturnValue({ where: whereFn });
       return { from: vi.fn().mockReturnValue({ where: whereFn, innerJoin: innerJoinFn }) };
-    }
-
-    function setupUpdateChain(rows: unknown[] = []) {
-      const returningFn = vi.fn().mockResolvedValue(rows);
-      const whereFn = vi.fn().mockReturnValue({ returning: returningFn });
-      const setFn = vi.fn().mockReturnValue({ where: whereFn });
-      mockDb.update.mockReturnValue({ set: setFn });
-      return { setFn, whereFn };
-    }
-
-    function setupInsertChain(rows: unknown[]) {
-      const returningFn = vi.fn().mockResolvedValue(rows);
-      const valuesFn = vi.fn().mockReturnValue({ returning: returningFn });
-      mockDb.insert.mockReturnValue({ values: valuesFn });
     }
 
     it('validates credentials, creates session, and returns user', async () => {

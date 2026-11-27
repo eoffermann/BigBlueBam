@@ -136,7 +136,6 @@ describe('createComment', () => {
   });
 
   it('should create a threaded reply with parent_id', async () => {
-    const parentComment = makeComment({ id: PARENT_COMMENT_ID, document_id: DOC_ID });
     const reply = makeComment({
       id: '00000000-0000-0000-0000-000000000032',
       parent_id: PARENT_COMMENT_ID,

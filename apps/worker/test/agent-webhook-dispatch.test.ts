@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
 import type { Job } from 'bullmq';
 import type { Logger } from 'pino';
 import type Redis from 'ioredis';
@@ -23,7 +23,6 @@ import {
   __test__,
 } from '../src/jobs/agent-webhook-dispatch.job.js';
 import { getDb } from '../src/utils/db.js';
-import { publishBoltEvent } from '../src/utils/bolt-events.js';
 
 const mockLogger = {
   info: vi.fn(),
@@ -50,8 +49,6 @@ function createMockRedis(secret: string | null): Redis {
 }
 
 // Helpers that mimic the chained builder API Drizzle produces.
-type Chain = { returning?: vi.Mock } | Promise<unknown>;
-
 function makeSelect(rows: unknown[]) {
   return {
     from: () => ({
@@ -69,7 +66,7 @@ function makeUpdate(returningRows: unknown[] = []) {
       where: () => ({ returning }),
     }),
     _returning: returning,
-  } as unknown as { set: () => unknown; _returning: vi.Mock };
+  } as unknown as { set: () => unknown; _returning: Mock };
 }
 
 describe('agent webhook dispatcher', () => {

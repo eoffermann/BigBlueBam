@@ -240,6 +240,7 @@ const makeTask = (overrides: Partial<import('@bigbluebam/shared').Task> = {}): i
   subtask_done_count: 0,
   carry_forward_count: 0,
   original_sprint_id: null,
+  links: [],
   created_at: '2025-01-01T00:00:00Z',
   updated_at: '2025-01-01T00:00:00Z',
   ...overrides,
@@ -355,8 +356,8 @@ describe('useBoardStore', () => {
       const state = useBoardStore.getState();
       expect(state.phases.find((p) => p.id === 'phase-1')!.tasks).toHaveLength(0);
       expect(state.phases.find((p) => p.id === 'phase-2')!.tasks).toHaveLength(1);
-      expect(state.phases.find((p) => p.id === 'phase-2')!.tasks[0].id).toBe('task-1');
-      expect(state.phases.find((p) => p.id === 'phase-2')!.tasks[0].phase_id).toBe('phase-2');
+      expect(state.phases.find((p) => p.id === 'phase-2')!.tasks[0]!.id).toBe('task-1');
+      expect(state.phases.find((p) => p.id === 'phase-2')!.tasks[0]!.phase_id).toBe('phase-2');
     });
 
     it('inserts task at the correct position', () => {
@@ -370,8 +371,8 @@ describe('useBoardStore', () => {
 
       const phase2 = useBoardStore.getState().phases.find((p) => p.id === 'phase-2')!;
       expect(phase2.tasks).toHaveLength(2);
-      expect(phase2.tasks[0].id).toBe('task-b');
-      expect(phase2.tasks[1].id).toBe('task-a');
+      expect(phase2.tasks[0]!.id).toBe('task-b');
+      expect(phase2.tasks[1]!.id).toBe('task-a');
     });
 
     it('is a no-op for nonexistent task', () => {
@@ -410,7 +411,7 @@ describe('useBoardStore', () => {
 
       const phase = useBoardStore.getState().phases.find((p) => p.id === 'phase-1')!;
       expect(phase.tasks).toHaveLength(1);
-      expect(phase.tasks[0].id).toBe('new-task');
+      expect(phase.tasks[0]!.id).toBe('new-task');
     });
 
     it('does not affect other phases', () => {
@@ -431,7 +432,7 @@ describe('useBoardStore', () => {
 
       useBoardStore.getState().updateTaskInBoard('task-1', { title: 'New Title' });
 
-      const updated = useBoardStore.getState().phases[0].tasks[0];
+      const updated = useBoardStore.getState().phases[0]!.tasks[0]!;
       expect(updated.title).toBe('New Title');
       expect(updated.id).toBe('task-1');
     });
@@ -443,7 +444,7 @@ describe('useBoardStore', () => {
 
       useBoardStore.getState().updateTaskInBoard('task-1', { title: 'Updated' });
 
-      expect(useBoardStore.getState().phases[0].tasks[1].title).toBe('Task 2');
+      expect(useBoardStore.getState().phases[0]!.tasks[1]!.title).toBe('Task 2');
     });
   });
 
@@ -454,7 +455,7 @@ describe('useBoardStore', () => {
 
       useBoardStore.getState().removeTaskFromBoard('task-1');
 
-      expect(useBoardStore.getState().phases[0].tasks).toHaveLength(0);
+      expect(useBoardStore.getState().phases[0]!.tasks).toHaveLength(0);
     });
 
     it('does not remove other tasks', () => {
@@ -464,8 +465,8 @@ describe('useBoardStore', () => {
 
       useBoardStore.getState().removeTaskFromBoard('task-1');
 
-      expect(useBoardStore.getState().phases[0].tasks).toHaveLength(1);
-      expect(useBoardStore.getState().phases[0].tasks[0].id).toBe('task-2');
+      expect(useBoardStore.getState().phases[0]!.tasks).toHaveLength(1);
+      expect(useBoardStore.getState().phases[0]!.tasks[0]!.id).toBe('task-2');
     });
   });
 });

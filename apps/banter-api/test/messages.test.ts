@@ -186,8 +186,8 @@ describe('Message Routes - Validation', () => {
     });
 
     it('should allow admin to delete any message', () => {
-      const authorId = 'user-1';
-      const requesterId = 'user-2';
+      const authorId: string = 'user-1';
+      const requesterId: string = 'user-2';
       const requesterRole = 'admin';
       const canDelete =
         authorId === requesterId || ['owner', 'admin'].includes(requesterRole);
@@ -195,8 +195,8 @@ describe('Message Routes - Validation', () => {
     });
 
     it('should deny non-author member from deleting', () => {
-      const authorId = 'user-1';
-      const requesterId = 'user-2';
+      const authorId: string = 'user-1';
+      const requesterId: string = 'user-2';
       const requesterRole = 'member';
       const canDelete =
         authorId === requesterId || ['owner', 'admin'].includes(requesterRole);
@@ -204,8 +204,8 @@ describe('Message Routes - Validation', () => {
     });
 
     it('should allow owner to delete any message', () => {
-      const authorId = 'user-1';
-      const requesterId = 'user-3';
+      const authorId: string = 'user-1';
+      const requesterId: string = 'user-3';
       const requesterRole = 'owner';
       const canDelete =
         authorId === requesterId || ['owner', 'admin'].includes(requesterRole);

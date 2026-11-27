@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import postgres from 'postgres';
+import type { Tx } from '../../src/engine/context.js';
 
 /**
  * Four-path immutability of Bastion's evidence (spec 3.4, migrations 0275-0278), the frozen
@@ -35,7 +36,7 @@ const EXCEPTION = '00000000-0000-0000-0000-0000ba571009';
 const OTHER_USER = '00000000-0000-0000-0000-0000ba57100a';
 const SHA = 'a'.repeat(64);
 
-async function seed(tx: postgres.TransactionSql): Promise<void> {
+async function seed(tx: Tx): Promise<void> {
   await tx`INSERT INTO organizations (id, name, slug)
            VALUES (${ORG}, 'Bastion Immutability', 'bastion-immutability') ON CONFLICT (id) DO NOTHING`;
   await tx`INSERT INTO users (id, org_id, email, display_name, password_hash,
@@ -75,10 +76,11 @@ async function seed(tx: postgres.TransactionSql): Promise<void> {
 /** Runs `act` after seeding, then rolls back. Returns the pg error code/message, or null. */
 async function attempt(
   sql: postgres.Sql,
-  act: (tx: postgres.TransactionSql) => Promise<unknown>,
+  act: (tx: Tx) => Promise<unknown>,
 ): Promise<string | null> {
   try {
-    await sql.begin(async (tx) => {
+    await sql.begin(async (raw) => {
+      const tx = raw as unknown as Tx;
       await seed(tx);
       await act(tx);
       throw new Error('ROLLBACK_SENTINEL');
@@ -249,7 +251,7 @@ describe.skipIf(!DATABASE_URL)('Bastion evidence immutability', () => {
 
   // #188: exception-expiry drift is idempotent per (org, exception, control).
   it('drift events: a second exception-expiry drift row for the same exception conflicts', async () => {
-    const insertDrift = (tx: postgres.TransactionSql) =>
+    const insertDrift = (tx: Tx) =>
       tx`INSERT INTO bastion_drift_events (organization_id, control_id, exception_id, from_status, to_status, reason)
          VALUES (${ORG}, ${CONTROL}, ${EXCEPTION}, 'pass_with_exception', 'fail', 'exception_expired')
          ON CONFLICT (organization_id, exception_id, control_id) WHERE exception_id IS NOT NULL DO NOTHING

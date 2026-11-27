@@ -10,6 +10,8 @@ coverage/
 .DS_Store
 Thumbs.db
 *.tsbuildinfo
+# Transient per-run config written and removed by scripts/typecheck-tests.mjs (#337).
+tsconfig.typecheck-tests.json
 .vite/
 e2e-*.png
 test-*.png

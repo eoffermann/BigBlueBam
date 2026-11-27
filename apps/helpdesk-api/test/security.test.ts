@@ -663,7 +663,7 @@ describe('HB-6: agent org scoping', () => {
     // Session org wins: the key user's org lookup is never consulted.
     expect(dbMock.select).toHaveBeenCalledTimes(2);
     expect(ticketsChain.innerJoin).toHaveBeenCalled();
-    const { sql, params } = renderWhere(ticketsChain.where.mock.calls[0][0]);
+    const { sql, params } = renderWhere(ticketsChain.where.mock.calls[0]![0]);
     expect(sql).toContain('"projects"."org_id" = ');
     expect(params).toEqual([SESSION_ORG]);
   });
@@ -686,7 +686,7 @@ describe('HB-6: agent org scoping', () => {
 
     expect(res.statusCode).toBe(200);
     expect(dbMock.execute).not.toHaveBeenCalled();
-    const { sql, params } = renderWhere(ticketsChain.where.mock.calls[0][0]);
+    const { sql, params } = renderWhere(ticketsChain.where.mock.calls[0]![0]);
     expect(sql).toContain('"projects"."org_id" = ');
     expect(params).toEqual([KEY_USER_ORG]);
   });
