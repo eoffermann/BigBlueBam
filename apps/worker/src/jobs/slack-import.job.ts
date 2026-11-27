@@ -32,6 +32,7 @@ import { getWorkerStorageDriver } from '../utils/storage.js';
 import crypto from 'node:crypto';
 import { readBodyCapped, safeFetch } from '@bigbluebam/egress-guard';
 import { getDb } from '../utils/db.js';
+import type { InternalEnsureProjectInput } from '@bigbluebam/shared';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -212,6 +213,7 @@ export async function processSlackImportJob(
     dryRun: Boolean(row.mapping?.options?.dry_run),
     cancelChecker: deps.cancelChecker,
     fetchImpl: deps.fetchImpl,
+    apiFetchImpl: deps.apiFetchImpl,
   };
 
   try {
@@ -328,9 +330,11 @@ export interface SlackImportDeps {
   emailQueue?: EmailQueueLike;
   cancelChecker?: (importId: string) => Promise<boolean>;
   fetchImpl?: typeof fetch;
+  /** Test override for the worker-to-api call that creates a create_new project (#364). */
+  apiFetchImpl?: typeof fetch;
 }
 
-interface ImportContext {
+export interface ImportContext {
   importId: string;
   row: ImportRow;
   logger: Logger;
@@ -343,6 +347,8 @@ interface ImportContext {
   cancelChecker?: (importId: string) => Promise<boolean>;
   /** Test override; production downloads use egress-guard's own fetch. */
   fetchImpl?: typeof fetch;
+  /** Test override for the internal api call (#364); production uses global fetch. */
+  apiFetchImpl?: typeof fetch;
 }
 
 // ---------------------------------------------------------------------------
@@ -836,7 +842,67 @@ async function getOrCreateMigrationBot(orgId: string): Promise<string> {
 // Phase 3 — channel group
 // ---------------------------------------------------------------------------
 
-async function createChannelGroup(
+/**
+ * The body the worker sends to the api's POST /internal/projects/ensure for a create_new
+ * project (#364). The import mapping carries a free-form `key` (1-50 chars); the project's
+ * identity is its slug (unique per org) and its task ids use task_id_prefix (2-6 capitals).
+ * Both derive from the key, falling back to the name, then to fixed values.
+ */
+export function importProjectBody(
+  orgId: string,
+  initiatedBy: string,
+  choice: { name: string; key?: string | null },
+): InternalEnsureProjectInput {
+  const name = choice.name.trim().slice(0, 255) || 'Slack import';
+  const slug = slugify(choice.key ?? '') || slugify(name) || 'slack-import';
+  const letters = (s: string) => s.toUpperCase().replace(/[^A-Z]/g, '');
+  const fromKey = letters(choice.key ?? '');
+  const fromName = letters(name);
+  const prefix = fromKey.length >= 2 ? fromKey : fromName.length >= 2 ? fromName : 'SLK';
+  return {
+    org_id: orgId,
+    created_by: initiatedBy,
+    name,
+    slug,
+    task_id_prefix: prefix.slice(0, 6),
+  };
+}
+
+/**
+ * Create (or, on a replay, find) the import's project through the api, so it gets the creator
+ * membership and default phases and states that POST /projects gives (#364). The api is
+ * idempotent on (org_id, slug). Any non-2xx throws and fails the phase, like any other phase
+ * error, rather than importing into no project.
+ */
+export async function ensureImportProject(
+  ctx: Pick<ImportContext, 'row' | 'logger' | 'apiFetchImpl'>,
+  choice: { name: string; key?: string | null },
+): Promise<string> {
+  const secret = process.env.INTERNAL_SERVICE_SECRET ?? '';
+  if (!secret) throw new Error('slack-import: INTERNAL_SERVICE_SECRET is not set; cannot create the import project');
+  // #192: BBB_API_INTERNAL_URL is the worker's one name for the api's private base.
+  const base = (process.env.BBB_API_INTERNAL_URL ?? 'http://api:4000').replace(/\/+$/, '');
+  const body = importProjectBody(ctx.row.org_id, ctx.row.initiated_by, choice);
+  const started = Date.now();
+  ctx.logger.info({ slug: body.slug, task_id_prefix: body.task_id_prefix }, 'slack-import: creating project via api');
+  const res = await (ctx.apiFetchImpl ?? fetch)(`${base}/internal/projects/ensure`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-internal-secret': secret },
+    body: JSON.stringify(body),
+    signal: AbortSignal.timeout(30_000),
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    throw new Error(`slack-import: project create answered ${res.status} ${text.slice(0, 300)}`);
+  }
+  const json = (await res.json()) as { data?: { id?: string }; created?: boolean };
+  const id = json.data?.id;
+  if (!id) throw new Error('slack-import: project create answered no project id');
+  ctx.logger.info({ project_id: id, created: json.created, ms: Date.now() - started }, 'slack-import: project ready');
+  return id;
+}
+
+export async function createChannelGroup(
   ctx: ImportContext,
 ): Promise<{ channelGroupId: string; projectId: string | null }> {
   const db = getDb();
@@ -845,20 +911,7 @@ async function createChannelGroup(
     (project.mode === 'use_existing' ? project.project_id : null) ?? ctx.row.project_id ?? null;
 
   if (project.mode === 'create_new' && project.name && !projectId) {
-    // Create a fresh project. The minimum NOT NULLs on projects are
-    // (org_id, name, key, owner_id) per apps/api/src/db/schema/projects.ts.
-    const key =
-      project.key?.toUpperCase().slice(0, 10) ??
-      slugify(project.name).toUpperCase().slice(0, 10) ??
-      'SLACK';
-    const result = await db.execute(sql`
-      INSERT INTO projects (org_id, name, key, owner_id)
-      VALUES (${ctx.row.org_id}, ${project.name}, ${key}, ${ctx.row.initiated_by})
-      ON CONFLICT (org_id, key) DO UPDATE SET updated_at = NOW()
-      RETURNING id
-    `);
-    const rows = normalizeRows<{ id: string }>(result);
-    projectId = rows[0]?.id ?? null;
+    projectId = await ensureImportProject(ctx, project);
   }
 
   // If we already created the group in a prior run (resume), reuse it.

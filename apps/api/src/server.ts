@@ -100,6 +100,7 @@ import permissionsAdminRoutes from './routes/permissions-admin.routes.js';
 import internalPermissionsRoutes from './routes/internal-permissions.routes.js';
 import internalCanReadRoutes from './routes/internal-can-read.routes.js';
 import internalSystemErrorsRoutes from './routes/internal-system-errors.routes.js';
+import internalProjectsRoutes from './routes/internal-projects.routes.js';
 import deploySettingsRoutes from './routes/deploy-settings.routes.js';
 import configHealthRoutes from './routes/config-health.routes.js';
 import superuserLogsRoutes from './routes/superuser-logs.routes.js';
@@ -327,6 +328,8 @@ await fastify.register(internalPermissionsRoutes);
 // D-12: cross-app can-read preflight for the Bureau summon system.
 await fastify.register(internalCanReadRoutes);
 await fastify.register(internalSystemErrorsRoutes, { prefix: '/internal' });
+// #364: server-to-server create-or-get project by (org_id, slug) (worker Slack import).
+await fastify.register(internalProjectsRoutes, { prefix: '/internal' });
 await fastify.register(deploySettingsRoutes);
 await fastify.register(configHealthRoutes);
 await fastify.register(superuserLogsRoutes);

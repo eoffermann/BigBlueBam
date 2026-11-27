@@ -180,6 +180,46 @@ export async function createProject(orgId: string, data: CreateProjectInput, cre
   return result;
 }
 
+/** A postgres unique violation, raw (postgres-js) or wrapped by drizzle in .cause. */
+function isUniqueViolation(err: unknown): boolean {
+  const e = err as { code?: string; cause?: { code?: string } } | null;
+  return e?.code === '23505' || e?.cause?.code === '23505';
+}
+
+async function projectBySlug(orgId: string, slug: string) {
+  const [row] = await db
+    .select()
+    .from(projects)
+    .where(and(eq(projects.org_id, orgId), eq(projects.slug, slug)))
+    .limit(1);
+  return row ?? null;
+}
+
+/**
+ * Create-or-get a project by (org_id, slug) for server-to-server callers (#364, the worker's
+ * Slack import). A new project goes through createProject, so the creator gets the admin
+ * membership and the template's phases and task states exactly as from POST /projects. A slug
+ * the org already holds answers that project with created=false; a concurrent create that loses
+ * the unique race on projects_org_slug_idx re-reads the winner.
+ */
+export async function ensureProject(
+  orgId: string,
+  data: CreateProjectInput & { slug: string },
+  creatorUserId: string,
+): Promise<{ project: NonNullable<Awaited<ReturnType<typeof projectBySlug>>>; created: boolean }> {
+  const existing = await projectBySlug(orgId, data.slug);
+  if (existing) return { project: existing, created: false };
+  try {
+    const project = await createProject(orgId, data, creatorUserId);
+    return { project, created: true };
+  } catch (err) {
+    if (!isUniqueViolation(err)) throw err;
+    const winner = await projectBySlug(orgId, data.slug);
+    if (!winner) throw err;
+    return { project: winner, created: false };
+  }
+}
+
 export async function listProjects(
   orgId: string,
   userId: string,

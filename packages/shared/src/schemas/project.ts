@@ -24,6 +24,26 @@ export const createProjectSchema = z.object({
 
 export const updateProjectSchema = createProjectSchema.partial();
 
+/**
+ * Body of the api's server-to-server POST /internal/projects/ensure (#364). Creates a project
+ * through the same createProject the signed-in POST /projects uses (creator membership, template
+ * phases and task states) on behalf of created_by in org_id. Idempotent on (org_id, slug), so
+ * slug is required here: a replay answers the project that already holds the slug.
+ * Caller: the worker's Slack import, project mode create_new.
+ */
+export const internalEnsureProjectSchema = createProjectSchema.extend({
+  org_id: uuidSchema,
+  created_by: uuidSchema,
+  name: z.string().min(1).max(255),
+  slug: z
+    .string()
+    .min(1)
+    .max(100)
+    .regex(/^[a-z0-9-]+$/),
+});
+
+export type InternalEnsureProjectInput = z.infer<typeof internalEnsureProjectSchema>;
+
 export const addProjectMemberSchema = z.object({
   user_id: uuidSchema,
   role: z.enum(PROJECT_ROLES),

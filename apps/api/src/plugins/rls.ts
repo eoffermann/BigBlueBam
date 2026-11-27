@@ -3,6 +3,7 @@ import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { drizzle } from 'drizzle-orm/postgres-js';
 import { queryClient, rlsStorage, schema, type RlsStore } from '../db/index.js';
 import { env } from '../env.js';
+import { withReservedTransactions } from '../db/reserved-transactions.js';
 // Type-only: brings the FastifyContextConfig.rlsOrgScope augmentation into scope.
 import type {} from '../lib/rls-org-scope.js';
 
@@ -93,7 +94,9 @@ const rlsPlugin = fp(async (fastify: FastifyInstance) => {
     // undefined (reading 'parsers')" and every enforce-mode request 500'd (found by the #105
     // DB-backed test). A reserved connection runs with its parent pool's options, which drizzle
     // already patched when the pool instance was created, so hand it those.
-    store.db = drizzle(Object.assign(reserved, { options: queryClient.options }), { schema });
+    // withReservedTransactions: a reserved connection has no begin()/savepoint(), so without it
+    // every db.transaction in an org-bound request failed (#364).
+    store.db = drizzle(Object.assign(withReservedTransactions(reserved), { options: queryClient.options }), { schema });
   });
 
   const release = async (): Promise<void> => {

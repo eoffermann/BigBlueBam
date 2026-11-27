@@ -39,7 +39,7 @@ A tool/command "corresponds" to the endpoint(s) its handler calls. Sections are 
 
 | Surface | REST endpoints | …with an MCP tool | …without a tool | MCP-only tools (no endpoint) |
 |---|--:|--:|--:|--:|
-| Bam — Work management | 93 | 86 | 7 | 2 |
+| Bam — Work management | 94 | 86 | 8 | 2 |
 | Bam — Org, auth, admin & integrations | 158 | 37 | 121 | 0 |
 | Banter | 114 | 75 | 39 | 0 |
 | Beacon | 40 | 38 | 2 | 0 |
@@ -66,7 +66,7 @@ A tool/command "corresponds" to the endpoint(s) its handler calls. Sections are 
 | Bursar | 79 | 22 | 57 | 0 |
 | Bastion | 113 | 83 | 30 | 0 |
 | Cross-app platform | 46 | 32 | 14 | 6 |
-| **Total** | **1381** | **954** | **427** | **17** |
+| **Total** | **1382** | **954** | **428** | **17** |
 
 _Counts are summed from the per-section tables (each row's REST endpoint counted once even when several MCP tools share it). After the `feat/mcp-endpoint-parity` build the "with an MCP tool" total roughly doubled (≈334 → ≈690). Of the ~247 endpoints still tool-less, the large majority are now annotated `— _(skip: …)_` with a reason — auth/OAuth/session, public-inbound (forms/booking/portal/tracking), multipart/binary upload, binary export (PDF/SVG/CSV/.ics), raw credential/API-key admin, SuperUser/permission/account admin (Bam org/admin held to a deliberately conservative scope this pass), Yjs/scene/WebSocket realtime sync, internal/service-to-service routes, and slug/name resolvers done internally, plus the Helpdesk customer-portal routes (cookie-only) and the three agent routes with no tool yet. Some endpoints are shared by multiple MCP tools and many are internal / webhook / public-inbound (not user-facing), so treat the totals as close approximations of the surface size, not an exact public-API inventory. The remaining intentional gaps cluster in **Bam org/admin** (SuperUser & permissions admin, integrations, credentials — UI/CLI-only) and a few per-app binary/upload/realtime tails._
 
@@ -148,6 +148,7 @@ Notes:
 |---|---|---|---|
 | `GET /projects` | `list_projects` | List accessible projects | `apps/frontend/src/pages/dashboard.tsx` |
 | `POST /projects` | `create_project` | Create a project | `apps/frontend/src/pages/dashboard.tsx` |
+| `POST /internal/projects/ensure` | — _(skip: internal service-to-service route)_ | Create-or-get a project by (org_id, slug) on behalf of `created_by`, through the same createProject as `POST /projects` (creator admin membership, template phases and states); 201 created / 200 existing. `INTERNAL_SERVICE_SECRET`-gated, org bound from `body.org_id`; called by the worker's Slack import for project mode `create_new` (#364) | — *(internal service-to-service)* |
 | `GET /projects/:id` | `get_project` | Get one project | `apps/frontend/src/hooks/use-projects.ts` |
 | `PATCH /projects/:id` | `update_project` | Update project (admin) | `apps/frontend/src/pages/settings.tsx` |
 | `DELETE /projects/:id` | `archive_project` | Archive project (admin) | `apps/frontend/src/pages/settings.tsx` |
