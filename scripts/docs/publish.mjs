@@ -15,6 +15,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { readLaunchpadCatalog, docDirForAppId } from './lib/tool-source.mjs';
+import { syncSiteScreenshots } from './sync-site-screenshots.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -436,9 +437,12 @@ function checkReadme(appMetas) {
 
 function syncMarketingSite(appMetas) {
   const contentDir = path.join(ROOT, 'site', 'src', 'content', 'apps');
-  const screenshotsDir = path.join(ROOT, 'site', 'public', 'screenshots');
 
-  for (const [appName, meta] of Object.entries(appMetas)) {
+  // Screenshots: one path, identical names, every app with a screenshots dir
+  // (whether or not it has a marketing.md) (#380).
+  if (!dryRun) syncSiteScreenshots(ROOT);
+
+  for (const appName of Object.keys(appMetas)) {
     const srcMarketing = path.join(ROOT, 'docs', 'apps', appName, 'marketing.md');
     if (!fs.existsSync(srcMarketing)) continue;
 
@@ -448,30 +452,8 @@ function syncMarketingSite(appMetas) {
       ensureDir(contentDir);
       fs.copyFileSync(srcMarketing, destMarketing);
     }
-
-    // Copy screenshots directory
-    const srcScreenshots = path.join(ROOT, 'docs', 'apps', appName, 'screenshots');
-    if (fs.existsSync(srcScreenshots)) {
-      const destScreenshotsApp = path.join(screenshotsDir, appName);
-      if (!dryRun) {
-        copyDirRecursive(srcScreenshots, destScreenshotsApp);
-      }
-    }
   }
   console.log(`  Synced marketing content to site/`);
-}
-
-function copyDirRecursive(src, dest) {
-  ensureDir(dest);
-  for (const entry of fs.readdirSync(src, { withFileTypes: true })) {
-    const srcPath = path.join(src, entry.name);
-    const destPath = path.join(dest, entry.name);
-    if (entry.isDirectory()) {
-      copyDirRecursive(srcPath, destPath);
-    } else {
-      fs.copyFileSync(srcPath, destPath);
-    }
-  }
 }
 
 // ---------------------------------------------------------------------------

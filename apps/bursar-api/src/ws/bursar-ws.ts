@@ -1,7 +1,8 @@
 // The /bursar/ws hub (spec 11.1, issue #121). nginx proxies /bursar/ws to bursar-api's /ws.
 //
 // The SPA (apps/bursar/src/hooks/use-bursar-realtime.ts) connects with `?rooms=a,b` and also
-// sends `{ type: 'subscribe', rooms: [...] }` after open. Each requested room is authorized ONCE,
+// sends `{ type: 'subscribe', rooms: [...] }` after open. Every frame in both directions is
+// declared once in @bigbluebam/shared (schemas/bursar-realtime.ts, #374). Each requested room is authorized ONCE,
 // when it is joined, then cached on the socket; per-frame delivery is an org check plus a set
 // lookup in process memory. One Redis subscriber per process fans frames out.
 //
@@ -24,6 +25,7 @@ import Redis from 'ioredis';
 import { env } from '../env.js';
 import { requireAuth } from '../plugins/auth.js';
 import { viewerOf } from '../lib/http.js';
+import { bursarClientFrameSchema, type BursarServerFrame } from '@bigbluebam/shared';
 import { BURSAR_WS_CHANNEL, orgRoom, type BursarEnvelope } from '../lib/realtime.js';
 import { wsFrameGate } from '../lib/ws-frames.js';
 import * as requests from '../services/requests.service.js';
@@ -185,14 +187,15 @@ export default async function registerBursarWs(fastify: FastifyInstance) {
           if (denial) {
             if (denial.code === 'PERMISSION_DENIED') {
               try {
-                socket.send(JSON.stringify({ type: 'error', ...denial }));
+                socket.send(JSON.stringify({ type: 'error', ...denial } satisfies BursarServerFrame));
               } catch {
                 /* ignore */
               }
             }
             return;
           }
-          if (msg.type === 'subscribe' && Array.isArray(msg.rooms)) await onSubscribe(msg.rooms);
+          const frame = bursarClientFrameSchema.safeParse(msg);
+          if (frame.success && frame.data.type === 'subscribe') await onSubscribe(frame.data.rooms);
         })().catch(() => {});
       });
 
@@ -200,7 +203,9 @@ export default async function registerBursarWs(fastify: FastifyInstance) {
         join(requestedRooms.filter((r): r is string => typeof r === 'string').slice(0, MAX_ROOMS_PER_SOCKET))
           .then((allowed) => {
             try {
-              socket.send(JSON.stringify({ type: 'subscribed', rooms: [...entry.rooms], joined: allowed }));
+              socket.send(
+                JSON.stringify({ type: 'subscribed', rooms: [...entry.rooms], joined: allowed } satisfies BursarServerFrame),
+              );
             } catch {
               /* ignore */
             }
@@ -212,7 +217,7 @@ export default async function registerBursarWs(fastify: FastifyInstance) {
       subscribers.add(entry);
       await join(roomsFromQuery(request)).catch(() => []);
       try {
-        socket.send(JSON.stringify({ type: 'ready', rooms: [...entry.rooms] }));
+        socket.send(JSON.stringify({ type: 'ready', rooms: [...entry.rooms] } satisfies BursarServerFrame));
       } catch {
         /* ignore */
       }

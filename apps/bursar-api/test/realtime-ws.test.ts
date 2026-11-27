@@ -44,7 +44,7 @@ describe('bursar ws room authorization (#121)', () => {
 });
 
 describe('bursar ws fan-out (#121)', () => {
-  const frame = { type: 'leveling.progress' as const, room: `request:${REQ}`, payload: { offer: 1, offer_count: 3 } };
+  const frame = { type: 'leveling.progress' as const, room: `request:${REQ}`, payload: { run_id: 'r1', status: 'running', done: false, offer: 1, offer_count: 3 } };
 
   it('delivers only to sockets of the same org that joined the room', () => {
     const a = { orgId: ORG, rooms: new Set([`request:${REQ}`]), send: vi.fn() };
@@ -95,6 +95,31 @@ describe('bursar realtime publishers (#121)', () => {
   it('never throws when Redis is down', async () => {
     realtime.__setBursarPublisherForTests({ publish: vi.fn(async () => { throw new Error('ECONNREFUSED'); }) } as never);
     await expect(realtime.publishScopeProgress(ORG, REQ, { runId: 'd1', status: 'running', done: false, processedChunk: null, chunkCount: 2 })).resolves.toBeUndefined();
+  });
+});
+
+describe('one frame contract for publisher and SPA (#374)', () => {
+  afterEach(() => realtime.__setBursarPublisherForTests(null));
+
+  it('every published frame parses with the shared server-frame schema the SPA uses', async () => {
+    const { bursarServerFrameSchema } = await import('@bigbluebam/shared');
+    const publish = vi.fn(async () => 1);
+    realtime.__setBursarPublisherForTests({ publish } as never);
+    await realtime.publishScopeProgress(ORG, REQ, { runId: 'd1', status: 'running', done: false, processedChunk: null, chunkCount: 2 });
+    await realtime.publishLevelingProgress(ORG, REQ, { runId: 'r1', status: 'succeeded', done: true, processedOffer: 2, offerCount: 3 });
+    const frames = publish.mock.calls.map((c) => JSON.parse((c as unknown as [string, string])[1]).frame);
+    expect(frames.map((f) => f.type)).toEqual(['scope.progress', 'leveling.progress', 'matrix.updated']);
+    for (const f of frames) expect(bursarServerFrameSchema.safeParse(f).success, JSON.stringify(f)).toBe(true);
+  });
+
+  it('neither end re-declares the frame shape', async () => {
+    const { readFileSync } = await import('node:fs');
+    const { join } = await import('node:path');
+    const api = readFileSync(join(__dirname, '..', 'src', 'lib', 'realtime.ts'), 'utf8');
+    expect(api).not.toMatch(/interface BursarFrame\b|type BursarEventType\s*=/);
+    const spa = readFileSync(join(__dirname, '..', '..', 'bursar', 'src', 'hooks', 'use-bursar-realtime.ts'), 'utf8');
+    expect(spa).toMatch(/bursarServerFrameSchema/);
+    expect(spa).not.toMatch(/type:\s*string/);
   });
 });
 

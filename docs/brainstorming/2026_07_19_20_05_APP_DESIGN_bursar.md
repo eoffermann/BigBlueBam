@@ -925,6 +925,21 @@ exists in `apps/burn/src`, so: exponential backoff (1s, capped 30s, jittered), a
 "reconnecting" state, and **`GET /requests/:id/leveling-runs` polled at 5s as the authoritative
 fallback.**
 
+**Amended 2026-11-27 to match what ships (#374).** The hub is `apps/bursar-api/src/ws/bursar-ws.ts`
+and the frame contract (server events, the hub's `ready` / `subscribed` / `error` control frames,
+and the client `subscribe` frame) is declared once in `packages/shared/src/schemas/bursar-realtime.ts`;
+bursar-api publishes with it and the SPA's `useBursarRealtime` safeParses every frame against it.
+Two parts of the paragraph above are deferred, not dropped:
+
+- **`vendor:<id>` rooms are reserved and refused** until a server event targets them. No event is
+  vendor-scoped yet, and vendor reads carry their own permission (`bursar.vendor.read`) that the
+  socket's `bursar.request.read` gate does not cover, so the hub does not authorize them
+  speculatively.
+- **`leveling.progress` carries `offer n/N` only.** A leveling slice processes one whole offer, so
+  node `m/M` and window `w/W` progress inside an offer is not observable when the frame is sent. That
+  detail stays on the polled run row (`GET /requests/:id/leveling-runs`), which is authoritative
+  anyway.
+
 ---
 
 ## 12. MCP surface

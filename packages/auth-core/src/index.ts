@@ -70,6 +70,7 @@ export {
 export {
   KEY_PROJECT_RESTRICTED,
   checkKeyProjectAccess,
+  isKeyProjectExempt,
   isKeyProjectRestricted,
   keyProjectAccessChecked,
   keyProjectAllows,
@@ -77,6 +78,7 @@ export {
   keyProjectRestriction,
   refuseProjectRestrictedKey,
   requireKeyProjectChecked,
+  type KeyProjectExempt,
   type ProjectRestrictedUser,
 } from './key-project.js';
 

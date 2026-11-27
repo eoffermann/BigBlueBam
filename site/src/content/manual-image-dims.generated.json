@@ -29,7 +29,7 @@
   ],
   "/screenshots/bam/light/07-platform-smtp.png": [
     1440,
-    3403
+    3798
   ],
   "/screenshots/bam/light/08-org-smtp.png": [
     1440,
@@ -58,6 +58,18 @@
   "/screenshots/banter/light/06-preferences.png": [
     1440,
     900
+  ],
+  "/screenshots/basis/light/01-catalog.png": [
+    2880,
+    1800
+  ],
+  "/screenshots/basis/light/02-builder.png": [
+    2880,
+    1800
+  ],
+  "/screenshots/basis/light/03-metric-detail.png": [
+    2880,
+    1800
   ],
   "/screenshots/beacon/light/01-knowledge-home.png": [
     1440,
@@ -155,7 +167,23 @@
     1440,
     900
   ],
+  "/screenshots/bin/light/launchpad-with-bin.png": [
+    1440,
+    900
+  ],
   "/screenshots/bin/light/asset-library.png": [
+    1440,
+    900
+  ],
+  "/screenshots/bin/light/data-grid.png": [
+    1440,
+    900
+  ],
+  "/screenshots/bin/light/data-tree.png": [
+    1440,
+    900
+  ],
+  "/screenshots/bin/light/string-list.png": [
     1440,
     900
   ],
@@ -426,6 +454,18 @@
   "/screenshots/burn/light/rules.png": [
     2880,
     1800
+  ],
+  "/screenshots/bursar/light/01-vendor-portfolio.png": [
+    1440,
+    900
+  ],
+  "/screenshots/bursar/light/04-leveling-matrix.png": [
+    1440,
+    900
+  ],
+  "/screenshots/bursar/light/05-exclusion-diff.png": [
+    1440,
+    900
   ],
   "/screenshots/helpdesk/light/01-portal-entry.png": [
     1440,

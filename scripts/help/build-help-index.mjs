@@ -21,6 +21,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { stripMd } from '../lib/help-strip-md.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '..', '..');
@@ -57,15 +58,8 @@ export function slugify(text) {
     .replace(/-+/g, '-');
 }
 
-/** Strip inline markdown to plain text for the search index. */
-function stripMd(s) {
-  return s
-    .replace(/!\[[^\]]*\]\([^)]*\)/g, '') // images
-    .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1') // links -> text
-    .replace(/[*_`#>]/g, '')
-    .replace(/\s+/g, ' ')
-    .trim();
-}
+// stripMd (inline markdown -> plain search text) lives in scripts/lib so it is
+// unit-tested; it keeps inline code spans verbatim (#366).
 
 // Bold-span content we should NOT treat as a UI label (story/structure words).
 const LABEL_DENYLIST = new Set([

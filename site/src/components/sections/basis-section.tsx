@@ -75,7 +75,7 @@ export function BasisSection() {
       {/* Hero screenshot: the metric catalog with certified + draft metrics. */}
       <AnimatedReveal delay={0.1} withScale>
         <FloatingFrame
-          src="/screenshots/basis/light/catalog.png"
+          src="/screenshots/basis/light/01-catalog.png"
           alt="The Basis metric catalog listing governed metrics with certification badges"
         />
         <p className="mt-3 text-center text-sm text-zinc-500">
@@ -87,7 +87,7 @@ export function BasisSection() {
       <AnimatedReveal delay={0.13} withScale>
         <div className="mt-8 mx-auto max-w-3xl">
           <FloatingFrame
-            src="/screenshots/basis/light/builder.png"
+            src="/screenshots/basis/light/02-builder.png"
             alt="The Basis definition builder with a governed data source, measure, aggregation, and time column selected from dropdowns"
           />
           <p className="mt-3 text-center text-sm text-zinc-500">
@@ -100,7 +100,7 @@ export function BasisSection() {
       <AnimatedReveal delay={0.15} withScale>
         <div className="mt-8 mx-auto max-w-3xl">
           <FloatingFrame
-            src="/screenshots/basis/light/metric-detail.png"
+            src="/screenshots/basis/light/03-metric-detail.png"
             alt="A Basis metric detail view with the current value, full definition, certification controls, and immutable version history"
           />
           <p className="mt-3 text-center text-sm text-zinc-500">
@@ -114,7 +114,7 @@ export function BasisSection() {
       <AnimatedReveal delay={0.18} withScale>
         <div className="mt-8 mx-auto max-w-3xl">
           <FloatingFrame
-            src="/screenshots/basis/dark/builder.png"
+            src="/screenshots/basis/dark/02-builder.png"
             alt="The Basis definition builder in dark mode, with readable field dropdowns"
           />
           <p className="mt-3 text-center text-sm text-zinc-500">

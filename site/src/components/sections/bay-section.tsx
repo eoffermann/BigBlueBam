@@ -146,7 +146,7 @@ export function BaySection() {
               Served at{' '}
               <code className="rounded bg-zinc-200 px-1.5 py-0.5 text-xs">/bay/</code>, a dedicated
               SPA with token-gated guest review at{' '}
-              <code className="rounded bg-zinc-200 px-1.5 py-0.5 text-xs">/bay/r/:token</code>.
+              <code className="rounded bg-zinc-200 px-1.5 py-0.5 text-xs">/bay/r#&lt;token&gt;</code>.
             </p>
           </div>
           <Button href="/bay/" variant="primary" size="sm">

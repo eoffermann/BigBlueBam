@@ -209,7 +209,15 @@ export default async function agentPoliciesRoutes(fastify: FastifyInstance) {
     Querystring: { tool?: string };
   }>(
     '/v1/agent-policies/:agent_user_id/check',
-    { preHandler: [requireAuth, requireScope('read'), shadowOnly('bam.agent_policy_check.create')] },
+    {
+      preHandler: [requireAuth, requireScope('read'), shadowOnly('bam.agent_policy_check.create')],
+      // #367: the MCP policy gate asks this about its own caller before every tool call. A
+      // project-restricted agent key may ask about itself (and only itself).
+      config: {
+        keyProjectExempt: (req) =>
+          (req.params as { agent_user_id?: string }).agent_user_id === req.user?.id,
+      },
+    },
     async (request, reply) => {
       const parsed = checkQuerySchema.safeParse(request.query);
       if (!parsed.success) {

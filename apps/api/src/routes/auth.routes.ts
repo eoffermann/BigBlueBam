@@ -337,7 +337,11 @@ export default async function authRoutes(fastify: FastifyInstance) {
     return reply.send({ data: { success: true } });
   });
 
-  fastify.get('/auth/me', { preHandler: [requireAuth] }, async (request, reply) => {
+  // keyProjectExempt (#367): identity-only, it describes the caller and nothing else, so a
+  // project-restricted API key may call it. The MCP policy gate resolves its caller here; without
+  // the exemption every restricted agent failed closed as AGENT_DISABLED. PATCH /auth/me is NOT
+  // exempt.
+  fastify.get('/auth/me', { preHandler: [requireAuth], config: { keyProjectExempt: true } }, async (request, reply) => {
     const user = await authService.getUserById(request.user!.id);
     if (!user) {
       return reply.status(404).send({
