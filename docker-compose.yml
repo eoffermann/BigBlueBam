@@ -854,6 +854,13 @@ services:
       # Calls the resolver via HTTP at $BBB_API_INTERNAL_URL.
       - BBB_PERMISSIONS_ENFORCE=${BBB_PERMISSIONS_ENFORCE:-warn}
       - INTERNAL_SERVICE_SECRET=${INTERNAL_SERVICE_SECRET:-}
+      # ICS feed fetches go through @bigbluebam/egress-guard, which refuses
+      # private addresses. The GILLIGAN demo seed hosts its Book calendar feed
+      # on this stack's MinIO (http://minio:9000/gilligan-feeds/...) so the demo
+      # needs no internet (#247); this exact host:port is the only exception.
+      # Set EGRESS_ALLOW_PRIVATE_HOSTS= (empty) in .env to make the guard
+      # strict. The Railway catalog never sets it.
+      - EGRESS_ALLOW_PRIVATE_HOSTS=${EGRESS_ALLOW_PRIVATE_HOSTS-minio:9000}
     depends_on:
       migrate:
         condition: service_completed_successfully
