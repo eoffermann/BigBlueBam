@@ -75,3 +75,37 @@ export function findBareOrgGucCasts(strippedText) {
   }
   return [...found.values()].sort((a, b) => a.line - b.line);
 }
+
+function normalizeTable(name) {
+  return name.replace(/"/g, '').replace(/^public\./i, '').toLowerCase();
+}
+
+/**
+ * Rule `drop-column-separate-release` (#375). A migration that adds a column
+ * to a table and drops a column of the same table is an expand and a contract
+ * in one deploy: the previous release still reads the dropped column while it
+ * serves, and a rollback to it is impossible. The drop must ship in a later
+ * migration, released after the code that stops reading the column.
+ */
+export function findSameFileAddDropColumn(strippedText) {
+  const re = /\balter\s+table\s+(?:if\s+exists\s+)?(?:only\s+)?("?[a-z_][\w$]*"?(?:\."?[a-z_][\w$]*"?)?)([^;]*)/gi;
+  const adds = new Set();
+  const drops = [];
+  let m;
+  while ((m = re.exec(strippedText)) !== null) {
+    const table = normalizeTable(m[1]);
+    const body = m[2];
+    const bodyStart = m.index + m[0].length - body.length;
+    if (/\badd\s+column\b/i.test(body)) adds.add(table);
+    const dropRe = /\bdrop\s+column\s+(?:if\s+exists\s+)?("?[a-z_][\w$]*"?)/gi;
+    let d;
+    while ((d = dropRe.exec(body)) !== null) {
+      drops.push({
+        line: lineAt(strippedText, bodyStart + d.index),
+        table,
+        column: d[1].replace(/"/g, '').toLowerCase(),
+      });
+    }
+  }
+  return drops.filter((d) => adds.has(d.table));
+}

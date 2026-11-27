@@ -26,7 +26,9 @@
 //      $$ function or DO bodies are not top level and are fine.
 //   5. org-guc-nullif (#381): current_setting('app.current_org_id')::uuid
 //      must be NULLIF(current_setting(...), '')::uuid (an emptied GUC is '').
-//   (5 lives in scripts/lib/migration-lint-rules.mjs, unit tested.)
+//   6. drop-column-separate-release (#375): no DROP COLUMN on a table the
+//      same file adds a column to; the contract ships in a later release.
+//   (5 and 6 live in scripts/lib/migration-lint-rules.mjs, unit tested.)
 //
 // Inline escape: append `-- noqa: <rule-name>` on the offending line to
 // silence a single rule. Use sparingly and only with justification.
@@ -49,7 +51,11 @@ import { readdirSync, readFileSync, existsSync } from 'node:fs';
 import { join, resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { findTopLevelTransactionControl } from './lib/sql-top-level.mjs';
-import { findBareOrgGucCasts, stripSqlComments } from './lib/migration-lint-rules.mjs';
+import {
+  findBareOrgGucCasts,
+  findSameFileAddDropColumn,
+  stripSqlComments,
+} from './lib/migration-lint-rules.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const MIGRATIONS_DIR = resolve(__dirname, '..', 'infra', 'postgres', 'migrations');
@@ -143,6 +149,21 @@ const OFF_FILE_SUPPRESSIONS = {
   '0159_permissions_drop_legacy_role_columns.sql': {
     13: ['no-transaction-control'],
     23: ['no-transaction-control'],
+  },
+  // drop-column-separate-release (#375): expand and contract of one table in
+  // one file, predating the rule. Applied everywhere, bodies frozen. 0340 is
+  // the Bay token_hash migration that motivated the rule; its drop already ran
+  // wherever 0340 applied, so it cannot be split retroactively.
+  '0029_bearing_schema_alignment.sql': {
+    30: ['drop-column-separate-release'],
+    31: ['drop-column-separate-release'],
+    32: ['drop-column-separate-release'],
+    33: ['drop-column-separate-release'],
+    91: ['drop-column-separate-release'],
+    92: ['drop-column-separate-release'],
+  },
+  '0340_bay_review_link_token_hash.sql': {
+    42: ['drop-column-separate-release'],
   },
   // org-guc-nullif (#381): bare current_setting('app.current_org_id')::uuid
   // casts that predate the rule. Applied everywhere, bodies frozen; 0355
@@ -415,6 +436,16 @@ function checkFile(filename, content) {
       line - 1,
       'org-guc-nullif',
       "cast app.current_org_id as NULLIF(current_setting('app.current_org_id', true), '')::uuid; the bare ::uuid cast fails with 22P02 when the GUC is an empty string",
+    );
+  }
+
+  // Rule: drop-column-separate-release (#375). Expand and contract of one
+  // table in one file breaks the release that is still serving.
+  for (const { line, table, column } of findSameFileAddDropColumn(strippedText)) {
+    check(
+      line - 1,
+      'drop-column-separate-release',
+      `DROP COLUMN ${table}.${column} in the same migration that adds a column to ${table}: ship the drop in a later migration, released after the code stops reading the column`,
     );
   }
 
