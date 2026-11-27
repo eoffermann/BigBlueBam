@@ -3,11 +3,12 @@ import path from 'node:path';
 import { test, expect } from '../../../fixtures/base.fixture';
 
 // Bastion M11 user story 16 (spec 11.4): Bastion appears on the Launchpad and opens /bastion/;
-// the marketing /docs page lists the Bastion MCP tools.
+// the marketing /docs page (the BigBlueBam Manual) names Bastion with its MCP tool count.
 //
 // The tool count is not hard-coded: it comes from the committed, generated catalog
 // (site/src/content/docs-catalog.generated.json, built by `pnpm docs:catalog` from
-// apps/mcp-server/src/tools/bastion-tools.ts), the same file the /docs page renders from.
+// apps/mcp-server/src/tools/bastion-tools.ts), the same count the manual's suite
+// introduction is generated with.
 //
 // Auth: the default authenticated context (.auth/admin.json) as Skipper. Read-only.
 // The marketing site is not behind the app nginx; it serves itself on SITE_PORT (default 3000),
@@ -58,11 +59,13 @@ test.describe('Bastion - Launchpad and docs (M11)', () => {
     await expect(page.locator('a[href="/b3/"]').filter({ hasText: 'Bam' })).toBeVisible();
     await page.keyboard.press('Escape');
 
-    // Marketing /docs: the MCP tool catalog lists Bastion with its generated count.
+    // Marketing /docs is the BigBlueBam Manual (site/src/App.tsx routes /docs to ManualPage);
+    // its suite introduction names every app with its generated MCP tool count, and the sidebar
+    // links to the Bastion chapter.
     const count = bastionToolCount();
     expect(count).toBeGreaterThan(0);
     await page.goto(`${SITE_URL}/docs`);
-    await expect(page.getByRole('heading', { name: new RegExp(`^Bastion\\s*\\(${count} tools\\)$`) })).toBeVisible();
-    await expect(page.locator('a[href="#bastion"]')).toContainText(String(count));
+    await expect(page.getByText(`Bastion (${count} tools)`, { exact: false }).first()).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Bastion', exact: true }).first()).toBeVisible();
   });
 });
