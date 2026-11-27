@@ -38,7 +38,7 @@ export default async function viewRoutes(fastify: FastifyInstance) {
   // ── POST /projects/:id/views ──────────────────────────────────────────
   fastify.post<{ Params: { id: string } }>(
     '/projects/:id/views',
-    { preHandler: [requireAuth, fastify.requireCan('bam.project_view.create'), requireScope('read_write')] },
+    { preHandler: [requireAuth, requireProjectAccess(), fastify.requireCan('bam.project_view.create'), requireScope('read_write')] },
     async (request, reply) => {
       const bodySchema = z.object({
         name: z.string().min(1).max(255),

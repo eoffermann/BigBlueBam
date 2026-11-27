@@ -31,7 +31,7 @@ export default async function sprintRoutes(fastify: FastifyInstance) {
 
   fastify.post<{ Params: { id: string } }>(
     '/projects/:id/sprints',
-    { preHandler: [requireAuth, fastify.requireCan('bam.project_sprint.create'), requireScope('read_write')] },
+    { preHandler: [requireAuth, requireProjectAccess(), fastify.requireCan('bam.project_sprint.create'), requireScope('read_write')] },
     async (request, reply) => {
       const data = createSprintSchema.parse(request.body);
 

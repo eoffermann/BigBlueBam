@@ -54,7 +54,7 @@ export default async function templateRoutes(fastify: FastifyInstance) {
   // ── POST /projects/:id/task-templates ─────────────────────────────────
   fastify.post<{ Params: { id: string } }>(
     '/projects/:id/task-templates',
-    { preHandler: [requireAuth, fastify.requireCan('bam.project_task_template.create'), requireScope('read_write')] },
+    { preHandler: [requireAuth, requireProjectAccess(), fastify.requireCan('bam.project_task_template.create'), requireScope('read_write')] },
     async (request, reply) => {
       const bodySchema = z.object({
         name: z.string().min(1).max(255),
@@ -92,7 +92,7 @@ export default async function templateRoutes(fastify: FastifyInstance) {
   // ── POST /projects/:id/task-templates/:templateId/apply ───────────────
   fastify.post<{ Params: { id: string; templateId: string } }>(
     '/projects/:id/task-templates/:templateId/apply',
-    { preHandler: [requireAuth, fastify.requireCan('bam.project_task_template_apply.create'), requireScope('read_write')] },
+    { preHandler: [requireAuth, requireProjectAccess(), fastify.requireCan('bam.project_task_template_apply.create'), requireScope('read_write')] },
     async (request, reply) => {
       const overrideSchema = z.object({
         title: z.string().optional(),

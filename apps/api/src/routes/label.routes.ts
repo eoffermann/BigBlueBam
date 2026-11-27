@@ -75,7 +75,7 @@ export default async function labelRoutes(fastify: FastifyInstance) {
 
   fastify.post<{ Params: { id: string } }>(
     '/projects/:id/labels',
-    { preHandler: [requireAuth, fastify.requireCan('bam.project_label.create'), requireScope('read_write')] },
+    { preHandler: [requireAuth, requireProjectAccess(), fastify.requireCan('bam.project_label.create'), requireScope('read_write')] },
     async (request, reply) => {
       const schema = z.object({
         name: z.string().max(100),
