@@ -215,6 +215,8 @@ async function ensureComplianceProject() {
   } else {
     log(`  reusing project "${project.name}"`);
   }
+  const current = must(await bastion('GET', '/setup'), 'GET /setup').data.compliance_project;
+  if (current?.id === project.id) return;
   must(await bastion('POST', '/setup/compliance-project', { project_id: project.id }), 'set compliance project');
 }
 
@@ -664,12 +666,15 @@ async function seedGithubHistory() {
 async function seedOwnersAndWeights() {
   const m = EXP.m6;
   const professor = await userIdByEmail(m.laptop.ownerEmail);
+  // Only write what differs: every PATCH is a `control.update` audit row, even when nothing changes.
   for (const key of m.professorOwns) {
     const c = await controlByKey(key);
+    if (c.owner_user_id === professor) continue;
     must(await bastion('PATCH', `/controls/${c.id}`, { owner_user_id: professor }), `owner of ${key}`);
   }
   for (const [key, weight] of Object.entries(m.riskWeights)) {
     const c = await controlByKey(key);
+    if (Number(c.risk_weight) === Number(weight)) continue;
     must(await bastion('PATCH', `/controls/${c.id}`, { risk_weight: weight }), `risk weight of ${key}`);
   }
 }
@@ -1262,7 +1267,12 @@ async function main() {
   const ids = {};
   ids.soc2 = await adoptAndCompile('soc2');
   log('company profile (ten answers)...');
-  must(await bastion('PATCH', '/setup/profile', EXP.companyProfile), 'save profile');
+  const savedProfile = must(await bastion('GET', '/setup'), 'GET /setup').data.company_profile ?? {};
+  if (Object.entries(EXP.companyProfile).some(([k, v]) => savedProfile[k] !== v)) {
+    must(await bastion('PATCH', '/setup/profile', EXP.companyProfile), 'save profile');
+  } else {
+    log('  already saved');
+  }
   await ensureComplianceProject();
   ids.iso27001 = await adoptAndCompile('iso27001');
   await decideIsoApplicability(ids.iso27001);
