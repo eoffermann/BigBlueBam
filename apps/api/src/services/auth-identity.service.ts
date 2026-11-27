@@ -12,16 +12,27 @@
  * auth, login) uses this module, so the fact "identity is resolved without an
  * org context" lives in one place.
  *
+ * The bbam_ key rule itself (candidate query, DoS caps, expiry and rotation
+ * grace, owner state) is @bigbluebam/auth-core's verifyApiKeyToken, the one
+ * every service in the suite uses (#340). This module binds it to the api's db.
+ *
  * Under the default advisory posture the functions return exactly what the
  * old direct queries did.
  */
-import { inArray, sql } from 'drizzle-orm';
+import { sql } from 'drizzle-orm';
 import argon2 from 'argon2';
+import {
+  sqlApiKeyStore,
+  verifyApiKeyToken as verifyWithStore,
+  type ApiKeyCandidate,
+  type ApiKeyOwner,
+  type WarnLogger,
+} from '@bigbluebam/auth-core';
 import { db } from '../db/index.js';
-import type { apiKeys } from '../db/schema/api-keys.js';
-import { users } from '../db/schema/users.js';
 
-export type ApiKeyRow = typeof apiKeys.$inferSelect;
+export { isApiKeyUsable } from '@bigbluebam/auth-core';
+export type { ApiKeyOwner };
+export type VerifiedApiKey = ApiKeyCandidate;
 
 function rowsOf<T>(raw: unknown): T[] {
   return (Array.isArray(raw) ? raw : ((raw as { rows?: unknown[] })?.rows ?? [])) as T[];
@@ -32,139 +43,27 @@ function toDate(v: unknown): Date | null {
   return v instanceof Date ? v : new Date(v as string);
 }
 
-/** api_keys rows whose key_prefix matches (at most `limit`, capped at 64). */
-export async function findApiKeyCandidates(prefix: string, limit: number): Promise<ApiKeyRow[]> {
-  const raw = await db.execute(sql`SELECT * FROM auth_api_key_candidates(${prefix}, ${limit})`);
-  return rowsOf<Record<string, unknown>>(raw).map((r) => ({
-    ...(r as unknown as ApiKeyRow),
-    expires_at: toDate(r.expires_at),
-    created_at: toDate(r.created_at) as Date,
-    last_used_at: toDate(r.last_used_at),
-    rotated_at: toDate(r.rotated_at),
-    rotation_grace_expires_at: toDate(r.rotation_grace_expires_at),
-  }));
-}
+/** The api's binding of the shared key store: its own db.execute and argon2. */
+export const apiKeyStore = sqlApiKeyStore({
+  sql,
+  execute: (query) => db.execute(query),
+  verifyHash: (hash, token) => argon2.verify(hash, token),
+});
 
 /** Bump api_keys.last_used_at for a key that just authenticated. */
 export async function touchApiKey(keyId: string): Promise<void> {
-  await db.execute(sql`SELECT auth_touch_api_key(${keyId}::uuid)`);
+  await apiKeyStore.touch(keyId);
 }
 
 /**
- * Whether a key row may authenticate at `now`, independent of its secret.
- * A key past expires_at is refused unless it was rotated and its rotation
- * grace window is still open: rotation keeps the predecessor working so
- * callers can roll over without downtime.
- */
-export function isApiKeyUsable(
-  key: Pick<ApiKeyRow, 'expires_at' | 'rotated_at' | 'rotation_grace_expires_at'>,
-  now: Date = new Date(),
-): boolean {
-  if (!key.expires_at || new Date(key.expires_at) >= now) return true;
-  return !!key.rotated_at && !!key.rotation_grace_expires_at && new Date(key.rotation_grace_expires_at) > now;
-}
-
-export interface ApiKeyOwner {
-  id: string;
-  org_id: string;
-  email: string;
-  display_name: string;
-  avatar_url: string | null;
-  timezone: string;
-  is_active: boolean;
-  is_superuser: boolean;
-  kind: (typeof users.$inferSelect)['kind'];
-}
-
-export interface VerifiedApiKey {
-  apiKey: ApiKeyRow;
-  user: ApiKeyOwner;
-}
-
-interface WarnLogger {
-  warn: (obj: object, msg: string) => void;
-}
-
-/** Service-account tokens are `bbam_svc_<random>`, so their 8-char prefix is always this. */
-const SVC_KEY_PREFIX = 'bbam_svc';
-/** Fetch/verify ceiling for that shared bucket (#40). */
-const SVC_BUCKET_MAX = 64;
-
-/**
- * The api's single rule for "does this bbam_ token authenticate, and as whom".
- * Used by the auth plugin (Bearer) and the iCal feed (?token=), so the two can
- * never disagree about expiry, rotation grace, the DoS cap or owner state.
- *
- *  - Candidates are indexed by the 8-char key_prefix (through the #105 identity
- *    function, since the org is not known yet) and Argon2id-verified.
- *  - #40: the 'bbam_svc' prefix is shared by every service-account key, so that
- *    bucket fetches and verifies up to SVC_BUCKET_MAX rows. For any other prefix
- *    more than 3 candidates signals a forced-Argon2 attempt (P2-11) and the
- *    lookup collapses to the first candidate.
- *  - P2-10: argon2.verify always runs before the expiry check, so expired and
- *    wrong keys cost the same wall time. A malformed stored hash counts as a
- *    failed verify instead of throwing.
- *  - isApiKeyUsable decides expiry and the rotation grace window.
- *  - The owning user must exist and be active.
- *
+ * The api's single rule for "does this bbam_ token authenticate, and as whom":
+ * @bigbluebam/auth-core's verifyApiKeyToken over the api's db. Used by the auth
+ * plugin (Bearer) and the iCal feed (?token=), so the two can never disagree.
  * The caller decides what the key may do (scope, org pinning) and bumps
  * last_used_at via touchApiKey.
  */
 export async function verifyApiKeyToken(token: string, log?: WarnLogger): Promise<VerifiedApiKey | null> {
-  if (!token) return null;
-  const prefix = token.slice(0, 8);
-  const isSvcBucket = prefix === SVC_KEY_PREFIX;
-
-  const keyRows = await findApiKeyCandidates(prefix, isSvcBucket ? SVC_BUCKET_MAX : 10);
-  if (keyRows.length === 0) return null;
-
-  // users is not org-gated; the owners are joined in here.
-  const ownerRows: ApiKeyOwner[] = await db
-    .select({
-      id: users.id,
-      org_id: users.org_id,
-      email: users.email,
-      display_name: users.display_name,
-      avatar_url: users.avatar_url,
-      timezone: users.timezone,
-      is_active: users.is_active,
-      is_superuser: users.is_superuser,
-      kind: users.kind,
-    })
-    .from(users)
-    .where(inArray(users.id, [...new Set(keyRows.map((k) => k.user_id))]));
-  const ownerById = new Map(ownerRows.map((u) => [u.id, u]));
-  const candidates = keyRows.flatMap((apiKey) => {
-    const user = ownerById.get(apiKey.user_id);
-    return user ? [{ apiKey, user }] : [];
-  });
-
-  const verifyCandidates = !isSvcBucket && candidates.length > 3 ? candidates.slice(0, 1) : candidates;
-  if (!isSvcBucket && candidates.length > 3) {
-    log?.warn(
-      { prefix, candidate_count: candidates.length },
-      'Suspicious number of API key candidates for prefix; limiting to first candidate',
-    );
-  } else if (isSvcBucket && candidates.length >= SVC_BUCKET_MAX) {
-    // At the ceiling a valid key could fall outside the fetched window; the
-    // degenerate bucket needs the prefix-lengthening follow-up (#40).
-    log?.warn(
-      { prefix, candidate_count: candidates.length },
-      'Service-account prefix bucket hit SVC_BUCKET_MAX; some keys may not authenticate until prefixes are lengthened (#40 follow-up)',
-    );
-  }
-
-  for (const candidate of verifyCandidates) {
-    let valid = false;
-    try {
-      valid = await argon2.verify(candidate.apiKey.key_hash, token);
-    } catch (err) {
-      log?.warn({ err, api_key_id: candidate.apiKey.id }, 'argon2.verify threw on api key candidate; treating as invalid');
-    }
-    if (!isApiKeyUsable(candidate.apiKey)) continue;
-    if (valid && candidate.user.is_active) return candidate;
-  }
-  return null;
+  return verifyWithStore(token, apiKeyStore, log);
 }
 
 export interface LiveMembershipRow {

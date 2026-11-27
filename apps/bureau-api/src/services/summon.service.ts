@@ -54,6 +54,7 @@ import {
   type CrossAppName,
 } from './cross-app-access.service.js';
 import { emitSummonIssued } from '../lib/bureau-events.js';
+import { isDegradedReason } from '@bigbluebam/shared/cross-app-access';
 
 // ─────────────────────────────────────────────────────────────────────
 // Constants
@@ -140,6 +141,12 @@ export interface FanOutSummonArgs {
   targetLabel?: string | null;
   lkRoomHint?: string | null;
   recipients: SummonRecipientRecord[];
+  /**
+   * The plan's denied recipients. Any whose access check was UNAVAILABLE (a degraded deny, not a
+   * real "no") is owed a retry, which only the worker job does, so their presence forces the
+   * offload whatever the recipient count (#341).
+   */
+  denied?: SummonRecipientRecord[];
   /** When true, force inline fan-out regardless of recipient count (used by tests / worker). */
   forceInline?: boolean;
   /**
@@ -431,8 +438,12 @@ function getFanoutQueue(redis: Redis): Queue {
  * offloaded branch (so we never double-fire).
  */
 export async function fanOutSummon(args: FanOutSummonArgs): Promise<void> {
+  // #341: the inline path has no retry, so a summon with any unavailable access check goes to
+  // the worker, which re-checks those recipients with backoff (#330) instead of leaving them
+  // recorded as a final no_access after a brief board-api/brief-api outage.
   const offload =
-    !args.forceInline && args.recipients.length > FANOUT_INLINE_LIMIT;
+    !args.forceInline &&
+    (args.recipients.length > FANOUT_INLINE_LIMIT || owesAccessRecheck(args.denied ?? []));
 
   if (offload) {
     const queue = getFanoutQueue(args.redis);
@@ -499,6 +510,15 @@ export async function fanOutSummon(args: FanOutSummonArgs): Promise<void> {
   });
 }
 
+/**
+ * True when any denied recipient's access check was unavailable (a degraded deny recorded with a
+ * `degraded_` reason by planSummon) rather than a real answer. The one test both summon paths use
+ * to decide that a recipient is owed a re-check (#330 worker, #341 inline).
+ */
+export function owesAccessRecheck(denied: ReadonlyArray<Pick<SummonRecipientRecord, 'reason'>>): boolean {
+  return denied.some((r) => isDegradedReason(r.reason));
+}
+
 // ─────────────────────────────────────────────────────────────────────
 // reportDenials
 // ─────────────────────────────────────────────────────────────────────
@@ -510,9 +530,13 @@ export async function fanOutSummon(args: FanOutSummonArgs): Promise<void> {
  * skipping the call when denied.length === 0.
  */
 export async function reportDenials(args: ReportDenialsArgs): Promise<void> {
+  // An unavailable check is not a denial: the worker retries it (#341), so it is not offered to
+  // the summoner as someone to "grant access" to.
+  const denied = args.denied.filter((r) => !isDegradedReason(r.reason));
+  if (denied.length === 0) return;
   const payload = frame('summon_access_report', {
     summonId: args.summonId,
-    denied: args.denied.map((r) => ({ userId: r.userId, name: r.name })),
+    denied: denied.map((r) => ({ userId: r.userId, name: r.name })),
     canShare: args.canShare,
   });
   await publishUserTarget(args.redis, args.summonerId, payload);

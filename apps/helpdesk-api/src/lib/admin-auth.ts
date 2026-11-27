@@ -31,8 +31,8 @@ import { sql } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import { verifyAgentApiKey } from './agent-auth.js';
 import { bamBearerToken, verifyBamApiKey, type BamApiKeyCaller } from './bam-api-key.js';
+import { ORG_ADMIN_ROLES, keyRoleCapApplies, scopeAtLeast } from '@bigbluebam/auth-core';
 
-const ADMIN_ROLES: ReadonlySet<string> = new Set(['admin', 'owner']);
 
 declare module 'fastify' {
   interface FastifyRequest {
@@ -135,7 +135,7 @@ export async function requireAdminAuth(request: FastifyRequest, reply: FastifyRe
     // Mirrors apps/api: a write on an admin surface needs an 'admin'-scope
     // key (requireScope('admin')); reads accept any scope.
     const isRead = request.method === 'GET' || request.method === 'HEAD';
-    if (!isRead && apiKey.scope !== 'admin') {
+    if (!isRead && !scopeAtLeast(apiKey.scope, 'admin')) {
       return deny(403, 'FORBIDDEN', "API key requires at least 'admin' scope");
     }
     // A non-SuperUser key is pinned to its own org (apps/api P2-8), whatever
@@ -151,7 +151,11 @@ export async function requireAdminAuth(request: FastifyRequest, reply: FastifyRe
   }
 
   const { member, role } = await orgRole(userId, orgId);
-  const allowed = member && (viaAgentKey || (role !== null && ADMIN_ROLES.has(role)));
+  // The org-admin role set and the service/agent key exemption are
+  // @bigbluebam/auth-core's (#340), the same rule requireScope('admin') applies.
+  // A service/agent account's admin-scope key stands on its own scope, as it does there.
+  const roleCapExempt = apiKey !== null && scopeAtLeast(apiKey.scope, 'admin') && !keyRoleCapApplies(apiKey.kind);
+  const allowed = member && (viaAgentKey || roleCapExempt || (role !== null && ORG_ADMIN_ROLES.has(role)));
   if (!allowed) {
     request.log.warn(
       { user_id: userId, target_org_id: orgId, member, role, via_agent_key: viaAgentKey, path: request.url },

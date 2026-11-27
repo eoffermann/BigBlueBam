@@ -1,3 +1,5 @@
+import { ORG_ADMIN_ROLES } from '@bigbluebam/auth-core';
+
 /** Default org permission settings. Applied when a setting is not explicitly configured.
  *
  * TODO (P2-1 unification): These permissions are ALSO partially duplicated in
@@ -68,5 +70,5 @@ export function checkOrgPermission(
 
 /** Check if a user's org role bypasses permission restrictions (admin/owner). */
 export function isOrgPrivileged(userRole: string): boolean {
-  return userRole === 'admin' || userRole === 'owner';
+  return ORG_ADMIN_ROLES.has(userRole);
 }

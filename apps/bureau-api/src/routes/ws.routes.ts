@@ -1497,6 +1497,7 @@ export default async function wsRoutes(fastify: FastifyInstance) {
               targetLabel,
               lkRoomHint,
               recipients: plan.eligibleRecipients,
+              denied: plan.deniedRecipients,
               logger: fastify.log,
             });
 

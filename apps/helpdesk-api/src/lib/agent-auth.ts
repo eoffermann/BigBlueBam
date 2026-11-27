@@ -2,6 +2,7 @@ import type { FastifyRequest, FastifyReply } from 'fastify';
 import { eq, sql } from 'drizzle-orm';
 import argon2 from 'argon2';
 import { carriesInternalToken, createInternalSecretGuard } from '@bigbluebam/service-health';
+import { scopeAtLeast } from '@bigbluebam/auth-core';
 import { env } from '../env.js';
 import { db } from '../db/index.js';
 import { helpdeskAgentApiKeys } from '../db/schema/helpdesk-agent-api-keys.js';
@@ -45,7 +46,6 @@ declare module 'fastify' {
 }
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const WRITE_SCOPES: ReadonlySet<string> = new Set(['read_write', 'admin']);
 
 function rowsOf(raw: unknown): Array<Record<string, unknown>> {
   return (Array.isArray(raw) ? raw : ((raw as { rows?: unknown[] })?.rows ?? [])) as Array<
@@ -210,7 +210,7 @@ async function tryBamBearerAuth(request: FastifyRequest, reply: FastifyReply): P
   }
 
   const isRead = request.method === 'GET' || request.method === 'HEAD';
-  if (!isRead && !WRITE_SCOPES.has(caller.scope)) {
+  if (!isRead && !scopeAtLeast(caller.scope, 'read_write')) {
     deny(request, reply, 403, 'FORBIDDEN', "API key requires at least 'read_write' scope");
     return true;
   }

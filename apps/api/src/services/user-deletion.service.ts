@@ -48,6 +48,7 @@ import { projectMemberships } from '../db/schema/project-memberships.js';
 import { passwordResetTokens } from '../db/schema/password-reset-tokens.js';
 import { notifications } from '../db/schema/notifications.js';
 import { accountGroupMemberships, permissionGroups } from '../db/schema/permissions.js';
+import { downgradeDelegatedAgentKeys } from './role-resolver.js';
 
 export class CannotDeleteSelfError extends Error {
   constructor() {
@@ -238,6 +239,9 @@ export async function softDeleteUser(opts: {
     // plugin would reject any presented key anyway once is_active flips
     // to false above, but dropping the rows keeps the table clean.
     await tx.delete(apiKeys).where(eq(apiKeys.user_id, targetUserId));
+    // #342: the service/agent accounts the target created lose the admin
+    // scope only the target vouched for, in every org (role-resolver.ts).
+    await downgradeDelegatedAgentKeys(targetUserId, null, tx);
 
     // 3. Memberships gone — target is no longer in any org or project.
     await tx

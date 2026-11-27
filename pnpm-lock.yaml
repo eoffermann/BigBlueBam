@@ -35,6 +35,9 @@ importers:
 
   apps/api:
     dependencies:
+      '@bigbluebam/auth-core':
+        specifier: workspace:*
+        version: link:../../packages/auth-core
       '@bigbluebam/egress-guard':
         specifier: workspace:*
         version: link:../../packages/egress-guard
@@ -244,6 +247,9 @@ importers:
 
   apps/banter-api:
     dependencies:
+      '@bigbluebam/auth-core':
+        specifier: workspace:*
+        version: link:../../packages/auth-core
       '@bigbluebam/db-stubs':
         specifier: workspace:*
         version: link:../../packages/db-stubs
@@ -405,6 +411,9 @@ importers:
 
   apps/basis-api:
     dependencies:
+      '@bigbluebam/auth-core':
+        specifier: workspace:*
+        version: link:../../packages/auth-core
       '@bigbluebam/db-stubs':
         specifier: workspace:*
         version: link:../../packages/db-stubs
@@ -566,6 +575,9 @@ importers:
 
   apps/bastion-api:
     dependencies:
+      '@bigbluebam/auth-core':
+        specifier: workspace:*
+        version: link:../../packages/auth-core
       '@bigbluebam/db-stubs':
         specifier: workspace:*
         version: link:../../packages/db-stubs
@@ -739,6 +751,9 @@ importers:
 
   apps/bay-api:
     dependencies:
+      '@bigbluebam/auth-core':
+        specifier: workspace:*
+        version: link:../../packages/auth-core
       '@bigbluebam/db-stubs':
         specifier: workspace:*
         version: link:../../packages/db-stubs
@@ -939,6 +954,9 @@ importers:
 
   apps/beacon-api:
     dependencies:
+      '@bigbluebam/auth-core':
+        specifier: workspace:*
+        version: link:../../packages/auth-core
       '@bigbluebam/db-stubs':
         specifier: workspace:*
         version: link:../../packages/db-stubs
@@ -1142,6 +1160,9 @@ importers:
 
   apps/bearing-api:
     dependencies:
+      '@bigbluebam/auth-core':
+        specifier: workspace:*
+        version: link:../../packages/auth-core
       '@bigbluebam/db-stubs':
         specifier: workspace:*
         version: link:../../packages/db-stubs
@@ -1327,6 +1348,9 @@ importers:
 
   apps/bench-api:
     dependencies:
+      '@bigbluebam/auth-core':
+        specifier: workspace:*
+        version: link:../../packages/auth-core
       '@bigbluebam/db-stubs':
         specifier: workspace:*
         version: link:../../packages/db-stubs
@@ -1500,6 +1524,9 @@ importers:
 
   apps/bill-api:
     dependencies:
+      '@bigbluebam/auth-core':
+        specifier: workspace:*
+        version: link:../../packages/auth-core
       '@bigbluebam/db-stubs':
         specifier: workspace:*
         version: link:../../packages/db-stubs
@@ -1670,6 +1697,9 @@ importers:
 
   apps/bin-api:
     dependencies:
+      '@bigbluebam/auth-core':
+        specifier: workspace:*
+        version: link:../../packages/auth-core
       '@bigbluebam/db-stubs':
         specifier: workspace:*
         version: link:../../packages/db-stubs
@@ -1873,6 +1903,9 @@ importers:
 
   apps/blank-api:
     dependencies:
+      '@bigbluebam/auth-core':
+        specifier: workspace:*
+        version: link:../../packages/auth-core
       '@bigbluebam/db-stubs':
         specifier: workspace:*
         version: link:../../packages/db-stubs
@@ -2064,6 +2097,9 @@ importers:
 
   apps/blast-api:
     dependencies:
+      '@bigbluebam/auth-core':
+        specifier: workspace:*
+        version: link:../../packages/auth-core
       '@bigbluebam/db-stubs':
         specifier: workspace:*
         version: link:../../packages/db-stubs
@@ -2225,6 +2261,9 @@ importers:
 
   apps/blip-api:
     dependencies:
+      '@bigbluebam/auth-core':
+        specifier: workspace:*
+        version: link:../../packages/auth-core
       '@bigbluebam/db-stubs':
         specifier: workspace:*
         version: link:../../packages/db-stubs
@@ -2413,6 +2452,9 @@ importers:
 
   apps/blueprint-api:
     dependencies:
+      '@bigbluebam/auth-core':
+        specifier: workspace:*
+        version: link:../../packages/auth-core
       '@bigbluebam/db-stubs':
         specifier: workspace:*
         version: link:../../packages/db-stubs
@@ -2592,6 +2634,9 @@ importers:
 
   apps/board-api:
     dependencies:
+      '@bigbluebam/auth-core':
+        specifier: workspace:*
+        version: link:../../packages/auth-core
       '@bigbluebam/db-stubs':
         specifier: workspace:*
         version: link:../../packages/db-stubs
@@ -2780,6 +2825,9 @@ importers:
 
   apps/bolt-api:
     dependencies:
+      '@bigbluebam/auth-core':
+        specifier: workspace:*
+        version: link:../../packages/auth-core
       '@bigbluebam/db-stubs':
         specifier: workspace:*
         version: link:../../packages/db-stubs
@@ -2971,6 +3019,9 @@ importers:
 
   apps/bond-api:
     dependencies:
+      '@bigbluebam/auth-core':
+        specifier: workspace:*
+        version: link:../../packages/auth-core
       '@bigbluebam/db-stubs':
         specifier: workspace:*
         version: link:../../packages/db-stubs
@@ -3150,6 +3201,9 @@ importers:
 
   apps/book-api:
     dependencies:
+      '@bigbluebam/auth-core':
+        specifier: workspace:*
+        version: link:../../packages/auth-core
       '@bigbluebam/db-stubs':
         specifier: workspace:*
         version: link:../../packages/db-stubs
@@ -3317,6 +3371,9 @@ importers:
 
   apps/braid-api:
     dependencies:
+      '@bigbluebam/auth-core':
+        specifier: workspace:*
+        version: link:../../packages/auth-core
       '@bigbluebam/db-stubs':
         specifier: workspace:*
         version: link:../../packages/db-stubs
@@ -3586,6 +3643,9 @@ importers:
 
   apps/brief-api:
     dependencies:
+      '@bigbluebam/auth-core':
+        specifier: workspace:*
+        version: link:../../packages/auth-core
       '@bigbluebam/db-stubs':
         specifier: workspace:*
         version: link:../../packages/db-stubs
@@ -3774,6 +3834,9 @@ importers:
 
   apps/bulwark-api:
     dependencies:
+      '@bigbluebam/auth-core':
+        specifier: workspace:*
+        version: link:../../packages/auth-core
       '@bigbluebam/db-stubs':
         specifier: workspace:*
         version: link:../../packages/db-stubs
@@ -3926,6 +3989,9 @@ importers:
 
   apps/bureau-api:
     dependencies:
+      '@bigbluebam/auth-core':
+        specifier: workspace:*
+        version: link:../../packages/auth-core
       '@bigbluebam/db-stubs':
         specifier: workspace:*
         version: link:../../packages/db-stubs
@@ -4105,6 +4171,9 @@ importers:
 
   apps/burn-api:
     dependencies:
+      '@bigbluebam/auth-core':
+        specifier: workspace:*
+        version: link:../../packages/auth-core
       '@bigbluebam/db-stubs':
         specifier: workspace:*
         version: link:../../packages/db-stubs
@@ -4272,6 +4341,9 @@ importers:
 
   apps/bursar-api:
     dependencies:
+      '@bigbluebam/auth-core':
+        specifier: workspace:*
+        version: link:../../packages/auth-core
       '@bigbluebam/db-stubs':
         specifier: workspace:*
         version: link:../../packages/db-stubs
@@ -4575,6 +4647,9 @@ importers:
 
   apps/helpdesk-api:
     dependencies:
+      '@bigbluebam/auth-core':
+        specifier: workspace:*
+        version: link:../../packages/auth-core
       '@bigbluebam/db-stubs':
         specifier: workspace:*
         version: link:../../packages/db-stubs
@@ -4806,6 +4881,25 @@ importers:
       tsx:
         specifier: ^4.0.0
         version: 4.21.0
+      typescript:
+        specifier: ^5.4.0
+        version: 5.9.3
+      vitest:
+        specifier: ^2.0.0
+        version: 2.1.9(@types/node@22.19.15)(jsdom@29.0.2)(lightningcss@1.32.0)(sass@1.51.0)
+
+  packages/auth-core:
+    dependencies:
+      '@bigbluebam/shared':
+        specifier: workspace:*
+        version: link:../shared
+    devDependencies:
+      fastify:
+        specifier: ^5.2.0
+        version: 5.8.4
+      tsup:
+        specifier: ^8.0.0
+        version: 8.5.1(jiti@2.6.1)(postcss@8.5.8)(tsx@4.21.0)(typescript@5.9.3)(yaml@2.8.3)
       typescript:
         specifier: ^5.4.0
         version: 5.9.3

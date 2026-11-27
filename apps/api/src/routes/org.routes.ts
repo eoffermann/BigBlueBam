@@ -30,6 +30,7 @@ import {
 } from '@bigbluebam/smtp-resolver';
 import nodemailer from 'nodemailer';
 import { assertSafeSmtpTarget } from '@bigbluebam/egress-guard';
+import { API_KEY_SCOPES } from '@bigbluebam/auth-core';
 import { systemSettings } from '../db/schema/system-settings.js';
 import { env } from '../env.js';
 import {
@@ -1133,7 +1134,7 @@ export default async function orgRoutes(fastify: FastifyInstance) {
     async (request, reply) => {
       const schema = z.object({
         name: z.string().min(1).max(255),
-        scope: z.enum(['read', 'read_write', 'admin']),
+        scope: z.enum(API_KEY_SCOPES),
         project_ids: z.array(z.string().uuid()).optional(),
         expires_days: z.number().int().positive().max(3650).optional(),
       });

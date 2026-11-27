@@ -183,7 +183,37 @@ that a human other than the asker needs to approve.
   automatically from `users.kind`. Agents do not need to stamp
   `actor_type` manually unless they want to.
 
-## 8. Related references
+## 8. Service and agent account key privilege (decision, #342)
+
+A service or agent account (`users.kind` `service` or `agent`) holds org
+role `member` by design. Its API key's scope is delegated by the human who
+created it (`users.created_by`), so `requireScope('admin')` does not cap a
+service or agent key by its own org role (`keyRoleCapApplies` in
+`@bigbluebam/auth-core`). Minting an admin-scope agent requires an org
+owner or a platform SuperUser.
+
+**Decision:** the creator vouches for that admin scope, and only while
+they are an org admin or owner of the key's org.
+
+- When the creator is demoted below admin, removed from the org, or their
+  account is deleted, every admin-scope key of the service and agent
+  accounts they created, bound to that org (every org on deletion), is
+  downgraded to `read_write`. The keys are not deleted, so the automation
+  keeps working at read/write.
+- A creator who is a platform SuperUser keeps vouching; their authority
+  does not come from the org role.
+- Re-promoting the creator does not restore the scope. A remaining org
+  owner re-grants admin by creating a new admin-scope service account
+  (rotation keeps the downgraded scope), which then has a current voucher.
+- Agents are not re-attested to another admin automatically: the org
+  decides who vouches, not the platform.
+
+Enforced in one place, `reconcileOrgApiKeys` /
+`downgradeDelegatedAgentKeys` in `apps/api/src/services/role-resolver.ts`,
+which every role change (`setUserOrgRole`, `clearUserOrgRole`) and the
+user-deletion path call. Tested by `apps/api/test/org-api-key-reconcile.db.test.ts`.
+
+## 9. Related references
 
 - `AGENTIC_TODO.md` - the capability-vs-tool gap analysis, including this
   section (§11).

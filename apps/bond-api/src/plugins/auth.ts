@@ -1,17 +1,30 @@
 import fp from 'fastify-plugin';
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
-import { and, eq, gt, isNull } from 'drizzle-orm';
+import { and, eq, gt, isNull, sql } from 'drizzle-orm';
 import argon2 from 'argon2';
+import {
+  applyKeyOrgPin,
+  bearerToken,
+  isApiKeyOrgPinned,
+  sqlApiKeyStore,
+  verifyApiKeyToken,
+} from '@bigbluebam/auth-core';
 import { db } from '../db/index.js';
 import {
   sessions,
   users,
-  apiKeys,
   organizationMemberships,
   accountGroupMemberships,
   permissionGroups,
   impersonationSessions,
 } from '../db/schema/index.js';
+
+/** This service's binding of the shared bbam_ key store: its own db.execute and argon2. */
+const apiKeyStore = sqlApiKeyStore({
+  sql,
+  execute: (query) => db.execute(query),
+  verifyHash: (hash, token) => argon2.verify(hash, token),
+});
 
 const UUID_REGEX_HEADER = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -38,6 +51,8 @@ export interface AuthUser {
   timezone: string;
   is_active: boolean;
   is_superuser: boolean;
+  /** users.kind; set for API-key auth (requireScope's #336 role cap exempts service/agent). */
+  kind?: 'human' | 'agent' | 'service';
   api_key_scope: string | null;
   org_memberships: OrgMembership[];
   active_org_id: string;
@@ -214,55 +229,24 @@ async function authPlugin(fastify: FastifyInstance) {
         }
       }
 
-      // Try Bearer token (API key)
-      const authHeader = request.headers.authorization;
-      if (authHeader?.startsWith('Bearer ')) {
-        const token = authHeader.slice(7);
-        const prefix = token.slice(0, 8);
-
-        const candidates = await db
-          .select({
-            apiKey: apiKeys,
-            user: {
-              id: users.id,
-              org_id: users.org_id,
-              email: users.email,
-              display_name: users.display_name,
-              avatar_url: users.avatar_url,
-              timezone: users.timezone,
-              is_active: users.is_active,
-              is_superuser: users.is_superuser,
-            },
-          })
-          .from(apiKeys)
-          .innerJoin(users, eq(apiKeys.user_id, users.id))
-          .where(eq(apiKeys.key_prefix, prefix))
-          .limit(10);
-
-        const verifyCandidates = candidates.length > 3 ? candidates.slice(0, 1) : candidates;
-        if (candidates.length > 3) {
-          request.log.warn(
-            { prefix, candidate_count: candidates.length },
-            'Suspicious number of API key candidates for prefix; limiting to first candidate',
-          );
+      // Bearer API key. Verification (expiry, rotation grace, DoS caps, owner state), the
+      // org pin and requireScope are @bigbluebam/auth-core's, shared by every service (#340).
+      const token = bearerToken(request.headers.authorization);
+      const verified = token ? await verifyApiKeyToken(token, apiKeyStore, request.log) : null;
+      if (verified) {
+        // P2-8: a non-SuperUser key acts only in its own org, whatever X-Org-Id says, so the
+        // header is dropped rather than resolved (or probed) against the user's memberships.
+        if (isApiKeyOrgPinned(verified.apiKey.org_id, verified.user.is_superuser)) {
+          request.headers['x-org-id'] = undefined;
         }
-
-        for (const candidate of verifyCandidates) {
-          const valid = await argon2.verify(candidate.apiKey.key_hash, token);
-          if (candidate.apiKey.expires_at && new Date(candidate.apiKey.expires_at) < new Date()) {
-            continue;
-          }
-          if (valid && candidate.user.is_active) {
-            request.user = await buildAuthUser(candidate.user, candidate.apiKey.scope, request);
-            db.update(apiKeys)
-              .set({ last_used_at: new Date() })
-              .where(eq(apiKeys.id, candidate.apiKey.id))
-              .catch((err) => {
-                console.warn('Failed to update api_keys.last_used_at:', err);
-              });
-            return;
-          }
-        }
+        const user = await buildAuthUser(verified.user, verified.apiKey.scope, request);
+        applyKeyOrgPin(user, verified.apiKey.org_id);
+        user.kind = verified.user.kind;
+        request.user = user;
+        apiKeyStore.touch(verified.apiKey.id).catch((err: unknown) => {
+          request.log.warn({ err }, 'Failed to update api_keys.last_used_at');
+        });
+        return;
       }
     } catch (err) {
       if (err instanceof OrgMembershipError) {
@@ -360,34 +344,5 @@ export async function requireAuth(request: FastifyRequest, reply: FastifyReply) 
     });
   }
 }
-const SCOPE_HIERARCHY = ['read', 'read_write', 'admin'] as const;
-export function requireScope(minScope: string) {
-  return async function checkScope(request: FastifyRequest, reply: FastifyReply) {
-    if (!request.user) {
-      return reply.status(401).send({
-        error: {
-          code: 'UNAUTHORIZED',
-          message: 'Authentication required',
-          details: [],
-          request_id: request.id,
-        },
-      });
-    }
-    if (request.user.api_key_scope === null) return;
-    if (request.user.is_superuser) return;
-    const scopeLevel = SCOPE_HIERARCHY.indexOf(
-      request.user.api_key_scope as (typeof SCOPE_HIERARCHY)[number],
-    );
-    const requiredLevel = SCOPE_HIERARCHY.indexOf(minScope as (typeof SCOPE_HIERARCHY)[number]);
-    if (scopeLevel < requiredLevel) {
-      return reply.status(403).send({
-        error: {
-          code: 'FORBIDDEN',
-          message: `API key requires at least '${minScope}' scope`,
-          details: [],
-          request_id: request.id,
-        },
-      });
-    }
-  };
-}
+// requireScope is @bigbluebam/auth-core's, the one gate every service uses (#340).
+export { requireScope } from '@bigbluebam/auth-core';

@@ -20,10 +20,13 @@ vi.mock('../src/env.js', () => ({
 }));
 vi.mock('../src/db/index.js', () => ({ db: {}, connection: { end: vi.fn() } }));
 vi.mock('../src/services/cross-app-access.service.js', () => ({ resolveAccess: vi.fn() }));
-vi.mock('../src/lib/bureau-events.js', () => ({ emitSummonIssued: vi.fn() }));
+vi.mock('../src/lib/bureau-events.js', () => ({ emitSummonIssued: vi.fn(async () => undefined) }));
 vi.mock('../src/services/presence-publisher.service.js', () => ({ publishUserTarget: vi.fn() }));
 
-const { fanOutSummon, FANOUT_INLINE_LIMIT, SUMMON_FANOUT_ATTEMPTS } = await import('../src/services/summon.service.js');
+const { fanOutSummon, reportDenials, FANOUT_INLINE_LIMIT, SUMMON_FANOUT_ATTEMPTS } = await import(
+  '../src/services/summon.service.js'
+);
+const { publishUserTarget } = await import('../src/services/presence-publisher.service.js');
 
 describe('fanOutSummon offload', () => {
   it('enqueues the fan-out job with retries and exponential backoff', async () => {
@@ -46,5 +49,69 @@ describe('fanOutSummon offload', () => {
     expect(SUMMON_FANOUT_ATTEMPTS).toBeGreaterThan(1);
     expect(opts.attempts).toBe(SUMMON_FANOUT_ATTEMPTS);
     expect(opts.backoff.type).toBe('exponential');
+  });
+
+  // #341: a small summon (<= FANOUT_INLINE_LIMIT) used to fan out inline even when a
+  // recipient's access check was UNAVAILABLE, recording it as a final no_access with no retry.
+  const few = [{ userId: 'gilligan', name: 'Gilligan', outcome: 'pending' as const }];
+  const base = {
+    summonId: 's2',
+    orgId: 'o1',
+    summonerId: 'skipper',
+    summonerName: 'Skipper',
+    targetUrl: '/board/boards/x',
+    targetApp: 'board',
+    recipients: few,
+  };
+
+  it('offloads a small summon to the retrying worker when an access check was unavailable', async () => {
+    add.mockClear();
+    const publish = vi.fn(async () => 1);
+    await fanOutSummon({
+      ...base,
+      redis: { publish } as never,
+      denied: [{ userId: 'mary-ann', name: 'Mary Ann', outcome: 'no_access', reason: 'degraded_timeout' }],
+    } as never);
+    expect(add).toHaveBeenCalledTimes(1);
+    expect(publish).not.toHaveBeenCalled();
+  });
+
+  it('keeps a small summon inline when every deny is a real answer', async () => {
+    add.mockClear();
+    const publish = vi.fn(async () => 1);
+    await fanOutSummon({
+      ...base,
+      redis: { publish } as never,
+      denied: [{ userId: 'mary-ann', name: 'Mary Ann', outcome: 'no_access', reason: 'not_a_collaborator' }],
+    } as never);
+    expect(add).not.toHaveBeenCalled();
+    expect(publish).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not offer an unavailable check to the summoner as a denial to grant', async () => {
+    vi.mocked(publishUserTarget).mockClear();
+    await reportDenials({
+      redis: {} as never,
+      summonId: 's3',
+      summonerId: 'skipper',
+      canShare: true,
+      denied: [
+        { userId: 'mary-ann', name: 'Mary Ann', outcome: 'no_access', reason: 'degraded_http_error' },
+        { userId: 'ginger', name: 'Ginger', outcome: 'no_access', reason: 'not_a_collaborator' },
+      ],
+    });
+    const payload = JSON.stringify(vi.mocked(publishUserTarget).mock.calls[0]);
+    expect(payload).toContain('ginger');
+    expect(payload).not.toContain('mary-ann');
+
+    vi.mocked(publishUserTarget).mockClear();
+    await reportDenials({
+      redis: {} as never,
+      summonId: 's4',
+      summonerId: 'skipper',
+      canShare: true,
+      denied: [{ userId: 'mary-ann', name: 'Mary Ann', outcome: 'no_access', reason: 'degraded_timeout' }],
+    });
+    expect(publishUserTarget).not.toHaveBeenCalled();
   });
 });

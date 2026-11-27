@@ -79,12 +79,28 @@ function selectReturning(rows: unknown[]) {
   return chain;
 }
 
+/** One row of the shared candidate query: the key joined to its owner (owner_* columns). */
+function candidateRow(key: Record<string, unknown>, ownerOver: Record<string, unknown>) {
+  const o = { ...owner, ...ownerOver };
+  return {
+    ...keyRow(key),
+    owner_org_id: o.org_id,
+    owner_email: o.email,
+    owner_display_name: o.display_name,
+    owner_avatar_url: o.avatar_url,
+    owner_timezone: o.timezone,
+    owner_is_active: o.is_active,
+    owner_is_superuser: o.is_superuser,
+    owner_kind: o.kind,
+  };
+}
+
 async function feed(key: Record<string, unknown>, ownerOver: Record<string, unknown> = {}) {
-  // First execute: auth_api_key_candidates. Later ones (auth_touch_api_key) return nothing.
+  // First execute: the @bigbluebam/auth-core candidate query (auth_api_key_candidates joined to
+  // users). Later ones (auth_touch_api_key) return nothing.
   mockDb.execute.mockResolvedValue([]);
-  mockDb.execute.mockResolvedValueOnce([keyRow(key)]);
+  mockDb.execute.mockResolvedValueOnce([candidateRow(key, ownerOver)]);
   mockDb.select
-    .mockReturnValueOnce(selectReturning([{ ...owner, ...ownerOver }]))
     .mockReturnValueOnce(
       selectReturning([
         { id: 't1', human_id: 'RSA-1', title: 'Count coconuts', description: null, due_date: '2026-12-01', priority: 'high' },
@@ -127,6 +143,25 @@ describe('iCal ?token= uses the shared API-key verification', () => {
       rotation_grace_expires_at: new Date(Date.now() - hour).toISOString(),
     });
     expect(res.statusCode).toBe(401);
+  });
+
+  // #343: a superseded key with no expires_at authenticated forever after rotation.
+  it('refuses a rotated key with no expires_at once its grace window has closed', async () => {
+    const res = await feed({
+      expires_at: null,
+      rotated_at: new Date(Date.now() - 8 * 24 * hour).toISOString(),
+      rotation_grace_expires_at: new Date(Date.now() - hour).toISOString(),
+    });
+    expect(res.statusCode).toBe(401);
+  });
+
+  it('accepts a rotated key with no expires_at inside its grace window', async () => {
+    const res = await feed({
+      expires_at: null,
+      rotated_at: new Date(Date.now() - hour).toISOString(),
+      rotation_grace_expires_at: new Date(Date.now() + hour).toISOString(),
+    });
+    expect(res.statusCode, res.body).toBe(200);
   });
 
   it("refuses a key whose owner is deactivated", async () => {
