@@ -252,6 +252,7 @@ function createMcpServer(
     banterApiUrl: env.BANTER_API_URL,
     boardApiUrl: env.BOARD_API_URL,
     basisApiUrl: env.BASIS_API_URL,
+    bastionApiUrl: env.BASTION_API_URL,
   });
   registerResolveTools(server, apiClient, {
     bondApiUrl: env.BOND_API_URL,

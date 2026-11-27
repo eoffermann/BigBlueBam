@@ -187,7 +187,7 @@ export async function createRoom(deps: SharingDeps, viewer: Viewer, body: Bastio
     });
     await enqueueBastionEvent(
       'auditor_room.created',
-      { room_id: id, label: body.label, framework_id: fw.id, controls: controlIds.length, restricted: restricted.length, expires_at: expiresAt.toISOString() },
+      { room_id: id, framework_id: fw.id, controls: controlIds.length, restricted: restricted.length, expires_at: expiresAt.toISOString() },
       tx,
       { orgId: viewer.org_id, idempotencyKey: `auditor_room.created:${id}`, actorId: viewer.id, actorType: 'user' },
     );
@@ -211,7 +211,7 @@ export async function revokeRoom(deps: SharingDeps, viewer: Viewer, id: string) 
     if (r.revoked_at) return r;
     await tx`UPDATE bastion_auditor_rooms SET revoked_at = ${now} WHERE organization_id = ${viewer.org_id} AND id = ${id}`;
     await auditRaw(tx, viewer, 'auditor_room.revoke', { type: 'auditor_room', id }, { label: r.label });
-    await enqueueBastionEvent('auditor_room.revoked', { room_id: id, label: r.label, reason: 'revoked' }, tx, {
+    await enqueueBastionEvent('auditor_room.revoked', { room_id: id, reason: 'revoked' }, tx, {
       orgId: viewer.org_id,
       idempotencyKey: `auditor_room.revoked:${id}`,
       actorId: viewer.id,

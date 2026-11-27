@@ -54,6 +54,8 @@ export const APP_SERVICES = [
         // shared @bigbluebam/smtp-resolver key). The DB system_settings.smtp_from
         // (set in the UI) takes precedence over it.
         'SMTP_HOST', 'SMTP_PORT', 'SMTP_USER', 'SMTP_PASS', 'EMAIL_FROM',
+        // The stop grace that sizes the internal LLM proxy's shutdown drain (#294).
+        'RAILWAY_DEPLOYMENT_DRAINING_SECONDS',
       ],
     },
   },
@@ -440,6 +442,8 @@ export const APP_SERVICES = [
         'BASTION_TRUST_PROXY_HOPS',
         'BASTION_LLM_TIMEOUT_MS',
         'BASTION_LLM_MAX_TOKENS',
+        'BASTION_QUESTIONNAIRE_MAX_TOKENS',
+        'BASTION_REWORD_MAX_TOKENS',
         'BASTION_ENGINE_TIMEOUT_MS',
         'BASTION_PROBE_TIMEOUT_MS',
         'BASTION_PUT_TIMEOUT_MS',

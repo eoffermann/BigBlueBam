@@ -829,7 +829,9 @@ export default async function agentRoutes(fastify: FastifyInstance) {
         'ticket.message_posted',
         'helpdesk',
         {
+          ticket: { id: id },
           ticket_id: id,
+          message: { id: message.id, author_id: authorId, is_internal: message.is_internal },
           message_id: message.id,
           author_type: 'agent',
           author_id: authorId,
@@ -1008,6 +1010,7 @@ export default async function agentRoutes(fastify: FastifyInstance) {
           'ticket.status_changed',
           'helpdesk',
           {
+            ticket: { id: id },
             ticket_id: id,
             from: existing.status,
             to: data.status,
@@ -1021,9 +1024,8 @@ export default async function agentRoutes(fastify: FastifyInstance) {
             'ticket.closed',
             'helpdesk',
             {
+              ticket: { id: id, closed_by: agentActorId, closed_at: nowIso },
               ticket_id: id,
-              'ticket.closed_by': agentActorId,
-              'ticket.closed_at': nowIso,
               from: existing.status,
             },
             scopeOrgId,
@@ -1038,9 +1040,8 @@ export default async function agentRoutes(fastify: FastifyInstance) {
             'ticket.reopened',
             'helpdesk',
             {
+              ticket: { id: id, reopened_by: agentActorId, reopened_at: nowIso },
               ticket_id: id,
-              'ticket.reopened_by': agentActorId,
-              'ticket.reopened_at': nowIso,
               from: existing.status,
               to: data.status,
             },
@@ -1143,9 +1144,8 @@ export default async function agentRoutes(fastify: FastifyInstance) {
         'ticket.closed',
         'helpdesk',
         {
+          ticket: { id: id, closed_by: request.agentUserId, closed_at: new Date().toISOString() },
           ticket_id: id,
-          'ticket.closed_by': request.agentUserId,
-          'ticket.closed_at': new Date().toISOString(),
           from: ticket.status,
         },
         scopeOrgId,
@@ -1157,6 +1157,7 @@ export default async function agentRoutes(fastify: FastifyInstance) {
           'ticket.status_changed',
           'helpdesk',
           {
+            ticket: { id: id },
             ticket_id: id,
             from: ticket.status,
             to: 'closed',

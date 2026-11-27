@@ -1,8 +1,11 @@
-import { eq } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import { beaconEntries } from '../db/schema/index.js';
-import { BeaconError, getBeaconById } from './beacon.service.js';
+import { BeaconError } from './beacon.service.js';
 import { resolveExpiryPolicy } from './policy.service.js';
+
+/** A transaction handle from db.transaction. */
+export type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
 // ---------------------------------------------------------------------------
 // Status type
@@ -85,12 +88,36 @@ export async function transitionBeacon(
   opts?: TransitionOpts,
   orgId?: string,
 ) {
-  const existing = orgId ? await getBeaconById(beaconId, orgId) : null;
-  if (!existing && !orgId) {
-    // Fallback: should not happen in properly updated callers, but
-    // throw to surface the missing orgId during development
+  if (!orgId) {
+    // Should not happen in properly updated callers; throw to surface the
+    // missing orgId during development.
     throw new BeaconError('BAD_REQUEST', 'orgId is required for transitionBeacon', 400);
   }
+  return db.transaction((tx) => transitionBeaconInTx(tx, beaconId, targetStatus, userId, orgId, opts));
+}
+
+/**
+ * The transition itself, inside the caller's transaction (#304). The row is
+ * read FOR UPDATE, so `from` is the status as of the lock and a concurrent
+ * transition waits instead of both passing assertTransition on a stale read.
+ * The UPDATE is still predicated on id, org and `status = from`, and
+ * verification_count is bumped in SQL, so the write can never land on a row
+ * whose state moved under it; if it would, 409 rather than a silent overwrite.
+ */
+export async function transitionBeaconInTx(
+  tx: Tx,
+  beaconId: string,
+  targetStatus: BeaconStatus,
+  userId: string,
+  orgId: string,
+  opts?: TransitionOpts,
+) {
+  const [existing] = await tx
+    .select()
+    .from(beaconEntries)
+    .where(and(eq(beaconEntries.id, beaconId), eq(beaconEntries.organization_id, orgId)))
+    .limit(1)
+    .for('update');
   if (!existing) {
     throw new BeaconError('NOT_FOUND', 'Beacon not found', 404);
   }
@@ -109,6 +136,7 @@ export async function transitionBeacon(
     const policy = await resolveExpiryPolicy(
       existing.project_id,
       existing.organization_id,
+      tx,
     );
     const days = opts?.expiryDays ?? policy.default_days;
     updateValues.expires_at = new Date(now.getTime() + days * 86_400_000);
@@ -121,13 +149,14 @@ export async function transitionBeacon(
     const policy = await resolveExpiryPolicy(
       existing.project_id,
       existing.organization_id,
+      tx,
     );
     const days = opts?.expiryDays ?? policy.default_days;
     updateValues.expires_at = new Date(now.getTime() + days * 86_400_000);
     updateValues.last_verified_at = now;
     updateValues.last_verified_by = userId;
     if (from === 'PendingReview') {
-      updateValues.verification_count = existing.verification_count + 1;
+      updateValues.verification_count = sql`${beaconEntries.verification_count} + 1`;
     }
   }
 
@@ -135,11 +164,24 @@ export async function transitionBeacon(
     updateValues.retired_at = now;
   }
 
-  const [beacon] = await db
+  const [beacon] = await tx
     .update(beaconEntries)
     .set(updateValues)
-    .where(eq(beaconEntries.id, beaconId))
+    .where(
+      and(
+        eq(beaconEntries.id, beaconId),
+        eq(beaconEntries.organization_id, orgId),
+        eq(beaconEntries.status, from),
+      ),
+    )
     .returning();
+  if (!beacon) {
+    throw new BeaconError(
+      'CONFLICT',
+      'The beacon changed status while this transition was running; reload and try again',
+      409,
+    );
+  }
 
-  return beacon!;
+  return beacon;
 }

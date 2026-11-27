@@ -47,9 +47,12 @@ const FALLBACK_POLICY: EffectivePolicy = {
 export async function resolveExpiryPolicy(
   projectId: string | null,
   orgId: string,
+  // A transaction caller passes its handle so the reads share its connection
+  // instead of taking a second pool connection while holding a row lock.
+  executor: Pick<typeof db, 'select'> = db,
 ): Promise<EffectivePolicy> {
   // --- System ---
-  const [sysRow] = await db
+  const [sysRow] = await executor
     .select()
     .from(beaconExpiryPolicies)
     .where(eq(beaconExpiryPolicies.scope, 'System'))
@@ -65,7 +68,7 @@ export async function resolveExpiryPolicy(
     : { ...FALLBACK_POLICY };
 
   // --- Organization ---
-  const [orgRow] = await db
+  const [orgRow] = await executor
     .select()
     .from(beaconExpiryPolicies)
     .where(
@@ -89,7 +92,7 @@ export async function resolveExpiryPolicy(
 
   // --- Project ---
   if (projectId) {
-    const [projRow] = await db
+    const [projRow] = await executor
       .select()
       .from(beaconExpiryPolicies)
       .where(

@@ -12,6 +12,11 @@ export const PROBE_TIMEOUT_MS = 8_000;
 export const PUT_TIMEOUT_MS = 5_000;
 /** SET LOCAL lock_timeout for the per-org ledger advisory lock. */
 export const LEDGER_LOCK_TIMEOUT_MS = 3_000;
+/**
+ * How long a gap writer waits for the per-org gap-rank lock (#293). Its holders do database work
+ * only (a whole-org re-rank is the longest), so a longer wait means something is stuck.
+ */
+export const GAP_RANK_LOCK_TIMEOUT_MS = 10_000;
 /** The worker's bound on one engine call (BASTION_ENGINE_TIMEOUT_MS). */
 export const ENGINE_TIMEOUT_MS = 30_000;
 /** Headroom past the write for what no timeout bounds: the heartbeat, finish()'s counts, the reply. */
@@ -66,6 +71,12 @@ export const MAX_REPLICA_LAG_MS = 30_000;
 export const ORPHAN_REQUEUE_AFTER_MS = 120_000;
 /** Resumable runs are released at most this many times before they go `partial`. */
 export const MAX_RESUMES = 3;
+/**
+ * LLM slices (compile, autofill) released after a transient database error do not count against
+ * MAX_RESUMES, up to this many per run (#295); past it a release counts as usual, so a database
+ * that keeps failing still parks the run.
+ */
+export const TRANSIENT_RELEASE_LIMIT = 10;
 
 /** The worker's evaluate-run poll loop (spec 7). */
 export const EVALUATE_POLL_INTERVAL_MS = 10_000;

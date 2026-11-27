@@ -102,6 +102,21 @@ export default async function commentsRoutes(fastify: FastifyInstance) {
     async (request, reply) => {
       const data = updateCommentSchema.parse(request.body);
       try {
+        // Same cross-beacon check as DELETE: the comment must belong to the
+        // beacon whose read access was just checked, or an author who lost
+        // access to beacon B could still edit their comment there via beacon A.
+        const withBeacon = await commentService.getCommentWithBeacon(request.params.commentId);
+        const beacon = (request as any).beacon;
+        if (!withBeacon || withBeacon.comment.beacon_id !== beacon.id) {
+          return reply.status(404).send({
+            error: {
+              code: 'NOT_FOUND',
+              message: 'Comment not found on this beacon',
+              details: [],
+              request_id: request.id,
+            },
+          });
+        }
         const updated = await commentService.updateComment(
           request.params.commentId,
           request.user!.id,

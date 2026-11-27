@@ -1,8 +1,10 @@
 import { useState } from 'react';
 import { ArrowLeft, Download, Loader2 } from 'lucide-react';
+import { BASTION_CONFIDENCE_WORDS } from '@bigbluebam/shared';
 import { useCan } from '@bigbluebam/ui/use-can';
 import { getImpersonation, impersonateHeader } from '@bigbluebam/ui/impersonation-banner';
 import type { AnswerLibraryRow, QuestionnaireItemRow, QuestionnaireRow, QuestionnaireSheetMap } from '@/lib/api';
+import { MemberPicker } from '@/components/member-picker';
 import { binAssetIdFrom, NOT_A_BIN_LINK } from '@/lib/bin-link';
 import { friendlyError } from '@/lib/errors';
 import {
@@ -60,6 +62,11 @@ export function draftingEstimate(rowsLeft: number): string {
 }
 
 const yesNoWords = (v: boolean | null) => (v === true ? 'Yes' : v === false ? 'No' : null);
+
+/** "1 Sure, 1 Check this, 1 Needs an expert", in the shared confidence words (#272). */
+export function bandCountsWords(r: Pick<QuestionnaireRow, 'high_count' | 'medium_count' | 'low_count'>): string {
+  return `${r.high_count} ${BASTION_CONFIDENCE_WORDS.high}, ${r.medium_count} ${BASTION_CONFIDENCE_WORDS.medium}, ${r.low_count} ${BASTION_CONFIDENCE_WORDS.low}`;
+}
 
 function formatDate(iso: string | null): string | null {
   return iso ? new Date(iso).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }) : null;
@@ -143,7 +150,9 @@ function AddQuestionnaireForm({ onCreated }: { onCreated: (id: string) => void }
 
 function AnswerLibrary() {
   const [q, setQ] = useState('');
-  const lib = useAnswerLibrary(q);
+  const [showRetired, setShowRetired] = useState(false);
+  const [retiring, setRetiring] = useState<string | null>(null);
+  const lib = useAnswerLibrary(q, showRetired);
   const canWrite = useCan('bastion.answer_library.write');
   const update = useUpdateAnswerLibrary();
   const rows: AnswerLibraryRow[] = lib.data?.data ?? [];
@@ -152,6 +161,10 @@ function AnswerLibrary() {
       <h2 className="text-base font-semibold text-zinc-900 dark:text-zinc-100">Answer library</h2>
       <p className="text-sm text-zinc-600 dark:text-zinc-400">Answers you approved before. Bastion reuses them, and marks one to check again when a control it relies on changes.</p>
       <input className={input} value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search approved answers" />
+      <label className="text-xs flex items-center gap-1">
+        <input type="checkbox" checked={showRetired} onChange={(e) => setShowRetired(e.target.checked)} />
+        Show retired answers
+      </label>
       {lib.isLoading && <Loader2 className="h-4 w-4 animate-spin text-zinc-400" />}
       {!lib.isLoading && rows.length === 0 && <p className="text-sm text-zinc-500">No approved answers yet. They appear here after you approve a questionnaire.</p>}
       <ul className="divide-y divide-zinc-200 dark:divide-zinc-800">
@@ -167,16 +180,39 @@ function AnswerLibrary() {
               {r.approved_at ? ` on ${formatDate(r.approved_at)}` : ''}
             </p>
             {r.stale && <p className="text-xs text-amber-700">{r.stale_words}</p>}
+            {r.retired_at && <p className="text-xs text-zinc-500">Retired on {formatDate(r.retired_at)}. Bastion no longer reuses it.</p>}
             {canWrite && (
-              <div className="flex gap-2">
-                {r.stale && (
+              <div className="flex flex-wrap gap-2">
+                {r.stale && !r.retired_at && (
                   <button type="button" className={secondary} disabled={update.isPending} onClick={() => update.mutate({ id: r.id, body: { stale: false } })}>
                     It still holds
                   </button>
                 )}
-                <button type="button" className={secondary} disabled={update.isPending} onClick={() => update.mutate({ id: r.id, body: { retired: true } })}>
-                  Retire
-                </button>
+                {r.retired_at ? (
+                  <button type="button" className={secondary} disabled={update.isPending} onClick={() => update.mutate({ id: r.id, body: { retired: false } })}>
+                    Bring it back
+                  </button>
+                ) : retiring === r.id ? (
+                  // #268: retiring stops Bastion reusing the answer; say so and ask first.
+                  <span className="flex flex-wrap items-center gap-2 text-xs text-amber-800" data-testid="retire-confirm">
+                    Bastion will stop reusing this answer. You can bring it back from the retired answers.
+                    <button
+                      type="button"
+                      className={primary}
+                      disabled={update.isPending}
+                      onClick={() => update.mutate({ id: r.id, body: { retired: true } }, { onSettled: () => setRetiring(null) })}
+                    >
+                      Retire it
+                    </button>
+                    <button type="button" className={secondary} onClick={() => setRetiring(null)}>
+                      Keep it
+                    </button>
+                  </span>
+                ) : (
+                  <button type="button" className={secondary} onClick={() => setRetiring(r.id)}>
+                    Retire
+                  </button>
+                )}
               </div>
             )}
           </li>
@@ -219,7 +255,7 @@ export function QuestionnairesPage({ onNavigate }: { onNavigate: (path: string) 
                   {STATUS_WORDS[r.status]}
                   {r.requester_label ? ` · from ${r.requester_label}` : ''}
                   {r.row_count > 0 ? ` · ${r.row_count} questions` : ''}
-                  {r.row_count > 0 && r.rows_done > 0 ? ` · ${r.high_count} Sure, ${r.medium_count} Check this, ${r.low_count} Needs an expert` : ''}
+                  {r.row_count > 0 && r.rows_done > 0 ? ` · ${bandCountsWords(r)}` : ''}
                 </span>
               </button>
             </li>
@@ -237,18 +273,38 @@ function columnOptions(count: number) {
   return Array.from({ length: Math.max(count, 1) }, (_, i) => i);
 }
 
+type SheetPreview = NonNullable<QuestionnaireRow['sheet_preview']>[number];
+
+/** A first guess for a sheet the person chooses to use: the first row is the header, questions in the first column. */
+function defaultSheetMap(name: string): QuestionnaireSheetMap {
+  return { sheet_name: name, header_row: 0, first_row: 1, question_column: 0, answer_column: null, yes_no_column: null, section_column: null, answer_kind: 'yes_no_text' };
+}
+
+/**
+ * Check the columns, for EVERY sheet (#266): one block per sheet in the file, each with its own
+ * mapping, and sheets the guess skipped shown as "Not used" with a way to add them. Saving sends
+ * the whole mapping; leaving out a sheet that held questions needs an explicit confirmation.
+ */
 function MappingStep({ q }: { q: QuestionnaireRow }) {
   const update = useUpdateQuestionnaire();
   const autofill = useAutofill();
   const canWrite = useCan('bastion.questionnaire.write');
-  const current = q.column_map?.sheets[0];
-  const sheet = q.sheet_preview?.find((s) => s.name === current?.sheet_name) ?? q.sheet_preview?.[0];
-  const [map, setMap] = useState<QuestionnaireSheetMap | undefined>(current);
-  if (!sheet || !map) return <p className="text-sm text-zinc-600">This questionnaire has no rows Bastion could read.</p>;
-  const header = map.header_row !== null ? (sheet.rows[map.header_row] ?? []) : [];
-  const colName = (i: number) => (header[i]?.trim() ? `${header[i]}` : `Column ${i + 1}`);
-  const set = (patch: Partial<QuestionnaireSheetMap>) => setMap({ ...map, ...patch });
-  const changed = JSON.stringify(map) !== JSON.stringify(current);
+  const sheets = q.sheet_preview ?? [];
+  const initial = Object.fromEntries(sheets.map((s) => [s.name, q.column_map?.sheets.find((m) => m.sheet_name === s.name) ?? null])) as Record<
+    string,
+    QuestionnaireSheetMap | null
+  >;
+  const [maps, setMaps] = useState<Record<string, QuestionnaireSheetMap | null>>(initial);
+  const [confirmDrop, setConfirmDrop] = useState(false);
+  if (sheets.length === 0 || !Object.values(initial).some(Boolean)) return <p className="text-sm text-zinc-600">This questionnaire has no rows Bastion could read.</p>;
+  const chosen = sheets.map((s) => maps[s.name]).filter((m): m is QuestionnaireSheetMap => !!m);
+  const changed = JSON.stringify(maps) !== JSON.stringify(initial);
+  const dropping = sheets.filter((s) => initial[s.name] && !maps[s.name]).map((s) => s.name || 'the pasted rows');
+  const save = () =>
+    update.mutate(
+      { id: q.id, body: { column_map: { sheets: chosen }, ...(dropping.length > 0 ? { drop_unmapped_sheets: true } : {}) } },
+      { onSuccess: () => setConfirmDrop(false) },
+    );
   return (
     <section className="space-y-3" data-testid="mapping-step">
       <h2 className="text-base font-semibold">Check the columns</h2>
@@ -256,6 +312,85 @@ function MappingStep({ q }: { q: QuestionnaireRow }) {
         {q.column_map?.guessed ? 'Bastion guessed which column holds the questions. Check it against the first rows below.' : 'These are the columns you chose.'}
         {q.source_truncated ? ' The file was larger than Bastion reads at once, so the last rows or columns were left out.' : ''}
       </p>
+      {sheets.map((sheet) => (
+        <SheetMapping
+          key={sheet.name}
+          sheet={sheet}
+          showName={sheets.length > 1}
+          map={maps[sheet.name] ?? null}
+          canWrite={canWrite}
+          onChange={(m) => setMaps({ ...maps, [sheet.name]: m })}
+        />
+      ))}
+      {canWrite && (
+        <div className="flex flex-wrap items-center gap-2">
+          {changed && chosen.length > 0 && !confirmDrop && (
+            <button type="button" className={secondary} disabled={update.isPending} onClick={() => (dropping.length > 0 ? setConfirmDrop(true) : save())}>
+              Use these columns
+            </button>
+          )}
+          {confirmDrop && (
+            <span className="flex flex-wrap items-center gap-2 text-xs text-amber-800" data-testid="confirm-drop">
+              The questions on {dropping.map((n) => `"${n}"`).join(', ')} will be left out.
+              <button type="button" className={primary} disabled={update.isPending} onClick={save}>
+                Leave them out
+              </button>
+              <button type="button" className={secondary} onClick={() => setConfirmDrop(false)}>
+                Keep them
+              </button>
+            </span>
+          )}
+          <button type="button" className={primary} disabled={changed || autofill.isPending || q.row_count === 0} onClick={() => autofill.mutate({ id: q.id })}>
+            Draft the answers
+          </button>
+          <span className="text-xs text-zinc-500">
+            {q.row_count} questions; drafting takes {draftingEstimate(q.row_count)}.
+          </span>
+        </div>
+      )}
+      {(update.error || autofill.error) && <p className="text-xs text-red-600">{friendlyError(update.error ?? autofill.error)}</p>}
+    </section>
+  );
+}
+
+function SheetMapping({
+  sheet,
+  showName,
+  map,
+  canWrite,
+  onChange,
+}: {
+  sheet: SheetPreview;
+  showName: boolean;
+  map: QuestionnaireSheetMap | null;
+  canWrite: boolean;
+  onChange: (m: QuestionnaireSheetMap | null) => void;
+}) {
+  const label = sheet.name || 'Pasted rows';
+  if (!map) {
+    return (
+      <div className="rounded border border-dashed border-zinc-300 dark:border-zinc-700 p-3 text-sm" data-testid="sheet-mapping" data-sheet={sheet.name}>
+        <p className="font-medium">
+          {showName ? `${label}: ` : ''}
+          <span className="text-zinc-500">Not used</span>
+        </p>
+        <p className="text-xs text-zinc-500">
+          {sheet.row_count} rows. Bastion found no questions here{canWrite ? '; use it if this sheet holds questions too' : ''}.
+        </p>
+        {canWrite && (
+          <button type="button" className={`${secondary} mt-2`} onClick={() => onChange(defaultSheetMap(sheet.name))}>
+            Use this sheet
+          </button>
+        )}
+      </div>
+    );
+  }
+  const header = map.header_row !== null ? (sheet.rows[map.header_row] ?? []) : [];
+  const colName = (i: number) => (header[i]?.trim() ? `${header[i]}` : `Column ${i + 1}`);
+  const set = (patch: Partial<QuestionnaireSheetMap>) => onChange({ ...map, ...patch });
+  return (
+    <div className="space-y-2" data-testid="sheet-mapping" data-sheet={sheet.name}>
+      {showName && <h3 className="text-sm font-semibold text-zinc-800 dark:text-zinc-200">{label}</h3>}
       <div className="overflow-x-auto rounded border border-zinc-200 dark:border-zinc-800">
         <table className="text-xs">
           <tbody>
@@ -308,22 +443,11 @@ function MappingStep({ q }: { q: QuestionnaireRow }) {
         </div>
       )}
       {canWrite && (
-        <div className="flex flex-wrap items-center gap-2">
-          {changed && (
-            <button type="button" className={secondary} disabled={update.isPending} onClick={() => update.mutate({ id: q.id, body: { column_map: { sheets: [map] } } })}>
-              Use these columns
-            </button>
-          )}
-          <button type="button" className={primary} disabled={changed || autofill.isPending || q.row_count === 0} onClick={() => autofill.mutate({ id: q.id })}>
-            Draft the answers
-          </button>
-          <span className="text-xs text-zinc-500">
-            {q.row_count} questions; drafting takes {draftingEstimate(q.row_count)}.
-          </span>
-        </div>
+        <button type="button" className={`${secondary}`} onClick={() => onChange(null)}>
+          Do not use this sheet
+        </button>
       )}
-      {(update.error || autofill.error) && <p className="text-xs text-red-600">{friendlyError(update.error ?? autofill.error)}</p>}
-    </section>
+    </div>
   );
 }
 
@@ -331,6 +455,8 @@ function ItemRow({ item, questionnaireId, locked }: { item: QuestionnaireItemRow
   const review = useReviewItem(questionnaireId);
   const canWrite = useCan('bastion.questionnaire.write');
   const [editing, setEditing] = useState(false);
+  const [asking, setAsking] = useState(false);
+  const [expert, setExpert] = useState<string | null>(null);
   const [text, setText] = useState(item.final_answer ?? item.draft_answer ?? '');
   const [yesNo, setYesNo] = useState<string>(String(item.final_yes_no ?? item.draft_yes_no ?? ''));
   const shownAnswer = item.final_answer ?? item.draft_answer;
@@ -405,7 +531,23 @@ function ItemRow({ item, questionnaireId, locked }: { item: QuestionnaireItemRow
           </div>
         </div>
       )}
-      {canWrite && !locked && !editing && (
+      {canWrite && !locked && asking && (
+        <div className="flex flex-wrap items-end gap-2" data-testid="ask-someone">
+          <MemberPicker value={expert} onChange={setExpert} className="w-64" />
+          <button
+            type="button"
+            className={primary}
+            disabled={!expert || review.isPending}
+            onClick={() => review.mutate({ id: item.id, review_status: 'needs_owner', assigned_to: expert }, { onSuccess: () => setAsking(false) })}
+          >
+            Ask them
+          </button>
+          <button type="button" className={secondary} onClick={() => setAsking(false)}>
+            Cancel
+          </button>
+        </div>
+      )}
+      {canWrite && !locked && !editing && !asking && (
         <div className="flex gap-2">
           {item.review_status === 'pending' && (shownAnswer || shownYesNo) && (
             <button type="button" className={secondary} disabled={review.isPending} onClick={() => review.mutate({ id: item.id, review_status: 'accepted' })}>
@@ -415,6 +557,11 @@ function ItemRow({ item, questionnaireId, locked }: { item: QuestionnaireItemRow
           <button type="button" className={secondary} onClick={() => setEditing(true)}>
             Edit
           </button>
+          {item.review_status === 'pending' && (
+            <button type="button" className={secondary} onClick={() => setAsking(true)}>
+              Ask someone
+            </button>
+          )}
           {item.review_status !== 'pending' && (
             <button type="button" className={secondary} disabled={review.isPending} onClick={() => review.mutate({ id: item.id, review_status: 'pending' })}>
               Undo review
@@ -447,10 +594,12 @@ function ReviewStep({ q }: { q: QuestionnaireRow }) {
   const canExport = useCan('bastion.questionnaire.export');
   const [filter, setFilter] = useState<'all' | 'needs'>('all');
   const [downloadError, setDownloadError] = useState<string | null>(null);
+  const [confirming, setConfirming] = useState(false);
   const impersonating = getImpersonation() !== null;
   const approved = q.status === 'approved' || q.status === 'exported';
   const data = items.data?.data ?? [];
   const approval = items.data?.approval;
+  const unreviewedChecks = approval?.medium_unreviewed ?? 0;
   const shown = filter === 'needs' ? data.filter((i) => i.needs_review || i.review_status === 'needs_owner') : data;
   return (
     <section className="space-y-4">
@@ -462,7 +611,7 @@ function ReviewStep({ q }: { q: QuestionnaireRow }) {
       )}
       {q.injection_suspected && (
         <p className="text-xs text-amber-700 bg-amber-50 dark:bg-amber-950/30 rounded px-2 py-1">
-          Some questions contain text that reads like instructions to a computer. Bastion marked those "Needs an expert"; a person should answer them.
+          Some questions contain text that reads like instructions to a computer. Bastion marked those "{BASTION_CONFIDENCE_WORDS.low}"; a person should answer them.
         </p>
       )}
       <div className="flex flex-wrap items-center gap-3">
@@ -470,17 +619,36 @@ function ReviewStep({ q }: { q: QuestionnaireRow }) {
           <input type="checkbox" checked={filter === 'needs'} onChange={(e) => setFilter(e.target.checked ? 'needs' : 'all')} />
           Only answers that still need a person
         </label>
-        {!approved && canApprove && (
+        {!approved && canApprove && !confirming && (
           <button
             type="button"
             className={primary}
             disabled={!approval?.can_approve || impersonating || approve.isPending}
             title={impersonating ? IMPERSONATING_NOTE : undefined}
-            onClick={() => approve.mutate(q.id)}
+            // #268: the person approving is told what they vouch for. With "Check this" answers
+            // nobody reviewed, a second step says so in plain words before anything is approved.
+            onClick={() => (unreviewedChecks > 0 ? setConfirming(true) : approve.mutate(q.id))}
             data-testid="approve"
           >
             Approve
           </button>
+        )}
+        {!approved && canApprove && confirming && (
+          <span className="flex flex-wrap items-center gap-2 text-xs text-amber-800 dark:text-amber-300" data-testid="approve-confirm">
+            {unreviewedChecks} answer{unreviewedChecks === 1 ? '' : 's'} marked "{BASTION_CONFIDENCE_WORDS.medium}" {unreviewedChecks === 1 ? 'has' : 'have'} not been reviewed. Approving
+            sends {unreviewedChecks === 1 ? 'it' : 'them'} as written.
+            <button
+              type="button"
+              className={primary}
+              disabled={impersonating || approve.isPending}
+              onClick={() => approve.mutate(q.id, { onSettled: () => setConfirming(false) })}
+            >
+              Approve anyway
+            </button>
+            <button type="button" className={secondary} onClick={() => setConfirming(false)}>
+              Review them first
+            </button>
+          </span>
         )}
         {approved && canExport && (
           <>
@@ -538,7 +706,7 @@ export function QuestionnaireDetailPage({ questionnaireId, onNavigate }: { quest
               {STATUS_WORDS[row.status]}
               {row.requester_label ? ` · from ${row.requester_label}` : ''}
               {row.due_date ? ` · due ${formatDate(row.due_date)}` : ''}
-              {row.rows_done > 0 ? ` · ${row.high_count} Sure, ${row.medium_count} Check this, ${row.low_count} Needs an expert` : ''}
+              {row.rows_done > 0 ? ` · ${bandCountsWords(row)}` : ''}
             </p>
           </div>
           {(row.status === 'mapping' || row.status === 'uploaded') && <MappingStep q={row} />}

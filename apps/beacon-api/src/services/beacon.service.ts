@@ -11,6 +11,7 @@ import {
 } from '../db/schema/index.js';
 import { sanitizeHtml } from '../lib/sanitize.js';
 import { beaconRefLookup } from '../lib/beacon-ref.js';
+import { resolveBeaconAccess } from '../lib/beacon-access.js';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -40,30 +41,24 @@ export function slugify(title: string): string {
 }
 
 /**
- * Generate a slug that is unique within the org.
- * Uses base slug if available, otherwise appends a random 8-char hex suffix
- * for O(1) uniqueness without scanning existing slugs.
+ * Candidate slugs for a new beacon, in the order createBeacon tries them: the
+ * clean slug first, then the clean slug with a random 8-char hex suffix.
  *
- * The probe is org-scoped to match beacon_entries_org_slug_key (#246): another
- * org owning the same slug is no collision, and an unscoped probe would both
- * leak that it exists and needlessly suffix a clean slug.
+ * There is no pre-read: createBeacon inserts each candidate with
+ * ON CONFLICT (organization_id, slug) DO NOTHING, the per-org unique key
+ * (beacon_entries_org_slug_key, #246), and moves to the next candidate when the
+ * insert returns no row. A probe-then-insert let two creates with the same title
+ * both see the slug free and the second 500 on the unique key (#304).
  */
-async function uniqueSlug(title: string, orgId: string): Promise<string> {
+export function slugCandidate(title: string, attempt: number): string {
   const base = slugify(title);
-  if (!base) return `beacon-${crypto.randomBytes(4).toString('hex')}`;
-
-  // Try the clean slug first
-  const [existing] = await db
-    .select({ slug: beaconEntries.slug })
-    .from(beaconEntries)
-    .where(and(eq(beaconEntries.slug, base), eq(beaconEntries.organization_id, orgId)))
-    .limit(1);
-
-  if (!existing) return base;
-
-  // Append random suffix for guaranteed uniqueness
-  return `${base}-${crypto.randomBytes(4).toString('hex')}`;
+  const suffix = crypto.randomBytes(4).toString('hex');
+  if (!base) return `beacon-${suffix}`;
+  return attempt === 0 ? base : `${base.slice(0, 247)}-${suffix}`;
 }
+
+/** Clean slug plus this many suffixed retries before createBeacon gives up. */
+const CREATE_SLUG_ATTEMPTS = 6;
 
 // ---------------------------------------------------------------------------
 // Expiry policy resolution
@@ -152,42 +147,50 @@ export async function createBeacon(
   userId: string,
   orgId: string,
 ) {
-  const slug = await uniqueSlug(data.title, orgId);
   const expiryDays = await resolveDefaultExpiryDays(orgId, data.project_id ?? null);
   const expiresAt = new Date(Date.now() + expiryDays * 24 * 60 * 60 * 1000);
 
-  const [beacon] = await db
-    .insert(beaconEntries)
-    .values({
-      slug,
-      title: data.title,
-      summary: data.summary ?? null,
-      body_markdown: data.body_markdown,
-      body_html: data.body_html ? sanitizeHtml(data.body_html) : null,
-      version: 1,
-      status: 'Draft',
-      visibility: data.visibility ?? 'Project',
-      created_by: userId,
-      owned_by: userId,
-      project_id: data.project_id ?? null,
-      organization_id: orgId,
-      expires_at: expiresAt,
-      metadata: data.metadata ?? {},
-    })
-    .returning();
+  // One transaction (#304): the entry and its v1 beacon_versions snapshot commit
+  // or roll back together, so no reader (Bastion's policy reader reads the
+  // current version's frozen body from beacon_versions) ever sees an entry with
+  // no v1. The slug is claimed by the insert itself, see slugCandidate.
+  return db.transaction(async (tx) => {
+    for (let attempt = 0; attempt < CREATE_SLUG_ATTEMPTS; attempt++) {
+      const [beacon] = await tx
+        .insert(beaconEntries)
+        .values({
+          slug: slugCandidate(data.title, attempt),
+          title: data.title,
+          summary: data.summary ?? null,
+          body_markdown: data.body_markdown,
+          body_html: data.body_html ? sanitizeHtml(data.body_html) : null,
+          version: 1,
+          status: 'Draft',
+          visibility: data.visibility ?? 'Project',
+          created_by: userId,
+          owned_by: userId,
+          project_id: data.project_id ?? null,
+          organization_id: orgId,
+          expires_at: expiresAt,
+          metadata: data.metadata ?? {},
+        })
+        .onConflictDoNothing({ target: [beaconEntries.organization_id, beaconEntries.slug] })
+        .returning();
+      if (!beacon) continue; // slug taken in this org: try the next candidate
 
-  // Insert first version row
-  await db.insert(beaconVersions).values({
-    beacon_id: beacon!.id,
-    version: 1,
-    title: data.title,
-    summary: data.summary ?? null,
-    body_markdown: data.body_markdown,
-    changed_by: userId,
-    change_note: 'Initial version',
+      await tx.insert(beaconVersions).values({
+        beacon_id: beacon.id,
+        version: 1,
+        title: data.title,
+        summary: data.summary ?? null,
+        body_markdown: data.body_markdown,
+        changed_by: userId,
+        change_note: 'Initial version',
+      });
+      return beacon;
+    }
+    throw new BeaconError('CONFLICT', 'Could not allocate a unique slug for this beacon; try again', 409);
   });
-
-  return beacon!;
 }
 
 export async function getBeacon(idOrSlug: string, userId: string, orgId: string) {
@@ -201,22 +204,10 @@ export async function getBeacon(idOrSlug: string, userId: string, orgId: string)
 
   if (!beacon) return null;
 
-  // Visibility check: Private beacons only visible to owner/creator
-  if (beacon.visibility === 'Private') {
-    if (beacon.owned_by !== userId && beacon.created_by !== userId) {
-      return null;
-    }
-  }
-
-  // Visibility check: Project-scoped beacons require project membership
-  if (beacon.visibility === 'Project' && beacon.project_id) {
-    if (beacon.owned_by !== userId && beacon.created_by !== userId) {
-      const userProjects = await getUserProjectIds(userId);
-      if (!userProjects.has(beacon.project_id)) {
-        return null;
-      }
-    }
-  }
+  // The shared read rule (lib/beacon-access.ts, #299). Read never depends on the
+  // org role, so the least-privileged role is passed.
+  const level = await resolveBeaconAccess({ id: userId, org_id: orgId, role: 'viewer' }, beacon);
+  if (level === 'none') return null;
 
   return beacon;
 }

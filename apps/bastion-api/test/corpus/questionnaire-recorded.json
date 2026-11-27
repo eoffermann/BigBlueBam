@@ -4,6 +4,7 @@
     "prompt_version": 1,
     "source": "live",
     "model": "glm-5.3-flash:cloud",
+    "max_tokens": 2048,
     "note": "Recorded live through apps/api POST /internal/llm/chat with the questionnaire draft prompt; replayed by questionnaire-corpus.test.ts."
   },
   "responses": {

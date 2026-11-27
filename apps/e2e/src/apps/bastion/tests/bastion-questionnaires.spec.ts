@@ -24,6 +24,7 @@ interface Item {
   confidence_band: string;
   draft_answer: string | null;
   review_status: string;
+  band_reasons: Array<{ code: string }>;
 }
 
 async function makeApi(request: APIRequestContext, context: BrowserContext): Promise<DirectApiClient> {
@@ -36,11 +37,14 @@ test.describe('Bastion - questionnaires (M8)', () => {
     const api = await makeApi(request, context);
     const list = await api.getRaw('/questionnaires');
     expect(list.status).toBe(200);
-    const q = (list.body as { data: Array<{ id: string; title: string; status: string; row_count: number }> }).data.find((x) => x.title === M.title);
+    const q = (list.body as { data: Array<{ id: string; title: string; status: string; row_count: number; autofill_use_ai: boolean }> }).data.find((x) => x.title === M.title);
     expect(q, 'run the GILLIGAN seed (scripts/seed-gilligan/run-all.mjs) first').toBeDefined();
     const qid = String(q?.id);
     expect(q?.status).toBe('in_review');
     expect(q?.row_count).toBe(M.rows);
+    // #271: the seeded state is deterministic: drafted without the AI, the story rows decided by
+    // the hard rules on reused approved answers, never by a live model's wording.
+    expect(q?.autofill_use_ai).toBe(M.useAi);
 
     const itemsRes = await api.getRaw(`/questionnaires/${qid}/items`);
     const items = itemsRes.body as { data: Item[]; approval: { can_approve: boolean; low_unreviewed: number } };
@@ -50,6 +54,8 @@ test.describe('Bastion - questionnaires (M8)', () => {
     expect(enc.draft_answer).toMatch(new RegExp(`^${M.encryption.answerStartsWith.replace(/\./g, '\\.')}`));
     expect(rr.confidence_band).toBe(M.radioRelay.band);
     expect(rr.draft_answer).toContain(M.radioRelay.mentions);
+    for (const code of M.encryption.reasons) expect(enc.band_reasons.map((r) => r.code)).toContain(code);
+    for (const code of M.radioRelay.reasons) expect(rr.band_reasons.map((r) => r.code)).toContain(code);
     expect(items.approval.can_approve).toBe(false);
     expect(items.approval.low_unreviewed).toBeGreaterThan(0);
 

@@ -211,6 +211,15 @@ export async function createHelpdeskTicket(input: CreateTicketInput, log: Logger
         'ticket.created',
         'helpdesk',
         {
+          // #289: the nested shape the Bolt catalog, template and seeded rules read
+          // (event.ticket.priority, event.ticket.category); the flat keys stay for existing rules.
+          ticket: {
+            id: ticket.id,
+            number: ticket.ticket_number,
+            subject: ticket.subject,
+            priority: ticket.priority,
+            category: ticket.category,
+          },
           ticket_id: ticket.id,
           ticket_number: ticket.ticket_number,
           subject: ticket.subject,

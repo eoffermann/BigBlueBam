@@ -464,7 +464,9 @@ export default async function ticketRoutes(fastify: FastifyInstance) {
           'ticket.message_posted',
           'helpdesk',
           {
+            ticket: { id: id },
             ticket_id: id,
+            message: { id: message.id, author_id: user.id, is_internal: false },
             message_id: message.id,
             author_type: 'customer',
             helpdesk_user_id: user.id,
@@ -510,6 +512,7 @@ export default async function ticketRoutes(fastify: FastifyInstance) {
           'ticket.status_changed',
           'helpdesk',
           {
+            ticket: { id: id },
             ticket_id: id,
             from: 'waiting_on_customer',
             to: 'open',
@@ -653,9 +656,8 @@ export default async function ticketRoutes(fastify: FastifyInstance) {
           'ticket.reopened',
           'helpdesk',
           {
+            ticket: { id: id, reopened_by: user.id, reopened_at: new Date().toISOString() },
             ticket_id: id,
-            'ticket.reopened_by': user.id,
-            'ticket.reopened_at': new Date().toISOString(),
             from: ticket.status,
           },
           orgIdForReopen,
@@ -666,6 +668,7 @@ export default async function ticketRoutes(fastify: FastifyInstance) {
           'ticket.status_changed',
           'helpdesk',
           {
+            ticket: { id: id },
             ticket_id: id,
             from: ticket.status,
             to: 'open',
@@ -773,9 +776,8 @@ export default async function ticketRoutes(fastify: FastifyInstance) {
           'ticket.closed',
           'helpdesk',
           {
+            ticket: { id: id, closed_by: user.id, closed_at: new Date().toISOString() },
             ticket_id: id,
-            'ticket.closed_by': user.id,
-            'ticket.closed_at': new Date().toISOString(),
             from: ticket.status,
           },
           orgIdForClose,
@@ -787,6 +789,7 @@ export default async function ticketRoutes(fastify: FastifyInstance) {
             'ticket.status_changed',
             'helpdesk',
             {
+              ticket: { id: id },
               ticket_id: id,
               from: ticket.status,
               to: 'closed',

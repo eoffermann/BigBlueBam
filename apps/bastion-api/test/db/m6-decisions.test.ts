@@ -2,7 +2,8 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import postgres from 'postgres';
 import { aggregateControl, type RunRow } from '../../src/engine/evaluator.js';
 import { orgTx, type EngineDeps } from '../../src/engine/context.js';
-import { rankOrgGaps } from '../../src/engine/gaps.js';
+import { GAP_RANK_LOCK_TIMEOUT_MS } from '../../src/engine/budgets.js';
+import { lockOrgGapRank, rankOrgGaps } from '../../src/engine/gaps.js';
 import { deliverToBam, type Deliverer, drainOutbox } from '../../src/engine/outbox.js';
 import { proposalReconcile, type DecisionDeps } from '../../src/services/decisions.service.js';
 import { decideException, expireExceptions, proposeException } from '../../src/services/exceptions.service.js';
@@ -286,6 +287,16 @@ describe.skipIf(!DATABASE_URL)('M6 gaps, fixes, exceptions and drift (live datab
     const r2 = await proposalReconcile(deps, { organization_id: s.org });
     expect(r2.fixes_expired).toBe(1);
     expect((await sql`SELECT status FROM bastion_fix_drafts WHERE id = ${third.id}`)[0]!.status).toBe('expired');
+
+    // #282: deciding a fix whose proposal has expired is refused AND the expiry is kept: the draft
+    // is expired and the gap reopened at once, without waiting for the reconcile.
+    await sql`UPDATE bastion_gaps SET status = 'open' WHERE id = ${gap.id}`;
+    const fourth = (await proposeFix(d, viewer(s.org, s.owner), gap.id, null)).data as { id: string; proposal_id: string };
+    expect((await sql`SELECT status FROM bastion_gaps WHERE id = ${gap.id}`)[0]!.status).toBe('proposed');
+    await sql`UPDATE agent_proposals SET expires_at = now() - interval '1 minute' WHERE id = ${fourth.proposal_id}`;
+    await expect(decideFix(d, viewer(s.org, s.owner), fourth.id, { decision: 'approve' }, false)).rejects.toMatchObject({ code: 'FIX_EXPIRED' });
+    expect((await sql`SELECT status FROM bastion_fix_drafts WHERE id = ${fourth.id}`)[0]!.status).toBe('expired');
+    expect((await sql`SELECT status FROM bastion_gaps WHERE id = ${gap.id}`)[0]!.status).toBe('open');
   });
 
   it('a deleted Compliance project: drift rows say project_unavailable, Readiness says so, and fixing it re-drives the tasks (#229)', async () => {
@@ -334,5 +345,101 @@ describe.skipIf(!DATABASE_URL)('M6 gaps, fixes, exceptions and drift (live datab
     expect((await sql`SELECT task_status FROM bastion_drift_events WHERE id = ${drift!.id as string}`)[0]!.task_status).toBe('created');
     // Nothing left to re-drive.
     expect(await redriveRecoveredProjects(deps, { organization_id: s.org })).toBe(0);
+  });
+
+  /** Can another transaction take this org's gap-rank lock right now? */
+  const gapRankFree = (org: string) =>
+    orgTx(sql, org, async (tx) => (await tx`SELECT pg_try_advisory_xact_lock(hashtextextended(${`bastion_gap_rank:${org}`}, 0)) AS ok`)[0]!.ok === true);
+
+  it('proposeFix holds no gap-rank lock while it waits on can_access (#293)', async () => {
+    const s = await setUp('293-draft', 1);
+    const deps = makeDeps(sql);
+    const [control, assertion] = [s.controls[0]!, s.assertions[0]!];
+    const refs = Array.from({ length: 3 }, (_, i) => ({ entity_type: 'bam.task', entity_id: `00000000-0000-4000-8000-00000000029${i}`, label: `Task ${i}` }));
+    await evaluate(deps, s.org, control, assertion, 'fail', refs, new Date());
+    await orgTx(sql, s.org, (tx) => rankOrgGaps(tx, s.org, deps.now()));
+    const gap = (await listGaps({ engine: deps, canAccess: async () => true }, viewer(s.org, s.owner), { status: 'active', sort: 'risk', limit: 50 })).data.find(
+      (g) => g.gap_kind === 'failing',
+    )!;
+    expect(gap).toBeDefined();
+
+    // A can_access that hangs until the test lets it answer: a slow or degraded Bam api.
+    let answer!: () => void;
+    const gate = new Promise<void>((r) => {
+      answer = r;
+    });
+    let calls = 0;
+    const slow: DecisionDeps = {
+      engine: deps,
+      canAccess: async () => {
+        calls += 1;
+        await gate;
+        return true;
+      },
+    };
+    const proposing = proposeFix(slow, viewer(s.org, s.owner), gap.id, null);
+    try {
+      for (let i = 0; i < 100 && calls === 0; i++) await new Promise((r) => setTimeout(r, 50));
+      expect(calls).toBeGreaterThan(0);
+      // While the draft waits on the network, every other gap writer in the org can proceed.
+      expect(await gapRankFree(s.org)).toBe(true);
+    } finally {
+      answer();
+    }
+    const draft = (await proposing).data as { status: string; cited_refs: unknown[] };
+    expect(draft.status).toBe('proposed');
+    expect((await sql`SELECT status FROM bastion_gaps WHERE id = ${gap.id}`)[0]!.status).toBe('proposed');
+  });
+
+  it('a gap writer waiting on a stuck gap-rank lock gives up with GAP_RANK_BUSY (#293)', async () => {
+    const s = await setUp('293-busy', 1);
+    const deps = makeDeps(sql);
+    const [control, assertion] = [s.controls[0]!, s.assertions[0]!];
+    await evaluate(deps, s.org, control, assertion, 'fail', [], new Date());
+    await orgTx(sql, s.org, (tx) => rankOrgGaps(tx, s.org, deps.now()));
+    const d: DecisionDeps = { engine: deps, canAccess: async () => true };
+    const gap = (await listGaps(d, viewer(s.org, s.owner), { status: 'active', sort: 'risk', limit: 50 })).data.find((g) => g.gap_kind === 'failing')!;
+    // A waiting fix, so the org has something to decide and something for reconcile to visit.
+    const draft = (await proposeFix(d, viewer(s.org, s.owner), gap.id, null)).data as { id: string };
+
+    let release!: () => void;
+    const released = new Promise<void>((r) => {
+      release = r;
+    });
+    let held!: () => void;
+    const holding = new Promise<void>((r) => {
+      held = r;
+    });
+    const holder = orgTx(sql, s.org, async (tx) => {
+      await lockOrgGapRank(tx, s.org);
+      held();
+      await released;
+    });
+    try {
+      await holding;
+      const t0 = Date.now();
+      const outcome = await Promise.race([
+        decideFix(d, viewer(s.org, s.owner), draft.id, { decision: 'approve' }, false).then(
+          () => 'decided',
+          (err: { code?: string }) => err.code ?? 'error',
+        ),
+        new Promise<string>((r) => setTimeout(() => r('still waiting'), GAP_RANK_LOCK_TIMEOUT_MS + 5_000)),
+      ]);
+      expect(outcome).toBe('GAP_RANK_BUSY');
+      expect(Date.now() - t0).toBeGreaterThanOrEqual(GAP_RANK_LOCK_TIMEOUT_MS - 500);
+
+      // Reconcile skips the busy org instead of stalling the run on it.
+      const r = await proposalReconcile(deps, { organization_id: s.org });
+      expect(r.orgs_failed).toBe(1);
+    } finally {
+      release();
+      await holder;
+    }
+    // Once the holder commits the same call goes through, and the lock_timeout it set is gone.
+    expect(((await decideFix(d, viewer(s.org, s.owner), draft.id, { decision: 'approve' }, false)).data as { status: string }).status).toBe('approved');
+    expect(await orgTx(sql, s.org, async (tx) => {
+      await lockOrgGapRank(tx, s.org);
+      return String((await tx`SELECT current_setting('lock_timeout') AS v`)[0]!.v);
+    })).toBe('0');
   });
 });

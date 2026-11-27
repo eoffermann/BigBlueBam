@@ -125,8 +125,8 @@ export default async function crossProductRoutes(fastify: FastifyInstance) {
           'blueprint',
           {
             'diagram.id': result.diagram_id,
-            'source.project_id': body.project_id,
             source: 'bam',
+            project_id: body.project_id,
             node_count: result.node_count,
             edge_count: result.edge_count,
           },

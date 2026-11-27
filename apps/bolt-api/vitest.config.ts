@@ -3,9 +3,11 @@ import { resolve } from 'node:path';
 
 export default defineConfig({
   resolve: {
-    alias: {
-      '@bigbluebam/shared': resolve(__dirname, '../../packages/shared/src/index.ts'),
-    },
+    // The subpath entry first: the bare-name alias would otherwise rewrite it to index.ts/<sub>.
+    alias: [
+      { find: '@bigbluebam/shared/internal-llm-client', replacement: resolve(__dirname, '../../packages/shared/src/internal-llm-client.ts') },
+      { find: /^@bigbluebam\/shared$/, replacement: resolve(__dirname, '../../packages/shared/src/index.ts') },
+    ],
   },
   test: {
 

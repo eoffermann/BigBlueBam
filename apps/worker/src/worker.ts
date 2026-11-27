@@ -1,5 +1,8 @@
 import 'dotenv/config';
-import { Worker, Queue, type Job, type QueueOptions } from 'bullmq';
+import { Queue, type Job, type QueueOptions } from 'bullmq';
+// #315: every Worker records itself for graceful shutdown at construction; never import Worker
+// from bullmq here (lib/worker-shutdown.test.ts enforces it).
+import { Worker, workerRegistry } from './lib/worker-registry.js';
 import Redis from 'ioredis';
 import pino from 'pino';
 import { loadEnv } from './env.js';
@@ -2931,95 +2934,8 @@ restoreWorker.on('failed', (job, err) => {
   void recordWorkerError({ queueName: 'restore-database', jobId: job?.id, jobName: job?.name, err: err as Error });
 });
 
-// Collect all workers for graceful shutdown
-const workers = [
-  backupWorker,
-  restoreWorker,
-  bastionEvaluateRunWorker,
-  bastionCompileWorker,
-  bastionAutofillWorker,
-  bastionObjectBackupWorker,
-  bastionExportPacketWorker,
-  emailWorker,
-  notificationWorker,
-  sprintCloseWorker,
-  exportWorker,
-  banterNotificationWorker,
-  banterRetentionWorker,
-  banterScheduledPostWorker,
-  helpdeskTaskCreateWorker,
-  beaconVectorSyncWorker,
-  beaconExpirySweepWorker,
-  livekitIpDriftWorker,
-  turnCertExpiryWorker,
-  bearingSnapshotWorker,
-  bearingRecomputeWorker,
-  bearingDigestWorker,
-  bearingWatcherNotifyWorker,
-  boltExecuteWorker,
-  boltScheduleTickWorker,
-  blastSendWorker,
-  bondStaleDealsWorker,
-  bamTaskOverdueSweepWorker,
-  billPdfGenerateWorker,
-  billEmailSendWorker,
-  billOverdueReminderWorker,
-  blankConfirmationEmailWorker,
-  blankFileProcessWorker,
-  benchReportDeliverWorker,
-  benchMvRefreshWorker,
-  briefEmbedWorker,
-  briefSnapshotWorker,
-  briefExportWorker,
-  briefCleanupWorker,
-  helpdeskSlaMonitorWorker,
-  boardThumbnailWorker,
-  boltExecutionCleanupWorker,
-  bondBulkScoreWorker,
-  helpdeskEmailNotifyWorker,
-  // §20 Wave 5 webhooks
-  agentWebhookDispatchWorker,
-  agentWebhookDlqWorker,
-  slackImportWorker,
-  // Phase 0 task Links title fetch
-  taskLinkTitleFetchWorker,
-  githubDeliveryRetryWorker,
-  // §13 Bureau presence reaper
-  bureauPresenceReapWorker,
-  // §10 Bureau summon fan-out
-  bureauSummonFanoutWorker,
-  // §4.3 Bureau knock timeout
-  bureauKnockTimeoutWorker,
-  // Workstream 4 Bureau booking lifecycle (activate at starts_at, release at ends_at)
-  bureauBookingActivateWorker,
-  bureauBookingReleaseWorker,
-  // Workstream 14 Bureau analytics rollup
-  bureauAnalyticsRollupWorker,
-  // Book task #63 external-calendar sync sweep
-  bookCalendarSyncWorker,
-  // Banter Feed fan-in
-  banterFeedFaninWorker,
-  // Bin AV-scan sweep
-  binAvScanWorker,
-  // Bin media transcode
-  binTranscodeWorker,
-  // Bin model processing (Bay FBX 3D review)
-  binModelProcessWorker,
-  // Blip telemetry (§17)
-  blipIngestWorker,
-  blipPartitionProvisionWorker,
-  blipRetentionSweepWorker,
-  blipWatchEvalWorker,
-  blipFieldIndexWorker,
-  blipExportJsonlWorker,
-  blipTimelapseWorker,
-  analyticsWorker,
-  // Braid identity resolution (§4.6)
-  braidMatchWorker,
-  braidRescanWorker,
-  braidProposalReconcileWorker,
-  braidCandidateRetentionWorker,
-];
+// Graceful shutdown closes every Worker this process built: each one records itself in
+// workerRegistry at construction (#315), so there is no hand-kept list to drift.
 
 logger.info(
   {
@@ -3124,7 +3040,14 @@ async function shutdown(signal: string) {
     logger.warn({ err }, 'banter-pattern-match: shutdown stop failed');
   }
 
-  await Promise.all(workers.map((w) => w.close()));
+  // #315: every worker (the registry, not a hand-kept list), bounded below the stop grace period;
+  // the DB pool and Redis close only after every worker has stopped.
+  const deadlineMs = env.WORKER_SHUTDOWN_DEADLINE_MS;
+  logger.info({ workers: workerRegistry.all().length, deadline_ms: deadlineMs }, `Closing ${workerRegistry.all().length} workers (waiting up to ${deadlineMs} ms for active jobs)...`);
+  const closed = await workerRegistry.closeAll(deadlineMs);
+  if (closed.forced > 0) {
+    logger.warn(closed, `${closed.forced} workers still had active jobs at the shutdown deadline and were force-closed; BullMQ re-runs those jobs as stalled`);
+  }
   await closeDb();
   redis.disconnect();
 

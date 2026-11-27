@@ -380,3 +380,72 @@ describe('search_everything MCP tool', () => {
     expect(helpdeskErr.message).toMatch(/timed out|abort/i);
   });
 });
+
+// M10 (spec 5.1 row 95, 8.5): the Bastion arm reads bastion-api's GET /search once for both
+// entity kinds, keeps only the kinds asked for, and gates them with can_access for an asker.
+describe('search_everything Bastion arm', () => {
+  let tools: Map<string, RegisteredTool>;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    const api = new ApiClient('http://api.test', 'test-token', logger);
+    const mock = createMockServer();
+    tools = mock.tools;
+    registerSearchTools(mock.server, api, { ...URLS, basisApiUrl: 'http://basis.test', bastionApiUrl: 'http://bastion.test/v1/' });
+  });
+
+  const bastionHits = {
+    data: [
+      { entity_type: 'bastion.control', id: UUID, title: 'Laptop encryption', snippet: 'Every laptop disk is encrypted', score: 1, url: '' },
+      { entity_type: 'bastion.policy', id: UUID2, title: 'Laptop and device policy', snippet: '5 of 7 have read the current version', score: 0.8, url: '' },
+      { entity_type: 'bastion.evidence', id: UUID3, title: 'not a search type', snippet: '', score: 1, url: '' },
+    ],
+  };
+
+  it('maps controls and policies to their Bastion pages with source_app bastion', async () => {
+    installRouter([{ match: 'bastion.test/v1/search?', respond: () => ({ body: bastionHits }) }]);
+    const result = await tools.get('search_everything')!.handler({ query: 'laptop', types: ['control', 'policy'] });
+    const parsed = JSON.parse(result.content[0]!.text);
+    expect(parsed.errors).toBeUndefined();
+    expect(parsed.data.map((h: { entity_type: string; source_app: string; url: string }) => [h.entity_type, h.source_app, h.url])).toEqual([
+      ['control', 'bastion', `/bastion/controls/${UUID}`],
+      ['policy', 'bastion', '/bastion/policies'],
+    ]);
+    const calledUrls = mockFetch.mock.calls.map((c) => c[0] as string);
+    expect(calledUrls).toEqual(['http://bastion.test/v1/search?q=laptop&limit=50']);
+    const init = mockFetch.mock.calls[0]![1] as RequestInit;
+    expect((init.headers as Record<string, string>).Authorization).toBe('Bearer test-token');
+  });
+
+  it('keeps only the kinds asked for and skips the arm when neither is asked for', async () => {
+    installRouter([{ match: 'bastion.test/v1/search?', respond: () => ({ body: bastionHits }) }]);
+    const onlyPolicies = JSON.parse((await tools.get('search_everything')!.handler({ query: 'laptop', types: ['policy'] })).content[0]!.text);
+    expect(onlyPolicies.data.map((h: { entity_type: string }) => h.entity_type)).toEqual(['policy']);
+    mockFetch.mockClear();
+    await tools.get('search_everything')!.handler({ query: 'laptop', types: ['metric'] });
+    expect(mockFetch.mock.calls.map((c) => c[0] as string).some((u) => u.includes('bastion.test'))).toBe(false);
+  });
+
+  it('gates Bastion hits with can_access as bastion.control / bastion.policy for an asker', async () => {
+    const asked: Array<{ entity_type: string; entity_id: string }> = [];
+    mockFetch.mockImplementation(async (url: string, init: RequestInit) => {
+      if (url.includes('bastion.test/v1/search?')) return { ok: true, status: 200, json: async () => bastionHits };
+      if (url.includes('/v1/visibility/can_access')) {
+        const body = JSON.parse(String(init.body)) as { entity_type: string; entity_id: string };
+        asked.push(body);
+        return { ok: true, status: 200, json: async () => ({ data: { allowed: body.entity_type === 'bastion.control' } }) };
+      }
+      return { ok: true, status: 200, json: async () => ({ data: [] }) };
+    });
+    const parsed = JSON.parse((await tools.get('search_everything')!.handler({ query: 'laptop', types: ['control', 'policy'], as_user_id: UUID4 })).content[0]!.text);
+    expect(asked.map((a) => a.entity_type).sort()).toEqual(['bastion.control', 'bastion.policy']);
+    expect(parsed.data.map((h: { entity_id: string }) => h.entity_id)).toEqual([UUID]);
+    expect(parsed.filtered_count).toBe(1);
+  });
+
+  it('reports a failing bastion-api in errors[] without failing the call', async () => {
+    installRouter([{ match: 'bastion.test', respond: () => ({ ok: false, status: 503, body: {} }) }]);
+    const parsed = JSON.parse((await tools.get('search_everything')!.handler({ query: 'laptop', types: ['control', 'metric'] })).content[0]!.text);
+    expect(parsed.errors).toEqual([{ source_app: 'bastion', message: 'status 503' }]);
+  });
+});

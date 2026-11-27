@@ -29,3 +29,4 @@ export * from './bond.js';
 export * from './book.js';
 export * from './helpdesk.js';
 export * from './platform.js';
+export * from './internal-llm.js';
