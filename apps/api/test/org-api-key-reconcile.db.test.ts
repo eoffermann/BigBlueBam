@@ -78,3 +78,93 @@ run('API keys follow org role changes (real Postgres)', () => {
     expect(await scopes(alice, other)).toEqual(['admin']);
   });
 });
+
+// #342: an agent's admin scope is vouched for by the org admin who created it. When that
+// creator is demoted or removed, the agent's admin keys in that org drop to read_write.
+run('Service/agent keys follow their creator (real Postgres)', () => {
+  const sql = postgres(DB_URL ?? 'postgres://x@localhost/x', { max: 2, onnotice: () => {} });
+  const database = drizzle(sql);
+  const tag = `${Date.now()}d`;
+  let org = '';
+  let other = '';
+  let skipper = '';
+  let professor = '';
+  let su = '';
+  let bot = '';
+  let agent = '';
+  let suBot = '';
+  let botOther = '';
+
+  const scopeOf = async (userId: string, orgId: string) =>
+    (await sql`SELECT scope FROM api_keys WHERE user_id = ${userId} AND org_id = ${orgId}`).map((r) => r.scope as string);
+  const addKey = (userId: string, orgId: string, name: string) =>
+    sql`INSERT INTO api_keys (user_id, org_id, name, key_hash, key_prefix, scope)
+        VALUES (${userId}, ${orgId}, ${name}, '!', ${`q${name}`.slice(0, 8)}, 'admin')`;
+  const addUser = async (email: string, kind: string, createdBy: string | null, isSuperuser = false) => {
+    const [row] = await sql`INSERT INTO users (org_id, email, display_name, password_hash, kind, created_by, is_superuser)
+      VALUES (${org}, ${`${email}-${tag}@keyrec.test`}, ${email}, '!', ${kind}, ${createdBy}, ${isSuperuser}) RETURNING id`;
+    return row!.id as string;
+  };
+
+  beforeAll(async () => {
+    [{ id: org }] = await sql`INSERT INTO organizations (name, slug) VALUES ('Gilligan Travel delegated', ${`deleg-${tag}`}) RETURNING id`;
+    [{ id: other }] = await sql`INSERT INTO organizations (name, slug) VALUES ('Howell Holdings delegated', ${`deleg-o-${tag}`}) RETURNING id`;
+    skipper = await addUser('skipper', 'human', null);
+    professor = await addUser('professor', 'human', null);
+    su = await addUser('superuser', 'human', null, true);
+    bot = await addUser('coconut-bot', 'service', skipper);
+    agent = await addUser('rescue-agent', 'agent', skipper);
+    suBot = await addUser('su-bot', 'service', su);
+    botOther = await addUser('luau-bot', 'service', skipper);
+    for (const u of [skipper, professor, su, bot, agent, suBot]) {
+      await sql`INSERT INTO organization_memberships (user_id, org_id) VALUES (${u}, ${org})`;
+    }
+    await sql`INSERT INTO organization_memberships (user_id, org_id) VALUES (${skipper}, ${other}), (${botOther}, ${other})`;
+    await setUserOrgRole(skipper, org, 'owner', {}, database);
+    await setUserOrgRole(skipper, other, 'owner', {}, database);
+    await setUserOrgRole(professor, org, 'owner', {}, database);
+    await setUserOrgRole(su, org, 'owner', {}, database);
+    for (const u of [bot, agent, suBot]) await setUserOrgRole(u, org, 'member', {}, database);
+    await setUserOrgRole(botOther, other, 'member', {}, database);
+    await addKey(bot, org, 'bot');
+    await addKey(agent, org, 'agent');
+    await addKey(suBot, org, 'subot');
+    await addKey(botOther, other, 'botother');
+  });
+
+  afterAll(async () => {
+    const ids = [skipper, professor, su, bot, agent, suBot, botOther];
+    await sql`DELETE FROM api_keys WHERE user_id = ANY(${ids})`;
+    await sql`DELETE FROM account_group_memberships WHERE user_id = ANY(${ids})`;
+    await sql`DELETE FROM organization_memberships WHERE org_id IN (${org}, ${other})`;
+    await sql`UPDATE users SET created_by = NULL WHERE id = ANY(${ids})`;
+    await sql`DELETE FROM users WHERE id = ANY(${ids})`;
+    await sql`DELETE FROM organizations WHERE id IN (${org}, ${other})`;
+    await sql.end();
+  });
+
+  it("keeps the agents' admin keys while their creator stays an org admin", async () => {
+    await setUserOrgRole(skipper, org, 'admin', {}, database);
+    expect(await scopeOf(bot, org)).toEqual(['admin']);
+    expect(await scopeOf(agent, org)).toEqual(['admin']);
+  });
+
+  it('downgrades the service and agent accounts the creator made when the creator is demoted', async () => {
+    await setUserOrgRole(skipper, org, 'member', {}, database);
+    expect(await scopeOf(bot, org)).toEqual(['read_write']);
+    expect(await scopeOf(agent, org)).toEqual(['read_write']);
+    // Other creators' agents and the creator's agents in other orgs are untouched.
+    expect(await scopeOf(suBot, org)).toEqual(['admin']);
+    expect(await scopeOf(botOther, other)).toEqual(['admin']);
+  });
+
+  it("downgrades the creator's agents in an org the creator is removed from", async () => {
+    await clearUserOrgRole(skipper, other, database);
+    expect(await scopeOf(botOther, other)).toEqual(['read_write']);
+  });
+
+  it('keeps vouching when the creator is a SuperUser', async () => {
+    await setUserOrgRole(su, org, 'member', {}, database);
+    expect(await scopeOf(suBot, org)).toEqual(['admin']);
+  });
+});

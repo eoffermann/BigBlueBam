@@ -40,6 +40,9 @@ export { ORG_ADMIN_ROLES, keyRoleCapApplies };
  * Bring a user's API keys for one org in line with their role there.
  * - role === null (membership removed): delete every key bound to the org.
  * - role below admin: downgrade admin-scope keys to read_write.
+ * - either way (#342): the service and agent accounts this user created
+ *   lose their admin-scope keys for the org, unless the user is a platform
+ *   SuperUser (see downgradeDelegatedAgentKeys).
  * Defense in depth behind the requireScope('admin') role check (#336).
  * Idempotent.
  */
@@ -53,12 +56,14 @@ export async function reconcileOrgApiKeys(
     await dbInstance
       .delete(apiKeys)
       .where(and(eq(apiKeys.user_id, userId), eq(apiKeys.org_id, orgId)));
+    await downgradeDelegatedAgentKeys(userId, orgId, dbInstance);
     return;
   }
   if (ORG_ADMIN_ROLES.has(role)) return;
+  await downgradeDelegatedAgentKeys(userId, orgId, dbInstance);
   // Service/agent accounts hold role 'member' by design; an owner delegated
   // their admin scope directly (service-account.routes.ts), so only human
-  // holders are downgraded. Mirrors keyRoleCapApplies() in requireScope.
+  // holders are downgraded here. Mirrors keyRoleCapApplies() in requireScope.
   await dbInstance
     .update(apiKeys)
     .set({ scope: 'read_write' })
@@ -68,6 +73,42 @@ export async function reconcileOrgApiKeys(
         eq(apiKeys.org_id, orgId),
         eq(apiKeys.scope, 'admin'),
         sql`EXISTS (SELECT 1 FROM users u WHERE u.id = ${apiKeys.user_id} AND u.kind = 'human')`,
+      ),
+    );
+}
+
+/**
+ * #342 decision: a service or agent account's admin scope is vouched for by
+ * the org admin who created it (users.created_by). Minting an admin-scope
+ * agent requires an org owner or a SuperUser (service-account.routes.ts), and
+ * the agent's own org role is 'member' by design, so requireScope('admin')
+ * exempts it from the role cap (keyRoleCapApplies). When the creator is
+ * demoted below admin or removed from the org, nobody vouches any more: the
+ * agent's admin-scope keys bound to that org are downgraded to read_write.
+ * They are not deleted, so the automation keeps working at read/write while
+ * a remaining owner decides whether to re-grant (a new admin-scope service
+ * account; rotation keeps the downgraded scope).
+ * A SuperUser creator keeps vouching (their authority does not come from the
+ * org role). Re-promoting the creator does not restore the scope.
+ * Recorded in docs/reference/agent-conventions.md section 8.
+ *
+ * orgId null means every org (the creator's account is being deleted).
+ */
+export async function downgradeDelegatedAgentKeys(
+  creatorId: string,
+  orgId: string | null,
+  dbInstance: DbLike = defaultDb,
+): Promise<void> {
+  await dbInstance
+    .update(apiKeys)
+    .set({ scope: 'read_write' })
+    .where(
+      and(
+        orgId === null ? undefined : eq(apiKeys.org_id, orgId),
+        eq(apiKeys.scope, 'admin'),
+        sql`EXISTS (SELECT 1 FROM users a WHERE a.id = ${apiKeys.user_id}
+                       AND a.created_by = ${creatorId} AND a.kind IN ('service', 'agent'))`,
+        sql`NOT EXISTS (SELECT 1 FROM users c WHERE c.id = ${creatorId} AND c.is_superuser = true)`,
       ),
     );
 }
