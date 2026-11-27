@@ -96,7 +96,7 @@ packages/
   rls-connection/   The one place a request reserves an org-bound postgres.js connection under BBB_RLS_ENFORCE=1: reserveOrgConnection (org GUC + begin/savepoint for db.transaction + pool options for drizzle), releaseOrgConnection, and requestRlsBinding, the Fastify per-request binding used by api, basis-api, braid-api and bulwark-api. scripts/lib/rls-reserved-connection.test.mjs fails if service source calls .reserve() itself (#365) (@bigbluebam/rls-connection).
   egress-guard/     The one SSRF guard for every server-side fetch of a URL or host a user, org admin or external system controls: protocol + hostname denylist, v4/v6 range tables, DNS resolution, connect-time pinning (safeDispatcher), per-hop redirect revalidation (safeFetch), and the EGRESS_ALLOW_PRIVATE_HOSTS operator allowlist. Use checkUrlSync/checkUrl for save-time 400s and safeFetch at the call site. Never write a private-IP table anywhere else; scripts/lib/egress-range-tables.test.mjs fails on a copy (@bigbluebam/egress-guard).
 infra/
-  postgres/         migrations/ (numbered, idempotent SQL migrations). 221 files as of tip 0259_bursar_builtin_group_defaults.sql.
+  postgres/         migrations/ (numbered, idempotent SQL migrations). Find the current tip with `ls infra/postgres/migrations/*.sql | tail -1`.
   nginx/            nginx.conf, certs.
   livekit/          LiveKit SFU configuration (livekit.yaml).
 scripts/            Utility scripts: deploy adapters, seed-all.mjs master orchestrator, per-app seeders, check-bolt-catalog.mjs drift guard, db-check.mjs, lint-migrations.mjs, and screenshot generators.
@@ -116,6 +116,7 @@ The entire stack runs via `docker compose up`. All services are accessed through
 - `http://DOMAIN/beacon/ws` proxies Beacon WebSocket connections (Yjs T4 co-editing)
 - `http://DOMAIN/brief/` serves the Brief collaborative document editor SPA
 - `http://DOMAIN/brief/api/` proxies to the Brief API
+- `http://DOMAIN/brief/ws` proxies Brief WebSocket connections (Yjs collaboration)
 - `http://DOMAIN/bolt/` serves the Bolt workflow automation SPA
 - `http://DOMAIN/bolt/api/` proxies to the Bolt API
 - `http://DOMAIN/bearing/` serves the Bearing Goals and OKRs SPA
@@ -125,12 +126,16 @@ The entire stack runs via `docker compose up`. All services are accessed through
 - `http://DOMAIN/board/ws` proxies Board WebSocket connections
 - `http://DOMAIN/bond/` serves the Bond CRM SPA
 - `http://DOMAIN/bond/api/` proxies to the Bond API
+- `http://DOMAIN/bond/ws` proxies Bond WebSocket connections (live pipeline updates)
 - `http://DOMAIN/blast/` serves the Blast Email Campaigns SPA
 - `http://DOMAIN/blast/api/` proxies to the Blast API
 - `http://DOMAIN/t/` proxies Blast tracking endpoints (open pixel, click redirect)
 - `http://DOMAIN/unsub/` proxies Blast unsubscribe endpoint
 - `http://DOMAIN/bench/` serves the Bench Analytics SPA
 - `http://DOMAIN/bench/api/` proxies to the Bench API
+- `http://DOMAIN/basis/` serves the Basis governed-metric SPA
+- `http://DOMAIN/basis/api/` proxies to the Basis API
+- `http://DOMAIN/basis/ws` proxies Basis WebSocket connections
 - `http://DOMAIN/braid/` serves the Braid identity-resolution SPA
 - `http://DOMAIN/braid/api/` proxies to the Braid API
 - `http://DOMAIN/braid/ws` proxies Braid WebSocket connections
@@ -163,14 +168,19 @@ The entire stack runs via `docker compose up`. All services are accessed through
 - `http://DOMAIN/bay/` serves the Bay media-review SPA
 - `http://DOMAIN/bay/api/` proxies to the Bay API (incl. public token-gated guest review at /bay/api/v1/public/review, token in the `X-Bay-Review-Token` header, guest page `/bay/r#<token>`)
 - `http://DOMAIN/bay/ws` proxies Bay WebSocket connections (live annotations/decisions)
+- `http://DOMAIN/blip/` serves the Blip telemetry and log-ingest SPA
+- `http://DOMAIN/blip/api/` proxies to the Blip API
+- `http://DOMAIN/blip/ws` proxies Blip WebSocket connections (live log streaming)
+- `http://DOMAIN/blip/ingest/` proxies Blip's bearer-token ingest endpoint (no session auth)
 - `http://DOMAIN/helpdesk/` serves the Helpdesk portal SPA
 - `http://DOMAIN/helpdesk/api/` proxies to the Helpdesk API
+- `http://DOMAIN/helpdesk/ws` proxies Helpdesk WebSocket connections
 - `http://DOMAIN/files/` serves uploaded files from MinIO
 - `http://DOMAIN/mcp/` proxies to the MCP server
 
 **The marketing `site` is also a Docker Compose service, run the same way locally and on Railway.** It is the top-level `site/` Vite app (React, not part of `apps/`), built by `infra/site/Dockerfile` (`npm run build`, then `serve -s dist` on `:3000`) and defined as the `site` service in `docker-compose.yml`. Two non-obvious things that have tripped this up before: (1) it is NOT fronted by the app nginx above (there is no `site` / `:3000` route in `infra/nginx/nginx.conf`); it serves itself on its own port/domain, which is why it is absent from the route list. Do not assume it lives outside the stack just because nginx does not mention it. (2) Anything under `site/public/` (including the committed `site/public/downloads/BigBlueBam-Manual.{pdf,docx}` book artifacts) is copied into `dist` and baked into the image at build time, so after changing site source or those artifacts you must `docker compose build site && docker compose up -d --force-recreate site` to see it locally; on Railway it ships on push to `stable`.
 
-Application containers (api, banter-api, beacon-api, brief-api, bolt-api, bearing-api, board-api, bond-api, blast-api, bench-api, book-api, blank-api, bill-api, blueprint-api, bureau-api, bin-api, bay-api, mcp-server, worker, helpdesk-api, frontend, site, voice-agent) are stateless and scale horizontally. Data services (postgres, redis, minio, qdrant) can be swapped for managed cloud equivalents by changing environment variables only.
+Application containers (api, every `*-api` service in `docker-compose.yml`, mcp-server, worker, frontend, site, voice-agent) are stateless and scale horizontally. Data services (postgres, redis, minio, qdrant) can be swapped for managed cloud equivalents by changing environment variables only. The remaining compose services are one-shot or infrastructure containers (migrate, seed, livekit-config, livekit, certbot, mailhog). `scripts/lib/claude-md-coverage.test.mjs` fails if a compose service fits none of these three groups.
 
 ## CRITICAL: Response style
 
@@ -244,9 +254,9 @@ If the work is purely internal (refactor, comment cleanup, no observable behavio
 
 ## Database Schema and Migrations
 
-**Single source of truth:** `infra/postgres/migrations/NNNN_*.sql`, append-only, idempotent numbered migration files. `0000_init.sql` is the canonical baseline; subsequent files layer schema evolution on top. There is no `init.sql`: the postgres container boots with an empty DB and the `migrate` service creates everything. As of this refresh the tree has 221 migration files with tip `0259_bursar_builtin_group_defaults.sql`. **Do not anchor a new migration number on this line without verifying it** (`ls infra/postgres/migrations/*.sql | tail -1`); it documents a point in time and goes stale every time an app ships.
+**Single source of truth:** `infra/postgres/migrations/NNNN_*.sql`, append-only, idempotent numbered migration files. `0000_init.sql` is the canonical baseline; subsequent files layer schema evolution on top. There is no `init.sql`: the postgres container boots with an empty DB and the `migrate` service creates everything. This file deliberately does not record the migration count or the current tip, because both go stale every time an app ships. **Before picking a new migration number, read the tip from the tree** (`ls infra/postgres/migrations/*.sql | tail -1`) and use the next number. `scripts/lib/claude-md-coverage.test.mjs` fails if a count or tip reappears here and disagrees with the tree.
 
-The `migrate` service (reuses the api image, runs `node dist/migrate.js`) is a `service_completed_successfully` dependency of every DB-using service: api, helpdesk-api, banter-api, beacon-api, brief-api, bolt-api, bearing-api, board-api, bond-api, blast-api, bench-api, book-api, blank-api, bill-api, blueprint-api, bureau-api, bin-api, bay-api, bursar-api, worker. It runs automatically on every `docker compose up`, tracks applied migrations in the `schema_migrations` table with SHA-256 checksums, and is a no-op once the DB is current.
+The `migrate` service (reuses the api image, runs `node dist/migrate.js`) is a `service_completed_successfully` dependency of every DB-using service in `docker-compose.yml`: `api`, every `*-api` service, `worker`, and `seed` (look for `depends_on: migrate` on the service you are debugging). `scripts/lib/claude-md-coverage.test.mjs` checks that this sentence still matches the compose file. It runs automatically on every `docker compose up`, tracks applied migrations in the `schema_migrations` table with SHA-256 checksums, and is a no-op once the DB is current.
 
 **When you change the schema:**
 
@@ -469,7 +479,7 @@ pnpm --filter @bigbluebam/integration-tests test   # Cross-app integration harne
   - **Write plane** (Wave 4, migrations 0130-0133): scheduled Banter posts with per-channel quiet hours (`banter_schedule_post`), idempotent upserts (`bond_upsert_contact`, `beacon_upsert_by_slug`, `helpdesk_upsert_user`, `task_upsert_by_external_id` — each emits a `*.upserted` event with a `created` flag), the `entity_links` durable cross-app linking table with backfill from known per-app FKs, and a federated `attachment_get` / `attachment_list` dispatcher.
   - **Agent policies and outbound webhooks** (§15 + §20, Wave 5, migrations 0139 + 0140): `agent_policies` drives per-agent kill switches and glob-prefix tool allowlists (`banter.*`, `bond.*`, etc.). A policy-check middleware in `apps/mcp-server/src/lib/register-tool.ts` fail-closes every service-account tool invocation with a short-TTL in-process cache plus Redis PubSub (`agent_policies:invalidate`) for fast propagation. Always-permitted core set: `get_server_info`, `get_me`, `agent_heartbeat`. Outbound webhooks push subscribed Bolt events to agent runners via HMAC-signed POSTs with a 0s/30s/2m/10m/30m/2h/6h/dead-letter backoff schedule, SSRF guards, 256KB payload cap, and auto-disable at 20 consecutive failures.
   - **Long tail** (Wave 5): dedupe primitives (`bond_find_duplicates`, `helpdesk_find_similar_tickets`, `dedupe_record_decision` / `dedupe_list_pending` backed by `dedupe_decisions`), trend queries (`helpdesk_ticket_count_by_phrase`, `bam_task_count_by_phrase`), `expertise_for_topic`, Bolt observability (`bolt_event_trace`, `bolt_recent_events`, runtime `catalog.drift_detected`), Banter agent-pattern subscriptions with `can_access`-gated worker fan-out, mixed-roster availability (`book_find_meeting_time_for_users`), and Redis-backed ingest-fingerprint dedup.
-- **Bolt catalog drift guard** is `scripts/check-bolt-catalog.mjs`. It scans every `publishBoltEvent(...)` call site under `apps/` and fails CI if the `(source, event_type)` pair is missing from `apps/bolt-api/src/services/event-catalog.ts`. 122 events registered as of the Blueprint integration with zero violations.
+- **Bolt catalog drift guard** is `scripts/check-bolt-catalog.mjs`. It scans every `publishBoltEvent(...)` call site under `apps/` and fails CI if the `(source, event_type)` pair is missing from `apps/bolt-api/src/services/event-catalog.ts`. Run it to see the current number of registered `(source, event_type)` pairs and `BOLT_SOURCES`; this file does not record the count.
 - **Seeding** is orchestrated by `scripts/seed-all.mjs`, invoked via the `docker compose --profile seed run --rm seed` sidecar (see `docker-compose.yml`). The orchestrator reads `SEED_ORG_SLUG` from the environment and runs seeders in four dependency phases: Phase A `seed-platform.mjs` (fatal on failure, seeds users/projects/tasks), Phase B per-app seeders (non-fatal, serial for log clarity), Phase C `seed-banter.mjs` + `seed-helpdesk.mjs` (depend on Phase A users), Phase D `seed-acme-scenario.mjs` (the cross-app "Acme lead to delivery" chain). Per-app seeders resolve the org dynamically via `SEED_ORG_SLUG`, so no script hardcodes a UUID. See `docs/history/2026-04-15-seeding/seeding-recovery-plan.md` for the gap analysis and the human-tester checklist that shaped the current seed set.
 
 ## Error Response Envelope
