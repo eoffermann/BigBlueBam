@@ -1,5 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { resolveCrossAppAccess, type CrossAppAccessConfig } from './cross-app-access.js';
+import {
+  isDegradedDecision,
+  isDegradedReason,
+  resolveCrossAppAccess,
+  type CrossAppAccessConfig,
+} from './cross-app-access.js';
 
 // #300: Bureau's cross-app preflight fails CLOSED.
 
@@ -49,6 +54,19 @@ describe('resolveCrossAppAccess', () => {
     expect(d.allowed).toBe(false);
     expect(d.reason).toBe('degraded_http_error');
     expect(onDegraded).toHaveBeenCalledWith(expect.objectContaining({ reason: 'http_error', app: 'board' }));
+    // #330: a degraded deny is marked so a caller that records outcomes can retry it.
+    expect(d.degraded).toBe(true);
+    expect(isDegradedDecision(d)).toBe(true);
+  });
+
+  it('does not mark a real deny as degraded (#330)', async () => {
+    respond(200, { allowed: false, reason: 'not_a_member' });
+    const d = await resolveCrossAppAccess(args('/board/boards/x'), config());
+    expect(d.allowed).toBe(false);
+    expect(d.degraded).toBeUndefined();
+    expect(isDegradedDecision(d)).toBe(false);
+    expect(isDegradedReason('degraded_timeout')).toBe(true);
+    expect(isDegradedReason('not_a_member')).toBe(false);
   });
 
   it('denies on a transport error, a malformed body and a missing secret', async () => {

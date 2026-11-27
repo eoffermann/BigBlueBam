@@ -66,6 +66,8 @@ import { emitSummonIssued } from '../lib/bureau-events.js';
  * and matches the threshold called out in the workstream-6 assignment.
  */
 export const FANOUT_INLINE_LIMIT = 10;
+/** Attempts for the bureau-summon-fanout job (degraded access checks retry, #330). */
+export const SUMMON_FANOUT_ATTEMPTS = 5;
 
 /** BullMQ queue name for the fan-out worker (apps/worker). */
 export const SUMMON_FANOUT_QUEUE = 'bureau-summon-fanout';
@@ -442,6 +444,12 @@ export async function fanOutSummon(args: FanOutSummonArgs): Promise<void> {
         summonerId: args.summonerId,
       },
       {
+        // #330: an access check that could not get a real answer (peer down,
+        // timeout) makes the worker throw instead of recording a final
+        // no_access, so the job needs retries with backoff: about 2.5 min
+        // across 5 attempts. The last attempt records access_check_unavailable.
+        attempts: SUMMON_FANOUT_ATTEMPTS,
+        backoff: { type: 'exponential', delay: 10_000 },
         removeOnComplete: 200,
         removeOnFail: 500,
       },
