@@ -3,6 +3,8 @@ import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { drizzle } from 'drizzle-orm/postgres-js';
 import { queryClient, rlsStorage, schema, type RlsStore } from '../db/index.js';
 import { env } from '../env.js';
+// Type-only: brings the FastifyContextConfig.rlsOrgScope augmentation into scope.
+import type {} from '../lib/rls-org-scope.js';
 
 /**
  * Row-level security plugin (Wave 1.A, Platform G1; binding fix issue #87).
@@ -56,16 +58,31 @@ const rlsPlugin = fp(async (fastify: FastifyInstance) => {
     // this request-wide pin.
     if (request.headers.upgrade?.toLowerCase() === 'websocket') return;
 
-    const user = request.user;
-    if (!user?.active_org_id) return;
     const store = rlsStorage.getStore();
     if (!store || store.reserved) return;
+
+    // The org comes from the signed-in user. A request with no user (server-to-server and
+    // webhook routes) binds the org its route declares through config.rlsOrgScope (#338,
+    // lib/rls-org-scope.ts); with neither, nothing is bound and org-gated tables stay empty.
+    let orgId: string | null = request.user?.active_org_id ?? null;
+    if (!orgId && !request.user) {
+      const resolve = request.routeOptions.config?.rlsOrgScope;
+      if (resolve) {
+        try {
+          orgId = await resolve(request);
+        } catch (err) {
+          request.log.warn({ err }, 'rls: route org resolver failed; binding no org');
+          orgId = null;
+        }
+      }
+    }
+    if (!orgId) return;
 
     const reserved = await queryClient.reserve();
     try {
       // Session-level (is_local=false) is correct here: the connection is exclusive to this
       // request and the GUC is cleared before it returns to the pool in `release`.
-      await reserved`select set_config('app.current_org_id', ${user.active_org_id}, false)`;
+      await reserved`select set_config('app.current_org_id', ${orgId}, false)`;
     } catch (err) {
       reserved.release();
       throw err;

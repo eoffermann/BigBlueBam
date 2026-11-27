@@ -1,7 +1,8 @@
 import { eq, and, sql } from 'drizzle-orm';
 import argon2 from 'argon2';
 import { nanoid } from 'nanoid';
-import { db } from '../db/index.js';
+import { randomUUID } from 'node:crypto';
+import { db, runInOrgScope } from '../db/index.js';
 import { organizations } from '../db/schema/organizations.js';
 import { users } from '../db/schema/users.js';
 import { sessions } from '../db/schema/sessions.js';
@@ -116,7 +117,11 @@ export async function bootstrap(data: BootstrapInput, meta?: SessionMetadata) {
     );
   }
 
-  const result = await db.transaction(async (tx) => {
+  // No user is signed in yet, so nothing has bound the org GUC. The org id is
+  // minted here and bound for the whole transaction, so under RLS enforce mode
+  // the org, membership and role rows pass their org policies (#338).
+  const orgId = randomUUID();
+  const result = await runInOrgScope(orgId, async (tx) => {
     // Re-check inside the transaction to close the race between two
     // simultaneous bootstrap attempts.
     const [txCount] = await tx
@@ -135,6 +140,7 @@ export async function bootstrap(data: BootstrapInput, meta?: SessionMetadata) {
     const [org] = await tx
       .insert(organizations)
       .values({
+        id: orgId,
         name: data.org_name,
         slug: orgSlug,
       })
@@ -179,10 +185,13 @@ export async function register(data: RegisterInput, meta?: SessionMetadata) {
     );
   }
 
-  const result = await db.transaction(async (tx) => {
+  // Same as bootstrap: bind the new org's id before creating it (#338).
+  const orgId = randomUUID();
+  const result = await runInOrgScope(orgId, async (tx) => {
     const [org] = await tx
       .insert(organizations)
       .values({
+        id: orgId,
         name: data.org_name,
         slug: orgSlug,
       })

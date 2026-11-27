@@ -2,7 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { randomBytes } from 'node:crypto';
 import { eq, and, isNotNull, isNull, desc } from 'drizzle-orm';
 import { z } from 'zod';
-import { db } from '../db/index.js';
+import { db, runInOrgScope } from '../db/index.js';
 import { tasks } from '../db/schema/tasks.js';
 import { projects } from '../db/schema/projects.js';
 import { touchApiKey, verifyApiKeyToken } from '../services/auth-identity.service.js';
@@ -168,6 +168,9 @@ export default async function icalRoutes(fastify: FastifyInstance) {
     async (request, reply) => {
       // Authenticate via token query parameter or standard auth
       let userId: string | null = null;
+      // The org the task read runs in when there is no request.user for the
+      // rls plugin to bind (#338): the key's pinned org (P2-8).
+      let keyOrgId: string | null = null;
 
       if (request.user) {
         userId = request.user.id;
@@ -178,6 +181,7 @@ export default async function icalRoutes(fastify: FastifyInstance) {
         const verified = await verifyApiKeyToken(request.query.token, request.log);
         if (verified) {
           userId = verified.user.id;
+          keyOrgId = verified.apiKey.org_id ?? verified.user.org_id;
           await touchApiKey(verified.apiKey.id);
         }
       }
@@ -193,22 +197,20 @@ export default async function icalRoutes(fastify: FastifyInstance) {
         });
       }
 
-      const taskList = await db
-        .select({
-          id: tasks.id,
-          human_id: tasks.human_id,
-          title: tasks.title,
-          description: tasks.description,
-          due_date: tasks.due_date,
-          priority: tasks.priority,
-        })
-        .from(tasks)
-        .where(
-          and(
-            eq(tasks.assignee_id, userId),
-            isNotNull(tasks.due_date),
-          ),
-        );
+      const assignee = userId;
+      const readTasks = () =>
+        db
+          .select({
+            id: tasks.id,
+            human_id: tasks.human_id,
+            title: tasks.title,
+            description: tasks.description,
+            due_date: tasks.due_date,
+            priority: tasks.priority,
+          })
+          .from(tasks)
+          .where(and(eq(tasks.assignee_id, assignee), isNotNull(tasks.due_date)));
+      const taskList = keyOrgId ? await runInOrgScope(keyOrgId, readTasks) : await readTasks();
 
       const ical = generateIcal(
         'My Tasks - BigBlueBam',
@@ -396,7 +398,9 @@ export default async function icalRoutes(fastify: FastifyInstance) {
         .set({ last_used_at: new Date() })
         .where(eq(projectCalendarTokens.id, matched.id));
 
-      const { projectName, body } = await fetchProjectTasksIcal(projectId);
+      // A public feed has no request.user, so bind the token's org for the
+      // projects/tasks read (#338); the token row carries its project's org.
+      const { projectName, body } = await runInOrgScope(matched.org_id, () => fetchProjectTasksIcal(projectId));
       if (!body || !projectName) {
         return reply.status(404).send({
           error: {

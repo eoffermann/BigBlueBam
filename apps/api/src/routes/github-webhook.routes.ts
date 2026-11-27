@@ -1,5 +1,5 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, type SQL } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '../db/index.js';
 import { githubIntegrations } from '../db/schema/github-integrations.js';
@@ -7,6 +7,7 @@ import { verifyGithubSignature, extractHookEvents } from '../services/github-int
 import { processGithubDelivery, type GithubDeliveryEvent } from '../services/github-delivery.service.js';
 import { enqueueGithubDeliveryRetry, githubDeliveryJobId } from '../services/github-delivery-queue.js';
 import { requireInternalSecret } from '../lib/internal-secret.js';
+import { orgOfProject, uuidAt, type RlsOrgResolver } from '../lib/rls-org-scope.js';
 
 /**
  * Phase 6: GitHub → Bam webhook ingest.
@@ -50,6 +51,35 @@ const processDeliverySchema = z.object({
   received_at: z.string().datetime({ offset: true }),
 });
 
+/**
+ * The org a GitHub delivery acts in: the project of the integration it names,
+ * either by repository (the webhook) or by integration id (the replay). Neither
+ * route has a signed-in user, so under RLS enforce mode this org is bound for
+ * the request (#338). github_integrations itself is not org-gated.
+ */
+async function orgOfIntegration(where: SQL | undefined): Promise<string | null> {
+  if (!where) return null;
+  const [row] = await db
+    .select({ project_id: githubIntegrations.project_id })
+    .from(githubIntegrations)
+    .where(where)
+    .limit(1);
+  return row ? orgOfProject(row.project_id) : null;
+}
+
+const webhookOrg: RlsOrgResolver = async (request) => {
+  const body = request.body as RepoPayload | undefined;
+  const owner = body?.repository?.owner?.login ?? body?.repository?.owner?.name;
+  const repoName = body?.repository?.name;
+  if (typeof owner !== 'string' || typeof repoName !== 'string') return null;
+  return orgOfIntegration(and(eq(githubIntegrations.repo_owner, owner), eq(githubIntegrations.repo_name, repoName)));
+};
+
+const replayOrg: RlsOrgResolver = async (request) => {
+  const id = uuidAt(request, 'body', 'integration_id');
+  return id ? orgOfIntegration(eq(githubIntegrations.id, id)) : null;
+};
+
 export default async function githubWebhookRoutes(fastify: FastifyInstance) {
   // We need the raw body bytes for HMAC verification — Fastify's
   // default JSON parser consumes and discards them. Instead of
@@ -64,6 +94,7 @@ export default async function githubWebhookRoutes(fastify: FastifyInstance) {
   fastify.post(
     '/webhooks/github',
     {
+      config: { rlsOrgScope: webhookOrg },
       preParsing: async (request, _reply, payload) => {
         const chunks: Buffer[] = [];
         for await (const chunk of payload) {
@@ -191,7 +222,7 @@ export default async function githubWebhookRoutes(fastify: FastifyInstance) {
   // INTERNAL_SERVICE_SECRET. A 5xx makes BullMQ retry with backoff.
   fastify.post(
     '/internal/github/deliveries/process',
-    { preHandler: [requireInternalSecret] },
+    { preHandler: [requireInternalSecret], config: { rlsOrgScope: replayOrg } },
     async (request, reply) => {
       const parsed = processDeliverySchema.safeParse(request.body);
       if (!parsed.success) {

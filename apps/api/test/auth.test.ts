@@ -18,6 +18,8 @@ const { mockDb, mockArgon2 } = vi.hoisted(() => {
 
 vi.mock('../src/db/index.js', () => ({
   db: mockDb,
+  // register/bootstrap bind the new org for their transaction (#338); here that is the mocked transaction.
+  runInOrgScope: (_orgId: string, fn: (tx: unknown) => Promise<unknown>) => mockDb.transaction(fn),
   connection: { end: vi.fn() },
 }));
 

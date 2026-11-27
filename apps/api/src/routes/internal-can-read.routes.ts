@@ -20,6 +20,7 @@ import { z } from 'zod';
 import { requireInternalSecret } from '../lib/internal-secret.js';
 import { preflightAccess } from '../services/visibility.service.js';
 import { suiteUrlEntity } from '../lib/suite-url-entity.js';
+import { homeOrgOfUserIn, orgIdIn } from '../lib/rls-org-scope.js';
 
 // Auth: the shared guard (lib/internal-secret.ts). It fails CLOSED when the secret is unset:
 // these routes answer "may this asker see this entity" for a caller-supplied asker_user_id
@@ -46,7 +47,9 @@ const canAccessBody = z.object({
 export default async function internalCanReadRoutes(fastify: FastifyInstance) {
   fastify.post(
     '/internal/can-read',
-    { preHandler: [requireInternalSecret] },
+    // The summon's org is bound under RLS enforce mode (#338); a cross-org
+    // entity is then simply not visible, which fails closed.
+    { preHandler: [requireInternalSecret], config: { rlsOrgScope: orgIdIn('body') } },
     async (request, reply) => {
       const body = canReadBody.parse(request.body);
 
@@ -87,7 +90,9 @@ export default async function internalCanReadRoutes(fastify: FastifyInstance) {
   // can_access tool; service-secret auth instead of a user session.
   fastify.post(
     '/internal/visibility/can-access',
-    { preHandler: [requireInternalSecret] },
+    // preflightAccess judges against the asker's home org; bind it under RLS
+    // enforce mode (#338).
+    { preHandler: [requireInternalSecret], config: { rlsOrgScope: homeOrgOfUserIn('body', 'asker_user_id') } },
     async (request, reply) => {
       const body = canAccessBody.parse(request.body);
       const result = await preflightAccess(
