@@ -51,8 +51,12 @@ const STATEMENTS: Record<'policy.attested' | 'policy.current', string> = {
  * transaction under one per-org lock, so two links at the same moment serialize: the second sees
  * the first's pins (the control is no longer unpinned, or its live checks are the first's
  * proposals) instead of both revising the same check and forking it. The control row is also held
- * FOR UPDATE, so it cannot be retired between the choice and the write. Re-running a pin for the
- * same policy and control is a no-op (a check already pinned to this policy is left alone).
+ * FOR NO KEY UPDATE, so it cannot be retired between the choice and the write. Re-running a pin for
+ * the same policy and control is a no-op (a check already pinned to this policy is left alone).
+ *
+ * #404: the control and check locks are FOR NO KEY UPDATE, never FOR UPDATE. An evaluator snapshot
+ * insert key-shares the check and then the control through its FKs; a full FOR UPDATE on both, in
+ * the other order, closed a deadlock cycle (40P01). NO KEY UPDATE does not conflict with KEY SHARE.
  */
 export async function pinPolicyChecks(viewer: Viewer, controlId: string | null, policyId: string): Promise<PinResult> {
   return runInOrgScope(viewer.org_id, (tx) => pinPolicyChecksIn(tx, viewer, controlId, policyId));
@@ -67,7 +71,7 @@ async function pinPolicyChecksIn(tx: DbTx, viewer: Viewer, controlId: string | n
   const locked = (await tx.execute(sql`
     SELECT id FROM bastion_controls
      WHERE organization_id = ${viewer.org_id} AND id = ${target} AND lifecycle = 'active'
-       FOR UPDATE`)) as unknown as Array<{ id: string }>;
+       FOR NO KEY UPDATE`)) as unknown as Array<{ id: string }>;
   if (!locked[0]) throw new NotFoundError('We could not find that control, or it was retired.');
   const live = (await tx.execute(sql`
     SELECT DISTINCT ON (probe_key) id, probe_key, params FROM bastion_assertions

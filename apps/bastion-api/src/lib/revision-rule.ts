@@ -6,9 +6,11 @@
 // is undecided, another is refused with REVISION_PENDING; the person or agent confirms, rejects or
 // revises the waiting one instead.
 //
-// The writers, each of which locks the check being replaced FOR UPDATE before looking for a
+// The writers, each of which locks the check being replaced FOR NO KEY UPDATE before looking for a
 // waiting revision (the #393 lock pattern), so two revisions of one check serialize and the second
-// sees the first:
+// sees the first. The lock is NO KEY UPDATE, never a full FOR UPDATE (#404): an evidence snapshot
+// insert takes FOR KEY SHARE on the check through its FK, which FOR UPDATE blocks and NO KEY UPDATE
+// does not, so a writer never waits on (or deadlocks with) the evaluator.
 //   - services/assertions.service.ts reviseAssertionIn (POST /assertions/:id/revise, the MCP
 //     bastion_propose_check revise path, and the policy pin in services/policy-pins.ts)
 //   - services/fixes.service.ts applyApproval, config_change for a population-drift gap
