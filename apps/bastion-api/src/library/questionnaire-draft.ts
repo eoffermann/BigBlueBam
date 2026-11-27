@@ -62,8 +62,35 @@ export interface BandReason {
     | 'reused_answer'
     | 'no_draft'
     | 'not_drafted'
-    | 'citations_dropped';
+    | 'citations_dropped'
+    | 'ai_cut_off'
+    | 'ai_bad_answer'
+    | 'ai_unavailable'
+    | 'budget_exhausted';
   words: string;
+}
+
+/**
+ * Why the AI's part of a row is missing, recorded on the row (#260, #261) so "Needs an expert"
+ * never hides whether the AI failed, was cut off, or was not allowed another call.
+ */
+export const AI_REASONS = {
+  ai_cut_off: { code: 'ai_cut_off', words: 'The AI answer was cut off before it finished (it ran out of room), so Bastion could not use it.' },
+  ai_bad_answer: { code: 'ai_bad_answer', words: "The AI's answer could not be read, so Bastion could not use it." },
+  ai_unavailable: {
+    code: 'ai_unavailable',
+    words: 'The AI was unavailable while Bastion drafted this one. Ask for new drafts when it is back, or answer it yourself.',
+  },
+  budget_exhausted: {
+    code: 'budget_exhausted',
+    words: "Bastion reached this questionnaire's limit on AI answers (every draft and new draft counts), so the AI did not draft this one.",
+  },
+} as const satisfies Record<string, BandReason>;
+
+/** A banded row with the AI's missing part explained: replaces the generic "could not draft" reason, else adds to the list. */
+export function withAiReason(b: BandResult, reason: BandReason): BandResult {
+  const rest = b.band_reasons.filter((r) => r.code !== 'no_draft');
+  return { ...b, band_reasons: [...rest, reason] };
 }
 
 export interface BandResult {
@@ -154,17 +181,17 @@ export const draftResponseSchema = z.object({
 });
 export type DraftResponse = z.infer<typeof draftResponseSchema>;
 
-export type ParsedDraft = { ok: true; value: DraftResponse } | { ok: false; reason: string };
+export type ParsedDraft = { ok: true; value: DraftResponse } | { ok: false; reason: string; cutOff: boolean };
 
 export function parseDraftResponse(content: string, finishReason: string | null = null): ParsedDraft {
-  if (finishReason === 'length') return { ok: false, reason: 'the AI answer was cut off' };
+  if (finishReason === 'length') return { ok: false, reason: 'the AI answer was cut off', cutOff: true };
   const raw = extractJsonObject(content);
-  if (raw === null || typeof raw !== 'object') return { ok: false, reason: 'the AI answer was not JSON' };
+  if (raw === null || typeof raw !== 'object') return { ok: false, reason: 'the AI answer was not JSON', cutOff: false };
   const r = raw as Record<string, unknown>;
   // Models sometimes write confidence as a percentage; anything else out of range is refused.
   if (typeof r.confidence === 'number' && r.confidence > 1 && r.confidence <= 100) r.confidence = r.confidence / 100;
   const parsed = draftResponseSchema.safeParse(r);
-  return parsed.success ? { ok: true, value: parsed.data } : { ok: false, reason: 'the AI answer did not have the expected shape' };
+  return parsed.success ? { ok: true, value: parsed.data } : { ok: false, reason: 'the AI answer did not have the expected shape', cutOff: false };
 }
 
 /* ------------------------------ banding ------------------------------ */

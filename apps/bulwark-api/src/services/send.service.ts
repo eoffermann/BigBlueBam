@@ -169,7 +169,8 @@ export async function draftNotice(
     await publishBoltEvent(
       'proposal.created',
       'platform',
-      { proposal: { id: proposal.id }, subject_type: BULWARK_NOTICE_SUBJECT, org: { id: orgId } },
+      // #291: the platform's proposal.created shape (proposal.subject_type), as apps/api publishes it.
+      { proposal: { id: proposal.id, subject_type: BULWARK_NOTICE_SUBJECT }, org: { id: orgId } },
       orgId,
       BULWARK_SYSTEM_USER_ID,
       'system',
@@ -452,7 +453,7 @@ export async function draftChase(
     await publishBoltEvent(
       'proposal.created',
       'platform',
-      { proposal: { id: proposal.id }, subject_type: BULWARK_CHASE_SUBJECT, org: { id: orgId } },
+      { proposal: { id: proposal.id, subject_type: BULWARK_CHASE_SUBJECT }, org: { id: orgId } },
       orgId,
       BULWARK_SYSTEM_USER_ID,
       'system',

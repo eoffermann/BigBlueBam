@@ -67,7 +67,11 @@ describe('Bastion pending tools stay out of the registered surface until M11', (
   });
 
   it('is not imported or registered by server.ts', () => {
-    expect(SERVER).not.toMatch(/bastion/i);
+    // The one Bastion line server.ts may carry before M11 is the search_everything arm's URL
+    // (M10, spec 8.5): it registers no Bastion tool.
+    const searchUrl = /^\s*bastionApiUrl: env\.BASTION_API_URL,\s*$/m;
+    expect(SERVER).toMatch(searchUrl);
+    expect(SERVER.replace(searchUrl, '')).not.toMatch(/bastion/i);
   });
 
   it('every handler goes through registerTool (agent policies apply once registered)', () => {
@@ -665,15 +669,28 @@ describe('Bastion M8 tools (questionnaires and the answer library)', () => {
 
   it('reads call the right routes and pass asker_user_id through', async () => {
     const tool = await load();
-    await tool('bastion_list_questionnaires').handler({ status: 'in_review' } as never);
+    await tool('bastion_list_questionnaires').handler({ status: 'in_review', asker_user_id: ASKER } as never);
     await tool('bastion_get_questionnaire').handler({ questionnaire_id: Q, needs_review: true, asker_user_id: ASKER } as never);
-    await tool('bastion_search_answer_library').handler({ q: 'mfa', include_stale: false } as never);
+    await tool('bastion_search_answer_library').handler({ q: 'mfa', include_stale: false, asker_user_id: ASKER } as never);
+    await tool('bastion_draft_answer').handler({ question: 'Do you use MFA?', asker_user_id: ASKER } as never);
     expect(calls.map((c) => `${c.method} ${c.url}`)).toEqual([
-      'GET http://bastion-api:4024/v1/questionnaires?status=in_review',
+      `GET http://bastion-api:4024/v1/questionnaires?status=in_review&asker_user_id=${ASKER}`,
       `GET http://bastion-api:4024/v1/questionnaires/${Q}?asker_user_id=${ASKER}`,
       `GET http://bastion-api:4024/v1/questionnaires/${Q}/items?needs_review=true&asker_user_id=${ASKER}`,
-      'GET http://bastion-api:4024/v1/answer-library?q=mfa&include_stale=false',
+      `GET http://bastion-api:4024/v1/answer-library?q=mfa&include_stale=false&asker_user_id=${ASKER}`,
+      `POST http://bastion-api:4024/v1/answers/draft?asker_user_id=${ASKER}`,
     ]);
+  });
+
+  it('the questionnaire and answer-library reads require asker_user_id, like the evidence reads (#274, #217)', async () => {
+    const tool = await load();
+    for (const name of ['bastion_list_questionnaires', 'bastion_get_questionnaire', 'bastion_search_answer_library', 'bastion_draft_answer']) {
+      const asker = tool(name).input.asker_user_id as { safeParse: (v: unknown) => { success: boolean } } | undefined;
+      expect(asker, name).toBeDefined();
+      expect(asker!.safeParse(undefined).success, name).toBe(false);
+      expect(asker!.safeParse('not-a-user').success, name).toBe(false);
+      expect(asker!.safeParse(ASKER).success, name).toBe(true);
+    }
   });
 
   it('writes are typed off the shared Zod', async () => {
@@ -682,7 +699,7 @@ describe('Bastion M8 tools (questionnaires and the answer library)', () => {
     await tool('bastion_create_questionnaire').handler({ title: 'Pasted', pasted_text: 'Question\nDo you use MFA?' } as never);
     await tool('bastion_questionnaire_autofill').handler({ questionnaire_id: Q } as never);
     await tool('bastion_answer_questionnaire_item').handler({ item_id: ITEM, review_status: 'edited', final_answer: 'Yes.' } as never);
-    await tool('bastion_draft_answer').handler({ question: 'Do you use MFA?' } as never);
+    await tool('bastion_draft_answer').handler({ question: 'Do you use MFA?', asker_user_id: ASKER } as never);
     await tool('bastion_update_answer_library').handler({ answer_id: ITEM, stale: false } as never);
     await tool('bastion_update_questionnaire').handler({ questionnaire_id: Q, title: 'Howell v2' } as never);
     expect(calls.map((c) => `${c.method} ${c.url}`)).toEqual([
@@ -690,13 +707,13 @@ describe('Bastion M8 tools (questionnaires and the answer library)', () => {
       'POST http://bastion-api:4024/v1/questionnaires',
       `POST http://bastion-api:4024/v1/questionnaires/${Q}/autofill`,
       `PATCH http://bastion-api:4024/v1/questionnaire-items/${ITEM}`,
-      'POST http://bastion-api:4024/v1/answers/draft',
+      `POST http://bastion-api:4024/v1/answers/draft?asker_user_id=${ASKER}`,
       `PATCH http://bastion-api:4024/v1/answer-library/${ITEM}`,
       `PATCH http://bastion-api:4024/v1/questionnaires/${Q}`,
     ]);
     expect(calls[0]!.body).toEqual({ title: 'Howell', source: { kind: 'bin_asset', bin_asset_id: ASSET } });
     expect(calls[1]!.body).toEqual({ title: 'Pasted', source: { kind: 'pasted', text: 'Question\nDo you use MFA?', format: 'tsv' } });
-    expect(calls[2]!.body).toEqual({ redraft: false });
+    expect(calls[2]!.body).toEqual({ redraft: false, use_ai: true });
     expect(calls[4]!.body).toEqual({ question: 'Do you use MFA?', answer_kind: 'yes_no_text' });
   });
 
@@ -769,5 +786,26 @@ describe('Bastion M9 sharing, settings and audit tools', () => {
     expect(names).not.toMatch(/create_auditor_room|revoke_auditor_room|unlock_auditor_room|download/);
     const CLIENT = readFileSync(join(SRC, 'clients', 'bastion-client.ts'), 'utf8');
     expect(CLIENT).not.toMatch(/'POST', '\/auditor-rooms'|auditor-rooms\/\$\{[^}]+\}\/(revoke|unlock)|\/public\/room|\/exports\/\$\{[^}]+\}\/download/);
+  });
+});
+
+describe('Bastion M10 client completion', () => {
+  it('bastion_control_status reads just the checks with checks_only (row 16)', async () => {
+    const tool = await load();
+    await tool('bastion_control_status').handler({ control_id: CTRL } as never);
+    await tool('bastion_control_status').handler({ control_id: CTRL, checks_only: true } as never);
+    expect(calls.map((c) => `${c.method} ${c.url}`)).toEqual([
+      `GET http://bastion-api:4024/v1/controls/${CTRL}`,
+      `GET http://bastion-api:4024/v1/controls/${CTRL}/assertions`,
+    ]);
+  });
+
+  it('the client reads GET /search (row 95) with the asker, for search_everything', async () => {
+    const { createBastionClient } = await import('../src/clients/bastion-client.js');
+    const client = createBastionClient('http://bastion-api:4024/v1/', { token: 'bbam_test' } as never, fakeFetch);
+    await client.search({ q: 'laptop encryption', limit: 5, asker_user_id: ASSERTION });
+    expect(calls.map((c) => `${c.method} ${c.url}`)).toEqual([
+      `GET http://bastion-api:4024/v1/search?q=laptop+encryption&limit=5&asker_user_id=${ASSERTION}`,
+    ]);
   });
 });

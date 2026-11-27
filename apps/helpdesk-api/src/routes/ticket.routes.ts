@@ -413,6 +413,15 @@ export default async function ticketRoutes(fastify: FastifyInstance) {
             'ticket.created',
             'helpdesk',
             {
+              // #289: the nested shape the Bolt catalog, template and seeded rules read
+              // (event.ticket.priority, event.ticket.category); the flat keys stay for existing rules.
+              ticket: {
+                id: result.ticket.id,
+                number: result.ticket.ticket_number,
+                subject: result.ticket.subject,
+                priority: result.ticket.priority,
+                category: result.ticket.category,
+              },
               ticket_id: result.ticket.id,
               ticket_number: result.ticket.ticket_number,
               subject: result.ticket.subject,
@@ -746,7 +755,9 @@ export default async function ticketRoutes(fastify: FastifyInstance) {
           'ticket.message_posted',
           'helpdesk',
           {
+            ticket: { id: id },
             ticket_id: id,
+            message: { id: message.id, author_id: user.id, is_internal: false },
             message_id: message.id,
             author_type: 'customer',
             helpdesk_user_id: user.id,
@@ -792,6 +803,7 @@ export default async function ticketRoutes(fastify: FastifyInstance) {
           'ticket.status_changed',
           'helpdesk',
           {
+            ticket: { id: id },
             ticket_id: id,
             from: 'waiting_on_customer',
             to: 'open',
@@ -935,9 +947,8 @@ export default async function ticketRoutes(fastify: FastifyInstance) {
           'ticket.reopened',
           'helpdesk',
           {
+            ticket: { id: id, reopened_by: user.id, reopened_at: new Date().toISOString() },
             ticket_id: id,
-            'ticket.reopened_by': user.id,
-            'ticket.reopened_at': new Date().toISOString(),
             from: ticket.status,
           },
           orgIdForReopen,
@@ -948,6 +959,7 @@ export default async function ticketRoutes(fastify: FastifyInstance) {
           'ticket.status_changed',
           'helpdesk',
           {
+            ticket: { id: id },
             ticket_id: id,
             from: ticket.status,
             to: 'open',
@@ -1055,9 +1067,8 @@ export default async function ticketRoutes(fastify: FastifyInstance) {
           'ticket.closed',
           'helpdesk',
           {
+            ticket: { id: id, closed_by: user.id, closed_at: new Date().toISOString() },
             ticket_id: id,
-            'ticket.closed_by': user.id,
-            'ticket.closed_at': new Date().toISOString(),
             from: ticket.status,
           },
           orgIdForClose,
@@ -1069,6 +1080,7 @@ export default async function ticketRoutes(fastify: FastifyInstance) {
             'ticket.status_changed',
             'helpdesk',
             {
+              ticket: { id: id },
               ticket_id: id,
               from: ticket.status,
               to: 'closed',

@@ -6,7 +6,9 @@
 
 import {
   BASTION_QUESTIONNAIRE_MAX_CELL_CHARS,
+  BASTION_QUESTIONNAIRE_MAX_CELLS,
   BASTION_QUESTIONNAIRE_MAX_COLUMNS,
+  BASTION_QUESTIONNAIRE_MAX_TOTAL_CHARS,
   type BastionAnswerKind,
   type BastionQuestionnaireColumnMap,
   type BastionQuestionnaireSheetMap,
@@ -23,21 +25,39 @@ export interface ParsedQuestionnaire {
   truncated: boolean;
 }
 
-/** What column_map holds: the person-checked mapping plus the grid it applies to (for write-back). */
+/**
+ * What column_map holds: the person-checked mapping only. The parsed grid lives in its own column
+ * (bastion_questionnaires.source_grid, migration 0290), read by mapping changes and export only,
+ * never by list or get (#265, #273).
+ */
 export interface StoredColumnMap extends BastionQuestionnaireColumnMap {
   /** Bastion's guess (true) or a person's choice (false). */
   guessed: boolean;
-  source: ParsedQuestionnaire;
 }
 
-function clampGrid(rows: string[][], maxRows: number): { rows: string[][]; truncated: boolean } {
+const TOO_MUCH_TEXT =
+  'This questionnaire holds more text than Bastion can read at once (a cell repeated many times counts every time). Save just the questions and try again.';
+
+/**
+ * Cut a grid to the row, column and per-cell limits, and charge every cell and character against
+ * the questionnaire-wide budget (BASTION_QUESTIONNAIRE_MAX_CELLS / _MAX_TOTAL_CHARS). The one place
+ * a questionnaire grid's size is bounded, for xlsx, CSV and pasted rows alike (#265, #273).
+ */
+function boundGrid(rows: string[][], maxRows: number, budget: { cells: number; chars: number }): { rows: string[][]; truncated: boolean } {
   let truncated = rows.length > maxRows;
   const out = rows.slice(0, maxRows).map((r) => {
     if (r.length > BASTION_QUESTIONNAIRE_MAX_COLUMNS) truncated = true;
-    return r.slice(0, BASTION_QUESTIONNAIRE_MAX_COLUMNS).map((c) => {
+    const row = r.slice(0, BASTION_QUESTIONNAIRE_MAX_COLUMNS).map((c) => {
       const s = String(c ?? '');
-      return s.length > BASTION_QUESTIONNAIRE_MAX_CELL_CHARS ? s.slice(0, BASTION_QUESTIONNAIRE_MAX_CELL_CHARS) : s;
+      const v = s.length > BASTION_QUESTIONNAIRE_MAX_CELL_CHARS ? s.slice(0, BASTION_QUESTIONNAIRE_MAX_CELL_CHARS) : s;
+      budget.chars += v.length;
+      return v;
     });
+    budget.cells += Math.max(1, row.length);
+    if (budget.cells > BASTION_QUESTIONNAIRE_MAX_CELLS || budget.chars > BASTION_QUESTIONNAIRE_MAX_TOTAL_CHARS) {
+      throw new ValidationFailure(TOO_MUCH_TEXT, 'QUESTIONNAIRE_TOO_LARGE');
+    }
+    return row;
   });
   return { rows: out, truncated };
 }
@@ -45,21 +65,31 @@ function clampGrid(rows: string[][], maxRows: number): { rows: string[][]; trunc
 /**
  * Read a questionnaire file: an xlsx workbook when the bytes are a zip, else UTF-8 CSV (the
  * delimiter is detected, so TSV works too). Rows beyond `maxRows` plus a header margin are cut.
+ * The xlsx reader is given the same budget, so a shared-string fan-out is refused while it is
+ * read, before any grid is built (#265, #273).
  */
 export function parseQuestionnaireBytes(bytes: Uint8Array, maxRows: number): ParsedQuestionnaire {
   const rowCap = maxRows + 50;
+  const budget = { cells: 0, chars: 0 };
   if (looksLikeXlsx(bytes)) {
     try {
-      const r = decodeXlsx(bytes, { maxRows: rowCap, maxColumns: BASTION_QUESTIONNAIRE_MAX_COLUMNS, maxSheets: 20 });
+      const r = decodeXlsx(bytes, {
+        maxRows: rowCap,
+        maxColumns: BASTION_QUESTIONNAIRE_MAX_COLUMNS,
+        maxSheets: 20,
+        maxCells: BASTION_QUESTIONNAIRE_MAX_CELLS,
+        maxCellChars: BASTION_QUESTIONNAIRE_MAX_CELL_CHARS,
+        maxTotalChars: BASTION_QUESTIONNAIRE_MAX_TOTAL_CHARS,
+      });
       let truncated = r.truncated;
       const sheets = r.sheets.map((s) => {
-        const c = clampGrid(s.rows, rowCap);
+        const c = boundGrid(s.rows, rowCap, budget);
         if (c.truncated) truncated = true;
         return { name: s.name.slice(0, 128), rows: c.rows };
       });
       return { format: 'xlsx', sheets, truncated };
     } catch (err) {
-      if (err instanceof XlsxError) throw new ValidationFailure(err.message, 'QUESTIONNAIRE_UNREADABLE');
+      if (err instanceof XlsxError) throw new ValidationFailure(err.code === 'TOO_LARGE' ? TOO_MUCH_TEXT : err.message, err.code === 'TOO_LARGE' ? 'QUESTIONNAIRE_TOO_LARGE' : 'QUESTIONNAIRE_UNREADABLE');
       throw err;
     }
   }
@@ -72,13 +102,13 @@ export function parseQuestionnaireBytes(bytes: Uint8Array, maxRows: number): Par
   if (text.includes('\u0000')) {
     throw new ValidationFailure('This file is not an Excel workbook or a CSV file Bastion can read. Save it as .xlsx or .csv and try again.', 'QUESTIONNAIRE_UNREADABLE');
   }
-  const c = clampGrid(decodeCsvGrid(text), rowCap);
+  const c = boundGrid(decodeCsvGrid(text), rowCap, budget);
   return { format: 'csv', sheets: [{ name: '', rows: c.rows }], truncated: c.truncated };
 }
 
 /** Pasted rows (from a spreadsheet: tab-separated; or CSV text). Stored as format `csv`. */
 export function parsePastedQuestionnaire(text: string, format: 'csv' | 'tsv', maxRows: number): ParsedQuestionnaire {
-  const c = clampGrid(decodeCsvGrid(text, format), maxRows + 50);
+  const c = boundGrid(decodeCsvGrid(text, format), maxRows + 50, { cells: 0, chars: 0 });
   return { format: 'csv', sheets: [{ name: '', rows: c.rows }], truncated: c.truncated };
 }
 

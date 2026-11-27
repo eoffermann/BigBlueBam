@@ -16,7 +16,7 @@
 // delimited data, then the deterministic verifier and bander (library/questionnaire-draft.ts),
 // with can_access on every citation for the person who started the autofill.
 
-import type { BastionDraftAnswer, BastionQuestionnaireSlice } from '@bigbluebam/shared';
+import { BASTION_CONFIDENCE_WORDS, type BastionDraftAnswer, type BastionQuestionnaireSlice } from '@bigbluebam/shared';
 import { type EngineDeps, orgTx, type Tx } from '../engine/context.js';
 import { LLM_SLICE_START_CUTOFF_MS, MAX_RESUMES, STALE_HEARTBEAT_MS } from '../engine/budgets.js';
 import { RunLeaseHeldError, RunNotFoundError } from '../engine/evaluator.js';
@@ -25,7 +25,10 @@ import { enqueueBastionEvent } from '../engine/outbox.js';
 import { scanLabel } from '../lib/injection-prescan.js';
 import { LlmError, LlmThrottledError, type LlmChat } from '../lib/llm-errors.js';
 import type { LlmPermits } from '../lib/llm-permits.js';
+import { BASTION_LLM_CALLS } from '../library/llm-call-settings.js';
 import {
+  AI_REASONS,
+  type BandReason,
   type BandResult,
   bandAnswer,
   buildDraftMessages,
@@ -35,6 +38,7 @@ import {
   notDrafted,
   parseDraftResponse,
   tsQueryTerms,
+  withAiReason,
 } from '../library/questionnaire-draft.js';
 import type { SliceLock } from './compile-ai.service.js';
 import { COMPILE_SLICE_LOCK_MS, resolveLlmProviderId, takeSliceLock } from './compile-ai.service.js';
@@ -59,6 +63,8 @@ export interface AutofillDeps {
   sleep?: (ms: number) => Promise<void>;
   shuttingDown?: () => boolean;
   sliceCutoffMs?: number;
+  /** max_tokens per answer (env BASTION_QUESTIONNAIRE_MAX_TOKENS; llm-call-settings.ts questionnaire_draft). */
+  maxTokens?: number;
 }
 
 /* ------------------------------ retrieval ------------------------------ */
@@ -225,16 +231,42 @@ export function bandWithContext(question: string, answerKind: BastionDraftAnswer
 
 /* ------------------------------ one LLM call ------------------------------ */
 
-type AiOutcome = { kind: 'answer'; response: DraftResponse | null; reason: string | null } | { kind: 'out_of_time' };
+/**
+ * What one attempt to get an AI answer came to (#260, #261):
+ *   answer            the model answered and the answer parsed; the bander judges it
+ *   unusable          the model answered but it was cut off (finish_reason length) or unreadable;
+ *                     the row is banded with that reason recorded (retrying would pay again for
+ *                     the same result)
+ *   ai_failed         the call itself failed (proxy unreachable, 5xx, timeout): transient, so the
+ *                     row stays undrafted and is retried after a back-off
+ *   budget_exhausted  the questionnaire's AI-call allowance is spent; no call was made
+ *   out_of_time       the slice's time budget ran out (or SIGTERM) before a call started
+ */
+type AiOutcome =
+  | { kind: 'answer'; response: DraftResponse }
+  | { kind: 'unusable'; cutOff: boolean; reason: string }
+  | { kind: 'ai_failed'; reason: string }
+  | { kind: 'budget_exhausted' }
+  | { kind: 'out_of_time' };
 
 interface CallHooks {
   heartbeat: () => Promise<void>;
   onWaiting: (w: 'ai_slot' | 'ai_throttled' | null) => void;
   log: EngineDeps['log'];
+  /** Charge one AI call to the questionnaire BEFORE it is made (#261); false = the allowance is spent. */
+  charge?: () => Promise<boolean>;
+}
+
+/** Consecutive transient AI failures on one questionnaire before the undrafted rest goes to review (#260). */
+export const AUTOFILL_MAX_AI_FAILURES = 6;
+
+/** Back-off after the n-th consecutive transient failure: 5 s, 10 s, 20 s, 40 s, then 60 s. */
+export function aiRetryDelayMs(streak: number): number {
+  return Math.min(60_000, 5_000 * 2 ** Math.max(0, streak - 1));
 }
 
 async function askAi(
-  d: Pick<AutofillDeps, 'llm' | 'permits' | 'sleep' | 'shuttingDown'>,
+  d: Pick<AutofillDeps, 'llm' | 'permits' | 'sleep' | 'shuttingDown' | 'maxTokens'>,
   orgId: string,
   providerId: string,
   messages: ReturnType<typeof buildDraftMessages>,
@@ -263,24 +295,30 @@ async function askAi(
       continue;
     }
     hooks.onWaiting(null);
+    let released = false;
     try {
-      // 2048, as the compile: reasoning models spend tokens before the answer (the recording at 700
-      // came back empty with finish_reason "length" on a sixth of the questions).
-      const res = await d.llm({ providerId, messages, maxTokens: 2048 });
+      // Every call is charged before it is made, a throttled retry included, so a crash after
+      // the call still counts it (#261).
+      if (hooks.charge && !(await hooks.charge())) return { kind: 'budget_exhausted' };
+      // The questionnaire_draft budget (library/llm-call-settings.ts; env
+      // BASTION_QUESTIONNAIRE_MAX_TOKENS), the same value the corpus was recorded and is gated at.
+      const res = await d.llm({ providerId, messages, maxTokens: d.maxTokens ?? BASTION_LLM_CALLS.questionnaire_draft.maxTokensDefault });
       const parsed = parseDraftResponse(res.content, res.finish_reason);
-      return { kind: 'answer', response: parsed.ok ? parsed.value : null, reason: parsed.ok ? null : parsed.reason };
+      return parsed.ok ? { kind: 'answer', response: parsed.value } : { kind: 'unusable', cutOff: parsed.cutOff, reason: parsed.reason };
     } catch (err) {
       if (err instanceof LlmThrottledError) {
         hooks.onWaiting('ai_throttled');
         const wait = Math.min(err.retryAfterSeconds, 30) * 1000;
         hooks.log.info({ organization_id: orgId }, `bastion-autofill: throttled by the AI provider, resuming in ${Math.round(wait / 1000)} s`);
+        released = true;
         await admission.release();
         await sleep(wait);
         continue;
       }
-      return { kind: 'answer', response: null, reason: err instanceof LlmError ? `the AI call failed (${err.message})` : 'the AI call failed' };
+      if (err instanceof ClaimLostError) throw err;
+      return { kind: 'ai_failed', reason: err instanceof LlmError ? `the AI call failed (${err.message})` : 'the AI call failed' };
     } finally {
-      await admission.release();
+      if (!released) await admission.release();
     }
   }
 }
@@ -291,10 +329,12 @@ async function askAi(
  * low. Citations pass can_access for the caller.
  */
 export async function draftOneAnswer(
-  d: Pick<AutofillDeps, 'engine' | 'llm' | 'permits' | 'canAccess' | 'sleep'>,
+  d: Pick<AutofillDeps, 'engine' | 'llm' | 'permits' | 'canAccess' | 'sleep' | 'maxTokens'>,
   viewer: { id: string; org_id: string },
   body: BastionDraftAnswer,
   waitMs = 20_000,
+  /** An agent drafting for a person (#274): citations must pass can_access for them too. Narrows, never widens. */
+  asker: string | null = null,
 ) {
   const now = d.engine.now();
   const { ctx, cands } = await orgTx(d.engine.sql, viewer.org_id, async (tx) => {
@@ -303,25 +343,37 @@ export async function draftOneAnswer(
   });
   let response: DraftResponse | null = null;
   let note: string | null = null;
+  let aiReason: BandReason | null = null;
   if (ctx.providerId) {
     const out = await askAi(d, viewer.org_id, ctx.providerId, buildDraftMessages({ question: body.question, section: null, answer_kind: body.answer_kind, candidates: cands }), Date.now(), waitMs, {
       heartbeat: async () => undefined,
       onWaiting: () => undefined,
       log: d.engine.log,
     });
-    if (out.kind === 'answer') {
-      response = out.response;
+    if (out.kind === 'answer') response = out.response;
+    else if (out.kind === 'unusable') {
       note = out.reason;
+      aiReason = out.cutOff ? AI_REASONS.ai_cut_off : AI_REASONS.ai_bad_answer;
+    } else if (out.kind === 'ai_failed') {
+      note = out.reason;
+      aiReason = AI_REASONS.ai_unavailable;
+      d.engine.log.warn({ organization_id: viewer.org_id, reason: out.reason }, 'bastion-draft: the AI call failed; the answer comes from the library or is empty');
     } else note = 'every AI slot was busy';
   } else note = 'no AI provider is set up';
-  const visible = await visibleRefs(d.canAccess, viewer.id, [...cands, ...libraryControlCandidates(cands, ctx)], new Map());
-  const banded = bandWithContext(body.question, body.answer_kind, cands, response, visible, ctx);
+  const all = [...cands, ...libraryControlCandidates(cands, ctx)];
+  const visible = await visibleRefs(d.canAccess, viewer.id, all, new Map());
+  if (asker && asker !== viewer.id) {
+    const forAsker = await visibleRefs(d.canAccess, asker, all, new Map());
+    for (const k of [...visible]) if (!forAsker.has(k)) visible.delete(k);
+  }
+  let banded = bandWithContext(body.question, body.answer_kind, cands, response, visible, ctx);
+  if (aiReason) banded = withAiReason(banded, aiReason);
   const labels = new Map<string, string>();
   for (const c of cands) for (const r of c.refs) if (c.kind !== 'library') labels.set(`${r.entity_type}:${r.entity_id}`, c.title);
   return {
     data: {
       ...banded,
-      confidence_words: banded.confidence_band === 'high' ? 'Sure' : banded.confidence_band === 'medium' ? 'Check this' : 'Needs an expert',
+      confidence_words: BASTION_CONFIDENCE_WORDS[banded.confidence_band],
       citations: banded.cited_refs.map((r) => ({ ...r, label: labels.get(`${r.entity_type}:${r.entity_id}`) ?? null })),
       drafted_by_ai: response !== null,
       note,
@@ -348,6 +400,14 @@ interface QRow {
   created_by: string | null;
   asker: string | null;
   slice_token: string | null;
+  /** Up by one on every start (#267): the drafted event's idempotency key is per run. */
+  autofill_generation: number;
+  /** false: this run never calls the AI (the deterministic path, #271). */
+  autofill_use_ai: boolean;
+  /** AI calls charged to this questionnaire across every run (#261); never reset by a redraft. */
+  llm_calls_used: number;
+  /** Consecutive transient AI failures (#260). */
+  ai_failure_streak: number;
 }
 
 /** One slice's ownership of the questionnaire row: the worker's claimant AND this slice's token (#242). */
@@ -375,7 +435,8 @@ export async function drainAutofillSlices(timeoutMs: number): Promise<number> {
 
 const SELECT_Q = (tx: Tx, orgId: string, id: string) => tx`
   SELECT id, organization_id, title, status, claimed_by, heartbeat_at, slice_token, row_count, rows_done, high_count, medium_count, low_count,
-         resume_count, owner_user_id, created_by, column_map->>'autofill_requested_by' AS asker
+         resume_count, owner_user_id, created_by, column_map->>'autofill_requested_by' AS asker,
+         llm_calls_used, ai_failure_streak, autofill_generation, autofill_use_ai
     FROM bastion_questionnaires WHERE organization_id = ${orgId} AND id = ${id}`;
 
 async function readQ(d: AutofillDeps, orgId: string, id: string): Promise<QRow | null> {
@@ -394,6 +455,8 @@ function sliceView(q: QRow, running: boolean, extra: Partial<BastionQuestionnair
     low: Number(q.low_count),
     slice_running: running,
     waiting: waitingState.get(q.id) ?? null,
+    llm_calls_used: Number(q.llm_calls_used ?? 0),
+    ai_failure_streak: Number(q.ai_failure_streak ?? 0),
     ...extra,
   };
 }
@@ -512,11 +575,14 @@ async function releaseQ(d: AutofillDeps, q: QRow, f: QFence): Promise<void> {
   });
 }
 
-/** After three releases: every undrafted row becomes "Needs an expert" and the questionnaire goes to review. */
-export async function parkQuestionnaire(tx: Tx, orgId: string, id: string): Promise<void> {
+/**
+ * After three releases (or AUTOFILL_MAX_AI_FAILURES failed AI calls in a row, #260): every
+ * undrafted row becomes "Needs an expert" with the reason, and the questionnaire goes to review.
+ */
+export async function parkQuestionnaire(tx: Tx, orgId: string, id: string, reasons: string = NOT_DRAFTED_REASONS): Promise<void> {
   await tx`
     UPDATE bastion_questionnaire_items
-       SET confidence_band = 'low', confidence = 0, band_reasons = ${NOT_DRAFTED_REASONS}::text::jsonb
+       SET confidence_band = 'low', confidence = 0, band_reasons = ${reasons}::text::jsonb
      WHERE organization_id = ${orgId} AND questionnaire_id = ${id} AND confidence_band IS NULL`;
   const n = await recount(tx, orgId, id);
   await tx`
@@ -524,6 +590,47 @@ export async function parkQuestionnaire(tx: Tx, orgId: string, id: string): Prom
        SET status = 'in_review', claimed_by = NULL, heartbeat_at = NULL, slice_token = NULL, rows_done = ${n.done}, row_count = ${n.total},
            high_count = ${n.high}, medium_count = ${n.medium}, low_count = ${n.low}
      WHERE organization_id = ${orgId} AND id = ${id} AND status = 'answering'`;
+}
+
+/**
+ * Charge one AI call to the questionnaire, in its own statement BEFORE the call (#261): a crash or
+ * a failed write after the call still counts it, a throttled retry counts, and a redraft never
+ * resets it. False when the allowance (max_llm_calls_per_questionnaire) is spent. Fenced on the
+ * slice (#242) like every other slice write.
+ */
+async function chargeCall(d: AutofillDeps, q: QRow, f: QFence, maxCalls: number): Promise<boolean> {
+  const r = await orgTx(d.engine.sql, q.organization_id, (tx) => tx`
+    UPDATE bastion_questionnaires SET llm_calls_used = llm_calls_used + 1
+     WHERE id = ${q.id} AND organization_id = ${q.organization_id} AND claimed_by = ${f.claimant} AND slice_token = ${f.token}
+       AND status = 'answering' AND llm_calls_used < ${maxCalls}
+    RETURNING llm_calls_used`);
+  if (r[0]) return true;
+  const cur = await readQ(d, q.organization_id, q.id);
+  if (!cur || cur.status !== 'answering' || cur.claimed_by !== f.claimant || cur.slice_token !== f.token) throw new ClaimLostError();
+  return false;
+}
+
+/** Record one transient AI failure (#260); returns the consecutive count. */
+async function recordAiFailure(d: AutofillDeps, q: QRow, f: QFence, reason: string): Promise<number> {
+  const r = await orgTx(d.engine.sql, q.organization_id, (tx) => tx`
+    UPDATE bastion_questionnaires
+       SET ai_failure_streak = ai_failure_streak + 1, last_ai_failure = ${reason.slice(0, 500)}, heartbeat_at = ${d.engine.now()}
+     WHERE id = ${q.id} AND organization_id = ${q.organization_id} AND claimed_by = ${f.claimant} AND slice_token = ${f.token} AND status = 'answering'
+    RETURNING ai_failure_streak`);
+  if (!r[0]) throw new ClaimLostError();
+  return Number(r[0].ai_failure_streak);
+}
+
+/** Sleep `ms`, heartbeating the claim at least every AUTOFILL_HEARTBEAT_EVERY_MS. */
+async function waitWithHeartbeat(d: AutofillDeps, q: QRow, f: QFence, ms: number): Promise<void> {
+  const sleep = d.sleep ?? ((t: number) => new Promise<void>((r) => setTimeout(r, t)));
+  let left = ms;
+  while (left > 0) {
+    const step = Math.min(left, AUTOFILL_HEARTBEAT_EVERY_MS);
+    await sleep(step);
+    left -= step;
+    await heartbeat(d, q, f);
+  }
 }
 
 async function runSlice(d: AutofillDeps, q: QRow, f: QFence): Promise<void> {
@@ -544,7 +651,13 @@ async function runSlice(d: AutofillDeps, q: QRow, f: QFence): Promise<void> {
   );
   const accessCache = new Map<string, boolean>();
   let processed = 0;
-  for (const it of items) {
+  // Per-slice tallies for the progress line (#260): failed calls (rows left undrafted and retried)
+  // and answers that came back unusable (cut off or unreadable, banded with that reason).
+  let aiFailed = 0;
+  let unusable = 0;
+  let i = 0;
+  while (i < items.length) {
+    const it = items[i] as (typeof items)[number];
     if (stopping || d.shuttingDown?.()) {
       await releaseQ(d, q, f);
       d.engine.log.info({ questionnaire_id: q.id }, 'bastion-autofill: shutting down; the questionnaire was released and will resume');
@@ -558,12 +671,16 @@ async function runSlice(d: AutofillDeps, q: QRow, f: QFence): Promise<void> {
     const cands = await orgTx(d.engine.sql, orgId, (tx) => retrieveCandidates(tx, orgId, question, ctx));
 
     let response: DraftResponse | null = null;
-    if (ctx.providerId && done < ctx.maxCalls && cands.length > 0) {
+    let aiReason: BandReason | null = null;
+    let aiReached = false;
+    // use_ai false (#271): no AI call; the bander still reuses library answers and applies the hard rules.
+    if (q.autofill_use_ai !== false && ctx.providerId && cands.length > 0) {
       const messages = buildDraftMessages({ question, section: (it.section as string | null) ?? null, answer_kind: answerKind, candidates: cands });
       const out = await askAi(d, orgId, ctx.providerId, messages, sliceStart, cutoff, {
         heartbeat: () => heartbeat(d, q, f),
         onWaiting: (w) => waitingState.set(q.id, w),
         log: d.engine.log,
+        charge: () => chargeCall(d, q, f, ctx.maxCalls),
       });
       if (out.kind === 'out_of_time') {
         if (stopping || d.shuttingDown?.()) {
@@ -572,10 +689,48 @@ async function runSlice(d: AutofillDeps, q: QRow, f: QFence): Promise<void> {
         }
         break;
       }
-      response = out.response;
+      if (out.kind === 'ai_failed') {
+        // Transient (#260): the row stays undrafted. Back off and try the same row again; after
+        // AUTOFILL_MAX_AI_FAILURES in a row the rest goes to review saying the AI was unavailable.
+        aiFailed += 1;
+        const streak = await recordAiFailure(d, q, f, out.reason);
+        d.engine.log.warn(
+          { questionnaire_id: q.id, item_id: it.id, reason: out.reason, streak },
+          `bastion-autofill: the AI call failed (${streak} in a row); the row stays undrafted and is tried again`,
+        );
+        if (streak >= AUTOFILL_MAX_AI_FAILURES) {
+          await orgTx(d.engine.sql, orgId, (tx) => parkQuestionnaire(tx, orgId, q.id, JSON.stringify([AI_REASONS.ai_unavailable])));
+          d.engine.log.warn(
+            { questionnaire_id: q.id, reason: out.reason },
+            `bastion-autofill: questionnaire '${q.title}': the AI failed ${streak} times in a row; the undrafted rows go to review as "Needs an expert" (the AI was unavailable). Ask for new drafts when it is back.`,
+          );
+          return;
+        }
+        const wait = aiRetryDelayMs(streak);
+        if (Date.now() - sliceStart + wait > cutoff) break; // the next slice tries again
+        await waitWithHeartbeat(d, q, f, wait);
+        continue; // the same row
+      }
+      if (out.kind === 'budget_exhausted') {
+        aiReason = AI_REASONS.budget_exhausted;
+      } else if (out.kind === 'unusable') {
+        aiReached = true;
+        unusable += 1;
+        aiReason = out.cutOff ? AI_REASONS.ai_cut_off : AI_REASONS.ai_bad_answer;
+        d.engine.log.warn(
+          { questionnaire_id: q.id, item_id: it.id, reason: out.reason },
+          out.cutOff
+            ? 'bastion-autofill: the AI answer stopped at max_tokens (finish_reason length); raise BASTION_QUESTIONNAIRE_MAX_TOKENS if this repeats'
+            : `bastion-autofill: the AI answer could not be used (${out.reason})`,
+        );
+      } else {
+        aiReached = true;
+        response = out.response;
+      }
     }
     const visible = asker ? await visibleRefs(d.canAccess, asker, [...cands, ...libraryControlCandidates(cands, ctx)], accessCache) : new Set<string>();
-    const b = bandWithContext(question, answerKind, cands, response, visible, ctx);
+    let b = bandWithContext(question, answerKind, cands, response, visible, ctx);
+    if (aiReason) b = withAiReason(b, aiReason);
 
     const counts = await orgTx(d.engine.sql, orgId, async (tx) => {
       await tx`
@@ -588,16 +743,19 @@ async function runSlice(d: AutofillDeps, q: QRow, f: QFence): Promise<void> {
       const upd = await tx`
         UPDATE bastion_questionnaires
            SET rows_done = ${n.done}, high_count = ${n.high}, medium_count = ${n.medium}, low_count = ${n.low},
-               injection_suspected = injection_suspected OR ${suspect}, heartbeat_at = ${d.engine.now()}
+               injection_suspected = injection_suspected OR ${suspect}, heartbeat_at = ${d.engine.now()},
+               ai_failure_streak = CASE WHEN ${aiReached} THEN 0 ELSE ai_failure_streak END
          WHERE id = ${q.id} AND organization_id = ${orgId} AND claimed_by = ${f.claimant} AND slice_token = ${f.token} AND status = 'answering'
         RETURNING id`;
       if (!upd[0]) throw new ClaimLostError();
       return n;
     });
     done = counts.done;
+    i += 1;
     d.engine.log.info(
       { questionnaire_id: q.id },
-      `bastion-autofill: questionnaire '${q.title}' rows ${counts.done}/${counts.total} (high ${counts.high}, medium ${counts.medium}, low ${counts.low}) elapsed_ms=${Date.now() - sliceStart}`,
+      `bastion-autofill: questionnaire '${q.title}' rows ${counts.done}/${counts.total} (high ${counts.high}, medium ${counts.medium}, low ${counts.low}; ` +
+        `this slice: ${aiFailed} failed AI calls, ${unusable} unusable AI answers) elapsed_ms=${Date.now() - sliceStart}`,
     );
   }
 
@@ -627,12 +785,20 @@ async function finish(d: AutofillDeps, q: QRow, f: QFence): Promise<void> {
       INSERT INTO bastion_audit_log (organization_id, actor_id, actor_kind, impersonator_id, action, subject_type, subject_id, details)
       VALUES (${orgId}, ${actor}, ${actorKind}, NULL, 'questionnaire.autofill', 'questionnaire', ${q.id},
               ${tx.json({ rows: counts.total, high: counts.high, medium: counts.medium, low: counts.low } as never)})`;
-    await enqueueBastionEvent(
+    // One event per autofill run (#267): a retry of this run's finish() dedupes, a redraft (a new
+    // generation) does not, whatever its counts. resume_count was reset by every start, so it
+    // repeated across runs and the second run's event was silently dropped.
+    const fresh = await enqueueBastionEvent(
       'questionnaire.drafted',
-      { questionnaire_id: q.id, title: q.title, rows: counts.total, high: counts.high, medium: counts.medium, low: counts.low },
+      // #262: the catalog's names; refs and counts only (spec 8.1). The customer-supplied title is
+      // deliberately left out of an org-wide event: a rule can read it by id.
+      { questionnaire_id: q.id, row_count: counts.total, high_count: counts.high, medium_count: counts.medium, low_count: counts.low },
       tx,
-      { orgId, idempotencyKey: `questionnaire.drafted:${q.id}:${q.resume_count}:${counts.total}:${counts.low}`, actorId: actor ?? undefined, actorType: actorKind === 'human' ? 'user' : 'agent' },
+      { orgId, idempotencyKey: `questionnaire.drafted:${q.id}:g${Number(q.autofill_generation)}`, actorId: actor ?? undefined, actorType: actorKind === 'human' ? 'user' : 'agent' },
     );
+    if (!fresh) {
+      d.engine.log.warn({ questionnaire_id: q.id, generation: q.autofill_generation }, 'bastion-autofill: questionnaire.drafted was already queued for this run; not sent again');
+    }
     return counts;
   });
   d.engine.log.info({ questionnaire_id: q.id }, `bastion-autofill: questionnaire '${q.title}' drafted; ${n.total} rows (high ${n.high}, medium ${n.medium}, low ${n.low})`);

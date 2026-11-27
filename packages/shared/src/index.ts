@@ -28,6 +28,8 @@ export * from './bam-phase-rules.js';
 export * from './stable-json.js';
 // The internal LLM proxy's call deadline, its cap and the hold windows derived from it (#257). Pure.
 export * from './llm-deadline.js';
+// The shutdown drain derived from that deadline, and the platform stop grace it must fit (#284). Pure.
+export * from './stop-grace.js';
 // NOTE: bulwark-arm-key.ts is intentionally NOT re-exported here. It imports node:crypto and is
 // server-only; re-exporting it from this browser-facing barrel drags node:crypto into every SPA
 // bundle and breaks the rollup production build. Server code (bulwark-api, apps/worker) imports it

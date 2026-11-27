@@ -17,7 +17,8 @@ export interface CorpusQuestion {
 }
 
 export interface RecordedQuestionnaireCorpus {
-  meta: { prompt_version: number; recorded_at: string; source: string; model: string | null; note?: string };
+  /** max_tokens: the budget the recording was made at (llm-call-settings.ts; the gate pins it to production's). */
+  meta: { prompt_version: number; recorded_at: string; source: string; model: string | null; max_tokens?: number; note?: string };
   responses: Record<string, { content: string; finish_reason: string | null } | { error: string }>;
 }
 

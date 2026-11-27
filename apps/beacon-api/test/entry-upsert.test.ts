@@ -71,11 +71,14 @@ function chainable(result: unknown[]) {
   obj.onConflictDoUpdate = vi.fn().mockReturnValue(obj);
   obj.onConflictDoNothing = vi.fn().mockReturnValue(obj);
   obj.groupBy = vi.fn().mockReturnValue(obj);
+  obj.for = vi.fn().mockReturnValue(obj);
   return obj;
 }
 
 const ORG_ID = '00000000-0000-0000-0000-000000000001';
 const USER_ID = '00000000-0000-0000-0000-000000000003';
+const OTHER_USER_ID = '00000000-0000-0000-0000-000000000004';
+const ACTOR = { id: USER_ID, org_id: ORG_ID, role: 'member', is_superuser: false };
 const ENTRY_ID = '00000000-0000-0000-0000-000000000200';
 
 function makeEntry(overrides: Record<string, unknown> = {}) {
@@ -120,8 +123,7 @@ describe('upsertEntryBySlug — validation', () => {
     await expect(
       upsertEntryBySlug(
         { slug: '', title: 't', body_markdown: 'b' },
-        USER_ID,
-        ORG_ID,
+        ACTOR,
       ),
     ).rejects.toThrow(/slug/);
   });
@@ -130,8 +132,7 @@ describe('upsertEntryBySlug — validation', () => {
     await expect(
       upsertEntryBySlug(
         { slug: 's', title: '', body_markdown: 'b' },
-        USER_ID,
-        ORG_ID,
+        ACTOR,
       ),
     ).rejects.toThrow(/title/);
   });
@@ -140,8 +141,7 @@ describe('upsertEntryBySlug — validation', () => {
     await expect(
       upsertEntryBySlug(
         { slug: 's', title: 't', body_markdown: '' },
-        USER_ID,
-        ORG_ID,
+        ACTOR,
       ),
     ).rejects.toThrow(/body_markdown/);
   });
@@ -161,6 +161,8 @@ describe('upsertEntryBySlug — create path', () => {
     // resolveDefaultExpiryDays uses db.execute; return empty rows so it
     // falls back to the 90-day default.
     mockExecute.mockResolvedValueOnce({ rows: [] });
+    // SELECT ... FOR UPDATE finds no row with this slug.
+    mockSelect.mockReturnValueOnce(chainable([]));
     // INSERT ... ON CONFLICT DO NOTHING RETURNING → the new row.
     const entryInsert = chainable([makeEntry()]);
     mockInsert.mockReturnValueOnce(entryInsert);
@@ -169,8 +171,7 @@ describe('upsertEntryBySlug — create path', () => {
 
     const result = await upsertEntryBySlug(
       { slug: 'deploy-runbook', title: 'Deploy Runbook', body_markdown: '## Steps' },
-      USER_ID,
-      ORG_ID,
+      ACTOR,
     );
 
     expect(result.created).toBe(true);
@@ -183,8 +184,11 @@ describe('upsertEntryBySlug — create path', () => {
 
   it('applies the loser of a create race as the next version instead of dropping it (#280)', async () => {
     mockExecute.mockResolvedValueOnce({ rows: [] });
-    // The parallel writer won the insert: ON CONFLICT DO NOTHING returns no row.
+    // No row at first read; the parallel writer then wins the insert, so ON CONFLICT DO NOTHING
+    // returns no row and the re-read under lock finds the winner's row (created by this user).
+    mockSelect.mockReturnValueOnce(chainable([]));
     mockInsert.mockReturnValueOnce(chainable([]));
+    mockSelect.mockReturnValueOnce(chainable([makeEntry()]));
     const update = chainable([makeEntry({ version: 2, title: 'Mine', body_markdown: 'my body' })]);
     mockUpdate.mockReturnValueOnce(update);
     const snapshot = chainable([{ id: 'ver-2' }]);
@@ -192,8 +196,7 @@ describe('upsertEntryBySlug — create path', () => {
 
     const result = await upsertEntryBySlug(
       { slug: 'deploy-runbook', title: 'Mine', body_markdown: 'my body' },
-      USER_ID,
-      ORG_ID,
+      ACTOR,
     );
 
     expect(result.created).toBe(false);
@@ -216,8 +219,8 @@ describe('upsertEntryBySlug — update path', () => {
   it('returns created=false and bumps version on an existing slug', async () => {
     const existing = makeEntry({ version: 3 });
     mockExecute.mockResolvedValueOnce({ rows: [] });
-    // The slug exists: the insert does nothing.
-    mockInsert.mockReturnValueOnce(chainable([]));
+    // The slug exists: the locked read finds it and no insert is attempted.
+    mockSelect.mockReturnValueOnce(chainable([existing]));
     // Update bumps version in SQL and returns the row it wrote.
     mockUpdate.mockReturnValueOnce(
       chainable([{ ...existing, version: 4, title: 'Deploy Runbook v2' }]),
@@ -232,13 +235,64 @@ describe('upsertEntryBySlug — update path', () => {
         title: 'Deploy Runbook v2',
         body_markdown: '## Updated Steps',
       },
-      USER_ID,
-      ORG_ID,
+      ACTOR,
     );
 
     expect(result.created).toBe(false);
     expect(result.data.version).toBe(4);
     expect(result.idempotency_key).toBe('slug:deploy-runbook');
     expect(snapshot.values).toHaveBeenCalledWith(expect.objectContaining({ version: 4 }));
+  });
+});
+
+// #299: the update branch applies the same edit rule as PUT /beacons/:id.
+describe('upsertEntryBySlug — access on an existing slug (#299)', () => {
+  let upsertEntryBySlug: Function;
+
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    vi.resetModules();
+    const mod = await import('../src/services/entry-upsert.service.js');
+    upsertEntryBySlug = mod.upsertEntryBySlug;
+  });
+
+  it("refuses a member on another user's Private slug with a neutral 409 and writes nothing", async () => {
+    mockExecute.mockResolvedValueOnce({ rows: [] });
+    mockSelect.mockReturnValueOnce(
+      chainable([makeEntry({ visibility: 'Private', owned_by: OTHER_USER_ID, created_by: OTHER_USER_ID })]),
+    );
+
+    await expect(
+      upsertEntryBySlug({ slug: 'deploy-runbook', title: 'x', body_markdown: 'x', visibility: 'Organization' }, ACTOR),
+    ).rejects.toMatchObject({ statusCode: 409, code: 'SLUG_UNAVAILABLE' });
+    expect(mockUpdate).not.toHaveBeenCalled();
+    expect(mockInsert).not.toHaveBeenCalled();
+  });
+
+  it("refuses a member on another user's Organization article with 403, as PUT does", async () => {
+    mockExecute.mockResolvedValueOnce({ rows: [] });
+    mockSelect.mockReturnValueOnce(
+      chainable([makeEntry({ visibility: 'Organization', owned_by: OTHER_USER_ID, created_by: OTHER_USER_ID })]),
+    );
+
+    await expect(
+      upsertEntryBySlug({ slug: 'deploy-runbook', title: 'x', body_markdown: 'x' }, ACTOR),
+    ).rejects.toMatchObject({ statusCode: 403, code: 'FORBIDDEN' });
+    expect(mockUpdate).not.toHaveBeenCalled();
+  });
+
+  it("lets an org admin update another user's Organization article", async () => {
+    mockExecute.mockResolvedValueOnce({ rows: [] });
+    const existing = makeEntry({ visibility: 'Organization', owned_by: OTHER_USER_ID, created_by: OTHER_USER_ID });
+    mockSelect.mockReturnValueOnce(chainable([existing]));
+    mockUpdate.mockReturnValueOnce(chainable([{ ...existing, version: 2 }]));
+    mockInsert.mockReturnValueOnce(chainable([{ id: 'ver-2' }]));
+
+    const result = await upsertEntryBySlug(
+      { slug: 'deploy-runbook', title: 'x', body_markdown: 'x' },
+      { ...ACTOR, role: 'admin' },
+    );
+    expect(result.created).toBe(false);
+    expect(result.data.version).toBe(2);
   });
 });

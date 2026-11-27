@@ -168,7 +168,7 @@ async function checkPasscode(deps: RoomDeps, orgId: string, roomId: string, room
     await deps.counters.set(okKey, PASSCODE_VERIFIED_TTL_S).catch(() => undefined);
     return;
   }
-  const left = await recordPasscodeMiss(deps.engine, orgId, roomId, String(room.label));
+  const left = await recordPasscodeMiss(deps.engine, orgId, roomId);
   if (left <= 0) throw new NotFoundError(ROOM_GONE);
   throw new RoomPasscodeRequired(true, left);
 }
@@ -207,7 +207,7 @@ async function releasePasscodeTry(engine: EngineDeps, orgId: string, roomId: str
  * One wrong passcode, whose try was already reserved (and so already counted): when the counter
  * stands at 5 the room locks and its creator is told (spec 5.2). Returns tries left.
  */
-export async function recordPasscodeMiss(engine: EngineDeps, orgId: string, roomId: string, label: string): Promise<number> {
+export async function recordPasscodeMiss(engine: EngineDeps, orgId: string, roomId: string): Promise<number> {
   return orgTx(engine.sql, orgId, async (tx) => {
     const now = engine.now();
     const [locked] = await tx`
@@ -216,7 +216,7 @@ export async function recordPasscodeMiss(engine: EngineDeps, orgId: string, room
          AND passcode_failures >= ${BASTION_ROOM_PASSCODE_MAX_FAILURES}
       RETURNING passcode_failures`;
     if (locked) {
-      await enqueueBastionEvent('auditor_room.revoked', { room_id: roomId, label, reason: 'locked' }, tx, {
+      await enqueueBastionEvent('auditor_room.revoked', { room_id: roomId, reason: 'locked' }, tx, {
         orgId,
         idempotencyKey: `auditor_room.locked:${roomId}:${now.toISOString()}`,
       });

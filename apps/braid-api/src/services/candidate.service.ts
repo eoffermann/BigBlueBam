@@ -189,8 +189,8 @@ export async function proposeMerge(
     org: { id: orgId },
   }, orgId).catch(() => {});
   publishBoltEvent('proposal.created', 'platform', {
-    proposal: { id: result.proposal_id },
-    proposed_action: 'braid.merge_profiles',
+    // #291: the platform's proposal.created shape (proposal.*), as apps/api publishes it.
+    proposal: { id: result.proposal_id, proposed_action: 'braid.merge_profiles' },
     org: { id: orgId },
   }, orgId).catch(() => {});
 

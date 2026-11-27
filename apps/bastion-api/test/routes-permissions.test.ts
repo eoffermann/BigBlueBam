@@ -128,6 +128,8 @@ const AGENT_REACHABLE = [
   'GET /delivery-problems',
   'POST /delivery-problems/:id/retry',
   'GET /audit',
+  // M10: read by the platform search_everything through an API key.
+  'GET /search',
 ];
 
 describe('bastion-api route gates', () => {

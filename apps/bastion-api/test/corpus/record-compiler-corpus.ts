@@ -11,7 +11,9 @@
 
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { buildTailoringMessages, COMPILE_MAX_TOKENS_DEFAULT, TAILORING_PROMPT_VERSION } from '../../src/library/tailoring.js';
+import { LLM_CLIENT_GRACE_MS } from '@bigbluebam/shared';
+import { llmDeadlineMs, llmMaxTokens } from '../../src/library/llm-call-settings.js';
+import { buildTailoringMessages, TAILORING_PROMPT_VERSION } from '../../src/library/tailoring.js';
 import { CORPUS_CONNECTED, CORPUS_PROFILE, corpusControls, type RecordedCorpus } from './compiler-fixtures.js';
 
 const started = Date.now();
@@ -25,8 +27,10 @@ if (!api || !provider || !secret) {
   process.exit(1);
 }
 const CONCURRENCY = Number(process.env.BASTION_RECORD_CONCURRENCY ?? 3);
-// The same budget production uses (#237): env BASTION_LLM_MAX_TOKENS, else the one constant.
-const MAX_TOKENS = Number(process.env.BASTION_LLM_MAX_TOKENS ?? COMPILE_MAX_TOKENS_DEFAULT);
+// The same budget production uses (#237, #263): env BASTION_LLM_MAX_TOKENS, else the one constant,
+// read through llm-call-settings.ts with the bounds env.ts applies.
+const MAX_TOKENS = llmMaxTokens('compile', process.env);
+const DEADLINE_MS = llmDeadlineMs('compile', process.env);
 
 async function call(messages: unknown): Promise<{ content: string; finish_reason: string | null }> {
   for (let attempt = 1; ; attempt++) {
@@ -40,9 +44,11 @@ async function call(messages: unknown): Promise<{ content: string; finish_reason
         messages,
         max_tokens: MAX_TOKENS,
         temperature: 0,
+        // The production deadline (#257, #263): the recording proves the budget fits inside it.
+        timeout_ms: DEADLINE_MS,
         ...(process.env.BASTION_RECORD_MODEL_OVERRIDE ? { model: process.env.BASTION_RECORD_MODEL_OVERRIDE } : {}),
       }),
-      signal: AbortSignal.timeout(90_000),
+      signal: AbortSignal.timeout(DEADLINE_MS + LLM_CLIENT_GRACE_MS),
     });
     if (res.status === 429 && attempt < 10) {
       await new Promise((r) => setTimeout(r, 2000 * attempt));
