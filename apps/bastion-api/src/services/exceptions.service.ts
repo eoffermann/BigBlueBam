@@ -22,7 +22,9 @@ import {
   type BastionException,
   type BastionExceptionDecide,
   type BastionExceptionListQuery,
+  type BastionExceptionListResponse,
   type BastionExceptionPropose,
+  type BastionExceptionResponse,
 } from '@bigbluebam/shared';
 import { auditRaw } from '../lib/audit-raw.js';
 import { ConflictError, ForbiddenError, NotFoundError, ValidationFailure } from '../lib/errors.js';
@@ -84,7 +86,7 @@ function shape(r: Record<string, unknown>, now: Date): BastionException {
   };
 }
 
-export async function listExceptions(engine: EngineDeps, viewer: Viewer, q: BastionExceptionListQuery) {
+export async function listExceptions(engine: EngineDeps, viewer: Viewer, q: BastionExceptionListQuery): Promise<BastionExceptionListResponse> {
   const now = engine.now();
   const rows = await orgTx(engine.sql, viewer.org_id, (tx) => tx.unsafe(
     `SELECT ${SELECT} ${FROM}
@@ -95,14 +97,14 @@ export async function listExceptions(engine: EngineDeps, viewer: Viewer, q: Bast
   return { data: rows.map((r) => shape(r as Record<string, unknown>, now)), next_cursor: null };
 }
 
-export async function getException(engine: EngineDeps, viewer: Viewer, id: string) {
+export async function getException(engine: EngineDeps, viewer: Viewer, id: string): Promise<BastionExceptionResponse> {
   const r = (await orgTx(engine.sql, viewer.org_id, (tx) => tx.unsafe(`SELECT ${SELECT} ${FROM} WHERE e.organization_id = $1 AND e.id = $2`, [viewer.org_id, id])))[0];
   if (!r) throw new NotFoundError('We could not find that exception.');
   return { data: shape(r as Record<string, unknown>, engine.now()) };
 }
 
 /** POST /exceptions (row 60). */
-export async function proposeException(d: DecisionDeps, viewer: Viewer, body: BastionExceptionPropose) {
+export async function proposeException(d: DecisionDeps, viewer: Viewer, body: BastionExceptionPropose): Promise<BastionExceptionResponse> {
   const now = d.engine.now();
   await orgTx(d.engine.sql, viewer.org_id, async (tx) => {
     const c = (await tx`SELECT id FROM bastion_controls WHERE organization_id = ${viewer.org_id} AND id = ${body.control_id}`)[0];

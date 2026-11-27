@@ -16,7 +16,9 @@ import {
   FeedAuthError,
   ingestBoltEventFeeds,
   ingestFeedBatch,
+  listFeedKeys,
   listFeedRecords,
+  listFeeds,
   revokeFeedKey,
 } from '../../src/services/feeds.service.js';
 import {
@@ -24,6 +26,7 @@ import {
   createManualEvidence,
   getManualEvidence,
   linkManualEvidence,
+  listManualEvidence,
   redactPersonalData,
   retryPendingScan,
   reviewManualEvidence,
@@ -33,6 +36,21 @@ import {
 } from '../../src/services/manual-evidence.service.js';
 import type { Viewer } from '../../src/services/types.js';
 import { DATABASE_URL, type FakeBucket, fakeBucket, makeDeps, wipeOrg } from './engine-harness.js';
+import {
+  bastionCoverageResponseSchema,
+  bastionFeedIngestResponseSchema,
+  bastionFeedKeyListResponseSchema,
+  bastionFeedListResponseSchema,
+  bastionFeedRecordListResponseSchema,
+  bastionFeedResponseSchema,
+  bastionManualEvidenceListResponseSchema,
+  bastionManualEvidenceResponseSchema,
+  bastionMintedFeedKeyResponseSchema,
+  bastionRedactResponseSchema,
+  bastionRevokedFeedKeyResponseSchema,
+  bastionSummaryResponseSchema,
+} from '@bigbluebam/shared';
+import { expectWire } from './wire.js';
 
 /**
  * M5 gates against a real migrated database and the real service code (spec 3.3-3.5, 11.1):
@@ -192,7 +210,13 @@ describe.skipIf(!DATABASE_URL)('M5 manual evidence, personal data, feeds and the
     const professor = o.others[0]!;
     const f = await putBinFile(bin, o.org, '%PDF two-step report');
 
-    const created = (await createManualEvidence(d, viewer(o, professor), fileBody(o, f.asset))).data as Record<string, unknown>;
+    const createdOut = await createManualEvidence(d, viewer(o, professor), fileBody(o, f.asset));
+    // #371: what each route sends (the service result through JSON) is the shared response shape;
+    // size_bytes and ledger_seq are bigint columns and numbers on the wire.
+    expectWire(bastionManualEvidenceResponseSchema, createdOut);
+    expect(typeof createdOut.data.size_bytes).toBe('number');
+    expect(typeof createdOut.data.ledger_seq).toBe('number');
+    const created = createdOut.data as Record<string, unknown>;
     expect(created.status).toBe('active');
     expect(created.scan_label).toBe('clean');
     expect(created.content_sha256).toBe(createHash('sha256').update('%PDF two-step report').digest('hex'));
@@ -213,25 +237,33 @@ describe.skipIf(!DATABASE_URL)('M5 manual evidence, personal data, feeds and the
 
     // Four humans: the uploader may not accept their own upload.
     await expect(reviewManualEvidence(d, viewer(o, professor), id, o.assertions.manual, { verdict: 'accepted' }, true)).rejects.toBeInstanceOf(ForbiddenError);
-    await reviewManualEvidence(d, viewer(o, o.owner, 'owner'), id, o.assertions.manual, { verdict: 'accepted' }, true);
+    expectWire(bastionManualEvidenceResponseSchema, await reviewManualEvidence(d, viewer(o, o.owner, 'owner'), id, o.assertions.manual, { verdict: 'accepted' }, true));
     expect(runs).toHaveLength(1);
     await drive(engine, o.org, runs);
+    const listedEvidence = await listManualEvidence(d, viewer(o, o.owner, 'owner'), { limit: 50 }, true);
+    expect(listedEvidence.data.map((e) => e.id)).toContain(id);
+    expectWire(bastionManualEvidenceListResponseSchema, listedEvidence);
     const passed = (await sql`SELECT status, coverage_kind FROM bastion_controls WHERE id = ${o.controls.manual}`)[0]!;
     expect(passed.status).toBe('pass');
     expect(passed.coverage_kind).toBe('manual_file');
 
-    const summary = (await readinessSummary(engine, viewer(o, o.owner, 'owner'), undefined, { storage_ok: true, offsite_backup_configured: false })).data;
+    const summaryOut = await readinessSummary(engine, viewer(o, o.owner, 'owner'), undefined, { storage_ok: true, offsite_backup_configured: false });
+    expectWire(bastionSummaryResponseSchema, summaryOut);
+    const summary = summaryOut.data;
     expect(summary.numbers.proven_by_evidence).toBe(1);
     expect(summary.numbers.total).toBe(2);
     expect(summary.expiring_evidence[0]?.days_left).toBe(12);
     expect(summary.banners.map((b) => b.code)).toContain('offsite_backup_not_configured');
     const map = await coverageMap(engine, viewer(o, o.owner, 'owner'), undefined);
+    expectWire(bastionCoverageResponseSchema, map);
     expect(map.data.find((r) => r.control_id === o.controls.manual)?.columns.manual_file).toBe(1);
     expect(map.data.find((r) => r.control_id === o.controls.statement)?.columns.self_attested).toBe(1);
 
     // Redaction: owner only; withdraws the only accepted file, deletes its bytes, re-evaluates.
     await expect(redactPersonalData(d, viewer(o, professor), pd.id as string, 'left the company')).rejects.toBeInstanceOf(ForbiddenError);
-    const red = (await redactPersonalData(d, viewer(o, o.owner, 'owner'), pd.id as string, 'personal data request')).data;
+    const redOut = await redactPersonalData(d, viewer(o, o.owner, 'owner'), pd.id as string, 'personal data request');
+    expectWire(bastionRedactResponseSchema, redOut);
+    const red = redOut.data;
     expect(red.bytes_deleted).toBe(true);
     expect(bucket.objects.has(obj.object_key as string)).toBe(false);
     const after = (await getManualEvidence(d, viewer(o, o.owner, 'owner'), id, true)).data as Record<string, unknown>;
@@ -558,11 +590,14 @@ describe.skipIf(!DATABASE_URL)('M5 manual evidence, personal data, feeds and the
     orgs.push(o.org);
     const engine = makeDeps(sql);
     const admin = viewer(o, o.owner, 'owner');
-    const feed = (await createFeed(engine, admin, { feed_key: 'crew-roster', label: 'Crew roster export', source_kind: 'api_push', cadence_days: 1, daily_record_quota: 3 }))
-      .data as Record<string, unknown>;
+    const feedOut = await createFeed(engine, admin, { feed_key: 'crew-roster', label: 'Crew roster export', source_kind: 'api_push', cadence_days: 1, daily_record_quota: 3 });
+    expectWire(bastionFeedResponseSchema, feedOut);
+    const feed = feedOut.data as Record<string, unknown>;
     const other = (await createFeed(engine, admin, { feed_key: 'other-feed', label: 'Other', source_kind: 'api_push', cadence_days: 1, daily_record_quota: 10 }))
       .data as Record<string, unknown>;
-    const key = (await createFeedKey(engine, admin, feed.id as string, { label: 'export job' }, PEPPER)).data;
+    const keyOut = await createFeedKey(engine, admin, feed.id as string, { label: 'export job' }, PEPPER);
+    expectWire(bastionMintedFeedKeyResponseSchema, keyOut);
+    const key = keyOut.data;
     expect(key.token.startsWith('bbf_')).toBe(true);
     const stored = (await sql`SELECT secret_hmac FROM bastion_feed_keys WHERE id = ${key.id as string}`)[0]!;
     expect(String(stored.secret_hmac)).not.toContain(key.token.split('_').pop()!);
@@ -589,12 +624,20 @@ describe.skipIf(!DATABASE_URL)('M5 manual evidence, personal data, feeds and the
     expect((await sql`SELECT count(*)::int AS n FROM bastion_ledger_entries WHERE organization_id = ${o.org} AND entry_kind = 'feed_record'`)[0]!.n).toBe(2);
     const records = await listFeedRecords(engine, admin, feed.id as string, { limit: 50 });
     expect(records.data.find((r) => r.idempotency_key === 'crew-1')?.subject).toBe('gilligan@gilligantravel.example');
+    // #371: ledger_seq is bigint in the table and a number on the wire.
+    expect(records.data.every((r) => typeof r.ledger_seq === 'number')).toBe(true);
+    expectWire(bastionFeedRecordListResponseSchema, records);
+    expectWire(bastionFeedIngestResponseSchema, again);
+    const feeds = await listFeeds(engine, admin);
+    expect(feeds.data.find((x) => x.id === feed.id)).toMatchObject({ record_count: 2, active_keys: 1 });
+    expectWire(bastionFeedListResponseSchema, feeds);
+    expectWire(bastionFeedKeyListResponseSchema, await listFeedKeys(engine, admin, feed.id as string));
 
     // Rotation: the old key keeps working through its grace window; revoke stops it at once.
     const key2 = (await createFeedKey(engine, admin, feed.id as string, {}, PEPPER)).data;
     expect(key2.rotated_keys).toBe(1);
     await expect(authenticateFeedPush(engine, 'crew-roster', `Bearer ${key.token}`, PEPPER)).resolves.toBeTruthy();
-    await revokeFeedKey(engine, admin, key.id as string);
+    expectWire(bastionRevokedFeedKeyResponseSchema, await revokeFeedKey(engine, admin, key.id as string));
     await expect(authenticateFeedPush(engine, 'crew-roster', `Bearer ${key.token}`, PEPPER)).rejects.toBeInstanceOf(FeedAuthError);
     await expect(authenticateFeedPush(engine, 'crew-roster', `Bearer ${key2.token}`, PEPPER)).resolves.toBeTruthy();
   });

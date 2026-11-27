@@ -19,9 +19,18 @@ import {
   type BastionFixDecide,
   type BastionFixDraft,
   type BastionFixDraftListQuery,
+  type BastionFixDraftListResponse,
+  type BastionFixDraftResponse,
   type BastionFixMarkApplied,
+  type BastionFixTemplate,
+  type BastionGapDismissResponse,
+  type BastionGapKind,
   type BastionGapListQuery,
+  type BastionGapRow,
+  type BastionGapsResponse,
+  type BastionGapStatus,
 } from '@bigbluebam/shared';
+import type { Served } from '../lib/served.js';
 import { auditRaw } from '../lib/audit-raw.js';
 import { ConflictError, ForbiddenError, NotFoundError } from '../lib/errors.js';
 import { delimitAsData, scanLabel } from '../lib/injection-prescan.js';
@@ -70,7 +79,7 @@ export const TEMPLATE_WORDS: Record<string, string> = {
 
 // ── Gaps ────────────────────────────────────────────────────────────────────────────────
 
-export async function listGaps(d: DecisionDeps, viewer: Viewer, q: BastionGapListQuery) {
+export async function listGaps(d: DecisionDeps, viewer: Viewer, q: BastionGapListQuery): Promise<Served<BastionGapsResponse>> {
   const now = d.engine.now();
   return orgTx(d.engine.sql, viewer.org_id, async (tx) => {
     const states = await loadControlStates(tx, viewer.org_id, now, q.framework_id);
@@ -91,23 +100,23 @@ export async function listGaps(d: DecisionDeps, viewer: Viewer, q: BastionGapLis
          AND g.control_id = ANY(${inView}::uuid[])
          ${q.control_id ? tx`AND g.control_id = ${q.control_id}` : tx``}
          ${q.gap_kind ? tx`AND g.gap_kind = ${q.gap_kind}` : tx``}`;
-    const shaped = rows.map((g) => ({
+    const shaped = rows.map((g): Served<BastionGapRow> => ({
       id: g.id as string,
       control_id: g.control_id as string,
       control_title: g.control_title as string,
       owner_name: (g.owner_name as string | null) ?? null,
       assertion_id: (g.assertion_id as string | null) ?? null,
       assertion_statement: (g.assertion_statement as string | null) ?? null,
-      gap_kind: g.gap_kind as string,
+      gap_kind: g.gap_kind as BastionGapKind,
       gap_words: GAP_WORDS[g.gap_kind as string] ?? String(g.gap_kind),
       risk_score: Number(g.risk_score),
-      fix_template: (g.fix_template as string | null) ?? null,
-      fix_words: g.fix_template ? TEMPLATE_WORDS[g.fix_template as string] : null,
+      fix_template: (g.fix_template as BastionFixTemplate | null) ?? null,
+      fix_words: g.fix_template ? (TEMPLATE_WORDS[g.fix_template as string] ?? null) : null,
       fix_cost: g.fix_cost === null ? null : Number(g.fix_cost),
-      status: g.status as string,
+      status: g.status as BastionGapStatus,
       dismissed_reason: (g.dismissed_reason as string | null) ?? null,
       latest_fix_draft_id: (g.latest_fix_draft_id as string | null) ?? null,
-      computed_at: g.computed_at,
+      computed_at: g.computed_at as Date,
     }));
     const sorted = sortGaps(shaped, q.sort).slice(0, q.limit);
 
@@ -117,7 +126,7 @@ export async function listGaps(d: DecisionDeps, viewer: Viewer, q: BastionGapLis
       stale.length > 0
         ? {
             gap_kind: BASTION_STALE_GAP_KIND,
-            gap_words: GAP_WORDS[BASTION_STALE_GAP_KIND],
+            gap_words: GAP_WORDS[BASTION_STALE_GAP_KIND] ?? "Checks haven't run recently",
             control_count: stale.length,
             message: `${stale.length} control${stale.length === 1 ? " hasn't" : "s haven't"} been checked recently, so Bastion can't vouch for ${stale.length === 1 ? 'it' : 'them'}.`,
           }
@@ -138,15 +147,15 @@ export async function listGaps(d: DecisionDeps, viewer: Viewer, q: BastionGapLis
       data: sorted,
       stale: staleRow,
       accepted_risks: accepted.map((e) => ({
-        id: e.id,
-        control_id: e.control_id,
-        control_title: e.control_title,
-        scope: e.scope,
-        reason: e.reason,
-        expires_at: e.expires_at,
-        owner_name: e.owner_name ?? null,
-        approved_by_name: e.decided_by_name ?? null,
-        small_team_self_approval: e.small_team_self_approval,
+        id: String(e.id),
+        control_id: String(e.control_id),
+        control_title: String(e.control_title),
+        scope: e.scope as BastionGapsResponse['accepted_risks'][number]['scope'],
+        reason: String(e.reason),
+        expires_at: e.expires_at as Date,
+        owner_name: (e.owner_name as string | null) ?? null,
+        approved_by_name: (e.decided_by_name as string | null) ?? null,
+        small_team_self_approval: !!e.small_team_self_approval,
         approval_label: e.small_team_self_approval ? 'approved by the proposer (small team)' : null,
       })),
       sort: q.sort,
@@ -171,7 +180,7 @@ async function loadGap(tx: Tx, orgId: string, id: string, forUpdate = true) {
   return g;
 }
 
-export async function dismissGap(d: DecisionDeps, viewer: Viewer, id: string, reason: string) {
+export async function dismissGap(d: DecisionDeps, viewer: Viewer, id: string, reason: string): Promise<BastionGapDismissResponse> {
   return orgTx(d.engine.sql, viewer.org_id, async (tx) => {
     await lockOrgGapRank(tx, viewer.org_id); // #255: the gap-rank lock first, like every gap writer
     const g = await loadGap(tx, viewer.org_id, id);
@@ -179,7 +188,7 @@ export async function dismissGap(d: DecisionDeps, viewer: Viewer, id: string, re
     if (g.status === 'resolved') throw new ConflictError('This gap is already fixed.', 'GAP_RESOLVED');
     await tx`UPDATE bastion_gaps SET status = 'dismissed', dismissed_reason = ${reason}, dismissed_by = ${viewer.id} WHERE id = ${id}`;
     await auditRaw(tx, viewer, 'gap.dismiss', { type: 'gap', id }, { gap_kind: g.gap_kind, reason });
-    return { data: { id, status: 'dismissed', dismissed_reason: reason } };
+    return { data: { id, status: 'dismissed' as const, dismissed_reason: reason } };
   });
 }
 
@@ -416,7 +425,7 @@ function processChange(base: Draft, control: string, statement: string | null): 
   };
 }
 
-export async function proposeFix(d: DecisionDeps, viewer: Viewer, gapId: string, note: string | null) {
+export async function proposeFix(d: DecisionDeps, viewer: Viewer, gapId: string, note: string | null): Promise<BastionFixDraftResponse> {
   const now = d.engine.now();
   const assertDraftable = (g: Record<string, unknown>) => {
     if (g.status !== 'open') {
@@ -566,7 +575,7 @@ async function shapeDraft(d: DecisionDeps, viewer: Viewer, r: Record<string, unk
   };
 }
 
-export async function listFixDrafts(d: DecisionDeps, viewer: Viewer, q: BastionFixDraftListQuery) {
+export async function listFixDrafts(d: DecisionDeps, viewer: Viewer, q: BastionFixDraftListQuery): Promise<BastionFixDraftListResponse> {
   const rows = await orgTx(d.engine.sql, viewer.org_id, (tx) => tx.unsafe(
     `SELECT ${DRAFT_SELECT} ${DRAFT_FROM}
       WHERE d.organization_id = $1 AND ($2::text IS NULL OR d.status = $2) AND ($3::uuid IS NULL OR d.gap_id = $3)
@@ -574,12 +583,12 @@ export async function listFixDrafts(d: DecisionDeps, viewer: Viewer, q: BastionF
       ORDER BY d.created_at DESC LIMIT $5`,
     [viewer.org_id, q.status ?? null, q.gap_id ?? null, q.control_id ?? null, q.limit],
   ));
-  const data = [];
+  const data: BastionFixDraft[] = [];
   for (const r of rows) data.push(await shapeDraft(d, viewer, r as Record<string, unknown>));
   return { data, next_cursor: null };
 }
 
-export async function getFixDraft(d: DecisionDeps, viewer: Viewer, id: string) {
+export async function getFixDraft(d: DecisionDeps, viewer: Viewer, id: string): Promise<BastionFixDraftResponse> {
   const r = (await orgTx(d.engine.sql, viewer.org_id, (tx) => tx.unsafe(`SELECT ${DRAFT_SELECT} ${DRAFT_FROM} WHERE d.organization_id = $1 AND d.id = $2`, [viewer.org_id, id])))[0];
   if (!r) throw new NotFoundError('We could not find that fix.');
   return { data: await shapeDraft(d, viewer, r as Record<string, unknown>) };
@@ -592,7 +601,13 @@ export async function getFixDraft(d: DecisionDeps, viewer: Viewer, id: string) {
  * the control or holds bastion.control.write. Approval files what the template promises; either
  * way the mirrored proposal is closed through the api (outbox) with this person as the decider.
  */
-export async function decideFix(d: DecisionDeps, viewer: Viewer, id: string, body: BastionFixDecide, canControlWrite: boolean) {
+export async function decideFix(
+  d: DecisionDeps,
+  viewer: Viewer,
+  id: string,
+  body: BastionFixDecide,
+  canControlWrite: boolean,
+): Promise<BastionFixDraftResponse> {
   const now = d.engine.now();
   // #282: an expired fix is recorded (draft expired, gap reopened) and THEN refused. The refusal
   // is thrown after the transaction commits; thrown inside it, it rolled the expiry back.
@@ -716,7 +731,7 @@ async function applyApproval(tx: Tx, viewer: Viewer, r: Record<string, unknown>)
   }
 }
 
-export async function markFixApplied(d: DecisionDeps, viewer: Viewer, id: string, body: BastionFixMarkApplied) {
+export async function markFixApplied(d: DecisionDeps, viewer: Viewer, id: string, body: BastionFixMarkApplied): Promise<BastionFixDraftResponse> {
   await orgTx(d.engine.sql, viewer.org_id, async (tx) => {
     const r = (await tx`SELECT id, status, template FROM bastion_fix_drafts WHERE organization_id = ${viewer.org_id} AND id = ${id} FOR UPDATE`)[0];
     if (!r) throw new NotFoundError('We could not find that fix.');

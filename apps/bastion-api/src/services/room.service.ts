@@ -25,9 +25,18 @@ import {
   BASTION_ROOM_REQUESTS_PER_HOUR,
   BASTION_ROOM_TOKEN_MISS_WINDOW_S,
   BASTION_ROOM_TOKEN_MISSES,
+  type BastionAuditorRequestStatus,
   type BastionAuditorViewKind,
   type BastionPublicRoomRequest,
+  type BastionPublicRoomRequestResponse,
+  type BastionRoomCheck,
+  type BastionRoomControlDetailResponse,
+  type BastionRoomEvidenceDetailResponse,
+  type BastionRoomFile,
+  type BastionRoomOverviewResponse,
+  type BastionStoredStatus,
 } from '@bigbluebam/shared';
+import type { Served } from '../lib/served.js';
 import { type EngineDeps, orgTx, type Tx } from '../engine/context.js';
 import { enqueueBastionEvent } from '../engine/outbox.js';
 import { downloadHeaders } from '../lib/download.js';
@@ -290,7 +299,7 @@ export async function logRoomAccess(deps: RoomDeps, r: ResolvedRoom, ctx: RoomRe
 }
 
 /** GET /public/room (row 101). */
-export async function publicRoomOverview(deps: RoomDeps, ctx: RoomRequestContext) {
+export async function publicRoomOverview(deps: RoomDeps, ctx: RoomRequestContext): Promise<Served<BastionRoomOverviewResponse>> {
   const r = await resolveRoom(deps, ctx);
   await logRoomAccess(deps, r, ctx, 'overview', null);
   return { data: await roomOverview(deps.engine, r.orgId, r.room) };
@@ -325,17 +334,18 @@ async function roomFiles(tx: Tx, orgId: string, room: Record<string, unknown>, o
      ORDER BY e.title`;
 }
 
-function fileOut(f: Record<string, unknown>) {
+/** A manual-evidence item as an auditor sees it (bastionRoomFileSchema). */
+function fileOut(f: Record<string, unknown>): Served<BastionRoomFile> {
   return {
-    id: f.id,
+    id: String(f.id),
     kind: f.kind === 'attestation_statement' ? 'statement' : 'file',
-    title: f.title,
-    description: f.description ?? null,
-    source_system: f.source_system ?? null,
-    produced_on: f.produced_on ?? null,
-    period_start: f.period_start ?? null,
-    period_end: f.period_end ?? null,
-    valid_until: f.valid_until ?? null,
+    title: String(f.title),
+    description: (f.description as string | null) ?? null,
+    source_system: (f.source_system as string | null) ?? null,
+    produced_on: (f.produced_on as string | null) ?? null,
+    period_start: (f.period_start as string | null) ?? null,
+    period_end: (f.period_end as string | null) ?? null,
+    valid_until: (f.valid_until as Date | null) ?? null,
     restricted: f.sensitivity === 'restricted',
     review: f.accepted ? 'Accepted by a reviewer' : 'Not reviewed yet',
     scan: f.scan_label === 'not_scanned' ? 'Not virus-scanned (scanning is off on this installation)' : null,
@@ -345,8 +355,21 @@ function fileOut(f: Record<string, unknown>) {
 
 const OUTCOME_WORDS: Record<string, string> = { pass: 'Passed', fail: 'Failed', unprovable: "Couldn't prove" };
 
+/** One check result for an auditor: counts-only (bastionRoomCheckSchema). */
+function checkOut(s: Record<string, unknown>): Served<BastionRoomCheck> {
+  const shown = present(s, false);
+  return {
+    id: String(s.id),
+    recorded_at: s.created_at as Date,
+    what: (s.plain_statement as string | null) ?? null,
+    outcome: s.outcome as BastionStoredStatus,
+    outcome_words: OUTCOME_WORDS[String(s.outcome)] ?? String(s.outcome),
+    explanation: shown.explanation,
+  };
+}
+
 /** GET /public/room/controls/:id (row 102). */
-export async function publicRoomControl(deps: RoomDeps, ctx: RoomRequestContext, controlId: string) {
+export async function publicRoomControl(deps: RoomDeps, ctx: RoomRequestContext, controlId: string): Promise<Served<BastionRoomControlDetailResponse>> {
   const r = await resolveRoom(deps, ctx);
   if (!roomControls(r.room).has(controlId) || !r.room.framework_id) throw new NotFoundError('That control is not part of this room.');
   const now = deps.engine.now();
@@ -369,17 +392,7 @@ export async function publicRoomControl(deps: RoomDeps, ctx: RoomRequestContext,
     return {
       control: { ...control, id: control.control_id },
       requirements: control.requirement_codes.map((code) => ({ ref_code: code, title: titles.get(code) ?? null })),
-      evidence: snaps.map((s) => {
-        const shown = present(s as Record<string, unknown>, false);
-        return {
-          id: s.id,
-          recorded_at: s.created_at,
-          what: (s.plain_statement as string | null) ?? null,
-          outcome: s.outcome,
-          outcome_words: OUTCOME_WORDS[String(s.outcome)] ?? String(s.outcome),
-          explanation: shown.explanation,
-        };
-      }),
+      evidence: snaps.map((s) => checkOut(s as Record<string, unknown>)),
       files: files.map((f) => fileOut(f as Record<string, unknown>)),
       accepted_risks: await acceptedRisks(tx, r.orgId, [controlId]),
     };
@@ -387,6 +400,9 @@ export async function publicRoomControl(deps: RoomDeps, ctx: RoomRequestContext,
   await logRoomAccess(deps, r, ctx, 'control', controlId);
   return { data: out };
 }
+
+/** What GET /public/room/evidence/:id shows before the file facts: a check, or a file or statement. */
+type RoomEvidenceBody = (Served<BastionRoomCheck> & { kind: 'check'; control_title: string }) | Served<BastionRoomFile>;
 
 interface EvidenceHit {
   kind: 'check' | 'file' | 'statement';
@@ -397,7 +413,7 @@ interface EvidenceHit {
   size: number | null;
   /** SHA-256 of the stored record (checks): the auditor can match it against a packet or seal. */
   fingerprint: string | null;
-  body: Record<string, unknown>;
+  body: RoomEvidenceBody;
 }
 
 async function findRoomEvidence(deps: RoomDeps, r: ResolvedRoom, id: string): Promise<EvidenceHit> {
@@ -414,7 +430,6 @@ async function findRoomEvidence(deps: RoomDeps, r: ResolvedRoom, id: string): Pr
        WHERE s.organization_id = ${r.orgId} AND s.id = ${id} AND s.control_id = ANY(${controls}::uuid[])
          ${inPeriod(tx, 's.created_at', r.room)}`)[0];
     if (snap) {
-      const shown = present(snap as Record<string, unknown>, false);
       return {
         kind: 'check' as const,
         title: `${String(snap.control_title)} check, ${new Date(snap.created_at as string).toISOString().slice(0, 10)}`,
@@ -423,16 +438,7 @@ async function findRoomEvidence(deps: RoomDeps, r: ResolvedRoom, id: string): Pr
         content_type: 'application/json',
         size: snap.size_bytes == null ? null : Number(snap.size_bytes),
         fingerprint: (snap.content_sha256 as string | null) ?? null,
-        body: {
-          id: snap.id,
-          kind: 'check',
-          control_title: snap.control_title,
-          what: snap.plain_statement ?? null,
-          recorded_at: snap.created_at,
-          outcome: snap.outcome,
-          outcome_words: OUTCOME_WORDS[String(snap.outcome)] ?? String(snap.outcome),
-          explanation: shown.explanation,
-        },
+        body: { ...checkOut(snap as Record<string, unknown>), kind: 'check' as const, control_title: String(snap.control_title) },
       };
     }
     const file = (await roomFiles(tx, r.orgId, r.room, null, id))[0];
@@ -456,7 +462,7 @@ async function findRoomEvidence(deps: RoomDeps, r: ResolvedRoom, id: string): Pr
 }
 
 /** GET /public/room/evidence/:id (row 103), and its `?download=1` byte stream. */
-export async function publicRoomEvidence(deps: RoomDeps, ctx: RoomRequestContext, id: string) {
+export async function publicRoomEvidence(deps: RoomDeps, ctx: RoomRequestContext, id: string): Promise<Served<BastionRoomEvidenceDetailResponse>> {
   const r = await resolveRoom(deps, ctx);
   const hit = await findRoomEvidence(deps, r, id);
   let file: 'available' | 'missing' | 'redacted' | 'none' = hit.object_key ? 'available' : 'none';
@@ -519,7 +525,7 @@ export async function publicRoomDownload(deps: RoomDeps, ctx: RoomRequestContext
 }
 
 /** POST /public/room/requests (row 104): at most 20 an hour per room. */
-export async function publicRoomRequest(deps: RoomDeps, ctx: RoomRequestContext, body: BastionPublicRoomRequest) {
+export async function publicRoomRequest(deps: RoomDeps, ctx: RoomRequestContext, body: BastionPublicRoomRequest): Promise<Served<BastionPublicRoomRequestResponse>> {
   const r = await resolveRoom(deps, ctx);
   if (body.control_id && !roomControls(r.room).has(body.control_id)) throw new NotFoundError('That control is not part of this room.');
   const now = deps.engine.now();
@@ -538,5 +544,12 @@ export async function publicRoomRequest(deps: RoomDeps, ctx: RoomRequestContext,
     return q;
   });
   await logRoomAccess(deps, r, ctx, 'request', String(row?.id));
-  return { data: { id: row?.id, status: row?.status, created_at: row?.created_at, message: 'Your question was sent. The team will answer it in Bastion.' } };
+  return {
+    data: {
+      id: String(row?.id),
+      status: row?.status as BastionAuditorRequestStatus,
+      created_at: row?.created_at as Date,
+      message: 'Your question was sent. The team will answer it in Bastion.',
+    },
+  };
 }

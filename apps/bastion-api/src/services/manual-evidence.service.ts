@@ -18,10 +18,19 @@ import {
   BASTION_PENDING_SCAN_CAP_MS,
   endOfDayInTz,
   localDateInTz,
+  type BastionCheckScanAgainResponse,
   type BastionManualEvidenceCreate,
+  type BastionManualEvidenceItem,
   type BastionManualEvidenceListQuery,
+  type BastionManualEvidenceListResponse,
+  type BastionManualEvidenceResponse,
   type BastionManualEvidenceReview,
+  type BastionManualEvidenceUnlinkResponse,
+  type BastionManualEvidenceWithdrawResponse,
+  type BastionPersonalDataHolderKind,
+  type BastionRedactResponse,
 } from '@bigbluebam/shared';
+import { intOrNull, type Served } from '../lib/served.js';
 import { randomUUID } from 'node:crypto';
 import { withStorageTimeout } from '@bigbluebam/storage';
 import { auditRaw, viewerKind } from '../lib/audit-raw.js';
@@ -263,7 +272,7 @@ async function createOrSupersede(
   body: BastionManualEvidenceCreate,
   supersedeId: string | null,
   canRestricted: boolean,
-) {
+): Promise<Served<BastionManualEvidenceResponse>> {
   const engine = d.engine;
   const orgId = viewer.org_id;
   if (supersedeId) {
@@ -293,12 +302,18 @@ async function createOrSupersede(
 }
 
 /** POST /manual-evidence (row 32). */
-export function createManualEvidence(d: EvidenceDeps, viewer: Viewer, body: BastionManualEvidenceCreate) {
+export function createManualEvidence(d: EvidenceDeps, viewer: Viewer, body: BastionManualEvidenceCreate): Promise<Served<BastionManualEvidenceResponse>> {
   return createOrSupersede(d, viewer, body, null, false);
 }
 
 /** POST /manual-evidence/:id/supersede (row 40). */
-export function supersedeManualEvidence(d: EvidenceDeps, viewer: Viewer, id: string, body: BastionManualEvidenceCreate, canRestricted: boolean) {
+export function supersedeManualEvidence(
+  d: EvidenceDeps,
+  viewer: Viewer,
+  id: string,
+  body: BastionManualEvidenceCreate,
+  canRestricted: boolean,
+): Promise<Served<BastionManualEvidenceResponse>> {
   return createOrSupersede(d, viewer, body, id, canRestricted);
 }
 
@@ -316,17 +331,22 @@ const ITEM_FROM = `FROM bastion_manual_evidence e
   LEFT JOIN users uu ON uu.id = e.uploaded_by
   LEFT JOIN bastion_personal_data pd ON pd.organization_id = e.organization_id AND pd.holder_kind = 'manual_evidence' AND pd.holder_id = e.id`;
 
-function shape(row: Record<string, unknown>, links: Array<Record<string, unknown>>, now: Date, canRestricted: boolean) {
+/** One item as the routes send it (bastionManualEvidenceItemSchema, #371); masked when restricted and unreadable. */
+function shape(row: Record<string, unknown>, links: Array<Record<string, unknown>>, now: Date, canRestricted: boolean): Served<BastionManualEvidenceItem> {
   const restricted = row.sensitivity === 'restricted';
   const masked = restricted && !canRestricted;
   const validUntil = row.valid_until ? new Date(row.valid_until as string) : null;
   const created = new Date(row.created_at as string);
   const stuck = row.status === 'pending_scan' && now.getTime() - created.getTime() >= BASTION_PENDING_SCAN_CAP_MS;
   return {
-    ...row,
-    title: masked ? 'Restricted evidence' : row.title,
-    description: masked ? null : row.description,
-    content_sha256: masked ? null : row.content_sha256,
+    ...(row as unknown as Served<BastionManualEvidenceItem>),
+    // bigint columns arrive from postgres as strings; the response carries numbers (#371).
+    size_bytes: intOrNull(row.size_bytes),
+    ledger_seq: intOrNull(row.ledger_seq),
+    attempts: Number(row.attempts ?? 0),
+    title: masked ? 'Restricted evidence' : String(row.title),
+    description: masked ? null : ((row.description as string | null) ?? null),
+    content_sha256: masked ? null : ((row.content_sha256 as string | null) ?? null),
     restricted,
     masked,
     trust_label: row.kind === 'attestation_statement' ? 'Self-attested' : 'Uploaded evidence',
@@ -334,17 +354,17 @@ function shape(row: Record<string, unknown>, links: Array<Record<string, unknown
     days_left: validUntil ? daysLeft(validUntil, now) : null,
     stuck_scan: stuck,
     links: links.map((l) => ({
-      assertion_id: l.assertion_id,
-      control_id: l.control_id,
-      control_title: l.control_title,
-      plain_statement: l.plain_statement,
-      review_verdict: l.review_verdict,
-      reviewed_by: l.reviewed_by,
-      reviewed_by_name: l.reviewed_by_name,
-      reviewed_at: l.reviewed_at,
-      review_note: masked ? null : l.review_note,
-      small_team_self_review: l.small_team_self_review,
-      linked_at: l.linked_at,
+      assertion_id: String(l.assertion_id),
+      control_id: String(l.control_id),
+      control_title: String(l.control_title),
+      plain_statement: String(l.plain_statement),
+      review_verdict: l.review_verdict as BastionManualEvidenceItem['links'][number]['review_verdict'],
+      reviewed_by: (l.reviewed_by as string | null) ?? null,
+      reviewed_by_name: (l.reviewed_by_name as string | null) ?? null,
+      reviewed_at: (l.reviewed_at as Date | null) ?? null,
+      review_note: masked ? null : ((l.review_note as string | null) ?? null),
+      small_team_self_review: !!l.small_team_self_review,
+      linked_at: l.linked_at as Date,
     })),
   };
 }
@@ -371,7 +391,12 @@ async function linksFor(tx: Tx, orgId: string, ids: string[]) {
 }
 
 /** GET /manual-evidence (row 33). Restricted items are listed but masked without read_restricted. */
-export async function listManualEvidence(d: EvidenceDeps, viewer: Viewer, q: BastionManualEvidenceListQuery, canRestricted: boolean) {
+export async function listManualEvidence(
+  d: EvidenceDeps,
+  viewer: Viewer,
+  q: BastionManualEvidenceListQuery,
+  canRestricted: boolean,
+): Promise<Served<BastionManualEvidenceListResponse>> {
   const now = d.engine.now();
   return orgTx(d.engine.sql, viewer.org_id, async (tx) => {
     const rows = (await tx.unsafe(
@@ -396,7 +421,7 @@ export async function listManualEvidence(d: EvidenceDeps, viewer: Viewer, q: Bas
              count(*) FILTER (WHERE status = 'pending_scan' AND created_at <= ${new Date(now.getTime() - BASTION_PENDING_SCAN_CAP_MS)})::int AS stuck,
              count(*) FILTER (WHERE status = 'blocked')::int AS blocked,
              count(*) FILTER (WHERE status = 'active' AND scan_label = 'not_scanned')::int AS not_scanned
-        FROM bastion_manual_evidence WHERE organization_id = ${viewer.org_id}`)[0];
+        FROM bastion_manual_evidence WHERE organization_id = ${viewer.org_id}`)[0] as BastionManualEvidenceListResponse['counts'];
     return {
       data: rows.map((r) => shape(r, links.get(String(r.id)) ?? [], now, canRestricted)),
       counts,
@@ -406,7 +431,7 @@ export async function listManualEvidence(d: EvidenceDeps, viewer: Viewer, q: Bas
 }
 
 /** GET /manual-evidence/:id (row 34). A restricted item is 404 without read_restricted. */
-export async function getManualEvidence(d: EvidenceDeps, viewer: Viewer, id: string, canRestricted: boolean) {
+export async function getManualEvidence(d: EvidenceDeps, viewer: Viewer, id: string, canRestricted: boolean): Promise<Served<BastionManualEvidenceResponse>> {
   const now = d.engine.now();
   return orgTx(d.engine.sql, viewer.org_id, async (tx) => {
     const rows = (await tx.unsafe(`SELECT ${ITEM_SELECT} ${ITEM_FROM} WHERE e.organization_id = $1 AND e.id = $2`, [viewer.org_id, id])) as unknown as Array<
@@ -464,7 +489,13 @@ async function loadItem(tx: Tx, orgId: string, id: string, canRestricted: boolea
 }
 
 /** POST /manual-evidence/:id/links (row 36). */
-export async function linkManualEvidence(d: EvidenceDeps, viewer: Viewer, id: string, assertionId: string, canRestricted: boolean) {
+export async function linkManualEvidence(
+  d: EvidenceDeps,
+  viewer: Viewer,
+  id: string,
+  assertionId: string,
+  canRestricted: boolean,
+): Promise<Served<BastionManualEvidenceResponse>> {
   const now = d.engine.now();
   await orgTx(d.engine.sql, viewer.org_id, async (tx) => {
     const item = await loadItem(tx, viewer.org_id, id, canRestricted);
@@ -491,7 +522,13 @@ export async function linkManualEvidence(d: EvidenceDeps, viewer: Viewer, id: st
 }
 
 /** DELETE /manual-evidence/:id/links/:assertion_id (row 37). The control is re-evaluated. */
-export async function unlinkManualEvidence(d: EvidenceDeps, viewer: Viewer, id: string, assertionId: string, canRestricted: boolean) {
+export async function unlinkManualEvidence(
+  d: EvidenceDeps,
+  viewer: Viewer,
+  id: string,
+  assertionId: string,
+  canRestricted: boolean,
+): Promise<BastionManualEvidenceUnlinkResponse> {
   const now = d.engine.now();
   const runs = await orgTx(d.engine.sql, viewer.org_id, async (tx) => {
     await loadItem(tx, viewer.org_id, id, canRestricted);
@@ -524,7 +561,7 @@ export async function reviewManualEvidence(
   assertionId: string,
   body: BastionManualEvidenceReview,
   canRestricted: boolean,
-) {
+): Promise<Served<BastionManualEvidenceResponse>> {
   const now = d.engine.now();
   const runs = await orgTx(d.engine.sql, viewer.org_id, async (tx) => {
     // A reviewer who may not read a restricted item cannot vouch for it (#209).
@@ -585,7 +622,13 @@ export async function reviewManualEvidence(
 // ── Withdraw and redact ─────────────────────────────────────────────────────────────────
 
 /** POST /manual-evidence/:id/withdraw (row 39, confirm). */
-export async function withdrawManualEvidence(d: EvidenceDeps, viewer: Viewer, id: string, reason: string | null, canRestricted: boolean) {
+export async function withdrawManualEvidence(
+  d: EvidenceDeps,
+  viewer: Viewer,
+  id: string,
+  reason: string | null,
+  canRestricted: boolean,
+): Promise<BastionManualEvidenceWithdrawResponse> {
   const engine = d.engine;
   const now = engine.now();
   const highest = await beginLedgerBatch(engine, viewer.org_id);
@@ -624,7 +667,7 @@ export async function withdrawManualEvidence(d: EvidenceDeps, viewer: Viewer, id
  * `redacted` in the same transaction, its object loses a holder, and the bytes are deleted once
  * no unredacted holder remains; linked controls are re-evaluated.
  */
-export async function redactPersonalData(d: EvidenceDeps, viewer: Viewer, pdId: string, reason: string) {
+export async function redactPersonalData(d: EvidenceDeps, viewer: Viewer, pdId: string, reason: string): Promise<BastionRedactResponse> {
   if (viewer.role !== 'owner') {
     throw new ForbiddenError('Only an owner of this organization can redact personal data.', 'OWNER_REQUIRED');
   }
@@ -703,7 +746,7 @@ export async function redactPersonalData(d: EvidenceDeps, viewer: Viewer, pdId: 
   return {
     data: {
       personal_data_id: pdId,
-      holder_kind: out.holder_kind,
+      holder_kind: out.holder_kind as BastionPersonalDataHolderKind,
       holder_id: out.holder_id,
       redacted: true,
       bytes_deleted: bytesDeleted,
@@ -903,7 +946,7 @@ async function copyAndRecord(
 }
 
 /** POST /manual-evidence/:id/check-again: the review-queue "Check again" (immediate retry). */
-export async function checkScanAgain(d: EvidenceDeps, viewer: Viewer, id: string, canRestricted: boolean) {
+export async function checkScanAgain(d: EvidenceDeps, viewer: Viewer, id: string, canRestricted: boolean): Promise<Served<BastionCheckScanAgainResponse>> {
   const exists = await orgTx(d.engine.sql, viewer.org_id, async (tx) => {
     const r = (await tx`SELECT status, sensitivity FROM bastion_manual_evidence WHERE organization_id = ${viewer.org_id} AND id = ${id}`)[0];
     if (!r || (r.sensitivity === 'restricted' && !canRestricted)) throw new NotFoundError('We could not find that evidence.');

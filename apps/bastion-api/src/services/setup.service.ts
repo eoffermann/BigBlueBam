@@ -6,8 +6,14 @@ import { and, desc, eq, inArray, sql } from 'drizzle-orm';
 import {
   BASTION_COMPANY_PROFILE_QUESTION_COUNT,
   type BastionCompanyProfile,
+  type BastionCompileRun,
+  type BastionComplianceProjectResponse,
+  type BastionRemediationTasks,
+  type BastionSaveProfileResponse,
   type BastionSetupComplianceProject,
+  type BastionSetupResponse,
 } from '@bigbluebam/shared';
+import type { Served } from '../lib/served.js';
 import { runInOrgScope } from '../plugins/rls.js';
 import { type DbTx, engineConnection } from '../db/index.js';
 import { orgTx } from '../engine/context.js';
@@ -53,7 +59,7 @@ function answeredCount(profile: unknown): number {
   return Object.values((profile ?? {}) as Record<string, unknown>).filter((v) => v !== undefined && v !== null).length;
 }
 
-export async function getSetup(viewer: Viewer) {
+export async function getSetup(viewer: Viewer): Promise<Served<BastionSetupResponse>> {
   const base = await runInOrgScope(viewer.org_id, async (tx) => {
     const settings = await ensureSettings(tx, viewer.org_id);
     const frameworks = await liveFrameworks(tx, viewer.org_id);
@@ -97,7 +103,10 @@ export async function getSetup(viewer: Viewer) {
   const frameworkViews = [];
   for (const f of base.frameworks) frameworkViews.push((await getFramework(viewer, f.id)).data);
 
-  const latestRun = (frameworkId: string) => base.runs.find((r) => r.framework_id === frameworkId) ?? null;
+  const latestRun = (frameworkId: string): Served<BastionCompileRun> | null => {
+    const run = base.runs.find((r) => r.framework_id === frameworkId);
+    return run ? { ...run, status: run.status as BastionCompileRun['status'], drop_reasons: (run.drop_reasons ?? {}) as Record<string, unknown> } : null;
+  };
   const reviews = base.proposed.map((p) => ({ ...assertionView(p.assertion), control_title: p.control_title }));
   const populationsPending = reviews.filter((r) => r.population !== null);
   const isoFrameworks = frameworkViews.filter((f) => f.is_iso);
@@ -126,12 +135,12 @@ export async function getSetup(viewer: Viewer) {
     data: {
       frameworks: frameworkViews.map((f) => ({
         ...f,
-        latest_compile_run: latestRun(f.id),
-        template_name: frameworkTemplate(f.template_key)?.name ?? f.name,
+        latest_compile_run: latestRun(String(f.id)),
+        template_name: frameworkTemplate(String(f.template_key))?.name ?? f.name,
       })),
-      company_profile: base.settings.company_profile,
+      company_profile: (base.settings.company_profile ?? {}) as Record<string, unknown>,
       compliance_project: base.project ? { id: base.project.id, name: base.project.name, archived: base.project.is_archived } : null,
-      remediation_tasks: base.settings.remediation_tasks,
+      remediation_tasks: base.settings.remediation_tasks as BastionRemediationTasks,
       proposed_checks: reviews,
       connected_populations: base.connected,
       steps,
@@ -143,7 +152,7 @@ export async function getSetup(viewer: Viewer) {
   };
 }
 
-export async function saveCompanyProfile(viewer: Viewer, profile: BastionCompanyProfile) {
+export async function saveCompanyProfile(viewer: Viewer, profile: BastionCompanyProfile): Promise<BastionSaveProfileResponse> {
   return runInOrgScope(viewer.org_id, async (tx) => {
     const settings = await ensureSettings(tx, viewer.org_id);
     const merged = { ...((settings.company_profile ?? {}) as Record<string, unknown>), ...profile };
@@ -153,7 +162,7 @@ export async function saveCompanyProfile(viewer: Viewer, profile: BastionCompany
       .where(eq(bastionOrgSettings.organization_id, viewer.org_id))
       .returning(), 'row');
     await audit(tx, viewer, 'setup.profile', { type: 'org_settings', id: null }, { answered: answeredCount(merged) });
-    return { data: { company_profile: row.company_profile, answered: answeredCount(merged) } };
+    return { data: { company_profile: (row.company_profile ?? {}) as Record<string, unknown>, answered: answeredCount(merged) } };
   });
 }
 
@@ -164,7 +173,7 @@ export async function saveCompanyProfile(viewer: Viewer, profile: BastionCompany
  * this organization and the caller is a member of it (the same rule Bam applies to "Use an
  * existing project"; SuperUsers bypass). Not a member answers the same 404 as no such project.
  */
-export async function setComplianceProject(viewer: Viewer, body: BastionSetupComplianceProject) {
+export async function setComplianceProject(viewer: Viewer, body: BastionSetupComplianceProject): Promise<BastionComplianceProjectResponse> {
   return runInOrgScope(viewer.org_id, async (tx) => {
     const project = await projectVisibleTo(tx, viewer, body.project_id);
     if (!project || project.is_archived) throw new NotFoundError('We could not find that project in your organization.');
