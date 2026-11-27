@@ -121,6 +121,8 @@ services:
       # banter-api's private base (assignment DMs). One name across api, bureau-api, worker and
       # mcp-server (#303).
       BANTER_API_URL: http://banter-api:4002
+      # helpdesk-api's private base (agent queue proxy). Same name as mcp-server and blank-api.
+      HELPDESK_API_URL: http://helpdesk-api:4001
       # env.ts auto-promotes COOKIE_SECURE to true whenever NODE_ENV=production
       # (which it always is in this image). Browsers silently drop a Secure
       # cookie sent over plain HTTP, so the session cookie never comes back
@@ -846,6 +848,8 @@ services:
       - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379
       - SESSION_SECRET=${SESSION_SECRET}
       - BBB_API_INTERNAL_URL=http://api:4000
+      # bond-api's private base (booking-page Bond contact, #305).
+      - BOND_API_INTERNAL_URL=http://bond-api:4009
       - NODE_ENV=production
       - PORT=4012
       - HOST=0.0.0.0
@@ -1321,6 +1325,9 @@ services:
       - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379
       - SESSION_SECRET=${SESSION_SECRET}
       - BBB_API_INTERNAL_URL=http://api:4000
+      # Form routing actions (#305): bond-api contact upsert, helpdesk-api ticket create.
+      - BOND_API_INTERNAL_URL=http://bond-api:4009
+      - HELPDESK_API_URL=http://helpdesk-api:4001
       - NODE_ENV=production
       - PORT=4013
       - HOST=0.0.0.0

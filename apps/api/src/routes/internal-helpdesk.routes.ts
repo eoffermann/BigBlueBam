@@ -527,7 +527,7 @@ async function proxyAgentRequest(
     });
   }
   try {
-    const url = new URL(path, env.HELPDESK_API_INTERNAL_URL);
+    const url = new URL(path, env.HELPDESK_API_URL);
     if (opts.query) {
       for (const [k, v] of opts.query) url.searchParams.set(k, v);
     }

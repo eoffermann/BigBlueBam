@@ -2,9 +2,10 @@
  * Internal cross-app routes for Bond.
  *
  * These endpoints are NOT user-facing. They are called by other
- * BigBlueBam services over the internal network (today: book-api, when a
- * public booking is made on a Meet page and the booking page is configured
- * to auto-create a Bond contact). They are authenticated by the shared
+ * BigBlueBam services over the internal network (book-api, when a public
+ * booking is made on a Meet page and the booking page is configured to
+ * auto-create a Bond contact; blank-api, when a form's routing rule creates a
+ * contact from a submission, #305). They are authenticated by the shared
  * INTERNAL_SERVICE_SECRET, sent in the `X-Internal-Service-Secret` header.
  * Cookie / API-key auth does NOT apply on this surface — the secret IS the
  * credential.
@@ -29,9 +30,9 @@
  */
 
 import type { FastifyInstance } from 'fastify';
-import { z } from 'zod';
 import { and, eq } from 'drizzle-orm';
 import { createInternalSecretGuard } from '@bigbluebam/service-health';
+import { bondInternalContactUpsertSchema } from '@bigbluebam/shared';
 import { db } from '../db/index.js';
 import { env } from '../env.js';
 import { users, organizationMemberships } from '../db/schema/index.js';
@@ -49,24 +50,10 @@ const requireInternalSecret = createInternalSecretGuard({ secrets: () => [env.IN
 // Schemas
 // ─────────────────────────────────────────────────────────────────────
 
-const lifecycleStages = [
-  'subscriber', 'lead', 'marketing_qualified', 'sales_qualified',
-  'opportunity', 'customer', 'evangelist', 'other',
-] as const;
-
-const upsertContactBody = z.object({
-  org_id: z.string().uuid(),
-  // The user the contact is attributed to (created_by + owner_id fallback).
-  // For a public booking this is the booking-page owner.
-  acting_user_id: z.string().uuid(),
-  email: z.string().email().max(255),
-  first_name: z.string().max(100).optional(),
-  last_name: z.string().max(100).optional(),
-  phone: z.string().max(50).optional(),
-  title: z.string().max(150).optional(),
-  lifecycle_stage: z.enum(lifecycleStages).optional(),
-  lead_source: z.string().max(60).optional(),
-});
+// The shared contract (#305): book-api (public bookings) and blank-api (form routing) build
+// their bodies from the same schema. acting_user_id is the user the contact is attributed to
+// (the booking-page owner, the form's creator).
+const upsertContactBody = bondInternalContactUpsertSchema;
 
 // ─────────────────────────────────────────────────────────────────────
 // Route registration

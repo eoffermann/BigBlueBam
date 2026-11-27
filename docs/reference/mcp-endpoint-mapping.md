@@ -58,7 +58,7 @@ A tool/command "corresponds" to the endpoint(s) its handler calls. Sections are 
 | Bin | 32 | 19 | 13 | 0 |
 | Bay | 20 | 14 | 6 | 0 |
 | Blip | 40 | 38 | 2 | 0 |
-| Helpdesk | 38 | 15 | 23 | 0 |
+| Helpdesk | 39 | 15 | 24 | 0 |
 | Basis | 17 | 15 | 2 | 0 |
 | Braid | 21 | 12 | 9 | 1 |
 | Bulwark | 29 | 17 | 12 | 0 |
@@ -66,7 +66,7 @@ A tool/command "corresponds" to the endpoint(s) its handler calls. Sections are 
 | Bursar | 79 | 22 | 57 | 0 |
 | Bastion (tools pending registration at M11) | 112 | 82 | 30 | 0 |
 | Cross-app platform | 46 | 32 | 14 | 6 |
-| **Total** | **1380** | **956** | **424** | **17** |
+| **Total** | **1381** | **956** | **425** | **17** |
 
 _Counts are summed from the per-section tables (each row's REST endpoint counted once even when several MCP tools share it). After the `feat/mcp-endpoint-parity` build the "with an MCP tool" total roughly doubled (≈334 → ≈690). Of the ~247 endpoints still tool-less, the large majority are now annotated `— _(skip: …)_` with a reason — auth/OAuth/session, public-inbound (forms/booking/portal/tracking), multipart/binary upload, binary export (PDF/SVG/CSV/.ics), raw credential/API-key admin, SuperUser/permission/account admin (Bam org/admin held to a deliberately conservative scope this pass), Yjs/scene/WebSocket realtime sync, internal/service-to-service routes, and slug/name resolvers done internally — plus the deferred Helpdesk `X-Agent-Key` agent routes. Some endpoints are shared by multiple MCP tools and many are internal / webhook / public-inbound (not user-facing), so treat the totals as close approximations of the surface size, not an exact public-API inventory. The remaining intentional gaps cluster in **Bam org/admin** (SuperUser & permissions admin, integrations, credentials — UI/CLI-only) and a few per-app binary/upload/realtime tails._
 
@@ -1033,7 +1033,7 @@ All routes are registered under the `/v1` prefix, so external paths are `/brief/
 | `POST /contacts/import` | — _(skip: bulk import upload)_ | Bulk import contacts | — |
 | `GET /contacts/search` | `bond_search_contacts` | Full-text contact search | — |
 | `POST /contacts/upsert` | `bond_upsert_contact` | Idempotent create-or-update by email | — |
-| `POST /internal/contacts` | — _(skip: internal service-to-service, INTERNAL_SERVICE_SECRET)_ | Internal upsert-by-email for anonymous public bookings (book-api) | `apps/book-api/src/routes/public-booking.routes.ts` |
+| `POST /internal/contacts` | — _(skip: internal service-to-service, INTERNAL_SERVICE_SECRET)_ | Internal upsert-by-email on behalf of a named acting user. Callers: book-api public bookings and blank-api form routing (#305). Body is the shared `bondInternalContactUpsertSchema` | `apps/book-api/src/routes/public-booking.routes.ts`, `apps/blank-api/src/services/routing.service.ts` |
 | `GET /contacts/:id` | `bond_get_contact` | Get contact detail | `apps/bond/src/hooks/use-contacts.ts` |
 | `PATCH /contacts/:id` | `bond_update_contact` | Update contact | `apps/bond/src/hooks/use-contacts.ts` |
 | `DELETE /contacts/:id` | `bond_delete_contact` | Delete contact | `apps/bond/src/hooks/use-contacts.ts` |
@@ -1755,6 +1755,7 @@ the upstream registers, so external path = `/helpdesk/api/` + the part after `/h
 | `POST /helpdesk/api/upload` | — _(skip: multipart attachment upload/download)_ | Generic multipart file upload | `apps/helpdesk/src/pages/new-ticket.tsx` |
 | `GET /helpdesk/api/v1/tickets/analytics/count-by-phrase` | `helpdesk_ticket_count_by_phrase` | Ticket counts bucketed by phrase | — |
 | `POST /helpdesk/api/v1/helpdesk-users/upsert` | `helpdesk_upsert_user` | Idempotent helpdesk-user upsert | — |
+| `POST /helpdesk/internal/tickets` | — _(skip: internal service-to-service route, INTERNAL_SERVICE_SECRET, refused through the edge)_ | Open a ticket for a requester (found or created by email in the org). Caller: blank-api form routing. Body is the shared `helpdeskInternalTicketCreateSchema` (#305) | — *(internal)* |
 
 
 ## Cross-app / agentic platform surface

@@ -104,7 +104,7 @@ async function tryInternalProxyAuth(request: FastifyRequest, reply: FastifyReply
 
   // The suite-wide guard (#252, #306, @bigbluebam/service-health): constant-time compare against
   // INTERNAL_HELPDESK_SECRET, fail closed, direct private-network peer only. Bam's api calls here
-  // directly at HELPDESK_API_INTERNAL_URL, never through the edge nginx.
+  // directly at HELPDESK_API_URL, never through the edge nginx.
   if (!checkHelpdeskToken(request, reply)) return true;
 
   const actingUserId = headerValue(request, 'x-acting-user-id');

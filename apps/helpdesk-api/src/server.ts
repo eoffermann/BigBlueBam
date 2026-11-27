@@ -25,6 +25,7 @@ import helpdeskUsersRoutes from './routes/users.routes.js';
 import analyticsRoutes from './routes/analytics.routes.js';
 // §7 Wave 5 dedupe
 import dedupeRoutes from './routes/dedupe.routes.js';
+import helpdeskInternalRoutes from './routes/internal.routes.js';
 import websocketHandler from './ws/handler.js';
 import { sql } from 'drizzle-orm';
 
@@ -179,6 +180,8 @@ await fastify.register(helpdeskUsersRoutes);
 await fastify.register(analyticsRoutes);
 // §7 Wave 5 dedupe
 await fastify.register(dedupeRoutes);
+// #305: service-to-service ticket creation (Blank form routing), internal-secret guarded.
+await fastify.register(helpdeskInternalRoutes);
 await fastify.register(websocketHandler);
 
 // Graceful shutdown

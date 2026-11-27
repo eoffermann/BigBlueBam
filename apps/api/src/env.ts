@@ -111,8 +111,10 @@ const envSchema = z.object({
   // Bolt workflow automation engine URL (fire-and-forget event publishing)
   BOLT_API_INTERNAL_URL: z.string().default('http://bolt-api:4006'),
 
-  // Helpdesk API internal URL for agent queue proxy
-  HELPDESK_API_INTERNAL_URL: z.string().default('http://helpdesk-api:4001'),
+  // helpdesk-api's private base, for the agent queue proxy. HELPDESK_API_URL is the one name
+  // (mcp-server and blank-api read it too); the api used to read a second name that was
+  // provisioned nowhere, so on Railway it always fell back to the compose host (#305).
+  HELPDESK_API_URL: z.string().url().default('http://helpdesk-api:4001'),
 
   // banter-api on the private network, for the assignment-notification DM (#278, #303). One name
   // (BANTER_API_URL) across api, bureau-api, worker and mcp-server.
