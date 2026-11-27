@@ -8,6 +8,11 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
       "require": "./dist/index.cjs"
+    },
+    "./fastify-request": {
+      "types": "./dist/fastify-request.d.ts",
+      "import": "./dist/fastify-request.js",
+      "require": "./dist/fastify-request.cjs"
     }
   },
   "main": "./dist/index.cjs",

@@ -183,6 +183,11 @@ test('every service that accepts bbam_ keys enforces the key project restriction
     } catch {
       continue;
     }
+    // #369: a satellite bound to createSatelliteAuth inherits the shared plugin's refusal,
+    // which the check below reads from auth-core itself.
+    if (/\bcreateSatelliteAuth\(/.test(text)) {
+      text = readFileSync(join(ROOT, 'packages', 'auth-core', 'src', 'satellite-plugin.ts'), 'utf8');
+    }
     if (!/\bBearer\b/.test(text) || !/verifyApiKeyToken\(/.test(text)) continue;
     const ok =
       app === 'api'
@@ -199,7 +204,7 @@ test('every service that verifies bbam_ keys depends on @bigbluebam/auth-core', 
     const auth = join(ROOT, 'apps', app, 'src', 'plugins', 'auth.ts');
     let uses = false;
     try {
-      uses = /\bBearer\b/.test(readFileSync(auth, 'utf8'));
+      uses = /\bBearer\b|\bcreateSatelliteAuth\(/.test(readFileSync(auth, 'utf8'));
     } catch {
       continue;
     }
@@ -208,4 +213,87 @@ test('every service that verifies bbam_ keys depends on @bigbluebam/auth-core', 
     if (!pkg.dependencies?.['@bigbluebam/auth-core']) missing.push(app);
   }
   assert.deepEqual(missing, [], `Add "@bigbluebam/auth-core": "workspace:*" to:\n${missing.join('\n')}`);
+});
+
+// #369: the satellites' auth plugin (session lookup, key path, org context, impersonation) lives
+// once, as createSatelliteAuth in packages/auth-core. Each satellite's plugins/auth.ts is a
+// binding of its db, sql tag and argon2. A copy that grows back, even partly, fails here.
+// apps/api (its own plugin, different request.user) and helpdesk-api (portal customers) are not
+// satellites.
+const NOT_SATELLITES = new Set(['api', 'helpdesk-api']);
+const SATELLITE_PLUGIN_MAX_LINES = 45;
+const SATELLITE_PLUGIN_RULES = [
+  {
+    what: 'a session lookup (createSatelliteAuth owns it)',
+    re: /\bFROM\s+sessions\b|\.from\(\s*sessions\s*\)|\bsessions\.(?:id|user_id|expires_at|active_org_id)\b|\bsessionId\b/i,
+  },
+  {
+    what: 'impersonation logic (createSatelliteAuth owns it)',
+    re: /impersonation_sessions|impersonationSessions|x-impersonate-user|\bimpersonator\b/i,
+  },
+  {
+    what: 'API-key handling (createSatelliteAuth owns it)',
+    re: /\bverifyApiKeyToken\b|\bbearerToken\b|\bsqlApiKeyStore\b|\bauthorization\b|\bapplyKeyOrgPin\b|\brefuseProjectRestrictedKey\b/,
+  },
+  {
+    what: 'org-context resolution (createSatelliteAuth owns it)',
+    re: /\bresolveOrgContext\b|\bsqlOrgContextStore\b|x-org-id|\brequestedOrgIdFromHeader\b/i,
+  },
+  {
+    what: 'request hooks or decorators (createSatelliteAuth owns them)',
+    re: /\baddHook\(|\bdecorateRequest\(|\bcookies\b|\breply\.(?:status|code|header)\(/,
+  },
+  {
+    what: 'a local AuthUser or FastifyRequest augmentation (use @bigbluebam/auth-core/fastify-request)',
+    re: /\binterface\s+AuthUser\b|declare\s+module\s+['"]fastify['"]/,
+  },
+];
+
+function satellitePluginOffenses(text) {
+  const out = [];
+  const lines = text.split('\n').length;
+  if (lines > SATELLITE_PLUGIN_MAX_LINES) out.push(`${lines} lines (max ${SATELLITE_PLUGIN_MAX_LINES})`);
+  if (!/\bcreateSatelliteAuth\(/.test(text)) out.push('does not call createSatelliteAuth');
+  if (!/@bigbluebam\/auth-core\/fastify-request/.test(text)) out.push('does not import @bigbluebam/auth-core/fastify-request');
+  for (const rule of SATELLITE_PLUGIN_RULES) if (rule.re.test(text)) out.push(rule.what);
+  return out;
+}
+
+test('every satellite plugins/auth.ts is a binding of createSatelliteAuth', () => {
+  const offenders = [];
+  let checked = 0;
+  for (const app of readdirSync(join(ROOT, 'apps'))) {
+    if (NOT_SATELLITES.has(app) || !app.endsWith('-api')) continue;
+    const file = join(ROOT, 'apps', app, 'src', 'plugins', 'auth.ts');
+    let text;
+    try {
+      text = readFileSync(file, 'utf8');
+    } catch {
+      continue;
+    }
+    checked++;
+    for (const o of satellitePluginOffenses(text)) offenders.push(`${relative(ROOT, file)}: ${o}`);
+  }
+  assert.ok(checked >= 23, `expected at least 23 satellite auth plugins, found ${checked}`);
+  assert.deepEqual(offenders, [], `Move auth logic into createSatelliteAuth (@bigbluebam/auth-core):\n${offenders.join('\n')}`);
+});
+
+test('the satellite plugin guard rejects the old hand-rolled copy', () => {
+  // Excerpts of the pre-#369 bond-api plugin: each must trip at least one rule on its own.
+  const excerpts = [
+    '.from(sessions)\n  .innerJoin(users, eq(sessions.user_id, users.id))',
+    'eq(impersonationSessions.superuser_id, impersonator.id)',
+    "const token = bearerToken(request.headers.authorization);",
+    'await resolveOrgContext(orgContextStore, row.id, row.org_id, requestedOrgId);',
+    "fastify.addHook('preHandler', async (request, reply) => {});",
+    'export interface AuthUser {\n  id: string;\n}',
+  ];
+  for (const e of excerpts) {
+    assert.ok(
+      SATELLITE_PLUGIN_RULES.some((r) => r.re.test(e)),
+      `no rule matched: ${e}`,
+    );
+  }
+  const padded = `createSatelliteAuth(\n'@bigbluebam/auth-core/fastify-request'\n${'\n'.repeat(SATELLITE_PLUGIN_MAX_LINES)}`;
+  assert.deepEqual(satellitePluginOffenses(padded), [`${SATELLITE_PLUGIN_MAX_LINES + 3} lines (max ${SATELLITE_PLUGIN_MAX_LINES})`]);
 });
