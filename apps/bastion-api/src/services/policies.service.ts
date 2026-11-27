@@ -19,7 +19,24 @@
 // Who is "required" is answered by the policy.attested probe itself (bastion_probe_policy_attested_v1),
 // so the Policies page, the nudge and the nightly check can never disagree about it.
 
-import type { BastionAttest, BastionPolicyCreate, BastionPolicyListQuery, BastionPolicyUpdate, BastionRequestAttestations } from '@bigbluebam/shared';
+import type {
+  BastionAttest,
+  BastionAttestResponse,
+  BastionMyAttestationRow,
+  BastionMyAttestationsResponse,
+  BastionPolicyAttestationsResponse,
+  BastionPolicyBodyResponse,
+  BastionPolicyCreate,
+  BastionPolicyCreateResponse,
+  BastionPolicyListQuery,
+  BastionPolicyListResponse,
+  BastionPolicyResponse,
+  BastionPolicyRow,
+  BastionPolicyUpdate,
+  BastionRequestAttestations,
+  BastionRequestAttestationsResponse,
+} from '@bigbluebam/shared';
+import type { Served } from '../lib/served.js';
 import { auditRaw } from '../lib/audit-raw.js';
 import { beaconEntryIdBySlug } from '../lib/beacon-slug.js';
 import { ConflictError, ForbiddenError, NotFoundError, ValidationFailure } from '../lib/errors.js';
@@ -185,7 +202,8 @@ function mayManage(p: PolicyRow, viewer: Viewer, opts: PolicyAccessOpts): boolea
   return opts.policyWrite === true || (p.owner_user_id !== null && p.owner_user_id === viewer.id);
 }
 
-function shapePolicy(p: PolicyRow, facts: PolicyFacts | null, now: Date, live: boolean, manage = false) {
+/** One policy as the routes send it (bastionPolicyRowSchema, #371). */
+function shapePolicy(p: PolicyRow, facts: PolicyFacts | null, now: Date, live: boolean, manage = false): Served<BastionPolicyRow> {
   const shared = sharedWithEveryone(p.visibility);
   const expires = live && p.expires_at ? new Date(p.expires_at) : null;
   const attested = facts ? facts.required_people - facts.not_attested_ids.length : 0;
@@ -201,7 +219,7 @@ function shapePolicy(p: PolicyRow, facts: PolicyFacts | null, now: Date, live: b
     cadence_days: p.cadence_days,
     owner_user_id: p.owner_user_id,
     owner_name: p.owner_name,
-    status: p.status,
+    status: p.status as BastionPolicyRow['status'],
     beacon_status: live ? p.entry_status : null,
     visibility: p.visibility,
     shared_with_everyone: shared,
@@ -223,7 +241,7 @@ function shapePolicy(p: PolicyRow, facts: PolicyFacts | null, now: Date, live: b
 }
 
 /** GET /policies (row 64). */
-export async function listPolicies(d: PolicyDeps, viewer: Viewer, q: BastionPolicyListQuery, opts: PolicyAccessOpts = {}) {
+export async function listPolicies(d: PolicyDeps, viewer: Viewer, q: BastionPolicyListQuery, opts: PolicyAccessOpts = {}): Promise<Served<BastionPolicyListResponse>> {
   const now = d.engine.now();
   const loaded = await orgTx(d.engine.sql, viewer.org_id, async (tx) => {
     // Ordered after shaping, by the title this viewer sees (never by a live title they may not).
@@ -238,7 +256,7 @@ export async function listPolicies(d: PolicyDeps, viewer: Viewer, q: BastionPoli
   const open = await liveFor(d, viewer, loaded.map((r) => r.p));
   const data = loaded
     .map((r) => shapePolicy(r.p, r.facts, now, isLive(r.p, open), mayManage(r.p, viewer, opts)))
-    .sort((a, b) => a.title.localeCompare(b.title));
+    .sort((a, b) => String(a.title).localeCompare(String(b.title)));
   return { data, next_cursor: null };
 }
 
@@ -253,7 +271,7 @@ async function assertMembers(tx: Tx, orgId: string, ids: string[], field: string
 }
 
 /** POST /policies (row 65). */
-export async function createPolicy(d: PolicyDeps, viewer: Viewer, body: BastionPolicyCreate) {
+export async function createPolicy(d: PolicyDeps, viewer: Viewer, body: BastionPolicyCreate): Promise<Served<BastionPolicyCreateResponse>> {
   const entry = await orgTx(d.engine.sql, viewer.org_id, async (tx) => {
     // The link Beacon shows names the article by slug (#239); an id still works.
     const entryId = body.beacon_slug ? await beaconEntryIdBySlug(tx, viewer.org_id, body.beacon_slug) : (body.beacon_entry_id ?? null);
@@ -302,7 +320,7 @@ export async function createPolicy(d: PolicyDeps, viewer: Viewer, body: BastionP
   return { data: { ...out.data, proposed_assertion_ids: proposed } };
 }
 
-export async function getPolicy(d: PolicyDeps, viewer: Viewer, id: string, opts: PolicyAccessOpts = {}) {
+export async function getPolicy(d: PolicyDeps, viewer: Viewer, id: string, opts: PolicyAccessOpts = {}): Promise<Served<BastionPolicyResponse>> {
   const now = d.engine.now();
   const { p, facts } = await orgTx(d.engine.sql, viewer.org_id, async (tx) => {
     const row = await loadPolicy(tx, viewer.org_id, id);
@@ -313,7 +331,7 @@ export async function getPolicy(d: PolicyDeps, viewer: Viewer, id: string, opts:
 }
 
 /** PATCH /policies/:id (row 66). */
-export async function updatePolicy(d: PolicyDeps, viewer: Viewer, id: string, body: BastionPolicyUpdate) {
+export async function updatePolicy(d: PolicyDeps, viewer: Viewer, id: string, body: BastionPolicyUpdate): Promise<Served<BastionPolicyResponse>> {
   await orgTx(d.engine.sql, viewer.org_id, async (tx) => {
     await loadPolicy(tx, viewer.org_id, id);
     if (body.audience?.kind === 'users') await assertMembers(tx, viewer.org_id, body.audience.user_ids, 'audience.user_ids');
@@ -352,7 +370,7 @@ async function currentBody(tx: Tx, orgId: string, p: PolicyRow, asOf: Date) {
 }
 
 /** GET /policies/:id/body (row 67). */
-export async function getPolicyBody(d: PolicyDeps, viewer: Viewer, id: string) {
+export async function getPolicyBody(d: PolicyDeps, viewer: Viewer, id: string): Promise<Served<BastionPolicyBodyResponse>> {
   const now = d.engine.now();
   const p = await orgTx(d.engine.sql, viewer.org_id, (tx) => loadPolicy(tx, viewer.org_id, id));
   if (!(await d.canAccess(viewer.id, 'beacon.entry', p.beacon_entry_id).catch(() => false))) {
@@ -394,7 +412,7 @@ async function isInAudience(tx: Tx, orgId: string, p: PolicyRow, userId: string)
 }
 
 /** GET /policies/:id/attestations (row 68). */
-export async function listPolicyAttestations(d: PolicyDeps, viewer: Viewer, id: string, opts: PolicyAccessOpts = {}) {
+export async function listPolicyAttestations(d: PolicyDeps, viewer: Viewer, id: string, opts: PolicyAccessOpts = {}): Promise<Served<BastionPolicyAttestationsResponse>> {
   const now = d.engine.now();
   const r = await orgTx(d.engine.sql, viewer.org_id, async (tx) => {
     const p = await loadPolicy(tx, viewer.org_id, id);
@@ -421,7 +439,7 @@ export async function listPolicyAttestations(d: PolicyDeps, viewer: Viewer, id: 
 }
 
 /** GET /me/attestations (row 69): every active policy the caller must read, and where they stand. */
-export async function myAttestations(d: PolicyDeps, viewer: Viewer) {
+export async function myAttestations(d: PolicyDeps, viewer: Viewer): Promise<Served<BastionMyAttestationsResponse>> {
   const now = d.engine.now();
   const rows = await orgTx(d.engine.sql, viewer.org_id, async (tx) =>
     (await tx.unsafe(`SELECT ${POLICY_SELECT} ${POLICY_FROM} WHERE p.organization_id = $1 AND p.status = 'active' ORDER BY p.created_at`, [
@@ -431,7 +449,7 @@ export async function myAttestations(d: PolicyDeps, viewer: Viewer) {
   // The live title only where this person may open the article (#236).
   const open = await liveFor(d, viewer, rows);
   const out = await orgTx(d.engine.sql, viewer.org_id, async (tx) => {
-    const data = [];
+    const data: Array<Served<BastionMyAttestationRow> & { title: string }> = [];
     for (const p of rows) {
       if (!(await isInAudience(tx, viewer.org_id, p, viewer.id))) continue;
       const facts = await policyFacts(tx, viewer.org_id, p.id, now);
@@ -488,7 +506,7 @@ async function assertHumanReader(tx: Tx, viewer: Viewer): Promise<void> {
 }
 
 /** POST /policies/:id/attest (row 70). The route already required a session and refused impersonation. */
-export async function attest(d: PolicyDeps, viewer: Viewer, id: string, body: BastionAttest) {
+export async function attest(d: PolicyDeps, viewer: Viewer, id: string, body: BastionAttest): Promise<Served<BastionAttestResponse>> {
   const engine = d.engine;
   const now = engine.now();
   const p = await orgTx(engine.sql, viewer.org_id, (tx) => loadPolicy(tx, viewer.org_id, id));
@@ -577,7 +595,17 @@ export async function attest(d: PolicyDeps, viewer: Viewer, id: string, body: Ba
   const row = await orgTx(engine.sql, viewer.org_id, (tx) => tx`
     SELECT id, policy_id, beacon_version, body_sha256, attested_at, ledger_seq FROM bastion_policy_attestations
      WHERE organization_id = ${viewer.org_id} AND id = ${attestationId}`);
-  return { data: { ...(row[0] ?? {}), created, rechecking_controls: runs.length } };
+  const att = row[0];
+  if (!att) throw new NotFoundError('We could not find that acknowledgement.');
+  return {
+    data: {
+      ...(att as unknown as Served<BastionAttestResponse['data']>),
+      // bigint arrives from postgres as a string; the response carries a number (#371).
+      ledger_seq: att.ledger_seq === null || att.ledger_seq === undefined ? null : Number(att.ledger_seq),
+      created,
+      rechecking_controls: runs.length,
+    },
+  };
 }
 
 /** The people still due on one policy, as the probe sees them now. */
@@ -587,7 +615,13 @@ async function duePeople(tx: Tx, orgId: string, policyId: string, now: Date) {
 }
 
 /** POST /policies/:id/request-attestations (row 71). One attestation.overdue per person, version and day. */
-export async function requestAttestations(d: PolicyDeps, viewer: Viewer, id: string, body: BastionRequestAttestations, opts: PolicyAccessOpts = {}) {
+export async function requestAttestations(
+  d: PolicyDeps,
+  viewer: Viewer,
+  id: string,
+  body: BastionRequestAttestations,
+  opts: PolicyAccessOpts = {},
+): Promise<BastionRequestAttestationsResponse> {
   const now = d.engine.now();
   // #296: which state the article is in is told only to someone who may open it or manage the
   // policy; anyone else gets the generic "you cannot open this policy" refusal. can_access is an

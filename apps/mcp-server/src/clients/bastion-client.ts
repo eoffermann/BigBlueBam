@@ -65,6 +65,13 @@ import type {
   BastionSearchQuery,
   BastionSettingsUpdate,
 } from '@bigbluebam/shared';
+import type {
+  BastionFrameworkListResponse,
+  BastionFrameworkResponse,
+  BastionQuestionnaireResponse,
+  BastionRequirementsResponse,
+  BastionTemplateListResponse,
+} from '@bigbluebam/shared';
 import type { ApiClient } from '../middleware/api-client.js';
 
 /**
@@ -128,11 +135,13 @@ export function createBastionClient(bastionApiUrl: string, api: ApiClient, fetch
   return {
     request,
     // Frameworks (spec 5.1 rows 1, 2, 4, 7, 9, 10)
-    listTemplates: () => request('GET', '/library/templates'),
+    // The responses the tools take apart are typed from the shared schemas (#371); on !ok, data is
+    // the error envelope instead.
+    listTemplates: () => request<BastionTemplateListResponse>('GET', '/library/templates'),
     listFrameworks: (includeArchived?: boolean) =>
-      request('GET', `/frameworks${qs({ include_archived: includeArchived ? 'true' : undefined })}`),
-    getFramework: (id: string) => request('GET', `/frameworks/${id}`),
-    listRequirements: (id: string) => request('GET', `/frameworks/${id}/requirements`),
+      request<BastionFrameworkListResponse>('GET', `/frameworks${qs({ include_archived: includeArchived ? 'true' : undefined })}`),
+    getFramework: (id: string) => request<BastionFrameworkResponse>('GET', `/frameworks/${id}`),
+    listRequirements: (id: string) => request<BastionRequirementsResponse>('GET', `/frameworks/${id}/requirements`),
     listNotApplicableSuggestions: (id: string) => request('GET', `/frameworks/${id}/not-applicable-suggestions`),
     compileFramework: (id: string) => request('POST', `/frameworks/${id}/compile`, {}),
     listCompileRuns: (id: string) => request('GET', `/frameworks/${id}/compile-runs`),
@@ -272,7 +281,8 @@ export function createBastionClient(bastionApiUrl: string, api: ApiClient, fetch
     listQuestionnaires: (q: Partial<BastionQuestionnaireListQuery> & Partial<Asker> = {}) =>
       request('GET', `/questionnaires${qs({ status: q.status, limit: q.limit === undefined ? undefined : String(q.limit), asker_user_id: q.asker_user_id })}`),
     createQuestionnaire: (body: BastionQuestionnaireCreate) => request('POST', '/questionnaires', body),
-    getQuestionnaire: (id: string, a: Partial<Asker> = {}) => request('GET', `/questionnaires/${id}${qs({ asker_user_id: a.asker_user_id })}`),
+    getQuestionnaire: (id: string, a: Partial<Asker> = {}) =>
+      request<BastionQuestionnaireResponse>('GET', `/questionnaires/${id}${qs({ asker_user_id: a.asker_user_id })}`),
     updateQuestionnaire: (id: string, body: BastionQuestionnaireUpdate) => request('PATCH', `/questionnaires/${id}`, body),
     autofillQuestionnaire: (id: string, body: BastionQuestionnaireAutofill) => request('POST', `/questionnaires/${id}/autofill`, body),
     listQuestionnaireItems: (id: string, q: Partial<BastionQuestionnaireItemListQuery> & Partial<Asker> = {}) =>

@@ -33,6 +33,15 @@ import { rewordFixDraft } from '../../src/services/fixes.service.js';
 import type { DecisionDeps } from '../../src/services/decisions.service.js';
 import type { Viewer } from '../../src/services/types.js';
 import { clock, DATABASE_URL, fakeBucket, makeDeps, seedOrg, wipeOrg } from './engine-harness.js';
+import {
+  bastionAnswerLibraryListResponseSchema,
+  bastionAnswerLibraryResponseSchema,
+  bastionQuestionnaireItemReviewResponseSchema,
+  bastionQuestionnaireItemsResponseSchema,
+  bastionQuestionnaireListResponseSchema,
+  bastionQuestionnaireResponseSchema,
+} from '@bigbluebam/shared';
+import { expectWire } from './wire.js';
 import { injectFault, QUESTIONNAIRE_ITEM_UPDATE } from './fault-injection.js';
 import { TRANSIENT_RELEASE_LIMIT } from '../../src/engine/budgets.js';
 
@@ -80,7 +89,11 @@ const memLock = (): SliceLock => {
   return {
     // The SliceLock contract: a token when taken, null when held elsewhere (#337: this fake
     // returned true/false, and false is not null, so "held" read as taken).
-    acquire: async (k) => (held.has(k) ? null : (held.add(k), k)),
+    acquire: async (k) => {
+      if (held.has(k)) return null;
+      held.add(k);
+      return k;
+    },
     release: async (k) => void held.delete(k),
   };
 };
@@ -186,12 +199,14 @@ describe.skipIf(!DATABASE_URL)('M8 questionnaires (live database)', () => {
     const owner = viewer(s.org, s.owner);
     const d = qdeps(s.engine);
     const created = await createQuestionnaire(d, owner, { title: 'Howell Industries Vendor Security Review', source: { kind: 'pasted', text: PASTED, format: 'tsv' } });
+    // #371: what each route sends (the service result through JSON) is the shared response shape.
+    expectWire(bastionQuestionnaireResponseSchema, created);
     const q = created.data as unknown as { id: string; status: string; row_count: number; column_map: { guessed: boolean } };
     expect(q.status).toBe('mapping');
     expect(q.row_count).toBe(5);
     expect(q.column_map.guessed).toBe(true);
 
-    await startAutofill(d, owner, q.id, { redraft: false, use_ai: true });
+    expectWire(bastionQuestionnaireResponseSchema, await startAutofill(d, owner, q.id, { redraft: false, use_ai: true }));
     expect(d.enqueued).toEqual([{ organization_id: s.org, questionnaire_id: q.id, resume_count: 0 }]);
 
     // A second claimant cannot take a live claim.
@@ -202,6 +217,7 @@ describe.skipIf(!DATABASE_URL)('M8 questionnaires (live database)', () => {
     const slice = await autofillSlice(adeps(s.engine), { organization_id: s.org, questionnaire_id: q.id, claimant: 'worker-autofill:j1' });
     expect(slice).toMatchObject({ done: true, status: 'in_review', rows_done: 5, row_count: 5 });
 
+    expectWire(bastionQuestionnaireItemsResponseSchema, await listItems(d, owner, q.id, {}));
     const items = (await listItems(d, owner, q.id, {})) as unknown as {
       data: Array<{ id: string; question_text: string; confidence_band: string; draft_answer: string | null; draft_yes_no: boolean | null; cited_refs: Array<{ entity_type: string; entity_id: string }>; review_status: string }>;
       approval: { can_approve: boolean; low_unreviewed: number };
@@ -228,9 +244,10 @@ describe.skipIf(!DATABASE_URL)('M8 questionnaires (live database)', () => {
     await expect(approveQuestionnaire(d, viewer(s.org, s.agent), q.id)).rejects.toMatchObject({ code: 'HUMAN_DECIDER_REQUIRED' });
     await expect(approveQuestionnaire(d, owner, q.id)).rejects.toMatchObject({ code: 'REVIEW_NOT_DONE' });
     for (const it of items.data.filter((i) => i.confidence_band === 'low')) {
-      await reviewItem(d, owner, it.id, { review_status: 'edited', final_answer: 'We are rolling this out this quarter.', final_yes_no: false });
+      const reviewed = await reviewItem(d, owner, it.id, { review_status: 'edited', final_answer: 'We are rolling this out this quarter.', final_yes_no: false });
+      expectWire(bastionQuestionnaireItemReviewResponseSchema, reviewed);
     }
-    await approveQuestionnaire(d, owner, q.id);
+    expectWire(bastionQuestionnaireResponseSchema, await approveQuestionnaire(d, owner, q.id));
     const [after] = await sql`SELECT status, approved_by FROM bastion_questionnaires WHERE id = ${q.id}`;
     expect(after).toMatchObject({ status: 'approved', approved_by: s.owner });
     const events = await sql`SELECT payload->>'event_type' AS e FROM bastion_outbox WHERE organization_id = ${s.org} AND kind = 'bolt_event'`;
@@ -246,6 +263,7 @@ describe.skipIf(!DATABASE_URL)('M8 questionnaires (live database)', () => {
     expect(decodeXlsx(new Uint8Array(xlsx.body)).sheets[0]!.rows[0]).toEqual(['Question', 'Answer', 'Yes/No']);
 
     // The library learned the answers; only a STORED status change stales the ones citing it.
+    expectWire(bastionAnswerLibraryListResponseSchema, await listAnswerLibrary(d, owner, { q: 'two-step sign-in', limit: 25 }));
     const lib = (await listAnswerLibrary(d, owner, { q: 'two-step sign-in', limit: 25 })) as unknown as { data: Array<{ id: string; stale: boolean; cited_refs: unknown[] }> };
     expect(lib.data.length).toBeGreaterThan(0);
     const mfaEntry = lib.data[0]!;
@@ -255,7 +273,7 @@ describe.skipIf(!DATABASE_URL)('M8 questionnaires (live database)', () => {
     await evaluate(s.engine, s.org, s.controls[0]!, s.assertions[0]!, 'fail', [], new Date(Date.now() + 120_000));
     const [staled] = await sql`SELECT stale, stale_reason FROM bastion_answer_library WHERE id = ${mfaEntry.id}`;
     expect(staled).toMatchObject({ stale: true, stale_reason: 'control_status_changed:pass:fail' });
-    await updateAnswerLibrary(d, owner, mfaEntry.id, { stale: false });
+    expectWire(bastionAnswerLibraryResponseSchema, await updateAnswerLibrary(d, owner, mfaEntry.id, { stale: false }));
     expect((await sql`SELECT stale FROM bastion_answer_library WHERE id = ${mfaEntry.id}`)[0]!.stale).toBe(false);
   });
 
@@ -311,6 +329,7 @@ describe.skipIf(!DATABASE_URL)('M8 questionnaires (live database)', () => {
     expect(row!.source_truncated).toBe(false);
     expect(q.sheet_preview[0]!.rows[0]).toEqual(['Question', 'Answer']);
 
+    expectWire(bastionQuestionnaireListResponseSchema, await listQuestionnaires(d, owner, { limit: 50 }));
     const listed = (await listQuestionnaires(d, owner, { limit: 50 })).data.find((x) => (x as unknown as { id: string }).id === q.id) as Record<string, unknown>;
     expect(listed.sheet_preview).toBeUndefined();
     expect(JSON.stringify(listed)).not.toContain('Do you require two-step sign-in');
@@ -318,6 +337,7 @@ describe.skipIf(!DATABASE_URL)('M8 questionnaires (live database)', () => {
 
     // A row from before 0290 has no stored preview: get computes it once from the grid and keeps it.
     await sql`UPDATE bastion_questionnaires SET source_preview = NULL WHERE id = ${q.id}`;
+    expectWire(bastionQuestionnaireResponseSchema, await getQuestionnaire(d, owner, q.id));
     const again = (await getQuestionnaire(d, owner, q.id)).data as unknown as { sheet_preview: Array<{ rows: string[][] }> };
     expect(again.sheet_preview[0]!.rows[0]).toEqual(['Question', 'Answer']);
     expect((await sql`SELECT source_preview IS NOT NULL AS kept FROM bastion_questionnaires WHERE id = ${q.id}`)[0]!.kept).toBe(true);

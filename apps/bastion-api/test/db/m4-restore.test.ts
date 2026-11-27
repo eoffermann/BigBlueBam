@@ -1,6 +1,14 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import postgres from 'postgres';
-import { bastionRestoreListResponseSchema } from '@bigbluebam/shared';
+import {
+  bastionEvaluationListResponseSchema,
+  bastionEvidenceSnapshotListResponseSchema,
+  bastionRestoreAcknowledgeResponseSchema,
+  bastionRestoreListResponseSchema,
+  bastionSealListResponseSchema,
+  bastionSettingsResponseSchema,
+} from '@bigbluebam/shared';
+import { expectWire } from './wire.js';
 import type { EngineDeps } from '../../src/engine/context.js';
 import { runEvaluationSlice } from '../../src/engine/evaluator.js';
 import { defaultDeliverer, drainOutbox, type Deliverer } from '../../src/engine/outbox.js';
@@ -37,10 +45,12 @@ const DAY = 86_400_000;
 // Each scenario drives several real evaluation slices and seals; through a local forwarder that
 // is tens of seconds, far above vitest's 5 s default.
 type Evidence = typeof import('../../src/services/evidence.service.js');
+type Settings = typeof import('../../src/services/settings.service.js');
 
 describe.skipIf(!DATABASE_URL)('M4 restore detection (live database)', () => {
   let sql: postgres.Sql;
   let evidence: Evidence;
+  let settingsService: Settings;
   const orgs: string[] = [];
   const platformRestores: string[] = [];
 
@@ -56,6 +66,8 @@ describe.skipIf(!DATABASE_URL)('M4 restore detection (live database)', () => {
     });
     sql = postgres(DATABASE_URL!, { max: 4, onnotice: () => {} });
     evidence = await import('../../src/services/evidence.service.js');
+    // Imported after the env above: settings.service reaches env.ts, which validates at import.
+    settingsService = await import('../../src/services/settings.service.js');
   });
 
   afterAll(async () => {
@@ -244,6 +256,13 @@ describe.skipIf(!DATABASE_URL)('M4 restore detection (live database)', () => {
     expect(row).toMatchObject({ status: 'unmatched', platform_restore_id: null });
     const outboxEvents = (await sql`SELECT payload->>'event_type' AS e FROM bastion_outbox WHERE organization_id = ${s.org} AND kind = 'bolt_event'`).map((r) => r.e);
     expect(outboxEvents).toEqual(expect.arrayContaining(['ledger.restore_detected', 'evidence.integrity_failed']));
+    // #371: Settings lists the restore awaiting an owner; its seqs are bigint columns and JSON
+    // numbers on the wire (they used to go out as strings while the SPA typed them as numbers).
+    const settingsOut = await settingsService.getSettings(booted, viewer(s), { offsite_backup_configured: false, storage_ok: true });
+    expect(settingsOut.data.evidence_integrity.restores_awaiting).toEqual([
+      expect.objectContaining({ id: ident.opened, status: 'unmatched', lost_from_seq: 2, lost_to_seq: 2, bucket_epoch: 1 }),
+    ]);
+    expectWire(bastionSettingsResponseSchema, settingsOut);
 
     await expect(evidence.acknowledgeRestore(booted, viewer(s), ident.opened!, { resolution: 'restore_acknowledged', confirm: true })).rejects.toMatchObject({
       code: 'NO_MATCHING_RESTORE',
@@ -253,6 +272,7 @@ describe.skipIf(!DATABASE_URL)('M4 restore detection (live database)', () => {
     ).rejects.toMatchObject({ code: 'OWNER_REQUIRED' });
     const ok = await evidence.acknowledgeRestore(booted, viewer(s), ident.opened!, { resolution: 'continue_unexplained', confirm: true });
     expect(ok.data).toMatchObject({ status: 'unmatched', resolution: 'continue_unexplained', provisional_epoch: 2, first_seq: 3 });
+    expectWire(bastionRestoreAcknowledgeResponseSchema, ok);
     await runToEnd(booted, s, c);
     expect(await maxSeq(s.org)).toBe(4);
     const listed = await evidence.listRestores(booted, viewer(s));
@@ -328,6 +348,10 @@ describe.skipIf(!DATABASE_URL)('M4 restore detection (live database)', () => {
     expect(seals.seen).toEqual(['2026-03-15', '2026-02-15', '2026-01-15']);
     const restores = await walk((cursor) => evidence.listRestores(deps, v, { cursor, limit: 2 }) as never, 'id');
     expect(new Set(restores.seen).size).toBe(3);
+    // #371: each list, as its route sends it, is the shared response shape.
+    expectWire(bastionEvaluationListResponseSchema, await evidence.listEvaluations(deps, v, { limit: 50 }));
+    expectWire(bastionEvidenceSnapshotListResponseSchema, await evidence.listControlEvidence(deps, v, ctl!.id as string, { limit: 50 }, async () => true));
+    expectWire(bastionSealListResponseSchema, await evidence.listSeals(deps, v, { limit: 50 }));
     // A forged cursor is a plain 400-class error, never a silent first page.
     await expect(evidence.listSeals(deps, v, { cursor: 'bm90LWEtZGF0ZQ', limit: 2 })).rejects.toMatchObject({ code: 'INVALID_CURSOR' });
   });

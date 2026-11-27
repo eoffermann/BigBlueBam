@@ -10,12 +10,27 @@ import argon2 from 'argon2';
 import { withStorageTimeout } from '@bigbluebam/storage';
 import type {
   BastionAccessLogQuery,
+  BastionAccessLogResponse,
+  BastionAuditorRequest,
   BastionAuditorRequestListQuery,
+  BastionAuditorRequestListResponse,
+  BastionAuditorRequestResponse,
   BastionAuditorRequestUpdate,
+  BastionAuditorRoom,
   BastionAuditorRoomCreate,
   BastionAuditorRoomListQuery,
+  BastionAuditorRoomListResponse,
+  BastionAuditorRoomResponse,
+  BastionAuditorViewKind,
+  BastionCreatedAuditorRoomResponse,
   BastionExportCreate,
+  BastionExportCreateResponse,
   BastionExportListQuery,
+  BastionExportListResponse,
+  BastionExportPacket,
+  BastionRoomOverview,
+  BastionRoomOverviewResponse,
+  BastionRoomState,
 } from '@bigbluebam/shared';
 import { type EngineDeps, orgTx, type Tx } from '../engine/context.js';
 import { enqueueBastionEvent } from '../engine/outbox.js';
@@ -28,6 +43,7 @@ import { assertSoaCompleteForPacket, SoaIncompleteError } from '../library/soa.j
 import { runInOrgScope } from '../plugins/rls.js';
 import { acceptedRisks, auditControls, loadAuditFramework, restoreNotices, sealHistory, soaFor, stateCounts } from './audit-view.js';
 import { soaLinks } from './frameworks.service.js';
+import { intOrNull, type Served } from '../lib/served.js';
 import type { Viewer } from './types.js';
 
 export interface SharingDeps {
@@ -47,7 +63,7 @@ export function roomTokenSha256(token: string): string {
   return createHash('sha256').update(token, 'utf8').digest('hex');
 }
 
-export type RoomState = 'active' | 'expired' | 'revoked' | 'locked';
+export type RoomState = BastionRoomState;
 
 /** Pure: a room's state at `now` (revoked wins, then locked, then expired). */
 export function roomStateAt(r: { revoked_at?: unknown; locked_at?: unknown; expires_at?: unknown }, now: Date): RoomState {
@@ -63,17 +79,18 @@ async function requireSettings(tx: Tx, orgId: string) {
   return { auditor_room_max_days: Number(s.auditor_room_max_days), max_packet_bytes: Number(s.max_packet_bytes) };
 }
 
-function roomOut(r: Record<string, unknown>, now: Date) {
+/** One room on the creator's side: the shared bastionAuditorRoomSchema (#371). */
+function roomOut(r: Record<string, unknown>, now: Date): Served<BastionAuditorRoom> {
   return {
-    id: r.id,
-    label: r.label,
-    framework_id: r.framework_id,
-    framework_name: r.framework_name ?? null,
-    period_start: r.period_start ?? null,
-    period_end: r.period_end ?? null,
-    expires_at: r.expires_at,
-    revoked_at: r.revoked_at ?? null,
-    locked_at: r.locked_at ?? null,
+    id: String(r.id),
+    label: String(r.label),
+    framework_id: (r.framework_id as string | null) ?? null,
+    framework_name: (r.framework_name as string | null) ?? null,
+    period_start: (r.period_start as string | null) ?? null,
+    period_end: (r.period_end as string | null) ?? null,
+    expires_at: r.expires_at as Date,
+    revoked_at: (r.revoked_at as Date | null) ?? null,
+    locked_at: (r.locked_at as Date | null) ?? null,
     state: roomStateAt(r, now),
     has_passcode: !!r.has_passcode,
     passcode_failures: Number(r.passcode_failures ?? 0),
@@ -81,10 +98,10 @@ function roomOut(r: Record<string, unknown>, now: Date) {
     control_count: Array.isArray(r.control_ids) ? r.control_ids.length : 0,
     restricted_count: Array.isArray(r.restricted_evidence_ids) ? r.restricted_evidence_ids.length : 0,
     access_count: Number(r.access_count ?? 0),
-    last_accessed_at: r.last_accessed_at ?? null,
+    last_accessed_at: (r.last_accessed_at as Date | null) ?? null,
     open_requests: Number(r.open_requests ?? 0),
-    created_by_name: r.created_by_name ?? null,
-    created_at: r.created_at,
+    created_by_name: (r.created_by_name as string | null) ?? null,
+    created_at: r.created_at as Date,
   };
 }
 
@@ -100,7 +117,7 @@ const ROOM_SELECT = (tx: Tx, orgId: string) => tx`
    WHERE r.organization_id = ${orgId}`;
 
 /** GET /auditor-rooms (row 84). */
-export async function listRooms(deps: SharingDeps, viewer: Viewer, q: BastionAuditorRoomListQuery) {
+export async function listRooms(deps: SharingDeps, viewer: Viewer, q: BastionAuditorRoomListQuery): Promise<Served<BastionAuditorRoomListResponse>> {
   const now = deps.engine.now();
   const rows = await orgTx(deps.engine.sql, viewer.org_id, (tx) => tx`${ROOM_SELECT(tx, viewer.org_id)} ORDER BY r.created_at DESC LIMIT 500`);
   const all = rows.map((r) => roomOut(r as Record<string, unknown>, now));
@@ -135,7 +152,12 @@ async function checkRestrictedAllowlist(tx: Tx, orgId: string, ids: readonly str
 }
 
 /** POST /auditor-rooms (row 85): the token is returned once and never stored. */
-export async function createRoom(deps: SharingDeps, viewer: Viewer, body: BastionAuditorRoomCreate, canRestricted: boolean) {
+export async function createRoom(
+  deps: SharingDeps,
+  viewer: Viewer,
+  body: BastionAuditorRoomCreate,
+  canRestricted: boolean,
+): Promise<Served<BastionCreatedAuditorRoomResponse>> {
   if (body.restricted_evidence_ids.length > 0 && !canRestricted) {
     throw new ForbiddenError('Only people who may see restricted evidence can share it with an auditor.', 'RESTRICTED_NOT_ALLOWED');
   }
@@ -204,7 +226,7 @@ export async function createRoom(deps: SharingDeps, viewer: Viewer, body: Bastio
 }
 
 /** POST /auditor-rooms/:id/revoke (row 86): the link stops working at once. */
-export async function revokeRoom(deps: SharingDeps, viewer: Viewer, id: string) {
+export async function revokeRoom(deps: SharingDeps, viewer: Viewer, id: string): Promise<Served<BastionAuditorRoomResponse>> {
   const now = deps.engine.now();
   const room = await orgTx(deps.engine.sql, viewer.org_id, async (tx) => {
     const r = await loadRoom(tx, viewer.org_id, id, true);
@@ -223,7 +245,7 @@ export async function revokeRoom(deps: SharingDeps, viewer: Viewer, id: string) 
 }
 
 /** POST /auditor-rooms/:id/unlock (row 87): after 5 wrong passcodes locked the room. */
-export async function unlockRoom(deps: SharingDeps, viewer: Viewer, id: string) {
+export async function unlockRoom(deps: SharingDeps, viewer: Viewer, id: string): Promise<Served<BastionAuditorRoomResponse>> {
   const now = deps.engine.now();
   const room = await orgTx(deps.engine.sql, viewer.org_id, async (tx) => {
     const r = await loadRoom(tx, viewer.org_id, id, true);
@@ -264,7 +286,7 @@ export function deviceOf(ua: string | null | undefined): string {
 }
 
 /** GET /auditor-rooms/:id/access-log (row 88): what was opened, when, and by which visitor. */
-export async function roomAccessLog(deps: SharingDeps, viewer: Viewer, id: string, q: BastionAccessLogQuery) {
+export async function roomAccessLog(deps: SharingDeps, viewer: Viewer, id: string, q: BastionAccessLogQuery): Promise<Served<BastionAccessLogResponse>> {
   return orgTx(deps.engine.sql, viewer.org_id, async (tx) => {
     const room = await loadRoom(tx, viewer.org_id, id);
     const after = q.cursor ? decodeIdCursor(q.cursor) : null;
@@ -285,9 +307,9 @@ export async function roomAccessLog(deps: SharingDeps, viewer: Viewer, id: strin
       ...page,
       room: roomOut(room, deps.engine.now()),
       data: page.data.map((r) => ({
-        id: r.id,
-        accessed_at: r.accessed_at,
-        view_kind: r.view_kind,
+        id: String(r.id),
+        accessed_at: r.accessed_at as Date,
+        view_kind: r.view_kind as BastionAuditorViewKind,
         what: r.view_kind === 'control' && r.control_title ? `Looked at "${r.control_title as string}"` : (VIEW_WORDS[String(r.view_kind)] ?? 'Visited'),
         visitor: r.ip_hash ? `Visitor ${number.get(String(r.ip_hash)) ?? '?'}` : 'Visitor',
         device: deviceOf(r.user_agent_trunc as string | null),
@@ -307,7 +329,7 @@ async function restrictedTitles(tx: Tx, orgId: string, ids: readonly string[]) {
  * The overview an auditor sees for a room. Shared by the public room and the creator's Preview,
  * so both always show the same thing.
  */
-export async function roomOverview(engine: EngineDeps, orgId: string, room: Record<string, unknown>) {
+export async function roomOverview(engine: EngineDeps, orgId: string, room: Record<string, unknown>): Promise<Served<BastionRoomOverview>> {
   const now = engine.now();
   const controlIds = (room.control_ids as string[] | null) ?? [];
   const built = await orgTx(engine.sql, orgId, async (tx) => {
@@ -326,13 +348,13 @@ export async function roomOverview(engine: EngineDeps, orgId: string, room: Reco
   const soa = built.fw ? await soaFor(orgId, built.fw) : null;
   return {
     room: {
-      label: room.label,
+      label: String(room.label),
       organization_name: built.org_name,
       framework_name: built.fw?.name ?? null,
       is_iso: built.fw?.is_iso ?? false,
-      period_start: room.period_start ?? null,
-      period_end: room.period_end ?? null,
-      expires_at: room.expires_at,
+      period_start: (room.period_start as string | null) ?? null,
+      period_end: (room.period_end as string | null) ?? null,
+      expires_at: room.expires_at as Date,
     },
     numbers: stateCounts(built.controls),
     controls: built.controls.map((c) => ({ ...c, id: c.control_id })),
@@ -347,46 +369,53 @@ export async function roomOverview(engine: EngineDeps, orgId: string, room: Reco
 }
 
 /** GET /auditor-rooms/:id/preview: exactly what the auditor sees, without logging a visit. */
-export async function previewRoom(deps: SharingDeps, viewer: Viewer, id: string) {
+export async function previewRoom(deps: SharingDeps, viewer: Viewer, id: string): Promise<Served<BastionRoomOverviewResponse>> {
   const room = await orgTx(deps.engine.sql, viewer.org_id, (tx) => loadRoom(tx, viewer.org_id, id));
   return { data: { ...(await roomOverview(deps.engine, viewer.org_id, room)), state: roomStateAt(room, deps.engine.now()) } };
 }
 
 // ── Auditor questions ────────────────────────────────────────────────────────────────────
 
+/** One auditor question, as the list and the update both send it (bastionAuditorRequestSchema). */
+const REQUEST_SELECT = (tx: Tx, orgId: string) => tx`
+  SELECT q.id, q.room_id, r.label AS room_label, q.control_id, c.title AS control_title, q.requester_name, q.body, q.status,
+         q.answer_note, u.display_name AS answered_by_name, q.created_at, q.updated_at
+    FROM bastion_auditor_requests q
+    JOIN bastion_auditor_rooms r ON r.id = q.room_id AND r.organization_id = q.organization_id
+    LEFT JOIN bastion_controls c ON c.id = q.control_id AND c.organization_id = q.organization_id
+    LEFT JOIN users u ON u.id = q.answered_by
+   WHERE q.organization_id = ${orgId}`;
+
 /** GET /auditor-requests (row 89). */
-export async function listRequests(deps: SharingDeps, viewer: Viewer, q: BastionAuditorRequestListQuery) {
+export async function listRequests(deps: SharingDeps, viewer: Viewer, q: BastionAuditorRequestListQuery): Promise<Served<BastionAuditorRequestListResponse>> {
   const rows = await orgTx(deps.engine.sql, viewer.org_id, (tx) => tx`
-    SELECT q.id, q.room_id, r.label AS room_label, q.control_id, c.title AS control_title, q.requester_name, q.body, q.status,
-           q.answer_note, u.display_name AS answered_by_name, q.created_at, q.updated_at
-      FROM bastion_auditor_requests q
-      JOIN bastion_auditor_rooms r ON r.id = q.room_id AND r.organization_id = q.organization_id
-      LEFT JOIN bastion_controls c ON c.id = q.control_id AND c.organization_id = q.organization_id
-      LEFT JOIN users u ON u.id = q.answered_by
-     WHERE q.organization_id = ${viewer.org_id}
+    ${REQUEST_SELECT(tx, viewer.org_id)}
        ${q.room_id ? tx`AND q.room_id = ${q.room_id}` : tx``}
        ${q.status ? tx`AND q.status = ${q.status}` : tx``}
      ORDER BY (q.status = 'open') DESC, q.created_at DESC LIMIT 500`);
-  return { data: rows, next_cursor: null };
+  return { data: rows as unknown as Served<BastionAuditorRequest>[], next_cursor: null };
 }
 
-/** PATCH /auditor-requests/:id (row 90). */
-export async function updateRequest(deps: SharingDeps, viewer: Viewer, id: string, body: BastionAuditorRequestUpdate) {
+/**
+ * PATCH /auditor-requests/:id (row 90). Answers with the row the list shows (#371: it used to send
+ * the bare table row, without room_label, control_title or answered_by_name).
+ */
+export async function updateRequest(deps: SharingDeps, viewer: Viewer, id: string, body: BastionAuditorRequestUpdate): Promise<Served<BastionAuditorRequestResponse>> {
   const row = await orgTx(deps.engine.sql, viewer.org_id, async (tx) => {
     const cur = (await tx`SELECT id, status FROM bastion_auditor_requests WHERE organization_id = ${viewer.org_id} AND id = ${id} FOR UPDATE`)[0];
     if (!cur) throw new NotFoundError('We could not find that question.');
     if (cur.status === 'closed') throw new ConflictError('This question is already closed.', 'REQUEST_CLOSED');
-    const [updated] = await tx`
+    await tx`
       UPDATE bastion_auditor_requests
          SET status = ${body.status},
              answer_note = coalesce(${body.answer_note ?? null}, answer_note),
              answered_by = CASE WHEN ${body.status} = 'answered' THEN ${viewer.id}::uuid ELSE answered_by END
-       WHERE organization_id = ${viewer.org_id} AND id = ${id}
-      RETURNING id, room_id, control_id, requester_name, body, status, answer_note, answered_by, created_at, updated_at`;
+       WHERE organization_id = ${viewer.org_id} AND id = ${id}`;
     await auditRaw(tx, viewer, `auditor_request.${body.status}`, { type: 'auditor_request', id }, {});
-    return updated;
+    return (await tx`${REQUEST_SELECT(tx, viewer.org_id)} AND q.id = ${id}`)[0];
   });
-  return { data: row };
+  if (!row) throw new NotFoundError('We could not find that question.');
+  return { data: row as unknown as Served<BastionAuditorRequest> };
 }
 
 // ── Audit packets ────────────────────────────────────────────────────────────────────────
@@ -417,8 +446,41 @@ export function stageWords(stage: string | null, progress: number, total: number
   return base;
 }
 
-/** POST /exports (row 91): queue one packet; the worker builds it (spec 7.2). */
-export async function createExport(deps: SharingDeps, viewer: Viewer, body: BastionExportCreate, canRestricted: boolean) {
+/** One packet as the list and the create both send it (bastionExportPacketSchema). */
+const EXPORT_SELECT = (tx: Tx, orgId: string) => tx`
+  SELECT p.id, p.framework_id, f.name AS framework_name, p.period_start::text AS period_start, p.period_end::text AS period_end,
+         p.include_restricted, p.status, p.stage, p.stage_progress, p.size_bytes, p.error, p.created_at, p.updated_at,
+         u.display_name AS requested_by_name
+    FROM bastion_export_packets p
+    LEFT JOIN bastion_frameworks f ON f.id = p.framework_id AND f.organization_id = p.organization_id
+    LEFT JOIN users u ON u.id = p.requested_by
+   WHERE p.organization_id = ${orgId}`;
+
+function exportOut(r: Record<string, unknown>): Served<BastionExportPacket> {
+  const status = r.status as BastionExportPacket['status'];
+  return {
+    ...(r as unknown as Served<BastionExportPacket>),
+    stage_progress: Number(r.stage_progress ?? 0),
+    // bigint arrives from postgres as a string; the response carries a number (#371).
+    size_bytes: intOrNull(r.size_bytes),
+    stage_words:
+      status === 'queued'
+        ? 'Waiting to start'
+        : status === 'running'
+          ? stageWords(r.stage as string | null, Number(r.stage_progress ?? 0), null)
+          : status === 'succeeded'
+            ? 'Ready to download'
+            : status === 'failed'
+              ? 'Could not be built'
+              : 'No longer available',
+  };
+}
+
+/**
+ * POST /exports (row 91): queue one packet; the worker builds it (spec 7.2). Answers with the row
+ * GET /exports lists (#371: it used to leave out stage, size_bytes, error and requested_by_name).
+ */
+export async function createExport(deps: SharingDeps, viewer: Viewer, body: BastionExportCreate, canRestricted: boolean): Promise<Served<BastionExportCreateResponse>> {
   if (body.include_restricted && !canRestricted) {
     throw new ForbiddenError('Only people who may see restricted evidence can put it in a packet.', 'RESTRICTED_NOT_ALLOWED');
   }
@@ -444,59 +506,25 @@ export async function createExport(deps: SharingDeps, viewer: Viewer, body: Bast
     const [r] = await tx`
       INSERT INTO bastion_export_packets (organization_id, framework_id, period_start, period_end, include_restricted, status, requested_by)
       VALUES (${viewer.org_id}, ${fw.id}, ${body.period_start}, ${body.period_end}, ${body.include_restricted}, 'queued', ${viewer.id})
-      RETURNING id, status, created_at`;
+      RETURNING id`;
     await auditRaw(tx, viewer, 'export.create', { type: 'export_packet', id: String(r?.id) }, {
       framework_id: fw.id,
       period_start: body.period_start,
       period_end: body.period_end,
       include_restricted: body.include_restricted,
     });
-    return r as Record<string, unknown>;
+    return (await tx`${EXPORT_SELECT(tx, viewer.org_id)} AND p.id = ${String(r?.id)}`)[0] as Record<string, unknown>;
   });
   const queued = await deps.enqueuePacket(viewer.org_id, String(row.id));
-  return {
-    data: {
-      id: row.id,
-      framework_id: fw.id,
-      framework_name: fw.name,
-      period_start: body.period_start,
-      period_end: body.period_end,
-      include_restricted: body.include_restricted,
-      status: 'queued',
-      stage_words: 'Waiting to start',
-      queued_for_worker: queued,
-      created_at: row.created_at,
-    },
-  };
+  return { data: { ...exportOut(row), queued_for_worker: queued } };
 }
 
 /** GET /exports (row 92). */
-export async function listExports(deps: SharingDeps, viewer: Viewer, q: BastionExportListQuery) {
+export async function listExports(deps: SharingDeps, viewer: Viewer, q: BastionExportListQuery): Promise<Served<BastionExportListResponse>> {
   const rows = await orgTx(deps.engine.sql, viewer.org_id, (tx) => tx`
-    SELECT p.id, p.framework_id, f.name AS framework_name, p.period_start::text AS period_start, p.period_end::text AS period_end,
-           p.include_restricted, p.status, p.stage, p.stage_progress, p.size_bytes, p.error, p.created_at, p.updated_at,
-           u.display_name AS requested_by_name
-      FROM bastion_export_packets p
-      LEFT JOIN bastion_frameworks f ON f.id = p.framework_id AND f.organization_id = p.organization_id
-      LEFT JOIN users u ON u.id = p.requested_by
-     WHERE p.organization_id = ${viewer.org_id} ${q.status ? tx`AND p.status = ${q.status}` : tx``}
+    ${EXPORT_SELECT(tx, viewer.org_id)} ${q.status ? tx`AND p.status = ${q.status}` : tx``}
      ORDER BY p.created_at DESC LIMIT ${q.limit}`);
-  return {
-    data: rows.map((r) => ({
-      ...r,
-      stage_words:
-        r.status === 'queued'
-          ? 'Waiting to start'
-          : r.status === 'running'
-            ? stageWords(r.stage as string | null, Number(r.stage_progress ?? 0), null)
-            : r.status === 'succeeded'
-              ? 'Ready to download'
-              : r.status === 'failed'
-                ? 'Could not be built'
-                : 'No longer available',
-    })),
-    next_cursor: null,
-  };
+  return { data: rows.map((r) => exportOut(r as Record<string, unknown>)), next_cursor: null };
 }
 
 /** GET /exports/:id/download (row 93): the zip, streamed from the Bastion bucket. */

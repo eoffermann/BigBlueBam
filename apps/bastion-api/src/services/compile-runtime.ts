@@ -15,6 +15,8 @@ import { enqueueCompileRun } from '../lib/queue.js';
 import { compileFramework, type CompileLogger } from './compile.service.js';
 import { type CompileAiDeps, createQueuedAiRun, resolveLlmProviderId } from './compile-ai.service.js';
 import { isUniqueViolation } from './shared.js';
+import type { BastionCompileRun, BastionCompileRunResponse } from '@bigbluebam/shared';
+import type { Served } from '../lib/served.js';
 import type { Viewer } from './types.js';
 import { redisSliceLock } from '../lib/slice-lock.js';
 
@@ -44,7 +46,7 @@ export async function startCompile(
   frameworkId: string,
   opts: { use_ai?: boolean },
   compileLog?: CompileLogger,
-) {
+): Promise<Served<BastionCompileRunResponse>> {
   if (opts.use_ai !== false) {
     const engine = engineDeps(log, redis);
     const providerId = await orgTx(engine.sql, viewer.org_id, async (tx) => {
@@ -63,7 +65,7 @@ export async function startCompile(
       }
       const queued = await enqueueCompileRun({ organization_id: viewer.org_id, run_id: String(run.id), resume_count: 0 });
       log.info({ run_id: run.id, framework_id: frameworkId, queued }, 'bastion-compile: AI compile queued for the worker');
-      return { data: run };
+      return { data: run as unknown as Served<BastionCompileRun> };
     }
   }
   return compileFramework(viewer, frameworkId, compileLog);

@@ -4,6 +4,17 @@
 // transaction (RLS GUC bound).
 
 import type {
+  BastionEvaluationListResponse,
+  BastionEvaluationResponse,
+  BastionEvaluationRun,
+  BastionRestoreAcknowledgeResponse,
+  BastionSealListResponse,
+  BastionSealRow,
+  BastionStartEvaluationResponse,
+  BastionVerifyEvidenceResponse,
+  BastionEvidenceSnapshot,
+  BastionEvidenceSnapshotListResponse,
+  BastionEvidenceSnapshotResponse,
   BastionBucketRestore,
   BastionRestoreListResponse,
   BastionRestoreRow,
@@ -32,6 +43,7 @@ import { type CitedRef, labelRefs, labelsFor } from '../lib/ref-labels.js';
 import { isAdminViewer, type Viewer } from './types.js';
 import { type CanAccess, visibleRefs } from './decisions.service.js';
 import { type NameVisible, populationNames, populationVisibility } from '../lib/population-visibility.js';
+import type { Served } from '../lib/served.js';
 
 
 const RUN_SELECT = `id, trigger, scope, control_id, nightly_for_date::text AS nightly_for_date, as_of, status, partial_reason,
@@ -41,7 +53,7 @@ const RUN_SELECT = `id, trigger, scope, control_id, nightly_for_date::text AS ni
 // ── Evaluation runs ──────────────────────────────────────────────────────────────────────
 
 /** POST /evaluations: 202 with the queued run. A live run of the same scope answers 409. */
-export async function startEvaluation(deps: EngineDeps, viewer: Viewer, body: BastionRunEvaluation) {
+export async function startEvaluation(deps: EngineDeps, viewer: Viewer, body: BastionRunEvaluation): Promise<Served<BastionStartEvaluationResponse>> {
   let run: Record<string, unknown>;
   try {
     run = await orgTx(deps.sql, viewer.org_id, async (tx) => {
@@ -67,11 +79,11 @@ export async function startEvaluation(deps: EngineDeps, viewer: Viewer, body: Ba
     throw err;
   }
   const enqueued = await enqueueEvaluationRun({ organization_id: viewer.org_id, run_id: run.id as string, resume_count: 0 });
-  return { data: { ...run, enqueued } };
+  return { data: { ...(run as unknown as Served<BastionEvaluationRun>), enqueued } };
 }
 
 /** GET /evaluations, newest first, keyset-paginated on (created_at, id) (issue #204). */
-export async function listEvaluations(deps: EngineDeps, viewer: Viewer, q: BastionEvaluationListQuery) {
+export async function listEvaluations(deps: EngineDeps, viewer: Viewer, q: BastionEvaluationListQuery): Promise<Served<BastionEvaluationListResponse>> {
   const after = q.cursor ? decodeIdCursor(q.cursor) : null;
   const rows = await orgTx(deps.sql, viewer.org_id, (tx) =>
     tx.unsafe(
@@ -83,15 +95,15 @@ export async function listEvaluations(deps: EngineDeps, viewer: Viewer, q: Basti
       [viewer.org_id, q.status ?? null, q.limit + 1, after],
     ),
   );
-  return pageOf(rows, q.limit, (r) => encodeIdCursor(r.id as string));
+  return pageOf(rows as unknown as Served<BastionEvaluationRun>[], q.limit, (r) => encodeIdCursor(String(r.id)));
 }
 
-export async function getEvaluation(deps: EngineDeps, viewer: Viewer, id: string) {
+export async function getEvaluation(deps: EngineDeps, viewer: Viewer, id: string): Promise<Served<BastionEvaluationResponse>> {
   const rows = await orgTx(deps.sql, viewer.org_id, (tx) =>
     tx.unsafe(`SELECT ${RUN_SELECT} FROM bastion_evaluation_runs WHERE organization_id = $1 AND id = $2`, [viewer.org_id, id]),
   );
   if (!rows[0]) throw new NotFoundError('We could not find that evaluation run.');
-  return { data: rows[0] };
+  return { data: rows[0] as unknown as Served<BastionEvaluationRun> };
 }
 
 // ── Evidence snapshots ───────────────────────────────────────────────────────────────────
@@ -165,6 +177,8 @@ export function present(row: Record<string, unknown>, detail: boolean, visibleNa
   }
   return {
     ...row,
+    // bigint arrives from postgres as a string; the response carries a number (#371).
+    ledger_seq: row.ledger_seq === null || row.ledger_seq === undefined ? null : Number(row.ledger_seq),
     summary,
     cited_refs: detail ? row.cited_refs : [],
     population_checked: detail && row.population_checked != null ? checked : null,
@@ -186,14 +200,15 @@ async function visibleRefKeys(canAccess: CanAccess, viewer: Viewer, refs: CitedR
   return new Set((await visibleRefs(canAccess, viewer, refs)).map(refKey));
 }
 
+/** One snapshot for a reader (bastionEvidenceSnapshotSchema, #371). */
 function withVisibleRefs(
   row: Record<string, unknown>,
   detail: boolean,
   visible: Set<string>,
   names: Map<string, string>,
   visibleName: NameVisible,
-) {
-  const shaped = present(row, detail, visibleName);
+): Served<BastionEvidenceSnapshot> {
+  const shaped = present(row, detail, visibleName) as unknown as Served<BastionEvidenceSnapshot>;
   const all = detail ? ((row.cited_refs as CitedRef[] | null) ?? []) : [];
   const refs = all.filter((r) => visible.has(refKey(r)));
   return {
@@ -205,7 +220,13 @@ function withVisibleRefs(
   };
 }
 
-export async function listControlEvidence(deps: EngineDeps, viewer: Viewer, controlId: string, q: BastionEvidenceListQuery, canAccess: CanAccess) {
+export async function listControlEvidence(
+  deps: EngineDeps,
+  viewer: Viewer,
+  controlId: string,
+  q: BastionEvidenceListQuery,
+  canAccess: CanAccess,
+): Promise<Served<BastionEvidenceSnapshotListResponse>> {
   return orgTx(deps.sql, viewer.org_id, async (tx) => {
     const c = await tx`SELECT id FROM bastion_controls WHERE organization_id = ${viewer.org_id} AND id = ${controlId}`;
     if (!c[0]) throw new NotFoundError('We could not find that control.');
@@ -236,7 +257,7 @@ export async function listControlEvidence(deps: EngineDeps, viewer: Viewer, cont
   });
 }
 
-export async function getEvidence(deps: EngineDeps, viewer: Viewer, id: string, canAccess: CanAccess) {
+export async function getEvidence(deps: EngineDeps, viewer: Viewer, id: string, canAccess: CanAccess): Promise<Served<BastionEvidenceSnapshotResponse>> {
   return orgTx(deps.sql, viewer.org_id, async (tx) => {
     const rows = await tx.unsafe(`SELECT ${SNAPSHOT_SELECT} FROM bastion_evidence_snapshots s WHERE s.organization_id = $1 AND s.id = $2`, [viewer.org_id, id]);
     const row = rows[0] as Record<string, unknown> | undefined;
@@ -272,7 +293,7 @@ async function readObject(deps: EngineDeps, key: string): Promise<Buffer | null>
  * checked against every published key). Results: intact, hash_mismatch, object_missing
  * (shown as "Evidence file missing"), redacted, pd_mismatch, key_changed.
  */
-export async function verifyEvidence(deps: EngineDeps, viewer: Viewer, id: string) {
+export async function verifyEvidence(deps: EngineDeps, viewer: Viewer, id: string): Promise<BastionVerifyEvidenceResponse> {
   const ctx = await orgTx(deps.sql, viewer.org_id, async (tx) => {
     const snap = (await tx`SELECT id, content_sha256, ledger_seq, personal_data_hmac, pd_hmac_key_id
                              FROM bastion_evidence_snapshots WHERE organization_id = ${viewer.org_id} AND id = ${id}`)[0];
@@ -344,7 +365,7 @@ export async function verifyEvidence(deps: EngineDeps, viewer: Viewer, id: strin
     else if (!ctx.pd || ctx.pd.data_hmac !== ctx.snap.personal_data_hmac) set('pd_mismatch');
   }
 
-  let sealCheck: Record<string, unknown> | null = null;
+  let sealCheck: BastionVerifyEvidenceResponse['data']['seal'] = null;
   if (ctx.seal) {
     const chain = verifyChain(ctx.walk);
     const sealHead = ctx.walk.find((w) => Number(w.seq) === Number(ctx.seal?.head_seq));
@@ -365,7 +386,13 @@ export async function verifyEvidence(deps: EngineDeps, viewer: Viewer, id: strin
       set('hash_mismatch');
       checks.push('The chain from this entry to its seal does not verify.');
     }
-    sealCheck = { seal_date: ctx.seal.seal_date, head_seq: Number(ctx.seal.head_seq), signing_key_id: ctx.seal.signing_key_id, signature_valid: signatureOk, chain_intact: chain.length === 0 && headOk };
+    sealCheck = {
+      seal_date: String(ctx.seal.seal_date),
+      head_seq: Number(ctx.seal.head_seq),
+      signing_key_id: String(ctx.seal.signing_key_id),
+      signature_valid: signatureOk,
+      chain_intact: chain.length === 0 && headOk,
+    };
   } else {
     checks.push('Not sealed yet: seals are written once a day.');
   }
@@ -374,8 +401,8 @@ export async function verifyEvidence(deps: EngineDeps, viewer: Viewer, id: strin
     data: {
       evidence_id: id,
       result,
-      content_sha256: ctx.snap.content_sha256,
-      ledger: ctx.entry ? { epoch: Number(ctx.entry.epoch), seq: Number(ctx.entry.seq), entry_hash: ctx.entry.entry_hash } : null,
+      content_sha256: (ctx.snap.content_sha256 as string | null) ?? null,
+      ledger: ctx.entry ? { epoch: Number(ctx.entry.epoch), seq: Number(ctx.entry.seq), entry_hash: String(ctx.entry.entry_hash) } : null,
       seal: sealCheck,
       notes: checks,
     },
@@ -385,7 +412,7 @@ export async function verifyEvidence(deps: EngineDeps, viewer: Viewer, id: strin
 // ── Seals and restores ───────────────────────────────────────────────────────────────────
 
 /** GET /ledger/seals, newest seal_date first, keyset-paginated on seal_date (issue #204). */
-export async function listSeals(deps: EngineDeps, viewer: Viewer, q: BastionSealListQuery = { limit: 90 }) {
+export async function listSeals(deps: EngineDeps, viewer: Viewer, q: BastionSealListQuery = { limit: 90 }): Promise<Served<BastionSealListResponse>> {
   const before = q.cursor ? decodeDateCursor(q.cursor) : null;
   const rows = await orgTx(deps.sql, viewer.org_id, (tx) => tx`
     SELECT seal_date::text AS seal_date, epoch, head_seq, head_hash, signature, signing_key_id, object_written_at, published_at
@@ -395,7 +422,7 @@ export async function listSeals(deps: EngineDeps, viewer: Viewer, q: BastionSeal
   const page = pageOf(rows, q.limit, (r) => encodeDateCursor(r.seal_date as string));
   return {
     ...page,
-    data: page.data.map((r) => ({ ...r, epoch: Number(r.epoch), head_seq: Number(r.head_seq) })),
+    data: page.data.map((r) => ({ ...(r as unknown as Served<BastionSealRow>), epoch: Number(r.epoch), head_seq: Number(r.head_seq) })),
     signing_keys: publishedSealKeys(),
     canonical_form: 'signature = Ed25519 over canonical JSON (sorted keys, no whitespace) of {org, seal_date, epoch, head_seq, head_hash, signing_key_id}',
   };
@@ -479,7 +506,7 @@ export async function listRestores(
  * epoch and keeps the "Unexplained gap" label forever. Either way a `restore` ledger entry opens
  * the provisional epoch, numbering never changes, and appends resume.
  */
-export async function acknowledgeRestore(deps: EngineDeps, viewer: Viewer, id: string, body: BastionRestoreAcknowledge) {
+export async function acknowledgeRestore(deps: EngineDeps, viewer: Viewer, id: string, body: BastionRestoreAcknowledge): Promise<BastionRestoreAcknowledgeResponse> {
   if (viewer.role !== 'owner') {
     throw new ForbiddenError('Only an owner of this organization can resolve a ledger restore.', 'OWNER_REQUIRED');
   }
@@ -521,7 +548,13 @@ export async function acknowledgeRestore(deps: EngineDeps, viewer: Viewer, id: s
       );
     }
     await auditRaw(tx, viewer, 'ledger.restore.resolve', { type: 'ledger_restore', id }, { resolution: body.resolution, epoch: entry?.epoch, seq: entry?.seq });
-    return { id, status, resolution: body.resolution, provisional_epoch: entry?.epoch ?? null, first_seq: entry?.seq ?? null };
+    return {
+      id,
+      status: status as BastionRestoreAcknowledgeResponse['data']['status'],
+      resolution: body.resolution,
+      provisional_epoch: entry?.epoch === undefined || entry?.epoch === null ? null : Number(entry.epoch),
+      first_seq: entry?.seq === undefined || entry?.seq === null ? null : Number(entry.seq),
+    };
   });
   await writeRestoreObject(deps, viewer.org_id, id);
   return { data: updated };

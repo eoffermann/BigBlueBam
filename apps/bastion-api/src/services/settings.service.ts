@@ -10,7 +10,19 @@
 //                                       marked superseded (spec 7, outbox-drain)
 //   GET /audit                          bastion_audit_log, newest first
 
-import type { BastionAuditLogQuery, BastionDeliveryProblemListQuery, BastionSettingsUpdate } from '@bigbluebam/shared';
+import type {
+  BastionAuditLogQuery,
+  BastionAuditLogResponse,
+  BastionAuditLogRow,
+  BastionDeliveryProblemListQuery,
+  BastionDeliveryProblemListResponse,
+  BastionDeliveryRetryResponse,
+  BastionRestoreStatus,
+  BastionSettingsResponse,
+  BastionSettingsUpdate,
+  BastionSettingsView,
+} from '@bigbluebam/shared';
+import { intOrNull, type Served } from '../lib/served.js';
 import { type EngineDeps, orgTx } from '../engine/context.js';
 import { auditRaw } from '../lib/audit-raw.js';
 import { decodeIdCursor, encodeIdCursor, pageOf } from '../lib/cursor.js';
@@ -55,7 +67,7 @@ export function fingerprint(id: string): string {
   return hex.match(/.{1,4}/g)?.join(' ') ?? hex;
 }
 
-export async function getSettings(engine: EngineDeps, viewer: Viewer, facts: SettingsFacts) {
+export async function getSettings(engine: EngineDeps, viewer: Viewer, facts: SettingsFacts): Promise<Served<BastionSettingsResponse>> {
   return orgTx(engine.sql, viewer.org_id, async (tx) => {
     const s = (await tx`
       SELECT s.*, p.name AS compliance_project_name
@@ -80,29 +92,46 @@ export async function getSettings(engine: EngineDeps, viewer: Viewer, facts: Set
     }
     return {
       data: {
-        settings,
-        compliance_project: s.compliance_project_id ? { id: s.compliance_project_id, name: s.compliance_project_name ?? null } : null,
-        ai_providers: providers.map((p) => ({ id: p.id, name: p.name, model: p.model_id, scope: p.scope, is_default: p.is_default })),
+        settings: settings as unknown as BastionSettingsView['settings'],
+        compliance_project: s.compliance_project_id
+          ? { id: String(s.compliance_project_id), name: (s.compliance_project_name as string | null) ?? null }
+          : null,
+        ai_providers: providers.map((p) => ({
+          id: String(p.id),
+          name: String(p.name),
+          model: String(p.model_id),
+          scope: String(p.scope),
+          is_default: !!p.is_default,
+        })),
         evidence_integrity: {
           seal_keys: publishedSealKeys().map((k) => ({ fingerprint: fingerprint(k.signing_key_id), current: k.current })),
           personal_data_key: fingerprint(pdHmacKeyId()),
-          restores_awaiting: restores,
+          // The seqs are bigint and arrive from postgres as strings; the response carries numbers (#371).
+          restores_awaiting: restores.map((r) => ({
+            id: String(r.id),
+            detected_at: r.detected_at as Date,
+            status: r.status as BastionRestoreStatus,
+            lost_from_seq: intOrNull(r.lost_from_seq),
+            lost_to_seq: intOrNull(r.lost_to_seq),
+            bucket_epoch: intOrNull(r.bucket_epoch),
+            provisional_epoch: Number(r.provisional_epoch),
+          })),
         },
         offsite_backup: {
           configured: facts.offsite_backup_configured,
-          last_backup_at: backup?.completed_at ?? null,
+          last_backup_at: (backup?.completed_at as Date | null | undefined) ?? null,
           last_mirror_status: (backup?.bastion_mirror_status as string | null) ?? null,
-          current_through: backup?.bastion_mirror_cursor ?? null,
+          current_through: (backup?.bastion_mirror_cursor as Date | null | undefined) ?? null,
         },
         storage_ok: facts.storage_ok,
         delivery_problems: Number(dead?.n ?? 0),
-        updated_at: s.updated_at,
+        updated_at: s.updated_at as Date,
       },
     };
   });
 }
 
-export async function updateSettings(engine: EngineDeps, viewer: Viewer, body: BastionSettingsUpdate, facts: SettingsFacts) {
+export async function updateSettings(engine: EngineDeps, viewer: Viewer, body: BastionSettingsUpdate, facts: SettingsFacts): Promise<Served<BastionSettingsResponse>> {
   if (body.timezone !== undefined && !validTimeZone(body.timezone)) {
     throw new ValidationFailure('That is not a timezone we know. Use a name like Europe/London or America/New_York.', 'BAD_TIMEZONE', [
       { field: 'timezone', issue: 'unknown' },
@@ -149,7 +178,7 @@ const KIND_WORDS: Record<string, string> = {
 };
 
 /** GET /delivery-problems (row 98). */
-export async function listDeliveryProblems(engine: EngineDeps, viewer: Viewer, q: BastionDeliveryProblemListQuery) {
+export async function listDeliveryProblems(engine: EngineDeps, viewer: Viewer, q: BastionDeliveryProblemListQuery): Promise<Served<BastionDeliveryProblemListResponse>> {
   const rows = await orgTx(engine.sql, viewer.org_id, (tx) => tx`
     SELECT id, kind, ordering_key, payload, attempts, redrive_count, last_error, created_at
       FROM bastion_outbox WHERE organization_id = ${viewer.org_id} AND status = 'dead'
@@ -158,13 +187,13 @@ export async function listDeliveryProblems(engine: EngineDeps, viewer: Viewer, q
     data: rows.map((r) => {
       const payload = (r.payload ?? {}) as { event_type?: string };
       return {
-        id: r.id,
+        id: String(r.id),
         what: KIND_WORDS[String(r.kind)] ?? 'An update to another app',
         event: r.kind === 'bolt_event' ? (payload.event_type ?? null) : null,
         attempts: Number(r.attempts),
         retried_before: Number(r.redrive_count),
         last_error: r.last_error ? String(r.last_error).slice(0, 300) : null,
-        created_at: r.created_at,
+        created_at: r.created_at as Date,
       };
     }),
     next_cursor: null,
@@ -172,7 +201,7 @@ export async function listDeliveryProblems(engine: EngineDeps, viewer: Viewer, q
 }
 
 /** POST /delivery-problems/:id/retry (row 99). */
-export async function retryDelivery(engine: EngineDeps, viewer: Viewer, id: string) {
+export async function retryDelivery(engine: EngineDeps, viewer: Viewer, id: string): Promise<Served<BastionDeliveryRetryResponse>> {
   const out = await orgTx(engine.sql, viewer.org_id, async (tx) => {
     const row = (await tx`SELECT id, kind, ordering_key, status, created_at FROM bastion_outbox
                           WHERE organization_id = ${viewer.org_id} AND id = ${id} FOR UPDATE`)[0];
@@ -198,7 +227,7 @@ export async function retryDelivery(engine: EngineDeps, viewer: Viewer, id: stri
 }
 
 /** GET /audit (row 100). */
-export async function listAudit(engine: EngineDeps, viewer: Viewer, q: BastionAuditLogQuery) {
+export async function listAudit(engine: EngineDeps, viewer: Viewer, q: BastionAuditLogQuery): Promise<Served<BastionAuditLogResponse>> {
   return orgTx(engine.sql, viewer.org_id, async (tx) => {
     const after = q.cursor ? decodeIdCursor(q.cursor) : null;
     const rows = await tx`
@@ -212,6 +241,6 @@ export async function listAudit(engine: EngineDeps, viewer: Viewer, q: BastionAu
          ${q.subject_type ? tx`AND a.subject_type = ${q.subject_type}` : tx``}
          ${after ? tx`AND (a.created_at, a.id) < (SELECT p.created_at, p.id FROM bastion_audit_log p WHERE p.id = ${after}::uuid AND p.organization_id = ${viewer.org_id})` : tx``}
        ORDER BY a.created_at DESC, a.id DESC LIMIT ${q.limit + 1}`;
-    return pageOf(rows, q.limit, (r) => encodeIdCursor(String(r.id)));
+    return pageOf(rows as unknown as Served<BastionAuditLogRow>[], q.limit, (r) => encodeIdCursor(String(r.id)));
   });
 }

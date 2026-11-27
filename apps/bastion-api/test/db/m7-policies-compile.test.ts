@@ -31,6 +31,16 @@ import {
 } from '../../src/services/policies.service.js';
 import type { Viewer } from '../../src/services/types.js';
 import { clock, DATABASE_URL, makeDeps, seedOrg, wipeOrg } from './engine-harness.js';
+import {
+  bastionAttestResponseSchema,
+  bastionMyAttestationsResponseSchema,
+  bastionPolicyAttestationsResponseSchema,
+  bastionPolicyBodyResponseSchema,
+  bastionPolicyCreateResponseSchema,
+  bastionPolicyListResponseSchema,
+  bastionPolicyResponseSchema,
+} from '@bigbluebam/shared';
+import { expectWire } from './wire.js';
 
 /**
  * M7 gates against a real migrated database and the real service code (spec 2.1, 3.6, 7.3):
@@ -49,6 +59,9 @@ import { clock, DATABASE_URL, makeDeps, seedOrg, wipeOrg } from './engine-harnes
  */
 
 if (!DATABASE_URL) console.warn('[bastion-api/m7] SKIPPING: DATABASE_URL is not set. Point it at a migrated database.');
+
+/** What the stubbed pinChecks reports it proposed (an assertion id, as the real one returns). */
+const PINNED = '00000000-0000-4000-8000-0000b1a5b001';
 
 const RECORDED = JSON.parse(readFileSync(join(__dirname, '..', 'corpus', 'compiler-recorded.json'), 'utf8')) as {
   responses: Record<string, { content: string; finish_reason: string | null }>;
@@ -127,15 +140,17 @@ describe.skipIf(!DATABASE_URL)('M7 policies and version-pinned attestation (live
 
     // The control proves this policy: its two policy checks are proposed, pinned to it.
     const created = await createPolicy(
-      { ...d, pinChecks: async () => ['pinned'] },
+      { ...d, pinChecks: async () => [PINNED] },
       owner,
       { beacon_entry_id: s.entry, audience: { kind: 'all' }, cadence_days: 365, control_id: s.controls[0] },
     );
     const policyId = created.data.id;
-    expect(created.data.proposed_assertion_ids).toEqual(['pinned']);
+    expect(created.data.proposed_assertion_ids).toEqual([PINNED]);
     // Three humans are required (owner plus two castaways); the agent never is.
     expect(created.data.required_people).toBe(3);
     expect(created.data.attestation_label).toBe('0 of 3 have read the current version');
+    // #371: what each route sends (the service result through JSON) is the shared response shape.
+    expectWire(bastionPolicyCreateResponseSchema, created);
     const link = await sql`SELECT link_kind FROM entity_links WHERE org_id = ${s.org} AND src_id = ${policyId} AND dst_id = ${s.entry}`;
     expect(link[0]?.link_kind).toBe('references');
     await expect(createPolicy(d, owner, { beacon_entry_id: s.entry, audience: { kind: 'all' }, cadence_days: 365 })).rejects.toMatchObject({ code: 'POLICY_ALREADY_LINKED' });
@@ -144,6 +159,7 @@ describe.skipIf(!DATABASE_URL)('M7 policies and version-pinned attestation (live
     expect(body.data.body_markdown).toBe('# Island policy\n\nCoconut radios are company property.');
     expect(body.data.body_sha256).toBe(policyBodySha256(body.data.body_markdown));
     expect(body.data.due).toBe(true);
+    expectWire(bastionPolicyBodyResponseSchema, body);
 
     // Vouching: not with an API key, not by an agent, not with a stale hash, not outside the audience.
     const good = { beacon_version: 1, body_sha256: body.data.body_sha256 };
@@ -153,6 +169,9 @@ describe.skipIf(!DATABASE_URL)('M7 policies and version-pinned attestation (live
 
     const first = await attest(d, owner, policyId, good);
     expect(first.data.created).toBe(true);
+    // #371: ledger_seq is bigint in the table and a number on the wire.
+    expect(typeof first.data.ledger_seq).toBe('number');
+    expectWire(bastionAttestResponseSchema, first);
     const again = await attest(d, owner, policyId, good);
     expect(again.data.created).toBe(false);
     const row = (await sql`SELECT * FROM bastion_policy_attestations WHERE organization_id = ${s.org} AND policy_id = ${policyId}`)[0]!;
@@ -166,13 +185,17 @@ describe.skipIf(!DATABASE_URL)('M7 policies and version-pinned attestation (live
     // Immutable (0276 trigger).
     await expect(sql`UPDATE bastion_policy_attestations SET beacon_version = 9 WHERE id = ${row.id as string}`).rejects.toThrow();
 
-    const listed = (await listPolicies(d, owner, { status: 'active' })).data[0]!;
+    const listedOut = await listPolicies(d, owner, { status: 'active' });
+    expectWire(bastionPolicyListResponseSchema, listedOut);
+    const listed = listedOut.data[0]!;
     expect(listed.attestation_label).toBe('1 of 3 have read the current version');
-    const mine = (await myAttestations(d, owner)).data[0]!;
+    const mineOut = await myAttestations(d, owner);
+    expectWire(bastionMyAttestationsResponseSchema, mineOut);
+    const mine = mineOut.data[0]!;
     expect(mine).toMatchObject({ due: false, state_words: 'Read and acknowledged', last_attested_version: 1 });
 
     // A narrowed audience: someone not listed cannot acknowledge.
-    await updatePolicy(d, owner, policyId, { audience: { kind: 'users', user_ids: [s.owner, s.people[0]!] } });
+    expectWire(bastionPolicyResponseSchema, await updatePolicy(d, owner, policyId, { audience: { kind: 'users', user_ids: [s.owner, s.people[0]!] } }));
     await expect(attest(d, viewer(s.org, s.people[1]!), policyId, good)).rejects.toMatchObject({ code: 'NOT_IN_AUDIENCE' });
     expect((await listPolicies(d, owner, { status: 'active' })).data[0]!.required_people).toBe(2);
 
@@ -247,6 +270,7 @@ describe.skipIf(!DATABASE_URL)('M7 policies and version-pinned attestation (live
     expect(who.data.cannot_open_count).toBe(1);
     expect(who.data.cannot_open_label).toBe("1 person can't open this policy");
     expect(who.data.not_attested.find((p) => p.user_id === s.people[1])?.can_open).toBe(false);
+    expectWire(bastionPolicyAttestationsResponseSchema, who);
 
     const r1 = await requestAttestations(d, owner, policyId, {});
     expect(r1.data).toMatchObject({ due: 3, asked: 3, nudged: 3 });

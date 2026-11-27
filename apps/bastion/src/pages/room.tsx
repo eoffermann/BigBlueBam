@@ -227,11 +227,15 @@ export function AuditorRoomPage() {
         <div className="space-y-3" data-testid="room-evidence">
           {back({ kind: 'control', id: view.controlId }, 'Back to the control')}
           <h1 className="text-xl font-semibold text-zinc-900 dark:text-zinc-100">{evidence.kind === 'check' ? (evidence.control_title ?? 'Check') : evidence.title}</h1>
-          {evidence.recorded_at && <p className="text-sm text-zinc-600">Recorded {formatDay(evidence.recorded_at)}</p>}
-          {evidence.what && <p className="text-sm text-zinc-700 dark:text-zinc-300">{evidence.what}</p>}
-          {evidence.outcome_words && <p className="text-sm font-medium">{evidence.outcome_words}</p>}
-          {evidence.explanation && <p className="text-sm text-zinc-600">{evidence.explanation}</p>}
-          {evidence.review && <p className="text-sm text-zinc-600">{evidence.review}</p>}
+          {evidence.kind === 'check' && (
+            <>
+              <p className="text-sm text-zinc-600">Recorded {formatDay(evidence.recorded_at)}</p>
+              {evidence.what && <p className="text-sm text-zinc-700 dark:text-zinc-300">{evidence.what}</p>}
+              <p className="text-sm font-medium">{evidence.outcome_words}</p>
+              {evidence.explanation && <p className="text-sm text-zinc-600">{evidence.explanation}</p>}
+            </>
+          )}
+          {evidence.kind !== 'check' && <p className="text-sm text-zinc-600">{evidence.review}</p>}
           {evidence.file_words && <p className="text-sm font-medium text-red-700">{evidence.file_words}</p>}
           {evidence.kind !== 'check' && evidence.file === 'available' && (
             <button type="button" className="px-3 py-1.5 rounded-lg text-sm font-medium bg-primary-600 text-white" onClick={() => void download(evidence.id, evidence.title ?? 'evidence')}>

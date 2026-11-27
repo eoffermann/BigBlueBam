@@ -5,7 +5,17 @@
 //                  view and days to audit, banners, top stored gaps, evidence expiring soon.
 //   GET /coverage  every in-view control by source column (native, feed, uploaded, self-attested).
 
-import { BASTION_DAY_MS as DAY_MS, BASTION_PENDING_SCAN_CAP_MS, type BastionReadinessBanner } from '@bigbluebam/shared';
+import {
+  BASTION_DAY_MS as DAY_MS,
+  BASTION_PENDING_SCAN_CAP_MS,
+  type BastionCoverageResponse,
+  type BastionFixTemplate,
+  type BastionFrameworkStatus,
+  type BastionGapKind,
+  type BastionReadinessBanner,
+  type BastionSummaryResponse,
+} from '@bigbluebam/shared';
+import type { Served } from '../lib/served.js';
 import { NotFoundError } from '../lib/errors.js';
 import { type EngineDeps, orgTx } from '../engine/context.js';
 import { daysLeft } from '../engine/manual.js';
@@ -54,16 +64,28 @@ async function frameworkView(tx: EngineDeps['sql'], orgId: string, frameworkId: 
   const targets = inView.map((f) => f.audit_target_date as string | null).filter((d): d is string => !!d);
   const nearest = targets.sort()[0] ?? null;
   const daysToAudit = nearest ? Math.ceil((Date.parse(`${nearest}T00:00:00Z`) - now.getTime()) / DAY_MS) : null;
+  const option = (f: (typeof frameworks)[number]) => ({
+    id: String(f.id),
+    template_key: String(f.template_key),
+    name: String(f.name),
+    audit_target_date: (f.audit_target_date as string | null) ?? null,
+  });
+  const selected = frameworkId ? frameworks.find((f) => f.id === frameworkId) : undefined;
   return {
-    frameworks: frameworks.map((f) => ({ id: f.id, template_key: f.template_key, name: f.name, audit_target_date: f.audit_target_date })),
-    selected: frameworkId ? (frameworks.find((f) => f.id === frameworkId) ?? null) : null,
+    frameworks: frameworks.map(option),
+    selected: selected ? { ...option(selected), status: selected.status as BastionFrameworkStatus } : null,
     nearest_audit_date: nearest,
     days_to_audit: daysToAudit,
   };
 }
 
 /** GET /summary (row 94) and the Readiness page. */
-export async function readinessSummary(engine: EngineDeps, viewer: Viewer, frameworkId: string | undefined, facts: PlatformFacts) {
+export async function readinessSummary(
+  engine: EngineDeps,
+  viewer: Viewer,
+  frameworkId: string | undefined,
+  facts: PlatformFacts,
+): Promise<Served<BastionSummaryResponse>> {
   const now = engine.now();
   return orgTx(engine.sql, viewer.org_id, async (tx) => {
     const view = await frameworkView(tx, viewer.org_id, frameworkId, now);
@@ -142,17 +164,25 @@ export async function readinessSummary(engine: EngineDeps, viewer: Viewer, frame
         not_met_label: numbers.risk_accepted > 0 ? `Not met: ${numbers.not_met} (${numbers.risk_accepted} risk accepted)` : `Not met: ${numbers.not_met}`,
         not_applicable: states.not_applicable,
         banners,
-        top_gaps: topGaps.map((g) => ({ ...g, risk_score: Number(g.risk_score) })),
+        top_gaps: topGaps.map((g) => ({
+          id: String(g.id),
+          control_id: String(g.control_id),
+          control_title: String(g.control_title),
+          gap_kind: g.gap_kind as BastionGapKind,
+          risk_score: Number(g.risk_score),
+          fix_template: (g.fix_template as BastionFixTemplate | null) ?? null,
+          fix_cost: g.fix_cost === null || g.fix_cost === undefined ? null : Number(g.fix_cost),
+        })),
         gaps_ranked: topGaps.length > 0,
         expiring_evidence: expiring.map((e) => ({
-          id: e.id,
-          title: e.sensitivity === 'restricted' ? 'Restricted evidence' : e.title,
-          owner_name: e.owner_name,
-          valid_until: e.valid_until,
+          id: String(e.id),
+          title: e.sensitivity === 'restricted' ? 'Restricted evidence' : String(e.title),
+          owner_name: (e.owner_name as string | null) ?? null,
+          valid_until: e.valid_until as Date,
           days_left: daysLeft(new Date(e.valid_until as string), now),
         })),
-        last_full_run_at: facts2.last_full_run ?? null,
-        timezone: settings?.timezone ?? 'UTC',
+        last_full_run_at: (facts2.last_full_run as Date | null | undefined) ?? null,
+        timezone: String(settings?.timezone ?? 'UTC'),
         as_of: now.toISOString(),
       },
     };
@@ -160,7 +190,7 @@ export async function readinessSummary(engine: EngineDeps, viewer: Viewer, frame
 }
 
 /** GET /coverage (row 50): the Evidence map. */
-export async function coverageMap(engine: EngineDeps, viewer: Viewer, frameworkId: string | undefined) {
+export async function coverageMap(engine: EngineDeps, viewer: Viewer, frameworkId: string | undefined): Promise<Served<BastionCoverageResponse>> {
   const now = engine.now();
   return orgTx(engine.sql, viewer.org_id, async (tx) => {
     const view = await frameworkView(tx, viewer.org_id, frameworkId, now);
@@ -175,7 +205,7 @@ export async function coverageMap(engine: EngineDeps, viewer: Viewer, frameworkI
       set_up: c.confirmed_count > 0,
       bucket: c.verdict.bucket,
       state: c.verdict.state,
-      state_words: c.verdict.state ? STATE_WORDS[c.verdict.state] : 'Not set up yet',
+      state_words: c.verdict.state ? (STATE_WORDS[c.verdict.state] ?? c.verdict.state) : 'Not set up yet',
       reason: c.verdict.reason,
       reason_words: c.verdict.reason ? (REASON_WORDS[c.verdict.reason] ?? null) : null,
       risk_accepted: c.verdict.risk_accepted,

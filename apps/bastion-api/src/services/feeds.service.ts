@@ -5,11 +5,20 @@
 // evidence-ingest engine).
 
 import {
+  type BastionFeed,
   type BastionFeedBatch,
   type BastionFeedCreate,
+  type BastionFeedKey,
   type BastionFeedKeyCreate,
+  type BastionFeedKeyListResponse,
+  type BastionFeedListResponse,
   type BastionFeedRecordListQuery,
+  type BastionFeedRecordListResponse,
+  type BastionFeedRecordRow,
+  type BastionFeedResponse,
   type BastionFeedUpdate,
+  type BastionMintedFeedKeyResponse,
+  type BastionRevokedFeedKeyResponse,
   BASTION_DAY_MS,
   BASTION_FEED_KEY_GRACE_DAYS,
   BASTION_PERSONAL_DATA_MAX_BYTES,
@@ -23,19 +32,21 @@ import { type EngineDeps, orgTx, sqlstateOf, type Tx, utcDate } from '../engine/
 import { appendLedger, type NewEntry } from '../engine/ledger.js';
 import type { SealIdentity } from '../engine/restore.js';
 import { beginLedgerBatch, mapAppendError } from './ledger-batch.js';
+import { intOrNull, type Served } from '../lib/served.js';
 import type { Viewer } from './types.js';
 
 const FEED_SELECT = `f.id, f.feed_key, f.label, f.feed_kind, f.source_kind, f.bolt_source, f.bolt_event_type, f.cadence_days,
   f.daily_record_quota, f.quota_day::text AS quota_day, f.records_on_quota_day, f.bytes_total, f.status, f.last_record_at,
   f.created_at, f.updated_at`;
 
-function shapeFeed(r: Record<string, unknown>, now: Date) {
+/** One feed as the routes send it (bastionFeedSchema, #371). */
+function shapeFeed(r: Record<string, unknown>, now: Date): Served<BastionFeed> {
   const today = utcDate(now);
   const usedToday = r.quota_day === today ? Number(r.records_on_quota_day) : 0;
   const lastAt = r.last_record_at ? new Date(r.last_record_at as string) : null;
   const fresh = lastAt !== null && now.getTime() - lastAt.getTime() <= Number(r.cadence_days) * BASTION_DAY_MS;
   return {
-    ...r,
+    ...(r as unknown as Served<BastionFeed>),
     bytes_total: Number(r.bytes_total),
     records_today: usedToday,
     quota_remaining_today: Math.max(0, Number(r.daily_record_quota) - usedToday),
@@ -45,7 +56,7 @@ function shapeFeed(r: Record<string, unknown>, now: Date) {
 }
 
 /** GET /feeds (row 42). */
-export async function listFeeds(engine: EngineDeps, viewer: Viewer) {
+export async function listFeeds(engine: EngineDeps, viewer: Viewer): Promise<Served<BastionFeedListResponse>> {
   const now = engine.now();
   return orgTx(engine.sql, viewer.org_id, async (tx) => {
     const rows = (await tx.unsafe(
@@ -66,7 +77,7 @@ async function loadFeed(tx: Tx, orgId: string, id: string) {
 }
 
 /** POST /feeds (row 43). */
-export async function createFeed(engine: EngineDeps, viewer: Viewer, body: BastionFeedCreate) {
+export async function createFeed(engine: EngineDeps, viewer: Viewer, body: BastionFeedCreate): Promise<Served<BastionFeedResponse>> {
   const now = engine.now();
   try {
     return await orgTx(engine.sql, viewer.org_id, async (tx) => {
@@ -89,7 +100,7 @@ export async function createFeed(engine: EngineDeps, viewer: Viewer, body: Basti
 }
 
 /** PATCH /feeds/:id (row 44). */
-export async function updateFeed(engine: EngineDeps, viewer: Viewer, id: string, body: BastionFeedUpdate) {
+export async function updateFeed(engine: EngineDeps, viewer: Viewer, id: string, body: BastionFeedUpdate): Promise<Served<BastionFeedResponse>> {
   const now = engine.now();
   return orgTx(engine.sql, viewer.org_id, async (tx) => {
     await loadFeed(tx, viewer.org_id, id);
@@ -108,7 +119,7 @@ export async function updateFeed(engine: EngineDeps, viewer: Viewer, id: string,
 const KEY_SELECT = 'id, feed_id, key_id, fingerprint, last4, label, status, grace_expires_at, predecessor_id, created_by, created_at, last_used_at, revoked_at';
 
 /** GET /feeds/:id/keys (row 45). Never returns secrets or their HMACs. */
-export async function listFeedKeys(engine: EngineDeps, viewer: Viewer, feedId: string) {
+export async function listFeedKeys(engine: EngineDeps, viewer: Viewer, feedId: string): Promise<Served<BastionFeedKeyListResponse>> {
   const now = engine.now();
   return orgTx(engine.sql, viewer.org_id, async (tx) => {
     await loadFeed(tx, viewer.org_id, feedId);
@@ -118,7 +129,7 @@ export async function listFeedKeys(engine: EngineDeps, viewer: Viewer, feedId: s
     )) as unknown as Array<Record<string, unknown>>;
     return {
       data: rows.map((k) => ({
-        ...k,
+        ...(k as unknown as Served<BastionFeedKey>),
         usable: keyUsable(
           { status: String(k.status), grace_expires_at: k.grace_expires_at ? new Date(k.grace_expires_at as string) : null, revoked_at: k.revoked_at ? new Date(k.revoked_at as string) : null },
           now,
@@ -132,7 +143,13 @@ export async function listFeedKeys(engine: EngineDeps, viewer: Viewer, feedId: s
  * POST /feeds/:id/keys (row 46). Shown once: the response carries the token and nothing stores
  * it. Rotation: the feed's current active keys move to `grace` for seven days.
  */
-export async function createFeedKey(engine: EngineDeps, viewer: Viewer, feedId: string, body: BastionFeedKeyCreate, pepperHex: string) {
+export async function createFeedKey(
+  engine: EngineDeps,
+  viewer: Viewer,
+  feedId: string,
+  body: BastionFeedKeyCreate,
+  pepperHex: string,
+): Promise<Served<BastionMintedFeedKeyResponse>> {
   const now = engine.now();
   const minted = mintFeedKey(pepperHex);
   return orgTx(engine.sql, viewer.org_id, async (tx) => {
@@ -154,14 +171,14 @@ export async function createFeedKey(engine: EngineDeps, viewer: Viewer, feedId: 
     await auditRaw(tx, viewer, 'feed.key.create', { type: 'feed_key', id: String(created.id) }, { feed_id: feedId, rotated: previous.length });
     return {
       data: {
-        id: created.id,
+        id: String(created.id),
         feed_id: feedId,
         key_id: minted.key_id,
         fingerprint: minted.fingerprint,
         last4: minted.last4,
         label: body.label ?? null,
-        status: 'active',
-        created_at: created.created_at,
+        status: 'active' as const,
+        created_at: created.created_at as Date,
         /** Shown once. Bastion keeps only an HMAC of the secret part. */
         token: minted.token,
         rotated_keys: previous.length,
@@ -173,7 +190,7 @@ export async function createFeedKey(engine: EngineDeps, viewer: Viewer, feedId: 
 }
 
 /** POST /feed-keys/:id/revoke (row 47). Immediate; no grace. */
-export async function revokeFeedKey(engine: EngineDeps, viewer: Viewer, keyRowId: string) {
+export async function revokeFeedKey(engine: EngineDeps, viewer: Viewer, keyRowId: string): Promise<BastionRevokedFeedKeyResponse> {
   const now = engine.now();
   return orgTx(engine.sql, viewer.org_id, async (tx) => {
     const rows = await tx`
@@ -186,12 +203,17 @@ export async function revokeFeedKey(engine: EngineDeps, viewer: Viewer, keyRowId
       throw new ConflictError('This key was already revoked.', 'ALREADY_REVOKED');
     }
     await auditRaw(tx, viewer, 'feed.key.revoke', { type: 'feed_key', id: keyRowId }, { feed_id: rows[0].feed_id });
-    return { data: { id: keyRowId, status: 'revoked', revoked_at: now.toISOString() } };
+    return { data: { id: keyRowId, status: 'revoked' as const, revoked_at: now.toISOString() } };
   });
 }
 
 /** GET /feeds/:id/records (row 49). Subjects are personal data: shown unless redacted. */
-export async function listFeedRecords(engine: EngineDeps, viewer: Viewer, feedId: string, q: BastionFeedRecordListQuery) {
+export async function listFeedRecords(
+  engine: EngineDeps,
+  viewer: Viewer,
+  feedId: string,
+  q: BastionFeedRecordListQuery,
+): Promise<Served<BastionFeedRecordListResponse>> {
   return orgTx(engine.sql, viewer.org_id, async (tx) => {
     await loadFeed(tx, viewer.org_id, feedId);
     const rows = (await tx.unsafe(
@@ -207,7 +229,8 @@ export async function listFeedRecords(engine: EngineDeps, viewer: Viewer, feedId
     const page = rows.slice(0, q.limit);
     const last = page[page.length - 1];
     return {
-      data: page,
+      // ledger_seq is bigint and arrives from postgres as a string; the response carries a number (#371).
+      data: page.map((r) => ({ ...(r as unknown as Served<BastionFeedRecordRow>), ledger_seq: intOrNull(r.ledger_seq) })),
       next_cursor: rows.length > q.limit && last ? new Date(last.occurred_at as string).toISOString() : null,
       has_more: rows.length > q.limit,
     };

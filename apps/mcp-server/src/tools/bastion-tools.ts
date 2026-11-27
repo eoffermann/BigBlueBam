@@ -162,14 +162,14 @@ export function registerBastionTools(
         if (!include_requirements) return ok(f.data);
         const reqs = await client.listRequirements(framework_id);
         if (!reqs.ok) return err('reading requirements', reqs.data);
-        return ok({ framework: (f.data as { data?: unknown }).data ?? f.data, requirements: reqs.data });
+        return ok({ framework: f.data.data, requirements: reqs.data });
       }
       const [list, templates] = await Promise.all([client.listFrameworks(include_archived), client.listTemplates()]);
       if (!list.ok) return err('listing frameworks', list.data);
       if (!templates.ok) return err('listing framework templates', templates.data);
       return ok({
-        frameworks: (list.data as { data?: unknown }).data ?? [],
-        templates: (templates.data as { data?: unknown }).data ?? [],
+        frameworks: list.data.data,
+        templates: templates.data.data,
       });
     },
   });
@@ -1170,7 +1170,7 @@ export function registerBastionQuestionnaireTools(server: McpServer, client: Bas
       if (include_items === false) return ok(head.data);
       const items = await client.listQuestionnaireItems(questionnaire_id, { band, needs_review, asker_user_id });
       if (!items.ok) return err('reading the answers', items.data);
-      return ok({ questionnaire: (head.data as { data?: unknown })?.data ?? head.data, items: items.data });
+      return ok({ questionnaire: head.data.data, items: items.data });
     },
   });
 
