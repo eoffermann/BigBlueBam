@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-27T15:56:43.291Z",
+  "generated_at": "2026-11-27T17:27:44.792Z",
   "screenshots": [
     {
       "app": "bam",
@@ -270,56 +270,56 @@
       "theme": "light",
       "file": "01-readiness.png",
       "path": "docs/apps/bastion/screenshots/light/01-readiness.png",
-      "size": 92807,
-      "hash": "f6093fb2c765b1148e8e2389e9bd0d44db881c67ef7d7f006c5bec86ba2fd110"
+      "size": 91875,
+      "hash": "57c68837ece3023fd7e56b4c0dae688bd957264e8b2e9b58df9d01a4d95aca9f"
     },
     {
       "app": "bastion",
       "theme": "light",
       "file": "02-setup.png",
       "path": "docs/apps/bastion/screenshots/light/02-setup.png",
-      "size": 91081,
-      "hash": "83bb979218441cab17eaaff7bc84ae094f4ec90037067860754cdd1d62d1872a"
+      "size": 91089,
+      "hash": "adba1b3cfe75169464719bb6ceb26e27dbe07983b9335670a656ab3ee4d67f7b"
     },
     {
       "app": "bastion",
       "theme": "light",
       "file": "03-controls.png",
       "path": "docs/apps/bastion/screenshots/light/03-controls.png",
-      "size": 93307,
-      "hash": "fedf988cb5e4c73ad9d4bdcb445cad5ddcd3914ab089818af77d3cceb6a048ae"
+      "size": 92916,
+      "hash": "c8d8ec087a17eec200af7d89e63640bf2e2687482ba05d9fd5ba06b1480e937f"
     },
     {
       "app": "bastion",
       "theme": "light",
       "file": "04-control-detail.png",
       "path": "docs/apps/bastion/screenshots/light/04-control-detail.png",
-      "size": 109078,
-      "hash": "80ac188d66f9a0b5dc243e38d4bf785c059edfe0f26190a630d2670466ffe5ac"
+      "size": 109112,
+      "hash": "8012f5b983ec3306c1d7a237c681134b6d7c2f21b66e4d39c0727321440b5887"
     },
     {
       "app": "bastion",
       "theme": "light",
       "file": "05-evidence-map.png",
       "path": "docs/apps/bastion/screenshots/light/05-evidence-map.png",
-      "size": 103115,
-      "hash": "ef6fecbef7616b3bc44fe19b5bd21610884342a57824bee7a9c6e8ee090b2fd4"
+      "size": 104377,
+      "hash": "0f9ff241a0e9d74032749c0666cd476dc354f3b6d6d4de1324a8e15f0cd67839"
     },
     {
       "app": "bastion",
       "theme": "light",
       "file": "06-what-to-fix-first.png",
       "path": "docs/apps/bastion/screenshots/light/06-what-to-fix-first.png",
-      "size": 128239,
-      "hash": "4512f5058a0f6a8a5a557c6848ca0cc63d82efcbf2035db47a567e0b001eb22c"
+      "size": 128076,
+      "hash": "d7bd363fa26e1dafed1edad01f09d91bb3378b686c4f3455ab2870126bd2dedb"
     },
     {
       "app": "bastion",
       "theme": "light",
       "file": "07-evidence-locker.png",
       "path": "docs/apps/bastion/screenshots/light/07-evidence-locker.png",
-      "size": 93412,
-      "hash": "639ae6026623cf77464f89b597f566d451ba916e2c6dc0bbf6a405b47759e647"
+      "size": 93417,
+      "hash": "d38e3d5cb006ef85ccb689926f2162f0012ad547bc547e376550ac2e1e489fe5"
     },
     {
       "app": "bastion",
@@ -350,40 +350,40 @@
       "theme": "light",
       "file": "11-questionnaires.png",
       "path": "docs/apps/bastion/screenshots/light/11-questionnaires.png",
-      "size": 111822,
-      "hash": "76c13dd14fe6bdf4994829ad8adbe69c9e80c97f22d389be81bd8c03749312fc"
+      "size": 112363,
+      "hash": "616be67dacb69a9f386903861f72df5c2a3e34f2a6f48bb57b0115e019e6fa37"
     },
     {
       "app": "bastion",
       "theme": "light",
       "file": "12-sharing.png",
       "path": "docs/apps/bastion/screenshots/light/12-sharing.png",
-      "size": 116679,
-      "hash": "b5faec9fa902c676fe360a2b51c5d4d0b20fb1e719f0cf6952a576948ad42e4b"
+      "size": 117431,
+      "hash": "576c98674bc073ada49779349df70bf1c73dcb7f0c851fa7283cfe5991bcb191"
     },
     {
       "app": "bastion",
       "theme": "light",
       "file": "13-settings.png",
       "path": "docs/apps/bastion/screenshots/light/13-settings.png",
-      "size": 78763,
-      "hash": "dcc84093c6d7e6b5e7a85ee895f77d5a178d94c4553e0854aa65fcd722755195"
+      "size": 78823,
+      "hash": "d435f4e969fe3d99b27adfe959554d6e2238f8877b9a3f3eb70b223243990e46"
     },
     {
       "app": "bastion",
       "theme": "light",
       "file": "14-auditor-room.png",
       "path": "docs/apps/bastion/screenshots/light/14-auditor-room.png",
-      "size": 939037,
-      "hash": "ee56e63496953e61f42f3f11b740742538216d72182f0173cee9d37651409b7e"
+      "size": 936112,
+      "hash": "a6f7752c3b2f4605257418dd47f0169e4c5f3666516c340cd17b150333aba075"
     },
     {
       "app": "bastion",
       "theme": "dark",
       "file": "01-readiness.png",
       "path": "docs/apps/bastion/screenshots/dark/01-readiness.png",
-      "size": 261008,
-      "hash": "5edf3651f564b3bd5f03711ac773cd42e4c12d0b66664f05a930ea96c7bc78d7"
+      "size": 255784,
+      "hash": "bb372c9bd730e3900aba6167ec8a434d1aff9529cabc6a6b48b78cc74e12cfa3"
     },
     {
       "app": "bay",
