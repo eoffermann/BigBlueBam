@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import Fastify, { type FastifyInstance } from 'fastify';
 import postgres from 'postgres';
 import { bastionRunClaimedErrorSchema } from '@bigbluebam/shared';
@@ -21,8 +21,6 @@ import { clock, DATABASE_URL, makeDeps, seedOrg, wipeOrg } from './engine-harnes
 if (!DATABASE_URL) {
   console.warn('[bastion-api/m4-retention-inbox] SKIPPING: DATABASE_URL is not set. Point it at a migrated database.');
 }
-
-vi.setConfig({ testTimeout: 120_000, hookTimeout: 60_000 });
 
 const DAY = 86_400_000;
 const SECRET = 'i'.repeat(40);

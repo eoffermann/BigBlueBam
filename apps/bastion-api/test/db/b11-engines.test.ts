@@ -6,6 +6,7 @@ import { deliverToBam, type Deliverer, drainOutbox } from '../../src/engine/outb
 import { redriveProjectDeliveries } from '../../src/engine/remediation.js';
 import { proposalReconcile } from '../../src/services/decisions.service.js';
 import { DATABASE_URL, makeDeps, seedOrg, wipeOrg } from './engine-harness.js';
+import { INGEST_EVENT_UPDATE, injectFault } from './fault-injection.js';
 
 /**
  * Review batch 11, worker engines (live database):
@@ -14,8 +15,6 @@ import { DATABASE_URL, makeDeps, seedOrg, wipeOrg } from './engine-harness.js';
  */
 
 if (!DATABASE_URL) console.warn('[bastion-api/b11-engines] SKIPPING: DATABASE_URL is not set. Point it at a migrated database.');
-
-vi.setConfig({ testTimeout: 120_000, hookTimeout: 60_000 });
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -161,16 +160,8 @@ describe.skipIf(!DATABASE_URL)('batch 11: worker engines (live database)', () =>
     const a = await orgWithDecision('reconcile-fail-a');
     const b = await orgWithDecision('reconcile-fail-b');
     const deps = makeDeps(sql);
-    const fn = `b11_fail_inbox_${a.org.replace(/-/g, '')}`;
-    await sql.unsafe(`
-      CREATE OR REPLACE FUNCTION ${fn}() RETURNS trigger LANGUAGE plpgsql AS $f$
-      BEGIN
-        IF NEW.organization_id = '${a.org}'::uuid THEN
-          RAISE EXCEPTION 'deadlock detected (test)' USING ERRCODE = '40P01';
-        END IF;
-        RETURN NEW;
-      END $f$`);
-    await sql.unsafe(`DROP TRIGGER IF EXISTS ${fn} ON bastion_ingest_events; CREATE TRIGGER ${fn} BEFORE UPDATE ON bastion_ingest_events FOR EACH ROW EXECUTE FUNCTION ${fn}()`);
+    // Org A's inbox updates fail (a fault row, not a trigger created here: #320).
+    const restore = await injectFault(sql, { target: INGEST_EVENT_UPDATE, match: { organization_id: a.org }, sqlstate: '40P01', message: 'deadlock detected (test)' });
     try {
       // Both orgs in one pass (no org filter would also sweep other tests' orgs; run each explicitly in order).
       const ra = await proposalReconcile(deps, { organization_id: a.org });
@@ -180,8 +171,7 @@ describe.skipIf(!DATABASE_URL)('batch 11: worker engines (live database)', () =>
       const bLeft = await sql`SELECT status FROM bastion_ingest_events WHERE organization_id = ${b.org}`;
       expect(bLeft.map((x) => x.status)).toEqual(['done']);
     } finally {
-      await sql.unsafe(`DROP TRIGGER IF EXISTS ${fn} ON bastion_ingest_events`);
-      await sql.unsafe(`DROP FUNCTION IF EXISTS ${fn}()`);
+      await restore();
     }
   });
 });
