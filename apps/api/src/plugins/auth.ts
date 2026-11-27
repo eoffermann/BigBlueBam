@@ -9,7 +9,7 @@ import { apiKeys } from '../db/schema/api-keys.js';
 import { organizationMemberships } from '../db/schema/organization-memberships.js';
 import { organizations } from '../db/schema/organizations.js';
 import { impersonationSessions } from '../db/schema/impersonation-sessions.js';
-import { resolveUserOrgRoles } from '../services/role-resolver.js';
+import { ORG_ADMIN_ROLES, keyRoleCapApplies, resolveUserOrgRoles } from '../services/role-resolver.js';
 import { resolveEffectiveOrg } from './org-context.js';
 
 const UUID_REGEX_HEADER = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -224,9 +224,10 @@ export async function buildAuthUser(
   if (apiKeyOrgId && !row.is_superuser) {
     const keyMembership = memberships.find((m) => m.org_id === apiKeyOrgId);
     // Use the user's role within the key's org. If the user is no longer
-    // a member of the key's org (revoked), fall back to 'viewer' — the
-    // key's own scope still gates write access, but org membership loss
-    // should strip role-derived privileges.
+    // a member of the key's org (revoked), fall back to 'viewer'. The key's
+    // scope gates write access and requireScope('admin') ALSO requires this
+    // role to be admin/owner, so a removed holder's admin key opens nothing
+    // org-admin (#336).
     keyScopedOrgId = apiKeyOrgId;
     keyScopedRole = keyMembership?.role ?? 'viewer';
   }
@@ -597,7 +598,6 @@ export async function requireAuth(request: FastifyRequest, reply: FastifyReply) 
 }
 
 /** Org roles that satisfy an `admin`-scoped gate under session auth. */
-const ORG_ADMIN_ROLES: ReadonlySet<string> = new Set(['admin', 'owner']);
 
 /** Requires the API key scope to allow the given operation type.
  *  Hierarchy: admin > read_write > read
@@ -654,6 +654,28 @@ export function requireScope(minScope: 'read' | 'read_write' | 'admin') {
         error: {
           code: 'FORBIDDEN',
           message: `API key requires '${minScope}' scope or higher`,
+          details: [],
+          request_id: request.id,
+        },
+      });
+    }
+    // #336: a key's effective privilege is the intersection of its scope and
+    // the holder's CURRENT org role. An admin-scope key minted while its
+    // holder was an owner must stop opening org-admin routes once they are
+    // demoted (role member) or removed (buildAuthUser falls back to viewer).
+    if (
+      minScope === 'admin' &&
+      keyRoleCapApplies(request.user.kind) &&
+      !ORG_ADMIN_ROLES.has(request.user.role)
+    ) {
+      request.log.warn(
+        { userId: request.user.id, role: request.user.role, path: request.url, method: request.method },
+        'requireScope(admin): denied an admin-scope API key whose holder is no longer an org admin',
+      );
+      return reply.status(403).send({
+        error: {
+          code: 'FORBIDDEN',
+          message: 'Organization admin privileges required',
           details: [],
           request_id: request.id,
         },

@@ -359,8 +359,8 @@ MCP tool modules in scope: `me-tools`, `member-tools`, `user-resolver-tools`, `p
 | `GET /org/launchpad-apps` | — _(skip: resolver; `set_org_launchpad_apps` covers the override)_ | Get org Launchpad override + platform default, plus `catalog_detail` (every app's name/description/path) that the Org Launchpad tab renders its rows from (#158) | `apps/frontend/src/pages/settings.tsx` |
 | `PUT /org/launchpad-apps` | `set_org_launchpad_apps` | Set/clear org Launchpad override | `apps/frontend/src/pages/settings.tsx` |
 | `GET /org/members` | `list_members` | List org members (guest-scoped subset) | `apps/frontend/src/pages/people/index.tsx` |
-| `PATCH /org/members/:userId` | `bam_update_member_role` | Update member org role | `apps/frontend/src/pages/people/detail.tsx` |
-| `DELETE /org/members/:userId` | `bam_remove_member_from_org` | Remove member from org | `apps/frontend/src/pages/people/detail.tsx` |
+| `PATCH /org/members/:userId` | `bam_update_member_role` | Update member org role (a demotion below admin downgrades the member's admin-scope API keys for the org to read_write) | `apps/frontend/src/pages/people/detail.tsx` |
+| `DELETE /org/members/:userId` | `bam_remove_member_from_org` | Remove member from org (deletes the member's API keys bound to the org) | `apps/frontend/src/pages/people/detail.tsx` |
 | `GET /org/members/:userId` | `bam_get_org_member` | Get member detail | `apps/frontend/src/pages/people/detail.tsx` |
 | `GET /org/members/:userId/activity` | `bam_get_member_activity` | Member activity feed (paginated) | `apps/frontend/src/pages/people/detail.tsx` |
 | `GET /org/members/:userId/api-keys` | — _(skip: raw credential/API-key admin)_ | List a member's API keys | `apps/frontend/src/pages/people/detail.tsx` |

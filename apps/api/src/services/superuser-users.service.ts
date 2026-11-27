@@ -5,7 +5,7 @@ import { escapeLike } from '../lib/escape-like.js';
 import { organizations } from '../db/schema/organizations.js';
 import { organizationMemberships } from '../db/schema/organization-memberships.js';
 import { accountGroupMemberships, permissionGroups } from '../db/schema/permissions.js';
-import { setUserOrgRole } from './role-resolver.js';
+import { reconcileOrgApiKeys, setUserOrgRole } from './role-resolver.js';
 import { superuserAuditLog } from '../db/schema/superuser-audit-log.js';
 import { sessions } from '../db/schema/sessions.js';
 import { projects } from '../db/schema/projects.js';
@@ -380,14 +380,18 @@ export async function removeMembership(
   userId: string,
   orgId: string,
 ): Promise<void> {
-  await db
-    .delete(organizationMemberships)
-    .where(
-      and(
-        eq(organizationMemberships.user_id, userId),
-        eq(organizationMemberships.org_id, orgId),
-      ),
-    );
+  await db.transaction(async (tx) => {
+    await tx
+      .delete(organizationMemberships)
+      .where(
+        and(
+          eq(organizationMemberships.user_id, userId),
+          eq(organizationMemberships.org_id, orgId),
+        ),
+      );
+    // A removed member's keys for this org must not outlive the membership.
+    await reconcileOrgApiKeys(userId, orgId, null, tx);
+  });
 }
 
 export async function updateMembershipRole(
