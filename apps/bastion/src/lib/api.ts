@@ -8,6 +8,7 @@ import type {
   BastionFixTemplate,
   BastionGapKind,
   BastionGapStatus,
+  BastionPolicyArticleState,
   BastionReadinessBanner,
   BastionReadinessNumbersOut,
 } from '@bigbluebam/shared';
@@ -274,7 +275,8 @@ export interface AnswerLibraryRow {
 export type PolicyAudience = { kind: 'all' } | { kind: 'users'; user_ids: string[] };
 
 /** One linked Beacon article (shapePolicy in apps/bastion-api/src/services/policies.service.ts). */
-export type PolicyArticleState = 'current' | 'missing' | 'retired' | 'expired';
+/** The linked article's state: one union with bastion-api and the MCP tools (#285). */
+export type PolicyArticleState = BastionPolicyArticleState;
 
 export interface PolicyRow {
   id: string;

@@ -12,6 +12,7 @@ import {
   requestAttestations,
 } from '../../src/services/policies.service.js';
 import type { Viewer } from '../../src/services/types.js';
+import { NotFoundError } from '../../src/lib/errors.js';
 import { clock, DATABASE_URL, makeDeps, seedOrg, wipeOrg } from './engine-harness.js';
 
 /**
@@ -140,12 +141,21 @@ describe.skipIf(!DATABASE_URL)('batch 11: policies and attestation (live databas
     await expect(attest(d, owner, policyId, good)).rejects.toMatchObject({ code: 'POLICY_ARTICLE_RETIRED' });
     await expect(getPolicyBody(d, owner, policyId)).rejects.toMatchObject({ code: 'POLICY_ARTICLE_RETIRED' });
     await expect(requestAttestations(d, owner, policyId, {})).rejects.toMatchObject({ code: 'POLICY_ARTICLE_RETIRED' });
-    expect((await myAttestations(d, owner)).data[0]).toMatchObject({ due: false, article_state: 'retired' });
+    expect((await myAttestations(d, owner)).data[0]).toMatchObject({
+      due: false,
+      article_state: 'retired',
+      state_words: 'This policy was withdrawn. Nothing to do.',
+      next_due_at: null,
+    });
+    // #285: the advice names the buttons that exist, never an article swap PATCH cannot do.
+    expect(listed.article_problem).toContain('"Link a Beacon article"');
+    expect(listed.article_problem).not.toContain('Link a current article');
     expect(await sql`SELECT 1 FROM bastion_policy_attestations WHERE organization_id = ${s.org}`).toHaveLength(0);
 
     // Active again but past its Beacon review date.
     await sql`UPDATE beacon_entries SET status = 'Active', expires_at = now() - interval '1 day' WHERE id = ${s.entry}`;
     await expect(attest(d, owner, policyId, good)).rejects.toMatchObject({ code: 'POLICY_ARTICLE_EXPIRED' });
+    expect((await myAttestations(d, owner)).data[0]).toMatchObject({ article_state: 'expired', state_words: 'Paused while its owner reviews it. Nothing to do for now.' });
     expect((await attestationNudge(d.engine, { organization_id: s.org })).nudged).toBe(0);
 
     // Current again: everything works as before.
@@ -159,6 +169,11 @@ describe.skipIf(!DATABASE_URL)('batch 11: policies and attestation (live databas
     const gone = (await listPolicies(d, owner, { status: 'active' })).data[0]!;
     expect(gone).toMatchObject({ article_state: 'missing', not_attested_count: 0 });
     expect((await attestationNudge(d.engine, { organization_id: s.org })).nudged).toBe(0);
+    // #285: a removed article reads as removed, and request-attestations refuses it exactly as body
+    // and attest do (a 404, not a 409 with an interpolated code).
+    expect((await myAttestations(d, owner)).data[0]).toMatchObject({ article_state: 'missing', state_words: "This policy's article was removed. Nothing to do." });
+    await expect(requestAttestations(d, owner, policyId, {})).rejects.toBeInstanceOf(NotFoundError);
+    await expect(getPolicyBody(d, owner, policyId)).rejects.toBeInstanceOf(NotFoundError);
     const probe = (await sql.begin(async (raw) => {
       const tx = raw as unknown as postgres.Sql;
       await tx`SELECT set_config('app.current_org_id', ${s.org}, true)`;

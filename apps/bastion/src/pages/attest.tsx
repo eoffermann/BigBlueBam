@@ -78,24 +78,31 @@ export function AttestPage() {
       {q.error && <p className="text-sm text-red-600">{friendlyError(q.error)}</p>}
       {!q.isLoading && rows.length === 0 && <p className="text-sm text-zinc-600 dark:text-zinc-400">Nothing to read right now. When your team links a policy, it shows up here.</p>}
       <ul className="divide-y divide-zinc-200 dark:divide-zinc-800">
-        {rows.map((r) => (
-          <li key={r.policy_id} className="py-3 flex items-center justify-between gap-4" data-testid="to-read-row">
-            <div>
-              <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">{r.title}</p>
-              <p className={`text-xs ${r.due ? 'text-amber-700' : 'text-green-700'}`}>
-                {r.state_words}
-                {!r.due && r.next_due_at ? ` · next by ${formatDate(r.next_due_at)}` : ''}
-              </p>
-            </div>
-            <button
-              type="button"
-              className="px-3 py-1.5 rounded-lg text-xs font-medium border border-zinc-300 dark:border-zinc-700"
-              onClick={() => setReading(reading === r.policy_id ? null : r.policy_id)}
-            >
-              {reading === r.policy_id ? 'Close' : r.due ? 'Read it' : 'Read again'}
-            </button>
-          </li>
-        ))}
+        {rows.map((r) => {
+          // #285: a paused policy (its article removed, withdrawn or past review) has nothing to
+          // read, so no button and no "next by" date: an action the server would refuse is hidden.
+          const readable = (r.article_state ?? 'current') === 'current';
+          return (
+            <li key={r.policy_id} className="py-3 flex items-center justify-between gap-4" data-testid="to-read-row">
+              <div>
+                <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">{r.title}</p>
+                <p className={`text-xs ${!readable ? 'text-zinc-600 dark:text-zinc-400' : r.due ? 'text-amber-700' : 'text-green-700'}`}>
+                  {r.state_words}
+                  {readable && !r.due && r.next_due_at ? ` · next by ${formatDate(r.next_due_at)}` : ''}
+                </p>
+              </div>
+              {readable && (
+                <button
+                  type="button"
+                  className="px-3 py-1.5 rounded-lg text-xs font-medium border border-zinc-300 dark:border-zinc-700"
+                  onClick={() => setReading(reading === r.policy_id ? null : r.policy_id)}
+                >
+                  {reading === r.policy_id ? 'Close' : r.due ? 'Read it' : 'Read again'}
+                </button>
+              )}
+            </li>
+          );
+        })}
       </ul>
       {reading && <Reader key={reading} policyId={reading} onDone={() => undefined} />}
     </div>

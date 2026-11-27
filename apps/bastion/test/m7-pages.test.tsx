@@ -221,6 +221,34 @@ describe('Policies to read', () => {
     expect(screen.getByText(/Only that person can acknowledge this/)).toBeInTheDocument();
   });
 
+  it('a paused policy says why in its own words and offers no read action or next date (#285)', async () => {
+    fetchMock = routedFetch({
+      'GET /bastion/api/v1/me/attestations': () =>
+        jsonResponse(200, {
+          data: [
+            {
+              policy_id: POLICY_ID,
+              title: 'Island Information Security Policy',
+              current_version: 3,
+              shared_with_everyone: true,
+              due: false,
+              article_state: 'retired',
+              state_words: 'This policy was withdrawn. Nothing to do.',
+              last_attested_version: 3,
+              last_attested_at: '2026-01-01T00:00:00.000Z',
+              next_due_at: '2027-01-01T00:00:00.000Z',
+            },
+          ],
+        }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    wrap(<AttestPage />, VIEWER);
+    expect(await screen.findByText('This policy was withdrawn. Nothing to do.')).toBeInTheDocument();
+    expect(screen.queryByText('Read again')).toBeNull();
+    expect(screen.queryByText('Read it')).toBeNull();
+    expect(screen.queryByText(/next by/)).toBeNull();
+  });
+
   it('without attestation.sign there is no button', async () => {
     wrap(<AttestPage />, { ...VIEWER, 'bastion.attestation.sign': false });
     fireEvent.click(await screen.findByText('Read it'));

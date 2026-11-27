@@ -30,7 +30,7 @@ import { claimNoticeEvery } from '../engine/notice-markers.js';
 import { enqueueBastionEvent } from '../engine/outbox.js';
 import { queueControlRuns, type QueuedRun } from '../engine/evidence-store.js';
 import type { CanAccess } from './decisions.service.js';
-import { ARTICLE_PROBLEM, type ArticleState, articleStateFromSummary, articleStateOf, cannotOpen, entriesOpenTo } from '../lib/policy-access.js';
+import { ARTICLE_PROBLEM, ARTICLE_READER_WORDS, type ArticleState, articleStateFromSummary, articleStateOf, cannotOpen, entriesOpenTo } from '../lib/policy-access.js';
 import { beginLedgerBatch, mapAppendError } from './ledger-batch.js';
 import { isUniqueViolation } from './shared.js';
 import type { Viewer } from './types.js';
@@ -433,7 +433,7 @@ export async function myAttestations(d: PolicyDeps, viewer: Viewer) {
         due,
         article_state: facts.article_state,
         state_words: paused
-          ? 'Nothing to do for now: this policy is being updated'
+          ? ARTICLE_READER_WORDS[facts.article_state as Exclude<ArticleState, 'current'>]
           : due
             ? last
               ? 'A new version or a new year: please read it again'
@@ -569,8 +569,10 @@ export async function requestAttestations(d: PolicyDeps, viewer: Viewer, id: str
     const p = await loadPolicy(tx, viewer.org_id, id);
     if (p.status !== 'active') throw new ConflictError('This policy was retired.', 'POLICY_RETIRED');
     const facts = await duePeople(tx, viewer.org_id, id, now);
-    // Never ask people to read an article that cannot be read (#244): the owner is told why instead.
-    if (facts.article_state !== 'current') throw new ConflictError(ARTICLE_PROBLEM[facts.article_state], `POLICY_ARTICLE_${facts.article_state.toUpperCase()}`);
+    // Never ask people to read an article that cannot be read (#244). The same refusal as body and
+    // attest (#285): one state, one status and one literal code (missing is a 404).
+    const refused = articleRefusal(facts.article_state);
+    if (refused) throw refused;
     const only = body.user_ids;
     const targets = only ? facts.not_attested_ids.filter((u) => only.includes(u)) : facts.not_attested_ids;
     let nudged = 0;
