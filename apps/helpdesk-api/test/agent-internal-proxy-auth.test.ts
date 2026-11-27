@@ -106,7 +106,8 @@ describe('Bam-proxied agent auth (internal token + acting user/org)', () => {
       headers: proxyHeaders({ 'x-internal-token': 'x'.repeat(40) }),
     });
     expect(res.statusCode).toBe(401);
-    expect(res.json().error.message).toMatch(/Invalid internal service token/);
+    // The shared guard's message (#306: the check now runs in @bigbluebam/service-health).
+    expect(res.json().error.message).toMatch(/Invalid or missing internal service secret/);
     expect(dbMock.execute).not.toHaveBeenCalled();
     expect(dbMock.select).not.toHaveBeenCalled();
   });
