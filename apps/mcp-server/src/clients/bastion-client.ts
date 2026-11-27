@@ -165,7 +165,7 @@ export function createBastionClient(bastionApiUrl: string, api: ApiClient, fetch
     listControlEvidence: (controlId: string, q: Partial<BastionEvidenceListQuery>) =>
       request(
         'GET',
-        `/controls/${controlId}/evidence${qs({ assertion_id: q.assertion_id, cursor: q.cursor, limit: q.limit !== undefined ? String(q.limit) : undefined })}`,
+        `/controls/${controlId}/evidence${qs({ assertion_id: q.assertion_id, latest: q.latest, cursor: q.cursor, limit: q.limit !== undefined ? String(q.limit) : undefined })}`,
       ),
     getEvidence: (id: string) => request('GET', `/evidence/${id}`),
     verifyEvidence: (id: string) => request('GET', `/evidence/${id}/verify`),

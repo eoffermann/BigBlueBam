@@ -57,6 +57,7 @@ export default async function evidenceRoutes(fastify: FastifyInstance) {
     const raw = request.query as Record<string, string | undefined>;
     const parsed = bastionEvidenceListQuerySchema.safeParse({
       assertion_id: raw.assertion_id || undefined,
+      latest: raw.latest || undefined,
       cursor: raw.cursor || undefined,
       limit: raw.limit || undefined,
     });

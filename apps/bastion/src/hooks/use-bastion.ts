@@ -472,8 +472,18 @@ export function useControl(id: string | null) {
 export function useControlEvidence(id: string | null) {
   return useQuery({
     queryKey: key('control-evidence', id),
-    queryFn: () => api.get<{ data: EvidenceSnapshotRow[] }>(`/controls/${id}/evidence`, { limit: 20 }),
+    // #403: what each confirmed check shows now, once (not one copy per evaluation run).
+    queryFn: () => api.get<{ data: EvidenceSnapshotRow[] }>(`/controls/${id}/evidence`, { latest: true, limit: 100 }),
     enabled: !!id,
+  });
+}
+
+/** One check's earlier results on a control, newest first (the Control detail history expander). */
+export function useCheckEvidenceHistory(controlId: string | null, assertionId: string, enabled: boolean) {
+  return useQuery({
+    queryKey: key('check-evidence-history', controlId, assertionId),
+    queryFn: () => api.get<{ data: EvidenceSnapshotRow[] }>(`/controls/${controlId}/evidence`, { assertion_id: assertionId, limit: 20 }),
+    enabled: enabled && !!controlId,
   });
 }
 

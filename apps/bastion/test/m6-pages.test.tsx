@@ -242,4 +242,56 @@ describe('Control detail', () => {
     expect(screen.getByText('Accept this as a risk')).toBeInTheDocument();
     expect(screen.getByText('Check now')).toBeInTheDocument();
   });
+
+  it('lists each check once with its newest result; earlier runs sit behind "Earlier results" (#403)', async () => {
+    const A = '0b0b0b0b-0000-4000-8000-0000000000a1';
+    const snap = (id: string, outcome: string, day: string) => ({
+      id,
+      assertion_id: A,
+      outcome,
+      created_at: `2026-11-${day}T03:00:00Z`,
+      explanation: null,
+      cited_refs: [],
+      cited_labels: [],
+      hidden_citation_count: 0,
+    });
+    fetchMock = routedFetch({
+      [`GET /bastion/api/v1/controls/${CONTROL_ID}`]: () =>
+        jsonResponse(200, {
+          data: {
+            id: CONTROL_ID,
+            title: 'API keys are rotated',
+            plain_summary: null,
+            owner_user_id: 'u-p',
+            risk_weight: 4,
+            setup_state: 'set_up',
+            requirements: [],
+            assertions: [{ id: A, plain_statement: 'No API key is older than 90 days', review_status: 'confirmed' }],
+          },
+        }),
+      'GET /bastion/api/v1/coverage': () => jsonResponse(200, { data: [] }),
+      [`GET /bastion/api/v1/controls/${CONTROL_ID}/evidence`]: (_init: RequestInit, url: URL) =>
+        url.searchParams.get('latest') === 'true'
+          ? jsonResponse(200, { data: [snap('s3', 'pass', '27')] })
+          : jsonResponse(200, { data: [snap('s3', 'pass', '27'), snap('s2', 'fail', '26'), snap('s1', 'fail', '25')] }),
+      'GET /bastion/api/v1/exceptions': () => jsonResponse(200, { data: [] }),
+      'GET /bastion/api/v1/fix-drafts': () => jsonResponse(200, { data: [] }),
+      'GET /bastion/api/v1/drift': () => jsonResponse(200, { data: [] }),
+      'GET /bastion/api/v1/gaps': () => jsonResponse(200, { data: [], stale: null, accepted_risks: [] }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    wrap(<ControlDetailPage controlId={CONTROL_ID} onNavigate={() => {}} />, OWNER);
+    const timeline = await screen.findByTestId('evidence-timeline');
+    expect(timeline.querySelectorAll(':scope > li')).toHaveLength(1);
+    expect(timeline).toHaveTextContent('No API key is older than 90 days');
+    expect(screen.queryByTestId('check-history')).toBeNull();
+
+    fireEvent.click(screen.getByText('Earlier results'));
+    const history = await screen.findByTestId('check-history');
+    // The newest result is not repeated; the two earlier runs are.
+    expect(history.querySelectorAll('li')).toHaveLength(2);
+    const calls = fetchMock.mock.calls.map((c: unknown[]) => new URL(String(c[0]), 'http://localhost')).filter((u: URL) => u.pathname.endsWith('/evidence'));
+    expect(calls.some((u: URL) => u.searchParams.get('latest') === 'true')).toBe(true);
+    expect(calls.some((u: URL) => u.searchParams.get('assertion_id') === A)).toBe(true);
+  });
 });

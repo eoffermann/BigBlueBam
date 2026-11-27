@@ -6427,7 +6427,7 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
   },
   {
     "mcp_tool": "bastion_evidence_for",
-    "description": "The evidence recorded for one control, newest first (GET /controls/:id/evidence): each snapshot's outcome (pass, fail, unprovable with a reason), the check that produced it, its window, counts, its hash and ledger position, and a plain explanation. Names and cited records are shown only to owners, admins and the control's owner; everyone else gets counts. Optional assertion_id narrows to one check. Pass next_cursor back as cursor while has_more is true. Read-only.",
+    "description": "The evidence recorded for one control, newest first (GET /controls/:id/evidence): each snapshot's outcome (pass, fail, unprovable with a reason), the check that produced it, its window, counts, its hash and ledger position, and a plain explanation. Names and cited records are shown only to owners, admins and the control's owner; everyone else gets counts. Every evaluation run stores one snapshot per check, so the full list repeats each check once per run; latest=true returns only the newest snapshot of each confirmed check (one page, what Control detail shows). Optional assertion_id narrows to one check (its history). Pass next_cursor back as cursor while has_more is true. Read-only.",
     "source": "bastion",
     "parameters": [
       {
@@ -6445,6 +6445,13 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
         "required": false,
         "nullable": false,
         "description": ""
+      },
+      {
+        "name": "latest",
+        "type": "boolean",
+        "required": false,
+        "nullable": false,
+        "description": "Only the newest snapshot of each confirmed check."
       },
       {
         "name": "cursor",

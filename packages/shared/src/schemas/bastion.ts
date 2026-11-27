@@ -799,6 +799,12 @@ export type BastionEvaluationListQuery = z.infer<typeof bastionEvaluationListQue
 export const bastionEvidenceListQuerySchema = z
   .object({
     assertion_id: z.string().uuid().optional(),
+    /**
+     * Only the newest snapshot of each of the control's confirmed checks (#403): what the check
+     * shows now, once, rather than one copy per evaluation run. One page, no cursor; the full
+     * history of a check is the same route with assertion_id.
+     */
+    latest: boolQueryParam().optional(),
     /** next_cursor from the previous page (issue #204). */
     cursor: z.string().trim().min(1).max(200).optional(),
     limit: z.coerce.number().int().min(1).max(100).default(25),

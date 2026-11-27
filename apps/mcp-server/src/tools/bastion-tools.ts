@@ -343,16 +343,17 @@ export function registerBastionTools(
   registerTool(server, {
     name: 'bastion_evidence_for',
     description:
-      'The evidence recorded for one control, newest first (GET /controls/:id/evidence): each snapshot\'s outcome (pass, fail, unprovable with a reason), the check that produced it, its window, counts, its hash and ledger position, and a plain explanation. Names and cited records are shown only to owners, admins and the control\'s owner; everyone else gets counts. Optional assertion_id narrows to one check. Pass next_cursor back as cursor while has_more is true. Read-only.',
+      'The evidence recorded for one control, newest first (GET /controls/:id/evidence): each snapshot\'s outcome (pass, fail, unprovable with a reason), the check that produced it, its window, counts, its hash and ledger position, and a plain explanation. Names and cited records are shown only to owners, admins and the control\'s owner; everyone else gets counts. Every evaluation run stores one snapshot per check, so the full list repeats each check once per run; latest=true returns only the newest snapshot of each confirmed check (one page, what Control detail shows). Optional assertion_id narrows to one check (its history). Pass next_cursor back as cursor while has_more is true. Read-only.',
     input: {
       control_id: z.string().uuid(),
       assertion_id: z.string().uuid().optional(),
+      latest: z.boolean().optional().describe('Only the newest snapshot of each confirmed check.'),
       cursor: z.string().max(200).optional().describe('next_cursor from the previous page.'),
       limit: z.number().int().min(1).max(100).optional(),
     },
     returns: z.record(z.unknown()),
-    handler: async ({ control_id, assertion_id, cursor, limit }) => {
-      const r = await client.listControlEvidence(control_id, { assertion_id, cursor, limit });
+    handler: async ({ control_id, assertion_id, latest, cursor, limit }) => {
+      const r = await client.listControlEvidence(control_id, { assertion_id, latest, cursor, limit });
       return r.ok ? ok(r.data) : err('listing evidence', r.data);
     },
   });

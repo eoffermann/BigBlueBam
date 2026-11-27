@@ -7,6 +7,7 @@ import { hiddenItemsSentence } from '@/lib/wording';
 import {
   useAcknowledgeDrift,
   useCheckControlNow,
+  useCheckEvidenceHistory,
   useControl,
   useControlEvidence,
   useCoverage,
@@ -38,6 +39,37 @@ function formatDate(iso: string): string {
 
 function plusDays(days: number): string {
   return new Date(Date.now() + days * 86_400_000).toISOString().slice(0, 10);
+}
+
+/**
+ * A check's earlier results, behind "Earlier results" (#403). The Evidence list shows each check
+ * once, with its newest result; every evaluation run's copy stays one click away here.
+ */
+function CheckHistory({ controlId, assertionId, latestId }: { controlId: string; assertionId: string; latestId: string }) {
+  const [open, setOpen] = useState(false);
+  const history = useCheckEvidenceHistory(controlId, assertionId, open);
+  const earlier = (history.data?.data ?? []).filter((h) => h.id !== latestId);
+  return (
+    <div className="mt-1">
+      <button type="button" className="text-xs text-primary-700 dark:text-primary-300 hover:underline" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
+        {open ? 'Hide earlier results' : 'Earlier results'}
+      </button>
+      {open &&
+        (history.isLoading ? (
+          <Loader2 className="h-4 w-4 animate-spin text-zinc-400" />
+        ) : earlier.length === 0 ? (
+          <p className="text-xs text-zinc-500">No earlier results for this check.</p>
+        ) : (
+          <ul className="mt-1 space-y-0.5 text-xs text-zinc-600 dark:text-zinc-400" data-testid="check-history">
+            {earlier.map((h) => (
+              <li key={h.id}>
+                {OUTCOME_WORDS[h.outcome]} · {formatDate(h.created_at)}
+              </li>
+            ))}
+          </ul>
+        ))}
+    </div>
+  );
 }
 
 function activeRisk(exceptions: ExceptionRow[]): ExceptionRow | null {
@@ -264,6 +296,7 @@ export function ControlDetailPage({ controlId, onNavigate }: { controlId: string
             {(evidence.data?.data ?? []).map((s) => (
               <li key={s.id} className="py-2 text-sm">
                 <span className="font-medium">{OUTCOME_WORDS[s.outcome]}</span> · {formatDate(s.created_at)} · {statementOf(s.assertion_id)}
+                <CheckHistory controlId={controlId} assertionId={s.assertion_id} latestId={s.id} />
                 {s.explanation && <p className="text-xs text-zinc-600 dark:text-zinc-400">{s.explanation}</p>}
                 {(s.cited_labels?.length ?? 0) > 0 && (
                   <div className="mt-1 flex flex-wrap gap-1" data-testid="cited-chips">

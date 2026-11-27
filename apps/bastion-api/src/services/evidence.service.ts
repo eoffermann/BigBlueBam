@@ -231,16 +231,32 @@ export async function listControlEvidence(
     const c = await tx`SELECT id FROM bastion_controls WHERE organization_id = ${viewer.org_id} AND id = ${controlId}`;
     if (!c[0]) throw new NotFoundError('We could not find that control.');
     const after = q.cursor ? decodeIdCursor(q.cursor) : null;
-    const rows = await tx.unsafe(
-      `SELECT ${SNAPSHOT_SELECT} FROM bastion_evidence_snapshots s
-        WHERE s.organization_id = $1 AND s.control_id = $2 AND ($3::uuid IS NULL OR s.assertion_id = $3)
-          AND ($5::uuid IS NULL OR (s.created_at, s.id) < (
-                SELECT p.created_at, p.id FROM bastion_evidence_snapshots p WHERE p.id = $5::uuid AND p.organization_id = $1))
-        ORDER BY s.created_at DESC, s.id DESC LIMIT $4`,
-      [viewer.org_id, controlId, q.assertion_id ?? null, q.limit + 1, after],
-    );
+    // #403: every evaluation run stores a snapshot per check, so the plain list repeats each check
+    // once per run. `latest` answers what each confirmed check shows now: its newest snapshot, one
+    // row per check, one page. History stays on the plain list (narrowed with assertion_id).
+    const rows = q.latest
+      ? await tx.unsafe(
+          `SELECT * FROM (
+             SELECT DISTINCT ON (s.assertion_id) ${SNAPSHOT_SELECT} FROM bastion_evidence_snapshots s
+               JOIN bastion_assertions a ON a.id = s.assertion_id AND a.organization_id = s.organization_id
+              WHERE s.organization_id = $1 AND s.control_id = $2 AND ($3::uuid IS NULL OR s.assertion_id = $3)
+                AND a.review_status = 'confirmed'
+              ORDER BY s.assertion_id, s.created_at DESC, s.id DESC) latest
+            ORDER BY latest.created_at DESC, latest.id DESC LIMIT $4`,
+          [viewer.org_id, controlId, q.assertion_id ?? null, q.limit],
+        )
+      : await tx.unsafe(
+          `SELECT ${SNAPSHOT_SELECT} FROM bastion_evidence_snapshots s
+            WHERE s.organization_id = $1 AND s.control_id = $2 AND ($3::uuid IS NULL OR s.assertion_id = $3)
+              AND ($5::uuid IS NULL OR (s.created_at, s.id) < (
+                    SELECT p.created_at, p.id FROM bastion_evidence_snapshots p WHERE p.id = $5::uuid AND p.organization_id = $1))
+            ORDER BY s.created_at DESC, s.id DESC LIMIT $4`,
+          [viewer.org_id, controlId, q.assertion_id ?? null, q.limit + 1, after],
+        );
     const detail = await detailAllowed(tx, viewer, controlId);
-    const page = pageOf(rows, q.limit, (r) => encodeIdCursor(r.id as string));
+    const page = q.latest
+      ? { data: [...rows], has_more: false, next_cursor: null }
+      : pageOf(rows, q.limit, (r) => encodeIdCursor(r.id as string));
     // Named chips for detail viewers (spec 6.2): "PR #42 in rescue-radio-firmware: ...", only for
     // refs that pass can_access for this reader.
     const allRefs = detail ? page.data.flatMap((r) => ((r as Record<string, unknown>).cited_refs as CitedRef[] | null) ?? []) : [];

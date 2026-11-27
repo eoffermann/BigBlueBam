@@ -106,7 +106,7 @@ It shows:
 - The state in words with its one-sentence reason. An accepted risk reads "Risk accepted until (date). Owner: (name)" with who approved it and why.
 - The owner, and the Bam task Bastion filed for this control, with a link.
 - **What needs doing**: the open gaps for this control, with a link to **Draft a fix in What to fix first**.
-- **Evidence**: the history of results, newest first ("Proven", "Not met" or "Can't prove yet", the date, and the check). Items the result cites appear as named chips when you are allowed to see them; otherwise a line says how many are hidden from you.
+- **Evidence**: each confirmed check once, with its newest result ("Proven", "Not met" or "Can't prove yet", the date, and the check). Click **Earlier results** under a check to see what each earlier nightly or manual check found. Items the result cites appear as named chips when you are allowed to see them; otherwise a line says how many are hidden from you.
 - **Accepted risks** on this control, with their status: Accepted, Waiting for approval, Ran out, or Not approved.
 - **Fixes** drafted for this control and where each stands.
 - **When it got worse**: each time the control's state dropped, why, and what happened to the task. Click **Acknowledge** to record that you have seen it.
