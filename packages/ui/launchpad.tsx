@@ -41,6 +41,7 @@ import {
   ShieldCheck,
   Flame,
   ShoppingCart,
+  Castle,
   Box,
   type LucideIcon,
 } from 'lucide-react';
@@ -90,6 +91,7 @@ const ICONS: Record<string, LucideIcon> = {
   'shield-check': ShieldCheck,
   flame: Flame,
   'shopping-cart': ShoppingCart,
+  castle: Castle,
 };
 
 // Hard-coded fallback used ONLY when the API is unreachable on the very
