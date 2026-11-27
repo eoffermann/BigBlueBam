@@ -76,7 +76,9 @@ const messageAttachmentSchema = z.object({
   size_bytes: z.number().int().nonnegative(),
   // Ignored (the server builds the authorized URL); null since issue #142.
   url: z.string().max(2048).nullable().optional(),
-  thumbnail_key: z.string().max(1024).optional(),
+  // thumbnail_key is no longer accepted (issue #162): nothing serves it and it was
+  // never checked against the poster's upload grants. Zod strips it if a client
+  // still sends it, so older clients keep working.
 });
 
 const createMessageSchema = z
@@ -612,7 +614,6 @@ export default async function messageRoutes(fastify: FastifyInstance) {
                   content_type: a.content_type,
                   size_bytes: a.size_bytes,
                   storage_key: a.key,
-                  thumbnail_key: a.thumbnail_key ?? null,
                 })),
               )
               .returning();

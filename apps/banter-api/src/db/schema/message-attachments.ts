@@ -15,6 +15,9 @@ export const banterMessageAttachments = pgTable(
     content_type: varchar('content_type', { length: 100 }).notNull(),
     size_bytes: bigint('size_bytes', { mode: 'number' }).notNull(),
     storage_key: text('storage_key').notNull(),
+    // DEPRECATED (issue #162), expand/contract step 1/2: no writer and no reader. The
+    // message route stopped accepting a client-supplied value; a later migration drops
+    // the column once every banter-api running is past that change.
     thumbnail_key: text('thumbnail_key'),
     width: integer('width'),
     height: integer('height'),

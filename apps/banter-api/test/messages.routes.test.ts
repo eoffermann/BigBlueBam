@@ -273,14 +273,18 @@ describe('malformed :id is rejected with 400 (not a 500 from Postgres 22P02)', (
  * that land on `mockDb` instead of the handle would be outside the transaction.
  */
 function makeTx(opts: { failAttachmentInsert?: boolean; failChannelUpdate?: boolean } = {}) {
-  const state: { outcome: 'none' | 'committed' | 'rolled_back'; handle: any } = { outcome: 'none', handle: null };
+  const state: { outcome: 'none' | 'committed' | 'rolled_back'; handle: any; values: unknown[] } = {
+    outcome: 'none',
+    handle: null,
+    values: [],
+  };
   let insertCall = 0;
   state.handle = {
     execute: vi.fn(async () => []),
     insert: vi.fn(() => {
       const n = insertCall++;
       return {
-        values: () => ({
+        values: (v: unknown) => (state.values.push(v), {
           returning: async () => {
             if (n === 0) return [{ ...msgRow(M1).message, attachment_count: 0 }];
             if (opts.failAttachmentInsert) throw new Error('connection terminated');
@@ -365,6 +369,26 @@ describe('POST message is one transaction: grant claim + message + attachments (
     expect(mockDb.insert).not.toHaveBeenCalled();
     const rt = await import('../src/services/realtime.js');
     expect(rt.broadcastToChannel).toHaveBeenCalledOnce();
+    await app.close();
+  });
+
+  it('does not store a client-supplied thumbnail_key (issue #162)', async () => {
+    claimAttachmentKeys.mockResolvedValueOnce({ ok: true });
+    const tx = makeTx();
+    selWhereLimit([{ id: CH, org_id: ORG, quiet_hours_policy: null }]);
+    const app = await buildApp();
+    const res = await app.inject({
+      method: 'POST',
+      url: `/v1/channels/${CH}/messages`,
+      headers: auth,
+      payload: { ...payload, attachments: [{ ...payload.attachments[0], thumbnail_key: 'banter/uploads/someone-elses-file.png' }] },
+    });
+    expect(res.statusCode).toBe(201);
+    const attachmentRows = tx.values[1] as Array<Record<string, unknown>>;
+    expect(attachmentRows).toHaveLength(1);
+    expect(attachmentRows[0]!.storage_key).toBe(key);
+    expect(attachmentRows[0]!.thumbnail_key ?? null).toBeNull();
+    expect(JSON.stringify(tx.values)).not.toContain('someone-elses-file');
     await app.close();
   });
 });
