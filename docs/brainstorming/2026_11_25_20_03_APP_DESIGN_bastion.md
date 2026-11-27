@@ -343,6 +343,7 @@ comment "Accepted risk expired on {date}". It also publishes `exception.expired`
 | Upload, withdraw, redact evidence; acknowledge a restore | no tool | a human |
 | Sign a policy attestation | **never** | the person, not impersonated |
 | Rooms, settings | no tool | floored humans |
+| Dismiss an audit packet that could not be built (#402; soft hide, audited) | yes, with the floored `export.create` grant | |
 
 **Guardrails.**
 
@@ -896,7 +897,12 @@ All tables prefixed `bastion_`, org-scoped by `organization_id`, Drizzle schema 
 - **`bastion_export_packets`**: `id`, `organization_id`, `framework_id`, `period_start`,
   `period_end`, `include_restricted`, `status`, `stage`, `stage_progress`, `object_key`,
   `content_sha256`, `size_bytes`, `requested_by`, `claimed_by`, `heartbeat_at`, `error`,
-  timestamps.
+  `dismissed_at`, `dismissed_by` (FK `users`, `ON DELETE SET NULL`), timestamps. The two
+  dismissal columns (migration `0364_bastion_export_dismiss.sql`, #402) are nullable and record a
+  person hiding a packet that could not be built; the row is never deleted. CHECK
+  `bastion_export_packets_dismiss_not_built`: `dismissed_at IS NULL OR status <> 'succeeded'`, so
+  a built packet can never carry a dismissal (the service is stricter still and dismisses only a
+  `failed` packet, row 93a).
 
 **Count:** 35 `bastion_` tables (enumerated in section 4.1.1), plus Bam-owned
 `github_pr_events`, one added column on `github_integrations`, and five added columns on
@@ -1015,12 +1021,12 @@ operations; `?framework_id=` on lists and the summary.
 | 17 | `POST /controls/:id/assertions` | `assertion.propose` | `bastion_propose_assertion` |
 | 18 | `POST /assertions/:id/confirm` | `assertion.confirm` | skip: human gate |
 | 19 | `POST /assertions/:id/reject` | `assertion.confirm` | skip: human gate |
-| 20 | `POST /assertions/:id/revise` | `assertion.propose` | `bastion_propose_assertion` |
+| 20 | `POST /assertions/:id/revise` (at most one open revision per check: 409 `REVISION_PENDING`, see the note under the table) | `assertion.propose` | `bastion_propose_assertion` |
 | 21 | `GET /probes` | `control.read` | `bastion_list_probes` |
 | 22 | `POST /evaluations` (202) | `evaluation.run` | `bastion_run_evaluation` |
 | 23 | `GET /evaluations` | `control.read` | `bastion_list_evaluations` |
 | 24 | `GET /evaluations/:id` | `control.read` | `bastion_list_evaluations` |
-| 25 | `GET /controls/:id/evidence` | `evidence.read` | `bastion_evidence_for` |
+| 25 | `GET /controls/:id/evidence` (`?assertion_id=`, cursor pages; `?latest=true` returns a different shape, see the note under the table) | `evidence.read` | `bastion_evidence_for` |
 | 26 | `GET /evidence/:id` | `evidence.read` | `bastion_get_evidence` |
 | 27 | `GET /evidence/:id/verify` | `evidence.read` | `bastion_verify_evidence` |
 | 28 | `GET /evidence/:id/download` | `evidence.read_detail` | skip: binary download |
@@ -1060,7 +1066,7 @@ operations; `?framework_id=` on lists and the summary.
 | 62 | `GET /drift` | `drift.read` | `bastion_list_drift` |
 | 63 | `POST /drift/:id/acknowledge` | `drift.acknowledge` | skip: human acknowledgement |
 | 64 | `GET /policies` | `policy.read` | skip: covered by `bastion_attestation_status` |
-| 65 | `POST /policies` | `policy.write` | skip: human admin |
+| 65 | `POST /policies` (201; pins the policy control's checks, `pin_problem` when that fails, see the note under the table) | `policy.write` | skip: human admin |
 | 66 | `PATCH /policies/:id` | `policy.write` | skip: human admin |
 | 67 | `GET /policies/:id/body` | `attestation.read` | skip: UI reading surface |
 | 68 | `GET /policies/:id/attestations` | `attestation.read` | `bastion_attestation_status` |
@@ -1079,7 +1085,7 @@ operations; `?framework_id=` on lists and the summary.
 | 81 | `POST /answers/draft` | `questionnaire.write` | `bastion_draft_answer` |
 | 82 | `GET /answer-library` | `answer_library.read` | `bastion_search_answer_library` |
 | 83 | `PATCH /answer-library/:id` | `answer_library.write` | skip: human curation |
-| 84 | `GET /auditor-rooms` | `auditor_room.read` | skip: floored |
+| 84 | `GET /auditor-rooms` (`?include_closed=`; the Sharing page sends `false` by default, #402) | `auditor_room.read` | skip: floored |
 | 85 | `POST /auditor-rooms` (confirm) | `auditor_room.create` | skip: disclosure is a human act |
 | 86 | `POST /auditor-rooms/:id/revoke` (confirm) | `auditor_room.revoke` | skip: human act |
 | 87 | `POST /auditor-rooms/:id/unlock` | `auditor_room.create` | skip: human act after a passcode lockout |
@@ -1087,8 +1093,9 @@ operations; `?framework_id=` on lists and the summary.
 | 89 | `GET /auditor-requests` | `auditor_room.read` | skip: floored |
 | 90 | `PATCH /auditor-requests/:id` | `auditor_room.respond` | skip: floored human response |
 | 91 | `POST /exports` (202) | `export.create` | skip: binary packet |
-| 92 | `GET /exports` | `export.read` | skip: floored |
+| 92 | `GET /exports` (`?status=`, `?include_dismissed=`, default false: dismissed packets are left out, #402) | `export.read` | skip: floored |
 | 93 | `GET /exports/:id/download` | `export.read` | skip: binary download |
+| 93a | `POST /exports/:id/dismiss` (#402; soft hide of a `failed` packet, audited `export.dismiss`; 409 `PACKET_NOT_FAILED` otherwise; idempotent) | `export.create` (see section 5.5) | `bastion_dismiss_export` |
 | 94 | `GET /summary` | `control.read` | `bastion_coverage_summary` |
 | 95 | `GET /search?q=` | `control.read` | skip: consumed by `search_everything` |
 | 96 | `GET /settings` | `settings.read` | skip: admin |
@@ -1104,8 +1111,43 @@ operations; `?framework_id=` on lists and the summary.
 | 106 | `POST /internal/engines/:name` | internal secret, internal network only | skip: service-to-service |
 | 107 | `GET /health`, `GET /health/ready`, `GET /metrics` | none | skip: health |
 
-**Count:** 106 REST endpoints in rows 1-106, plus the three health routes. 34 rows map to an MCP
-tool; 72 are intentional skips.
+**Count:** 107 REST endpoints in rows 1-106 plus row 93a (added by #402 and numbered 93a so the
+row numbers cited elsewhere stay stable), plus the three health routes. As drafted, 34 rows mapped
+to an MCP tool and 72 were intentional skips; the #196 parity decision (recorded in the build log)
+later gave every non-vouching route a tool, so the MCP column above is the original plan, and the
+Bastion section of `docs/reference/mcp-endpoint-mapping.md` is the authoritative route-to-tool map.
+
+**Contract notes added after the build (batches 39 and 42).**
+
+- **Row 20, one open revision per check (#401).** Revising a `proposed` or `rejected` check marks
+  it `superseded` at once. A `confirmed` check stays in force until its revision is confirmed, and
+  it has at most one revision waiting: a second revision of it is refused with 409
+  `REVISION_PENDING` ("This check already has a change waiting for review. Confirm, reject or
+  revise that change instead of starting another."). Revising the waiting revision itself is
+  allowed and replaces it; the new row supersedes the confirmed check (the *revision anchor*), not
+  the revision it replaced, so confirming the newest revision retires the check actually in force.
+  The same rule guards the population-drift `config_change` fix on approval (row 56): approving it
+  while a revision of that check is waiting answers 409 `REVISION_PENDING`. Both writers lock the
+  anchor row `FOR NO KEY UPDATE` before looking for a waiting revision, so two revisions of one
+  check serialize (#393). The lock is never a full `FOR UPDATE`, which would conflict with the
+  `FOR KEY SHARE` an evidence snapshot insert takes on the check through its FK (#404).
+- **Row 25, `?latest=true` (#403).** Returns only the newest snapshot of each of the control's
+  **confirmed** checks: one row per check, a single page (`has_more` false, `next_cursor` null,
+  `limit` still caps it), never a cursor. Without it the route is the full history, one snapshot
+  per check per evaluation run, cursor-paged; `?assertion_id=` narrows either form to one check.
+- **Row 65, `pin_problem` (#393).** Linking a policy pins the security policy control's two checks
+  (`policy.attested`, `policy.current`) to it, under a per-org lock, as `proposed` revisions or
+  proposals. The pin runs after the policy row commits, so a pin that fails never fails the link:
+  the route still answers 201 with the policy, `proposed_assertion_ids: []` and `pin_problem` set
+  to a plain-words message, and records `policy.pin_failed` (reason and SQLSTATE) in the audit
+  log. `pin_problem` is null on success. A transient database error (deadlock, serialization
+  failure, reset connection) is retried up to three times before it counts as a failure (#404);
+  re-running a pin for the same policy and control is a no-op.
+- **Rows 84 and 92, list defaults (#402).** `GET /exports` leaves dismissed packets out unless
+  `include_dismissed=true`; each row carries `dismissed_at`. `GET /auditor-rooms` returns every
+  room unless `include_closed=false`, which keeps only active and locked rooms; the Sharing page
+  sends `false` until a person ticks "Show closed rooms".
+- **Row 93a, dismiss (#402).** See section 5.5 for why `export.create` guards it.
 
 **Byte responses** (rows 8, 28, 35, 80, 93, 103 download) send `Content-Disposition:
 attachment`, `Content-Security-Policy: sandbox; default-src 'none'`, `nosniff`, and an allowlisted
@@ -1268,6 +1310,18 @@ proposer (small-team rule). `is_read` only on actions that change nothing
 (`packages/permissions/src/resolver.ts:204`). Enforcement is the hardcoded fail-closed boot
 invariant (`apps/bursar-api/src/boot/assert-permissions-enforce.ts:34-47`).
 
+**Why `export.create` guards dismissing a packet (row 93a, #402), and why an agent may call it.**
+There is no `bastion.export.dismiss` action. Dismissing applies only to a packet that could not be
+built, and only hides it from the default list: the row, its error and its audit trail are kept,
+`include_dismissed=true` still lists it, the CHECK on `bastion_export_packets` refuses a dismissal
+on a built packet, and the act is audited as `export.dismiss`. That is housekeeping on the
+requester's own failed request, not a disclosure, a decision or a destruction, so it carries the
+same floored grant as asking for the packet (owner and admin) rather than a separate action that
+every role would need to be granted alongside it. For the same reason it is agent-reachable
+(section 2.8): `bastion_dismiss_export` exists, unlike `POST /gaps/:id/dismiss` (row 53),
+which is a human-only judgment under its own `bastion.gap.dismiss` because it changes what the
+readiness numbers count.
+
 ---
 
 ## 6. Frontend and help
@@ -1294,7 +1348,7 @@ copied from `apps/bursar/src/` (path router with `BASE_PATH = '/bastion'`,
 | `/bastion/attest` | **Policies to read** | Every member's personal list; the body from row 67; **I have read and understood this** |
 | `/bastion/questionnaires`, `/:id` | **Questionnaires** | Upload, column mapping, progress with time estimates from the section 7.3 throughput, the answer grid with confidence words ("Sure", "Check this", "Needs an expert"), citations as named chips, exception notes, **Approve**, **Download answers** |
 | `/bastion/review` | **Review queue** | Proposed checks, evidence awaiting review, stuck scans, **fix and exception decisions (decided here)**, low-confidence answers, auditor requests |
-| `/bastion/sharing` | **Sharing** | Rooms (create, preview, revoke, unlock, access log), packets, Statement of Applicability download |
+| `/bastion/sharing` | **Sharing** | Rooms (create, preview, revoke, unlock, access log; open rooms only until **Show closed rooms** is ticked), packets (**Dismiss** on one that could not be built), Statement of Applicability download |
 | `/bastion/settings` | **Settings** | Compliance project, remediation mode, check time and timezone, AI provider, expiry warnings, limits, feed storage, **Delivery problems** (dead outbox rows, retry) and **Evidence integrity** (restores awaiting acknowledgement, key fingerprints) |
 | `/bastion/room` | **Auditor room** (public) | Rendered before the auth gate |
 
@@ -1709,7 +1763,7 @@ replica lag is under 30 seconds.
 | `event-catalog.ts` `bastionEvents` | section 8.1 | **M4** |
 | `docs/reference/mcp-endpoint-mapping.md` | Bastion section (rows 1-106, skip-marker form); internal Bam routes under "Cross-app - Internal service-to-service endpoints"; GitHub webhook change under Bam; **notes on the #123 `/files/*` change, the #124 ingest source change, and the #128 `DECIDE_IN_APP` behavior**, with Bastion proposals marked "decide in Bastion"; summary updated | M10 |
 | Visibility tool, agent conventions | section 8.4 | M10 |
-| **One merge unit at M11:** `server.ts` registration of `bastion-tools`, `APP_TOOL_MODULES`, `pnpm docs:catalog`, published tool counts (`README.md` lines 40, 57, 63, 346, 358, 390; `site/index.html:6`; `site/src/content/apps/introduction.md:15`; `site/src/lib/facts.ts` `MCP_TOOL_COUNT` to 951: 885 + 66, not the 909 this row first planned, because the #196 parity decision recorded in the build log gave every non-vouching route a tool), the CLAUDE.md per-module line, `LAUNCHPAD_*`, `ROOT_REDIRECT_VALUES`, `REDIRECT_MAP`, icon, marketing section, site screenshots, `pnpm docs:readme` (including the "23 apps" prose at README lines 63 and 390), CLAUDE.md app rows | | **M11** |
+| **One merge unit at M11:** `server.ts` registration of `bastion-tools`, `APP_TOOL_MODULES`, `pnpm docs:catalog`, published tool counts (`README.md` lines 40, 57, 63, 346, 358, 390; `site/index.html:6`; `site/src/content/apps/introduction.md:15`; `site/src/lib/facts.ts` `MCP_TOOL_COUNT` to 952: 885 + 67, not the 909 this row first planned, because the #196 parity decision recorded in the build log gave every non-vouching route a tool; M11 shipped 951 = 885 + 66 and #402 added `bastion_dismiss_export`), the CLAUDE.md per-module line, `LAUNCHPAD_*`, `ROOT_REDIRECT_VALUES`, `REDIRECT_MAP`, icon, marketing section, site screenshots, `pnpm docs:readme` (including the "23 apps" prose at README lines 63 and 390), CLAUDE.md app rows | | **M11** |
 | `scripts/seed-gilligan/run-all.mjs` | Compliance phase | M3, grown per milestone |
 
 ### 9.7 Backup, keys, and DR

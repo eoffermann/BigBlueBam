@@ -710,7 +710,8 @@ async function applyApproval(tx: Tx, viewer: Viewer, r: Record<string, unknown>)
       // File a superseding assertion with the found members added, for one-click confirmation.
       // Locked, then one open revision per check (#401, lib/revision-rule.ts): a second revision
       // waiting on the same check is refused, so approving this fix never forks the check.
-      const a = (await tx`SELECT * FROM bastion_assertions WHERE organization_id = ${viewer.org_id} AND id = ${r.assertion_id as string} FOR UPDATE`)[0];
+      // FOR NO KEY UPDATE (#404): serializes revisers without queueing behind snapshot inserts.
+      const a = (await tx`SELECT * FROM bastion_assertions WHERE organization_id = ${viewer.org_id} AND id = ${r.assertion_id as string} FOR NO KEY UPDATE`)[0];
       if (!a) return [];
       const waiting = await tx`
         SELECT 1 FROM bastion_assertions

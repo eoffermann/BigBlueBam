@@ -41,7 +41,7 @@ import { auditRaw } from '../lib/audit-raw.js';
 import { beaconEntryIdBySlug } from '../lib/beacon-slug.js';
 import { ConflictError, ForbiddenError, NotFoundError, ValidationFailure } from '../lib/errors.js';
 import { canonicalJson, sha256Hex } from '../lib/ledger-canonical.js';
-import { type EngineDeps, orgTx, type Tx, utcDate } from '../engine/context.js';
+import { type EngineDeps, isTransientDbError, orgTx, sqlstateOf, type Tx, utcDate } from '../engine/context.js';
 import { appendLedger } from '../engine/ledger.js';
 import { claimNoticeEvery } from '../engine/notice-markers.js';
 import { enqueueBastionEvent } from '../engine/outbox.js';
@@ -338,16 +338,35 @@ export const PIN_PROBLEM_MESSAGE =
  * so a pin that fails must not fail the link (#393): the client would retry a POST for a policy
  * that exists. The policy stands, the response says the checks were not pinned (pin_problem) and
  * the reason is recorded in the audit log as `policy.pin_failed`.
+ *
+ * #404: a transient database error (a deadlock, a serialization failure, a reset connection; see
+ * isTransientDbError) says nothing about the pin, so it is retried up to PIN_ATTEMPTS times before
+ * it is recorded as a failure. Re-running a pin for the same policy and control is a no-op, so a
+ * retry after a pin that did commit changes nothing.
  */
+export const PIN_ATTEMPTS = 3;
+
 async function pinAfterCreate(
   d: PolicyDeps,
   viewer: Viewer,
   controlId: string | null,
   policyId: string,
 ): Promise<{ proposed: string[]; problem: string | null }> {
-  if (!d.pinChecks) return { proposed: [], problem: null };
+  const pin = d.pinChecks;
+  if (!pin) return { proposed: [], problem: null };
   try {
-    return { proposed: (await d.pinChecks(viewer, controlId, policyId)).proposed, problem: null };
+    for (let attempt = 1; ; attempt++) {
+      try {
+        return { proposed: (await pin(viewer, controlId, policyId)).proposed, problem: null };
+      } catch (err) {
+        if (attempt >= PIN_ATTEMPTS || !isTransientDbError(err)) throw err;
+        d.engine.log.warn(
+          { organization_id: viewer.org_id, policy_id: policyId, control_id: controlId, sqlstate: sqlstateOf(err), attempt },
+          `bastion policy link: pinning the policy checks hit a transient database error; retrying (attempt ${attempt + 1} of ${PIN_ATTEMPTS})`,
+        );
+        await new Promise((r) => setTimeout(r, 50 * attempt));
+      }
+    }
   } catch (err) {
     const reason = err instanceof Error ? err.message : String(err);
     const code = (err as { code?: unknown } | null)?.code;

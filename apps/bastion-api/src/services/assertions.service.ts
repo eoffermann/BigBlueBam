@@ -40,6 +40,10 @@ async function loadAssertion(tx: DbTx, orgId: string, id: string) {
  * proposed check both saw it `proposed`, both inserted a successor and both marked it superseded,
  * which forked the check into two live proposals. Under the lock the second waits, then re-reads
  * the committed row (`superseded`) and is refused.
+ *
+ * FOR NO KEY UPDATE, not FOR UPDATE (#404, lib/revision-rule.ts): it still serializes two revisers,
+ * but does not block the FOR KEY SHARE an evidence snapshot insert takes through its FK, which with
+ * the policy pin's control lock formed a deadlock.
  */
 async function loadAssertionForUpdate(tx: DbTx, orgId: string, id: string) {
   const [row] = await tx
@@ -47,7 +51,7 @@ async function loadAssertionForUpdate(tx: DbTx, orgId: string, id: string) {
     .from(bastionAssertions)
     .where(and(eq(bastionAssertions.id, id), eq(bastionAssertions.organization_id, orgId)))
     .limit(1)
-    .for('update');
+    .for('no key update');
   if (!row) throw new NotFoundError('We could not find that check.');
   return row;
 }
@@ -55,7 +59,7 @@ async function loadAssertionForUpdate(tx: DbTx, orgId: string, id: string) {
 /**
  * One open revision per check (#401, lib/revision-rule.ts). Revising the waiting revision keeps it
  * the one open revision: the new row replaces the waiting one at once and, like it, supersedes the
- * confirmed check (revisionAnchor). The caller holds the anchor row FOR UPDATE (the #393 lock
+ * confirmed check (revisionAnchor). The caller holds the anchor row FOR NO KEY UPDATE (the #393 lock
  * pattern), so two revisions of the same check serialize and the second sees the first's committed
  * proposal here.
  */
@@ -77,7 +81,7 @@ async function assertNoOpenRevision(tx: DbTx, orgId: string, anchorId: string, e
  * The row a revision of `old` replaces when it is confirmed: `old` itself, unless `old` is a
  * proposed or rejected revision of a check that is still confirmed, in which case it is that
  * confirmed check (so confirming the newest revision retires the check actually in force, not a
- * row that was already superseded). Returned locked FOR UPDATE.
+ * row that was already superseded). Returned locked FOR NO KEY UPDATE (#404).
  */
 async function revisionAnchor(tx: DbTx, orgId: string, old: typeof bastionAssertions.$inferSelect) {
   if (old.review_status === 'confirmed' || !old.supersedes_id) return old;
@@ -86,7 +90,7 @@ async function revisionAnchor(tx: DbTx, orgId: string, old: typeof bastionAssert
     .from(bastionAssertions)
     .where(and(eq(bastionAssertions.id, old.supersedes_id), eq(bastionAssertions.organization_id, orgId)))
     .limit(1)
-    .for('update');
+    .for('no key update');
   return parent?.review_status === 'confirmed' ? parent : old;
 }
 
