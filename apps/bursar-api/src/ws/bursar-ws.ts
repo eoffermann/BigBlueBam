@@ -25,6 +25,7 @@ import { env } from '../env.js';
 import { requireAuth } from '../plugins/auth.js';
 import { viewerOf } from '../lib/http.js';
 import { BURSAR_WS_CHANNEL, orgRoom, type BursarEnvelope } from '../lib/realtime.js';
+import { wsFrameGate } from '../lib/ws-frames.js';
 import * as requests from '../services/requests.service.js';
 import type { Viewer } from '../services/types.js';
 
@@ -171,14 +172,32 @@ export default async function registerBursarWs(fastify: FastifyInstance) {
 
       // Register the listener before any await so an early subscribe frame is not lost.
       socket.on('message', (data: unknown) => {
-        let msg: { type?: unknown; rooms?: unknown };
-        try {
-          msg = JSON.parse(String(data)) as { type?: unknown; rooms?: unknown };
-        } catch {
-          return;
-        }
-        if (msg.type !== 'subscribe' || !Array.isArray(msg.rooms)) return;
-        void join(msg.rooms.filter((r): r is string => typeof r === 'string').slice(0, MAX_ROOMS_PER_SOCKET))
+        void (async () => {
+          let msg: { type?: unknown; rooms?: unknown };
+          try {
+            msg = JSON.parse(String(data)) as { type?: unknown; rooms?: unknown };
+          } catch {
+            return;
+          }
+          // Per-frame catalog gate, the REST twin's (issue #177). An undeclared frame type runs
+          // nothing.
+          const denial = await wsFrameGate.check(msg?.type, { user_id: viewer.id, org_id: viewer.org_id }, request.log);
+          if (denial) {
+            if (denial.code === 'PERMISSION_DENIED') {
+              try {
+                socket.send(JSON.stringify({ type: 'error', ...denial }));
+              } catch {
+                /* ignore */
+              }
+            }
+            return;
+          }
+          if (msg.type === 'subscribe' && Array.isArray(msg.rooms)) await onSubscribe(msg.rooms);
+        })().catch(() => {});
+      });
+
+      const onSubscribe = (requestedRooms: unknown[]) =>
+        join(requestedRooms.filter((r): r is string => typeof r === 'string').slice(0, MAX_ROOMS_PER_SOCKET))
           .then((allowed) => {
             try {
               socket.send(JSON.stringify({ type: 'subscribed', rooms: [...entry.rooms], joined: allowed }));
@@ -187,7 +206,6 @@ export default async function registerBursarWs(fastify: FastifyInstance) {
             }
           })
           .catch(() => {});
-      });
       socket.on('close', () => subscribers.delete(entry));
       socket.on('error', () => subscribers.delete(entry));
 

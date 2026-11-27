@@ -357,6 +357,12 @@ export const WS_FRAME_MAPS = [
     gateCall: 'wsFrameGate.check(',
   },
   {
+    handler: 'apps/bursar-api/src/ws/bursar-ws.ts',
+    map: 'apps/bursar-api/src/lib/ws-frames.ts',
+    exportName: 'WS_FRAME_PERMISSIONS',
+    gateCall: 'wsFrameGate.check(',
+  },
+  {
     handler: 'apps/blueprint-api/src/routes/ws.routes.ts',
     map: 'apps/blueprint-api/src/lib/ws-frames.ts',
     exportName: 'WS_FRAME_PERMISSIONS',
