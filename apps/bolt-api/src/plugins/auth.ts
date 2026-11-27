@@ -254,7 +254,7 @@ async function authPlugin(fastify: FastifyInstance) {
       // P2-8: a non-SuperUser key acts only in its own org, whatever X-Org-Id says, so the
       // header is dropped rather than resolved (or probed) against the user's memberships.
       if (isApiKeyOrgPinned(verified.apiKey.org_id, verified.user.is_superuser)) {
-        delete request.headers['x-org-id'];
+        request.headers['x-org-id'] = undefined;
       }
       const user = await buildAuthUser(verified.user, verified.apiKey.scope, request);
       applyKeyOrgPin(user, verified.apiKey.org_id);
