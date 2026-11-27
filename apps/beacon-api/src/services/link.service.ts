@@ -1,28 +1,44 @@
 import { eq, and, or } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import { beaconLinks, beaconEntries } from '../db/schema/index.js';
+import { resolveBeaconAccess, type BeaconAccessSubject } from '../lib/beacon-access.js';
+import { BeaconError } from './beacon.service.js';
 
+/**
+ * Link two beacons. The route has already applied the edit rule to the source
+ * (requireBeaconEditAccess). The target must be one the caller can read
+ * (lib/beacon-access.ts, #299): linking to a row you cannot see would both
+ * confirm that its id exists and publish the link on the source's link list.
+ * A missing, foreign-org or unreadable target is the same 404.
+ *
+ * Returns null only when the identical link already exists.
+ */
 export async function createLink(
   sourceId: string,
   targetId: string,
   linkType: 'RelatedTo' | 'Supersedes' | 'DependsOn' | 'ConflictsWith' | 'SeeAlso',
-  userId: string,
-  orgId: string,
+  actor: BeaconAccessSubject,
 ) {
-  // Verify both beacons exist and belong to the same org
   const [source] = await db
     .select({ org: beaconEntries.organization_id })
     .from(beaconEntries)
     .where(eq(beaconEntries.id, sourceId))
     .limit(1);
   const [target] = await db
-    .select({ org: beaconEntries.organization_id })
+    .select()
     .from(beaconEntries)
     .where(eq(beaconEntries.id, targetId))
     .limit(1);
 
-  if (!source || !target || source.org !== orgId || target.org !== orgId) {
-    return null; // treated as not-found by route
+  if (!source || source.org !== actor.org_id) {
+    throw new BeaconError('NOT_FOUND', 'Beacon not found', 404);
+  }
+  if (
+    !target ||
+    target.organization_id !== actor.org_id ||
+    (await resolveBeaconAccess(actor, target)) === 'none'
+  ) {
+    throw new BeaconError('NOT_FOUND', 'Target beacon not found', 404);
   }
 
   const [link] = await db
@@ -31,7 +47,7 @@ export async function createLink(
       source_id: sourceId,
       target_id: targetId,
       link_type: linkType,
-      created_by: userId,
+      created_by: actor.id,
     })
     .onConflictDoNothing({
       target: [beaconLinks.source_id, beaconLinks.target_id, beaconLinks.link_type],

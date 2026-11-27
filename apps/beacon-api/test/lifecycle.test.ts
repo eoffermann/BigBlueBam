@@ -14,7 +14,10 @@ vi.mock('../src/db/index.js', () => ({
     insert: mockInsert,
     update: mockUpdate,
     delete: vi.fn(),
-    transaction: vi.fn(),
+    // transitionBeacon, verifyBeacon and createBeacon run in a transaction (#304);
+    // the mock hands the callback a tx with the same query builders.
+    transaction: vi.fn((cb: (tx: unknown) => unknown) =>
+      cb({ select: mockSelect, insert: mockInsert, update: mockUpdate })),
     execute: vi.fn(),
   },
   connection: { end: vi.fn() },
@@ -52,7 +55,6 @@ function chainable(result: unknown[]) {
   // Make the object thenable so `await db.select().from().where()` resolves
   obj.then = (resolve: Function, reject?: Function) => Promise.resolve(result).then(resolve as any, reject as any);
   // Terminal methods return the result
-  obj.limit = vi.fn().mockResolvedValue(result);
   obj.returning = vi.fn().mockResolvedValue(result);
   // Intermediate methods return obj for chaining
   obj.from = vi.fn().mockReturnValue(obj);
@@ -61,6 +63,9 @@ function chainable(result: unknown[]) {
   obj.set = vi.fn().mockReturnValue(obj);
   obj.values = vi.fn().mockReturnValue(obj);
   obj.fields = vi.fn().mockReturnValue(obj);
+  // .limit(1).for('update') on the locked reads
+  obj.limit = vi.fn().mockReturnValue(obj);
+  obj.for = vi.fn().mockResolvedValue(result);
   return obj;
 }
 
@@ -244,6 +249,31 @@ describe('transitionBeacon', () => {
     await expect(
       transitionBeacon(BEACON_ID, 'Active', USER_ID, undefined, ORG_ID),
     ).rejects.toThrow("Cannot transition from 'Retired' to 'Active'");
+  });
+
+  // #304: the UPDATE is predicated on the status it was validated against, and a
+  // row whose status moved underneath answers 409 instead of being overwritten.
+  it('answers 409 when the status-guarded UPDATE matches no row (#304)', async () => {
+    mockSelect.mockReturnValue(chainable([makeBeacon({ status: 'Active' })]));
+    mockUpdate.mockReturnValue(chainable([]));
+
+    await expect(
+      transitionBeacon(BEACON_ID, 'Retired', USER_ID, undefined, ORG_ID),
+    ).rejects.toMatchObject({ statusCode: 409, code: 'CONFLICT' });
+  });
+
+  it('reads the row FOR UPDATE and bumps verification_count in SQL (#304)', async () => {
+    const select = chainable([makeBeacon({ status: 'PendingReview', verification_count: 5 })]);
+    mockSelect.mockReturnValueOnce(select).mockReturnValue(chainable([]));
+    const update = chainable([makeBeacon({ status: 'Active', verification_count: 6 })]);
+    mockUpdate.mockReturnValue(update);
+
+    await transitionBeacon(BEACON_ID, 'Active', USER_ID, undefined, ORG_ID);
+
+    expect(select.for).toHaveBeenCalledWith('update');
+    const setArg = update.set.mock.calls[0][0];
+    // A stale read-modify-write would write the literal 6.
+    expect(typeof setArg.verification_count).not.toBe('number');
   });
 });
 
@@ -595,6 +625,18 @@ describe('verifyBeacon', () => {
     await expect(
       verifyBeacon(BEACON_ID, USER_ID, { type: 'Manual', outcome: 'Confirmed' }, ORG_ID),
     ).rejects.toThrow('Beacon not found');
+  });
+
+  it('increments verification_count in SQL, not from a pre-read (#304)', async () => {
+    mockSelect.mockReturnValue(chainable([makeBeacon({ status: 'Active', verification_count: 3 })]));
+    mockInsert.mockReturnValue(chainable([{ id: 'ver-1' }]));
+    const update = chainable([makeBeacon({ status: 'Active', verification_count: 4 })]);
+    mockUpdate.mockReturnValue(update);
+
+    await verifyBeacon(BEACON_ID, USER_ID, { type: 'Manual', outcome: 'Confirmed' }, ORG_ID);
+
+    const setArg = update.set.mock.calls[0][0];
+    expect(typeof setArg.verification_count).not.toBe('number');
   });
 });
 

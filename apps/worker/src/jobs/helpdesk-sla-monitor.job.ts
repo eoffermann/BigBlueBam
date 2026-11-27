@@ -150,6 +150,8 @@ async function recordBreach(
       'ticket.sla_breached',
       'helpdesk',
       {
+        // #289: the nested shape the Bolt catalog declares (ticket.id, ticket.sla_type); flat keys stay.
+        ticket: { id: row.ticket_id, number: row.ticket_number, subject: row.subject, priority: row.priority, sla_type: slaType },
         ticket_id: row.ticket_id,
         ticket_number: row.ticket_number,
         subject: row.subject,

@@ -588,7 +588,9 @@ export async function getFixDraft(d: DecisionDeps, viewer: Viewer, id: string) {
  */
 export async function decideFix(d: DecisionDeps, viewer: Viewer, id: string, body: BastionFixDecide, canControlWrite: boolean) {
   const now = d.engine.now();
-  await orgTx(d.engine.sql, viewer.org_id, async (tx) => {
+  // #282: an expired fix is recorded (draft expired, gap reopened) and THEN refused. The refusal
+  // is thrown after the transaction commits; thrown inside it, it rolled the expiry back.
+  const outcome = await orgTx(d.engine.sql, viewer.org_id, async (tx): Promise<'decided' | 'expired'> => {
     // #255: the gap-rank lock first (this reopens the gap and row-locks the draft), the same order
     // as the reconcile, exception approval and every re-rank.
     await lockOrgGapRank(tx, viewer.org_id);
@@ -612,7 +614,7 @@ export async function decideFix(d: DecisionDeps, viewer: Viewer, id: string, bod
       if (p && (p.status === 'expired' || new Date(p.expires_at as string) <= now)) {
         await tx`UPDATE bastion_fix_drafts SET status = 'expired' WHERE id = ${id}`;
         if (r.gap_id) await tx`UPDATE bastion_gaps SET status = 'open' WHERE id = ${r.gap_id as string} AND status = 'proposed'`;
-        throw new ConflictError('This fix expired before anyone decided it. Draft it again if it is still needed.', 'FIX_EXPIRED');
+        return 'expired';
       }
     }
     const approve = body.decision === 'approve';
@@ -635,7 +637,9 @@ export async function decideFix(d: DecisionDeps, viewer: Viewer, id: string, bod
       effects,
       decided_as: r.owner_user_id === viewer.id ? 'control_owner' : 'control_write',
     });
+    return 'decided';
   });
+  if (outcome === 'expired') throw new ConflictError('This fix expired before anyone decided it. Draft it again if it is still needed.', 'FIX_EXPIRED');
   return getFixDraft(d, viewer, id);
 }
 

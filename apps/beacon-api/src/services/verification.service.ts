@@ -1,4 +1,4 @@
-import { eq } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import {
   beaconEntries,
@@ -7,7 +7,7 @@ import {
 } from '../db/schema/index.js';
 import type { BeaconAgentConfig } from '../db/schema/index.js';
 import { BeaconError, getBeaconById } from './beacon.service.js';
-import { transitionBeacon } from './lifecycle.service.js';
+import { transitionBeaconInTx } from './lifecycle.service.js';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -41,45 +41,55 @@ export async function verifyBeacon(
   data: VerifyInput,
   orgId: string,
 ) {
-  const existing = await getBeaconById(beaconId, orgId);
-  if (!existing) {
-    throw new BeaconError('NOT_FOUND', 'Beacon not found', 404);
-  }
+  // One transaction on the locked row (#304): the verification row, the
+  // counter bump and any status side effect commit together, the counter is
+  // incremented in SQL (two concurrent verifies used to record one), and the
+  // status side effect is decided on the status as of the lock, so a second
+  // concurrent verify sees the first one's transition instead of racing it.
+  return db.transaction(async (tx) => {
+    const [existing] = await tx
+      .select()
+      .from(beaconEntries)
+      .where(and(eq(beaconEntries.id, beaconId), eq(beaconEntries.organization_id, orgId)))
+      .limit(1)
+      .for('update');
+    if (!existing) {
+      throw new BeaconError('NOT_FOUND', 'Beacon not found', 404);
+    }
 
-  // Insert verification row
-  const [verification] = await db
-    .insert(beaconVerifications)
-    .values({
-      beacon_id: beaconId,
-      verified_by: userId,
-      verification_type: data.type,
-      outcome: data.outcome,
-      confidence_score: data.confidence ?? null,
-      notes: data.notes ?? null,
-    })
-    .returning();
+    const [verification] = await tx
+      .insert(beaconVerifications)
+      .values({
+        beacon_id: beaconId,
+        verified_by: userId,
+        verification_type: data.type,
+        outcome: data.outcome,
+        confidence_score: data.confidence ?? null,
+        notes: data.notes ?? null,
+      })
+      .returning();
 
-  // Update beacon verification metadata
-  const now = new Date();
-  await db
-    .update(beaconEntries)
-    .set({
-      last_verified_at: now,
-      last_verified_by: userId,
-      verification_count: existing.verification_count + 1,
-      updated_at: now,
-    })
-    .where(eq(beaconEntries.id, beaconId));
+    const now = new Date();
+    const [updated] = await tx
+      .update(beaconEntries)
+      .set({
+        last_verified_at: now,
+        last_verified_by: userId,
+        verification_count: sql`${beaconEntries.verification_count} + 1`,
+        updated_at: now,
+      })
+      .where(and(eq(beaconEntries.id, beaconId), eq(beaconEntries.organization_id, orgId)))
+      .returning();
 
-  // Status side-effects
-  let beacon = existing;
-  if (data.outcome === 'Confirmed' && existing.status === 'PendingReview') {
-    beacon = await transitionBeacon(beaconId, 'Active', userId, undefined, orgId);
-  } else if (data.outcome === 'Challenged' && existing.status === 'Active') {
-    beacon = await transitionBeacon(beaconId, 'PendingReview', userId, undefined, orgId);
-  }
+    let beacon = updated ?? existing;
+    if (data.outcome === 'Confirmed' && existing.status === 'PendingReview') {
+      beacon = await transitionBeaconInTx(tx, beaconId, 'Active', userId, orgId);
+    } else if (data.outcome === 'Challenged' && existing.status === 'Active') {
+      beacon = await transitionBeaconInTx(tx, beaconId, 'PendingReview', userId, orgId);
+    }
 
-  return { verification: verification!, beacon };
+    return { verification: verification!, beacon };
+  });
 }
 
 // ---------------------------------------------------------------------------

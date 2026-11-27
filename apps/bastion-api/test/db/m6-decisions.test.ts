@@ -287,6 +287,16 @@ describe.skipIf(!DATABASE_URL)('M6 gaps, fixes, exceptions and drift (live datab
     const r2 = await proposalReconcile(deps, { organization_id: s.org });
     expect(r2.fixes_expired).toBe(1);
     expect((await sql`SELECT status FROM bastion_fix_drafts WHERE id = ${third.id}`)[0]!.status).toBe('expired');
+
+    // #282: deciding a fix whose proposal has expired is refused AND the expiry is kept: the draft
+    // is expired and the gap reopened at once, without waiting for the reconcile.
+    await sql`UPDATE bastion_gaps SET status = 'open' WHERE id = ${gap.id}`;
+    const fourth = (await proposeFix(d, viewer(s.org, s.owner), gap.id, null)).data as { id: string; proposal_id: string };
+    expect((await sql`SELECT status FROM bastion_gaps WHERE id = ${gap.id}`)[0]!.status).toBe('proposed');
+    await sql`UPDATE agent_proposals SET expires_at = now() - interval '1 minute' WHERE id = ${fourth.proposal_id}`;
+    await expect(decideFix(d, viewer(s.org, s.owner), fourth.id, { decision: 'approve' }, false)).rejects.toMatchObject({ code: 'FIX_EXPIRED' });
+    expect((await sql`SELECT status FROM bastion_fix_drafts WHERE id = ${fourth.id}`)[0]!.status).toBe('expired');
+    expect((await sql`SELECT status FROM bastion_gaps WHERE id = ${gap.id}`)[0]!.status).toBe('open');
   });
 
   it('a deleted Compliance project: drift rows say project_unavailable, Readiness says so, and fixing it re-drives the tasks (#229)', async () => {
