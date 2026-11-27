@@ -2,10 +2,11 @@
 //
 // The authenticated Bay player streams Bin media through Bin's own scan-gated
 // /raw proxy (which requires a session). Public guests have no session, so for
-// the /bay/r/:token surface Bay streams the canonical bytes itself: it reads the
+// the /bay/r#<token> surface Bay streams the canonical bytes itself: it reads the
 // bin_assets row (shared DB) for the object key + scan status, then streams from
 // the same object store via the shared @bigbluebam/storage driver. Access is
-// authorized upstream by a valid, unexpired, unrevoked review-link token.
+// authorized upstream by a valid, unexpired, unrevoked review link (its media
+// ticket, lib/review-token.ts).
 //
 // Only clean/skipped assets are ever served (mirrors Bin's §9.3 gate).
 
