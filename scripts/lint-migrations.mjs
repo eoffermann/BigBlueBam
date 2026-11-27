@@ -24,6 +24,11 @@
 //      COMMIT / END / ROLLBACK (issue #131). The runner wraps every file and
 //      its schema_migrations row in one transaction already. Statements inside
 //      $$ function or DO bodies are not top level and are fine.
+//   5. org-guc-nullif (#381): current_setting('app.current_org_id')::uuid
+//      must be NULLIF(current_setting(...), '')::uuid (an emptied GUC is '').
+//   6. drop-column-separate-release (#375): no DROP COLUMN on a table the
+//      same file adds a column to; the contract ships in a later release.
+//   (5 and 6 live in scripts/lib/migration-lint-rules.mjs, unit tested.)
 //
 // Inline escape: append `-- noqa: <rule-name>` on the offending line to
 // silence a single rule. Use sparingly and only with justification.
@@ -46,6 +51,11 @@ import { readdirSync, readFileSync, existsSync } from 'node:fs';
 import { join, resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { findTopLevelTransactionControl } from './lib/sql-top-level.mjs';
+import {
+  findBareOrgGucCasts,
+  findSameFileAddDropColumn,
+  stripSqlComments,
+} from './lib/migration-lint-rules.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const MIGRATIONS_DIR = resolve(__dirname, '..', 'infra', 'postgres', 'migrations');
@@ -106,12 +116,15 @@ const OFF_FILE_SUPPRESSIONS = {
   },
   '0127_agent_identity_heartbeat.sql': {
     17: ['create-enum-guarded'],
+    95: ['org-guc-nullif'],
   },
   '0128_agent_proposals.sql': {
     13: ['create-enum-guarded'],
+    78: ['org-guc-nullif'],
   },
   '0132_entity_links.sql': {
     13: ['create-enum-guarded'],
+    56: ['org-guc-nullif'],
   },
   // Self-transacting migrations that predate the no-transaction-control rule
   // (issue #131). Applied everywhere, bodies frozen. The migrate runner strips
@@ -137,6 +150,139 @@ const OFF_FILE_SUPPRESSIONS = {
     13: ['no-transaction-control'],
     23: ['no-transaction-control'],
   },
+  // drop-column-separate-release (#375): expand and contract of one table in
+  // one file, predating the rule. Applied everywhere, bodies frozen. 0340 is
+  // the Bay token_hash migration that motivated the rule; its drop already ran
+  // wherever 0340 applied, so it cannot be split retroactively.
+  '0029_bearing_schema_alignment.sql': {
+    30: ['drop-column-separate-release'],
+    31: ['drop-column-separate-release'],
+    32: ['drop-column-separate-release'],
+    33: ['drop-column-separate-release'],
+    91: ['drop-column-separate-release'],
+    92: ['drop-column-separate-release'],
+  },
+  '0340_bay_review_link_token_hash.sql': {
+    42: ['drop-column-separate-release'],
+  },
+  // org-guc-nullif (#381): bare current_setting('app.current_org_id')::uuid
+  // casts that predate the rule. Applied everywhere, bodies frozen; 0355
+  // rewrote every live policy built from them to the NULLIF form at apply
+  // time, and its own hit is the search string it rewrites, not a cast.
+  '0116_rls_foundation.sql': {
+    25: ['org-guc-nullif'],
+    29: ['org-guc-nullif'],
+    33: ['org-guc-nullif'],
+    37: ['org-guc-nullif'],
+    45: ['org-guc-nullif'],
+    53: ['org-guc-nullif'],
+    61: ['org-guc-nullif'],
+    69: ['org-guc-nullif'],
+    77: ['org-guc-nullif'],
+    91: ['org-guc-nullif'],
+    102: ['org-guc-nullif'],
+  },
+  // (0127, 0128 and 0132 also have org-guc-nullif lines; they are listed in
+  // those files' entries above, since a second key would replace the first.)
+  '0133_banter_channels_quiet_hours.sql': {
+    45: ['org-guc-nullif'],
+  },
+  '0134_banter_agent_subscriptions.sql': {
+    58: ['org-guc-nullif'],
+  },
+  '0136_dedupe_decisions.sql': {
+    48: ['org-guc-nullif'],
+  },
+  '0139_agent_policies.sql': {
+    43: ['org-guc-nullif'],
+  },
+  '0140_agent_runner_webhooks.sql': {
+    71: ['org-guc-nullif'],
+  },
+  '0147_permissions_rls_uuid_cast.sql': {
+    18: ['org-guc-nullif'],
+    23: ['org-guc-nullif'],
+    34: ['org-guc-nullif'],
+    37: ['org-guc-nullif'],
+    46: ['org-guc-nullif'],
+    49: ['org-guc-nullif'],
+    57: ['org-guc-nullif'],
+    60: ['org-guc-nullif'],
+  },
+  '0149_permissions_divergence_log.sql': {
+    58: ['org-guc-nullif'],
+  },
+  '0226_basis_core.sql': {
+    94: ['org-guc-nullif'],
+    99: ['org-guc-nullif'],
+    104: ['org-guc-nullif'],
+  },
+  '0227_basis_snapshots_explanations.sql': {
+    57: ['org-guc-nullif'],
+    88: ['org-guc-nullif'],
+  },
+  '0230_braid_core.sql': {
+    149: ['org-guc-nullif'],
+    154: ['org-guc-nullif'],
+    159: ['org-guc-nullif'],
+    164: ['org-guc-nullif'],
+  },
+  '0231_braid_candidates_decisions.sql': {
+    94: ['org-guc-nullif'],
+    99: ['org-guc-nullif'],
+  },
+  '0234_bulwark_core.sql': {
+    264: ['org-guc-nullif'],
+    269: ['org-guc-nullif'],
+    274: ['org-guc-nullif'],
+    279: ['org-guc-nullif'],
+    284: ['org-guc-nullif'],
+    289: ['org-guc-nullif'],
+    294: ['org-guc-nullif'],
+  },
+  '0235_bulwark_compliance.sql': {
+    91: ['org-guc-nullif'],
+    96: ['org-guc-nullif'],
+  },
+  '0239_burn_core.sql': {
+    486: ['org-guc-nullif'],
+    491: ['org-guc-nullif'],
+    496: ['org-guc-nullif'],
+    501: ['org-guc-nullif'],
+    506: ['org-guc-nullif'],
+    511: ['org-guc-nullif'],
+    516: ['org-guc-nullif'],
+  },
+  '0240_burn_gate_variance.sql': {
+    423: ['org-guc-nullif'],
+    428: ['org-guc-nullif'],
+    433: ['org-guc-nullif'],
+    438: ['org-guc-nullif'],
+  },
+  '0241_burn_rates_rollups_rules.sql': {
+    254: ['org-guc-nullif'],
+    259: ['org-guc-nullif'],
+    264: ['org-guc-nullif'],
+  },
+  '0251_bursar_rls.sql': {
+    41: ['org-guc-nullif'],
+    43: ['org-guc-nullif'],
+    48: ['org-guc-nullif'],
+  },
+  '0252_bursar_settings_audit.sql': {
+    47: ['org-guc-nullif'],
+    49: ['org-guc-nullif'],
+    54: ['org-guc-nullif'],
+  },
+  '0280_bastion_rls.sql': {
+    35: ['org-guc-nullif'],
+  },
+  '0287_bastion_notice_markers.sql': {
+    28: ['org-guc-nullif'],
+  },
+  '0355_rls_policies_nullif_org_guc.sql': {
+    15: ['org-guc-nullif'],
+  },
 };
 
 function hasOffFileSuppression(filename, lineNumber, rule) {
@@ -145,42 +291,6 @@ function hasOffFileSuppression(filename, lineNumber, rule) {
   const rules = fileMap[lineNumber];
   if (!rules) return false;
   return rules.includes(rule) || rules.includes('all');
-}
-
-// Strip SQL comments from lines for DDL matching. Preserves line count so
-// that line numbers reported to the user match the original file. Handles
-// both -- line comments and /* block comments */ (block state carried
-// across lines).
-function stripComments(lines) {
-  const out = [];
-  let inBlock = false;
-  for (const line of lines) {
-    let s = '';
-    let i = 0;
-    while (i < line.length) {
-      if (inBlock) {
-        const end = line.indexOf('*/', i);
-        if (end === -1) { i = line.length; break; }
-        inBlock = false;
-        i = end + 2;
-        continue;
-      }
-      // line comment
-      if (line[i] === '-' && line[i + 1] === '-') {
-        break; // rest of line is a comment
-      }
-      // block comment start
-      if (line[i] === '/' && line[i + 1] === '*') {
-        inBlock = true;
-        i += 2;
-        continue;
-      }
-      s += line[i];
-      i++;
-    }
-    out.push(s);
-  }
-  return out;
 }
 
 function hasNoqa(rawLine, rule) {
@@ -228,7 +338,7 @@ function checkFile(filename, content) {
   }
 
   // Rule 3+: strip comments for DDL matching, preserve line numbers
-  const stripped = stripComments(rawLines);
+  const stripped = stripSqlComments(rawLines);
 
   const check = (lineIdx, rule, msg) => {
     if (hasNoqa(rawLines[lineIdx], rule)) return;
@@ -315,6 +425,27 @@ function checkFile(filename, content) {
       line - 1,
       'no-transaction-control',
       `top-level ${statement} is not allowed; the migrate runner wraps each file in its own transaction`,
+    );
+  }
+
+  // Rule: org-guc-nullif (#381). ''::uuid raises 22P02 on a pooled connection
+  // whose org GUC was emptied by an earlier transaction-local set_config.
+  const strippedText = stripped.join('\n');
+  for (const { line } of findBareOrgGucCasts(strippedText)) {
+    check(
+      line - 1,
+      'org-guc-nullif',
+      "cast app.current_org_id as NULLIF(current_setting('app.current_org_id', true), '')::uuid; the bare ::uuid cast fails with 22P02 when the GUC is an empty string",
+    );
+  }
+
+  // Rule: drop-column-separate-release (#375). Expand and contract of one
+  // table in one file breaks the release that is still serving.
+  for (const { line, table, column } of findSameFileAddDropColumn(strippedText)) {
+    check(
+      line - 1,
+      'drop-column-separate-release',
+      `DROP COLUMN ${table}.${column} in the same migration that adds a column to ${table}: ship the drop in a later migration, released after the code stops reading the column`,
     );
   }
 

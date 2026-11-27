@@ -5,8 +5,10 @@
  *     INTERNAL_SERVICE_SECRET-gated (the shared guard in lib/internal-secret.ts). Creates a
  *     project in body.org_id on behalf of body.created_by through projectService.createProject,
  *     the same code POST /projects runs, so the creator gets the admin project membership and
- *     the template's phases and task states. Idempotent on (org_id, slug): a slug the org
- *     already holds answers that project (200, created false) instead of a second row.
+ *     the template's phases and task states. Idempotent on (org_id, ensure_key), the caller's
+ *     own operation id: a replay answers the project that operation created (200, created
+ *     false). A slug held by any other project is never answered (#373); the new project takes
+ *     the first free suffixed slug (slug-2, slug-3, ...) and the response carries the real slug.
  *
  * Caller: the worker's Slack import (apps/worker/src/jobs/slack-import.job.ts), project mode
  * create_new. It used to INSERT INTO projects (org_id, name, key, owner_id) directly; key and

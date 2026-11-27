@@ -1,3 +1,4 @@
+import { sql } from 'drizzle-orm';
 import { pgTable, uuid, varchar, text, integer, jsonb, timestamp, boolean, index, uniqueIndex, type AnyPgColumn } from 'drizzle-orm/pg-core';
 import { organizations } from './organizations.js';
 import { users } from './users.js';
@@ -22,11 +23,18 @@ export const projects = pgTable(
     settings: jsonb('settings').default({}).notNull(),
     is_archived: boolean('is_archived').default(false).notNull(),
     created_by: uuid('created_by').references((): AnyPgColumn => users.id, { onDelete: 'set null' }),
+    // Idempotency key of the server-to-server operation that created the project (for example
+    // `slack-import:<import id>`), so POST /internal/projects/ensure answers a replay with its own
+    // project and never with an unrelated project that happens to hold the slug (#373).
+    ensure_key: varchar('ensure_key', { length: 200 }),
     created_at: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
     updated_at: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => [
     index('projects_org_id_idx').on(table.org_id),
     uniqueIndex('projects_org_slug_idx').on(table.org_id, table.slug),
+    uniqueIndex('projects_org_ensure_key_idx')
+      .on(table.org_id, table.ensure_key)
+      .where(sql`ensure_key IS NOT NULL`),
   ],
 );

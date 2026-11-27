@@ -779,8 +779,20 @@ Files must match `^[0-9]{4}_[a-z][a-z0-9_]*\.sql$` — a zero-padded 4-digit seq
 - Required header lines (filename, `Why:`, `Client impact:`)
 - Idempotency (`IF NOT EXISTS` / `IF EXISTS` / guarded triggers)
 - Warning on unguarded `CREATE TYPE ... AS ENUM` (no `IF NOT EXISTS` syntax exists; wrap in a `DO $$` block)
+- No top-level `BEGIN` / `COMMIT` (`no-transaction-control`, #131); the runner wraps each file in its own transaction
+- `org-guc-nullif` (#381): every uuid cast of the org GUC is written `NULLIF(current_setting('app.current_org_id', true), '')::uuid`. A pooled connection that ran a transaction-local `set_config` keeps the GUC as an empty string, and the bare `current_setting(...)::uuid` then fails with `22P02` instead of matching no rows (#363). The bare form appears in about 70 historical lines; those are suppressed off-file, and 0355 rewrote the live policies, so copy the NULLIF form, not the old one.
+- `drop-column-separate-release` (#375): a migration may not drop a column of a table it also adds a column to. See "Removing or replacing a column" below.
 
-Rule escape hatch: append `-- noqa: <rule-name>` (or `-- noqa: all`) on a line to silence a single rule. Use sparingly.
+Rule escape hatch: append `-- noqa: <rule-name>` (or `-- noqa: all`) on a line to silence a single rule, but only while the migration has never been applied anywhere. For an applied migration, register the suppression in `OFF_FILE_SUPPRESSIONS` in `scripts/lint-migrations.mjs` instead; an inline tag changes the body checksum.
+
+### Removing or replacing a column (two releases)
+
+Decision recorded 2026-11-27 after #375. Migrations and app containers do not deploy atomically: on Railway `migrate` is an independent service that can finish before or after the new app image is healthy, and under Docker Compose the old container keeps serving while the new image builds. A migration therefore has to work with both the release that is still running and the one replacing it.
+
+1. **Expand release:** add the new column, backfill it, and ship code that writes both and reads the new one (or tolerates either). The old column stays.
+2. **Contract release:** once no running release reads the old column, a later migration drops it. Until this release ships, rolling the app back to the pre-expand image still works.
+
+`0340_bay_review_link_token_hash.sql` did both steps in one file, so the previous bay-api 500ed on guest review links while the deploy was in flight and a rollback past it is impossible. 0340 is applied and frozen; its drop is suppressed in `OFF_FILE_SUPPRESSIONS` (as is the same shape in `0029_bearing_schema_alignment.sql`). New migrations are held to the rule by `drop-column-separate-release`.
 
 ### Drift guard — `pnpm db:check`
 

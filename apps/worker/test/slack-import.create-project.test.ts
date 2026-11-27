@@ -126,6 +126,8 @@ describe('slack-import create_new project (#364)', () => {
       name: 'Castaway Rescue',
       slug: 'rescue',
       task_id_prefix: 'RESCUE',
+      // #373: the api keys idempotency on this import, not on the user-visible slug.
+      ensure_key: 'slack-import:imp-1',
     });
     expect(body).not.toHaveProperty('key');
     expect(body).not.toHaveProperty('owner_id');
@@ -156,8 +158,8 @@ describe('slack-import create_new project (#364)', () => {
       }],
     ];
     for (const [choice, want] of cases) {
-      const body = importProjectBody(ORG, SKIPPER, choice);
-      expect(body).toMatchObject(want);
+      const body = importProjectBody(ORG, SKIPPER, 'imp-9', choice);
+      expect(body).toMatchObject({ ...want, ensure_key: 'slack-import:imp-9' });
       expect(internalEnsureProjectSchema.safeParse(body).success).toBe(true);
     }
   });

@@ -148,7 +148,7 @@ Notes:
 |---|---|---|---|
 | `GET /projects` | `list_projects` | List accessible projects | `apps/frontend/src/pages/dashboard.tsx` |
 | `POST /projects` | `create_project` | Create a project | `apps/frontend/src/pages/dashboard.tsx` |
-| `POST /internal/projects/ensure` | — _(skip: internal service-to-service route)_ | Create-or-get a project by (org_id, slug) on behalf of `created_by`, through the same createProject as `POST /projects` (creator admin membership, template phases and states); 201 created / 200 existing. `INTERNAL_SERVICE_SECRET`-gated, org bound from `body.org_id`; called by the worker's Slack import for project mode `create_new` (#364) | — *(internal service-to-service)* |
+| `POST /internal/projects/ensure` | — _(skip: internal service-to-service route)_ | Create-or-get a project by (org_id, `ensure_key`) on behalf of `created_by`, through the same createProject as `POST /projects` (creator admin membership, template phases and states); 201 created / 200 existing. `ensure_key` is the caller's own operation id (`slack-import:<import id>`); a slug another project already holds gets a suffixed slug, never that project (#373). `INTERNAL_SERVICE_SECRET`-gated, org bound from `body.org_id`; called by the worker's Slack import for project mode `create_new` (#364) | — *(internal service-to-service)* |
 | `GET /projects/:id` | `get_project` | Get one project | `apps/frontend/src/hooks/use-projects.ts` |
 | `PATCH /projects/:id` | `update_project` | Update project (admin) | `apps/frontend/src/pages/settings.tsx` |
 | `DELETE /projects/:id` | `archive_project` | Archive project (admin) | `apps/frontend/src/pages/settings.tsx` |

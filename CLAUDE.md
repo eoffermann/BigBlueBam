@@ -270,6 +270,8 @@ Every file in `infra/postgres/migrations/` MUST:
 2. **Header**: the first ~20 lines must contain a comment block with the filename marker, a `-- Why:` line (1-3 sentences on motivation), and a `-- Client impact:` line (`none` / `additive only` / `expand-contract step N/M` / etc).
 3. **Idempotency**: use `CREATE TABLE IF NOT EXISTS`, `CREATE [UNIQUE] INDEX IF NOT EXISTS`, `ADD COLUMN IF NOT EXISTS`, `DROP TABLE/INDEX/COLUMN IF EXISTS`. `CREATE TRIGGER` must be preceded by `DROP TRIGGER IF EXISTS ... ;` or wrapped in a `DO $$ ... EXCEPTION WHEN duplicate_object THEN NULL; END $$;` block.
 4. **Destructive ALTERs** (`DROP COLUMN`, `SET NOT NULL`, etc.) must be wrapped in a guarded `DO $$` block that tolerates re-runs.
+5. **Org GUC casts use NULLIF**: write `NULLIF(current_setting('app.current_org_id', true), '')::uuid`, never the bare `::uuid` cast that older migrations show (rule `org-guc-nullif`, #381).
+6. **Expand and contract ship in separate releases**: never drop a column in the migration that adds its replacement; the drop goes in a later migration released after no running code reads it (rule `drop-column-separate-release`, #375; rationale in `docs/reference/database.md`, "Removing or replacing a column").
 
 Enforced by `pnpm lint:migrations` (`scripts/lint-migrations.mjs`), run in CI by `.github/workflows/db-drift.yml` (job `migration-lint`). Rare exceptions may be silenced per-line with an inline `-- noqa: <rule-name>` comment **while the migration has not yet been applied in any environment**. After the migration has run anywhere, see the immutability rule below.
 

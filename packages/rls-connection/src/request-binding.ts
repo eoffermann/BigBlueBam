@@ -42,6 +42,57 @@ export interface RequestRlsBindingOptions<S extends RequestRlsStore<unknown>> {
   bindDb: (conn: postgres.Sql) => NonNullable<S['db']>;
   /** The org to bind for this request, or null to bind none (org-gated tables then stay empty). */
   resolveOrgId: (request: FastifyRequest) => string | null | Promise<string | null>;
+  /**
+   * How long a request waits to reserve and bind a read-replica connection before it gives up and
+   * reads on the write connection (#377). Default 500 ms, far below the pools' 10 s connect_timeout.
+   */
+  readReserveTimeoutMs?: number;
+  /**
+   * After a read bind fails or times out, the replica is skipped for this long (reads go to the
+   * write connection) before one request probes it again (#377). Default 30 s.
+   */
+  readBreakerCooldownMs?: number;
+  /** Clock, for tests. */
+  now?: () => number;
+}
+
+export const DEFAULT_READ_RESERVE_TIMEOUT_MS = 500;
+export const DEFAULT_READ_BREAKER_COOLDOWN_MS = 30_000;
+
+class ReadReserveTimeout extends Error {
+  constructor(ms: number) {
+    super(`read connection reserve timed out after ${ms} ms`);
+    this.name = 'ReadReserveTimeout';
+  }
+}
+
+/**
+ * Reserve and bind a read connection, but give up after `ms`. A reserve that completes after the
+ * deadline is released straight back to its pool, so a slow replica never leaks connections.
+ */
+async function reserveWithin(
+  pool: postgres.Sql,
+  orgId: string,
+  ms: number,
+): Promise<postgres.ReservedSql> {
+  const pending = reserveOrgConnection(pool, orgId);
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const deadline = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new ReadReserveTimeout(ms)), ms);
+  });
+  try {
+    return await Promise.race([pending, deadline]);
+  } catch (err) {
+    if (err instanceof ReadReserveTimeout) {
+      pending.then(
+        (late) => releaseOrgConnection(late),
+        () => undefined,
+      );
+    }
+    throw err;
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 /**
@@ -66,6 +117,16 @@ export function requestRlsBinding<S extends RequestRlsStore<unknown>>(
 ): FastifyPluginAsync {
   const { service, enforce, storage, writeClient, readClient, bindDb, resolveOrgId } = opts;
   const hasRead = readClient !== undefined;
+  const separateRead = hasRead && readClient !== writeClient;
+  const readTimeoutMs = opts.readReserveTimeoutMs ?? DEFAULT_READ_RESERVE_TIMEOUT_MS;
+  const cooldownMs = opts.readBreakerCooldownMs ?? DEFAULT_READ_BREAKER_COOLDOWN_MS;
+  const now = opts.now ?? Date.now;
+
+  // Read-replica circuit breaker (#377), process-wide for this service. Closed (0): every request
+  // tries the replica. Open (now < openUntil): reads go straight to the write connection. After
+  // the cooldown, exactly one request probes; success closes it, failure re-opens it.
+  let breakerOpenUntil = 0;
+  let probing = false;
 
   return fp(async (fastify: FastifyInstance) => {
     if (!enforce) {
@@ -95,23 +156,54 @@ export function requestRlsBinding<S extends RequestRlsStore<unknown>>(
       const orgId = await resolveOrgId(request);
       if (!orgId) return;
 
-      const reserved = await reserveOrgConnection(writeClient, orgId);
+      // The replica first, under a short budget, so a slow or dead replica never holds one of the
+      // write pool's connections while it times out (#377).
+      let readReserved: postgres.ReservedSql | null = null;
+      if (separateRead && readClient) {
+        const open = breakerOpenUntil !== 0;
+        const skip = open && (now() < breakerOpenUntil || probing);
+        if (!skip) {
+          if (open) probing = true;
+          try {
+            readReserved = await reserveWithin(readClient, orgId, readTimeoutMs);
+            if (open) {
+              breakerOpenUntil = 0;
+              fastify.log.info(`${service} rls: read replica reachable again; read circuit closed`);
+            }
+          } catch (err) {
+            breakerOpenUntil = now() + cooldownMs;
+            if (open) {
+              request.log.warn({ err }, `${service} rls: read replica probe failed; read circuit stays open`);
+            } else {
+              fastify.log.warn(
+                { err, cooldownMs },
+                `${service} rls: read connection bind failed; read circuit open, reads use the write connection`,
+              );
+            }
+          } finally {
+            if (open) probing = false;
+          }
+        }
+      }
+
+      let reserved: postgres.ReservedSql;
+      try {
+        reserved = await reserveOrgConnection(writeClient, orgId);
+      } catch (err) {
+        if (readReserved) await releaseOrgConnection(readReserved);
+        throw err;
+      }
       store.reserved = reserved;
       store.db = bindDb(reserved);
       if (!hasRead) return;
 
-      if (readClient === writeClient) {
-        store.readDb = store.db;
-        return;
-      }
-      try {
-        const readReserved = await reserveOrgConnection(readClient, orgId);
+      if (readReserved) {
         store.readReserved = readReserved;
         store.readDb = bindDb(readReserved);
-      } catch (err) {
-        // Degrade reads to the (already org-bound) write connection rather than leaving readDb on
-        // an unbound pool connection that would return empty results as success (issue #106).
-        request.log.warn({ err }, `${service} rls: read connection bind failed; reads use the write connection`);
+      } else {
+        // Same client, or the replica is unavailable: reads use the (already org-bound) write
+        // connection rather than an unbound pool connection that would return empty results as
+        // success (issue #106).
         store.readDb = store.db;
       }
     });

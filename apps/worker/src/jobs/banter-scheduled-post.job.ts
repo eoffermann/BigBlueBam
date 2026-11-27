@@ -148,15 +148,36 @@ export async function processBanterScheduledPostJob(
   // Sanitize content again? The row was sanitized when inserted. Trust it.
   const contentPlain = row.content.replace(/<[^>]*>/g, '').slice(0, 500);
 
-  const insertResult = await db.execute(sql`
-    INSERT INTO banter_messages
-      (channel_id, author_id, thread_parent_id, content, content_plain,
-       content_format, metadata, edit_permission)
-    VALUES (${row.channel_id}, ${row.author_id}, ${row.thread_parent_id},
-            ${row.content}, ${contentPlain}, ${row.content_format},
-            ${row.metadata ? JSON.stringify(row.metadata) : '{}'}::jsonb, 'own')
-    RETURNING id, created_at
-  `);
+  let insertResult: unknown;
+  try {
+    insertResult = await db.execute(sql`
+      INSERT INTO banter_messages
+        (channel_id, author_id, thread_parent_id, content, content_plain,
+         content_format, metadata, edit_permission)
+      VALUES (${row.channel_id}, ${row.author_id}, ${row.thread_parent_id},
+              ${row.content}, ${contentPlain}, ${row.content_format},
+              ${row.metadata ? JSON.stringify(row.metadata) : '{}'}::jsonb, 'own')
+      RETURNING id, created_at
+    `);
+  } catch (err) {
+    // The thread this reply was scheduled into was deleted before it fired: the
+    // banter_messages reference trigger (0361, #368) raises 23503. Retrying cannot help.
+    const e = err as { code?: string; cause?: { code?: string } } | null;
+    const code = e?.code ?? e?.cause?.code;
+    if (code === '23503' && row.thread_parent_id) {
+      await db.execute(sql`
+        UPDATE banter_scheduled_messages
+        SET status = 'failed', defer_reason = 'thread_parent_deleted'
+        WHERE id = ${row.id}
+      `);
+      logger.warn(
+        { jobId: job.id, scheduledId, threadParentId: row.thread_parent_id },
+        'banter-scheduled-post: thread parent no longer exists, row marked failed',
+      );
+      return;
+    }
+    throw err;
+  }
   const [inserted] = normaliseRows<{ id: string; created_at: Date }>(insertResult);
   if (!inserted) {
     logger.error({ jobId: job.id, scheduledId }, 'banter-scheduled-post: insert returned no row');
