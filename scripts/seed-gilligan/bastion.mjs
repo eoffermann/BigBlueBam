@@ -173,8 +173,9 @@ async function adoptAndCompile(templateKey) {
  * One way to find a GILLIGAN Bam project by name. Bam's `GET /projects` lists only the projects
  * the caller is a member of, and an org owner is not a member of the projects other castaways
  * created (the Professor's "Fix the Radio", Mary Ann's "Island Infrastructure"), so the list
- * cannot answer "does this project exist". The org-scoped table can; the project routes Skipper
- * then calls admit him as org owner.
+ * cannot answer "does this project exist". The org-scoped table can. Bam's per-project routes
+ * (`requireProjectAccess`) admit only project members and SuperUsers, not an org owner, so a
+ * call on one of those projects goes as one of its admins (`projectAdminRole`).
  */
 async function bamProjectByName(name) {
   return (
@@ -184,6 +185,18 @@ async function bamProjectByName(name) {
                    ORDER BY p.created_at LIMIT 1`,
     )
   )[0] ?? null;
+}
+
+/** The GKEYS role (the email's local part) of an admin of a Bam project, for its member-only routes. */
+async function projectAdminRole(projectId) {
+  const rows = await withDb(
+    (sql) => sql`SELECT u.email FROM project_memberships pm JOIN users u ON u.id = pm.user_id
+                 WHERE pm.project_id = ${projectId} AND pm.role = 'admin'
+                 ORDER BY pm.joined_at NULLS LAST, u.email`,
+  );
+  const role = rows.map((r) => r.email.split('@')[0]).find((r) => KEYS[r]);
+  if (!role) throw new Error(`no castaway with a seed key is an admin of project ${projectId}`);
+  return role;
 }
 
 async function ensureComplianceProject() {
@@ -611,9 +624,16 @@ async function seedGithubHistory() {
   for (const i of g.integrations) {
     const p = await bamProjectByName(i.project);
     if (!p) throw new Error(`project "${i.project}" is missing; run the Bam seed first`);
-    const cur = await bam('GET', `/projects/${p.id}/github-integration`);
-    if (cur.ok && cur.json?.data?.repo_name === i.repo) continue;
-    must(await bam('PUT', `/projects/${p.id}/github-integration`, { repo_owner: g.owner, repo_name: i.repo }), `connect ${i.repo}`);
+    const cur = await withDb(
+      (sql) => sql`SELECT repo_owner, repo_name FROM github_integrations WHERE project_id = ${p.id} LIMIT 1`,
+    );
+    if (cur[0]?.repo_owner === g.owner && cur[0]?.repo_name === i.repo) continue;
+    // Skipper is not a member of these projects, and Bam's project routes admit members only.
+    const as = await projectAdminRole(p.id);
+    must(
+      await call(BAM, 'PUT', `/projects/${p.id}/github-integration`, { repo_owner: g.owner, repo_name: i.repo }, { as }),
+      `connect ${i.repo} (as ${as})`,
+    );
   }
   // Deliveries GitHub sent (the webhook stores them in github_pr_events); idempotent on delivery id.
   await withDb(async (sql) => {
