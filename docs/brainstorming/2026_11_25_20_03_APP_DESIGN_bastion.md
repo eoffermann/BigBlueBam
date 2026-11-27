@@ -1465,7 +1465,7 @@ same change as the outbox. The drainer calls `publishBoltEvent` positionally.
 | `evidence.uploaded` | manual evidence becomes active |
 | `evidence.expiring` | warning window |
 | `evidence.expired` | expiry |
-| `evidence.integrity_failed` | hash mismatch or an unmatched ledger gap |
+| `evidence.integrity_failed` | hash mismatch or an unmatched ledger gap; a chain break alerts once per break as observed (epoch, seq, problem, row digest), so a new tamper of an already-alerted row alerts again (build decision #297) |
 | `evidence.redacted` | personal data redacted |
 | `ledger.sealed` | daily |
 | `ledger.restore_detected` | the database head is behind the bucket seal |
