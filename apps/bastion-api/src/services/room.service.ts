@@ -127,7 +127,7 @@ export async function resolveRoom(deps: RoomDeps, ctx: RoomRequestContext): Prom
       ok = false;
     }
     if (!ok) {
-      const left = await recordPasscodeMiss(deps.engine, orgId, roomId, String(room.label));
+      const left = await recordPasscodeMiss(deps.engine, orgId, roomId);
       if (left <= 0) throw new NotFoundError(ROOM_GONE);
       throw new RoomPasscodeRequired(true, left);
     }
@@ -136,7 +136,7 @@ export async function resolveRoom(deps: RoomDeps, ctx: RoomRequestContext): Prom
 }
 
 /** One wrong passcode: the 5th locks the room and tells its creator (spec 5.2). Returns tries left. */
-export async function recordPasscodeMiss(engine: EngineDeps, orgId: string, roomId: string, label: string): Promise<number> {
+export async function recordPasscodeMiss(engine: EngineDeps, orgId: string, roomId: string): Promise<number> {
   return orgTx(engine.sql, orgId, async (tx) => {
     const [r] = await tx`
       UPDATE bastion_auditor_rooms SET passcode_failures = passcode_failures + 1
@@ -146,7 +146,7 @@ export async function recordPasscodeMiss(engine: EngineDeps, orgId: string, room
     if (r && failures >= BASTION_ROOM_PASSCODE_MAX_FAILURES) {
       const now = engine.now();
       await tx`UPDATE bastion_auditor_rooms SET locked_at = ${now} WHERE organization_id = ${orgId} AND id = ${roomId}`;
-      await enqueueBastionEvent('auditor_room.revoked', { room_id: roomId, label, reason: 'locked' }, tx, {
+      await enqueueBastionEvent('auditor_room.revoked', { room_id: roomId, reason: 'locked' }, tx, {
         orgId,
         idempotencyKey: `auditor_room.locked:${roomId}:${now.toISOString()}`,
       });
