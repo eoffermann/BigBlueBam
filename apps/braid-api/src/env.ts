@@ -36,6 +36,8 @@ const envSchema = z.object({
 
   COOKIE_DOMAIN: z.string().optional(),
   COOKIE_SECURE: envBool(false),
+  // Platform RLS posture (#302): envBool, so 'true' enforces and an unknown value fails boot.
+  BBB_RLS_ENFORCE: envBool(false),
 
   // Reserved for Braid's LLM calls (none ship yet, #283); bounded by the proxy's own limits so the
   // first caller cannot be silently cut at the proxy.

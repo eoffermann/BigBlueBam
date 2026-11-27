@@ -16,7 +16,8 @@
       "packages/db-stubs/**",
       "packages/livekit-tokens/**",
       "packages/permissions/**",
-      "packages/storage/**"
+      "packages/storage/**",
+      "packages/egress-guard/**"
     ]
   },
   "deploy": {

@@ -6,7 +6,7 @@ import docsCatalog from '../content/docs-catalog.generated.json';
  * MCP tools registered by apps/mcp-server (one registerTool() call each).
  * Checked by scripts/check-tool-return-coverage.mjs.
  */
-export const MCP_TOOL_COUNT = 885;
+export const MCP_TOOL_COUNT = 951;
 
 /**
  * Apps on the Launchpad. Derived from the generated /docs catalog, which

@@ -22,7 +22,7 @@ vi.mock('../src/env.js', () => ({
     RATE_LIMIT_WINDOW_MS: 60000,
     COOKIE_SECURE: false,
     INTERNAL_HELPDESK_SECRET: 'test-internal-helpdesk-secret-1234567890',
-    HELPDESK_API_INTERNAL_URL: 'http://helpdesk-api:4001',
+    HELPDESK_API_URL: 'http://helpdesk-api:4001',
   },
 }));
 

@@ -15,6 +15,7 @@
       "packages/service-health/**",
       "packages/permissions/**",
       "packages/smtp-resolver/**",
+      "packages/egress-guard/**",
       "infra/postgres/migrations/**"
     ]
   },

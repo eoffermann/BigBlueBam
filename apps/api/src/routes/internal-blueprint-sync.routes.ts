@@ -13,7 +13,7 @@
  */
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import { tasks } from '../db/schema/tasks.js';
 import { requireInternalSecretOrToken } from '../lib/internal-secret.js';
@@ -21,6 +21,11 @@ import { broadcastToProject } from '../services/realtime.service.js';
 
 const syncSchema = z.object({
   task_id: z.string().uuid(),
+  // The org that owns the Blueprint diagram. Required, and both the read and
+  // the UPDATE below match it against tasks.org_id: a node's ref_entity_id is
+  // caller-controlled, and without this a Blueprint user could point a node at
+  // another org's task UUID and overwrite its title and description.
+  org_id: z.string().uuid(),
   title: z.string().max(500).optional(),
   description: z.string().nullable().optional(),
 });
@@ -51,7 +56,7 @@ export default async function internalBlueprintSyncRoutes(fastify: FastifyInstan
     const [current] = await db
       .select({ title: tasks.title, description: tasks.description })
       .from(tasks)
-      .where(eq(tasks.id, parsed.data.task_id))
+      .where(and(eq(tasks.id, parsed.data.task_id), eq(tasks.org_id, parsed.data.org_id)))
       .limit(1);
     if (!current) {
       return reply.status(404).send({
@@ -74,7 +79,7 @@ export default async function internalBlueprintSyncRoutes(fastify: FastifyInstan
     const result = await db
       .update(tasks)
       .set(update)
-      .where(eq(tasks.id, parsed.data.task_id))
+      .where(and(eq(tasks.id, parsed.data.task_id), eq(tasks.org_id, parsed.data.org_id)))
       .returning({ id: tasks.id, project_id: tasks.project_id });
 
     // Live broadcast on the project channel so any open Bam board picks

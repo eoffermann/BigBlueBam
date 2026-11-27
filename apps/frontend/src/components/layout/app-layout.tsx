@@ -14,6 +14,7 @@ import { UserMenu } from '@bigbluebam/ui/user-menu';
 import { Sidebar } from './sidebar';
 import { CommandPalette } from '@/components/common/command-palette';
 import { SuperuserContextBanner } from '@/components/superuser-context-banner';
+import { DeploymentHealthBanner } from '@/components/deployment-health-banner';
 import { ImpersonationBanner } from '@bigbluebam/ui/impersonation-banner';
 import { OrgSwitcher } from '@/components/layout/org-switcher';
 import { useAuthStore } from '@/stores/auth.store';
@@ -139,6 +140,7 @@ export function AppLayout({ children, currentProjectId, breadcrumbs = [], onNavi
       />
 
       <div className="flex flex-col flex-1 overflow-hidden">
+        <DeploymentHealthBanner />
         <SuperuserContextBanner />
         {showNoOwnerBanner && (
           <div className="flex items-center gap-3 px-6 py-2.5 border-b border-red-200 bg-red-50 text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-300 shrink-0">

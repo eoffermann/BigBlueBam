@@ -40,7 +40,7 @@ A tool/command "corresponds" to the endpoint(s) its handler calls. Sections are 
 | Surface | REST endpoints | …with an MCP tool | …without a tool | MCP-only tools (no endpoint) |
 |---|--:|--:|--:|--:|
 | Bam — Work management | 93 | 86 | 7 | 2 |
-| Bam — Org, auth, admin & integrations | 157 | 37 | 120 | 0 |
+| Bam — Org, auth, admin & integrations | 158 | 37 | 121 | 0 |
 | Banter | 114 | 75 | 39 | 0 |
 | Beacon | 40 | 38 | 2 | 0 |
 | Brief | 54 | 48 | 6 | 0 |
@@ -58,7 +58,7 @@ A tool/command "corresponds" to the endpoint(s) its handler calls. Sections are 
 | Bin | 32 | 19 | 13 | 0 |
 | Bay | 20 | 14 | 6 | 0 |
 | Blip | 40 | 38 | 2 | 0 |
-| Helpdesk | 38 | 15 | 23 | 0 |
+| Helpdesk | 39 | 15 | 24 | 0 |
 | Basis | 17 | 15 | 2 | 0 |
 | Braid | 21 | 12 | 9 | 1 |
 | Bulwark | 29 | 17 | 12 | 0 |
@@ -66,7 +66,7 @@ A tool/command "corresponds" to the endpoint(s) its handler calls. Sections are 
 | Bursar | 79 | 22 | 57 | 0 |
 | Bastion (tools pending registration at M11) | 113 | 83 | 30 | 0 |
 | Cross-app platform | 46 | 32 | 14 | 6 |
-| **Total** | **1381** | **957** | **424** | **17** |
+| **Total** | **1383** | **957** | **426** | **17** |
 
 _Counts are summed from the per-section tables (each row's REST endpoint counted once even when several MCP tools share it). After the `feat/mcp-endpoint-parity` build the "with an MCP tool" total roughly doubled (≈334 → ≈690). Of the ~247 endpoints still tool-less, the large majority are now annotated `— _(skip: …)_` with a reason — auth/OAuth/session, public-inbound (forms/booking/portal/tracking), multipart/binary upload, binary export (PDF/SVG/CSV/.ics), raw credential/API-key admin, SuperUser/permission/account admin (Bam org/admin held to a deliberately conservative scope this pass), Yjs/scene/WebSocket realtime sync, internal/service-to-service routes, and slug/name resolvers done internally — plus the deferred Helpdesk `X-Agent-Key` agent routes. Some endpoints are shared by multiple MCP tools and many are internal / webhook / public-inbound (not user-facing), so treat the totals as close approximations of the surface size, not an exact public-API inventory. The remaining intentional gaps cluster in **Bam org/admin** (SuperUser & permissions admin, integrations, credentials — UI/CLI-only) and a few per-app binary/upload/realtime tails._
 
@@ -89,7 +89,10 @@ stay terse:
   `attachment_get` / `attachment_list`); raw credential management (API-key
   secrets); SuperUser break-glass & permission-matrix admin (intentionally
   UI/CLI-only); pure internal/service-to-service routes (`/internal/*`,
-  `/tools/call`, dual-read). Slug/name **resolver** GETs are not standalone tools
+  `/tools/call`, dual-read; `/tools/call` answers 401 for a missing or wrong
+  secret and 403 for a right secret from a caller relayed by the edge or not on
+  the private network, which is what a `MCP_INTERNAL_URL` pointed through nginx
+  produces). Slug/name **resolver** GETs are not standalone tools
   — the write tools resolve names/slugs internally.
 - **Permission mapping.** New tools are not added to `@bigbluebam/permissions`
   `TOOL_TO_PERMISSION` in this pass, so under per-action enforcement they
@@ -291,8 +294,8 @@ Notes:
 | `POST /tasks/:id/attachments` | — _(skip: multipart upload)_ | Attach a file record to a task | `apps/frontend/src/components/tasks/task-detail-drawer.tsx` |
 | `GET /tasks/:id/attachments` | — _(skip: covered by cross-app `attachment_list`)_ | List a task's attachments | `apps/frontend/src/components/tasks/task-detail-drawer.tsx` |
 | `DELETE /attachments/:id` | — _(skip: binary/attachment lifecycle)_ | Delete an attachment | `apps/frontend/src/components/tasks/task-detail-drawer.tsx` |
-| `POST /upload` | — _(skip: multipart binary upload)_ | Multipart upload to MinIO | `apps/frontend/src/components/common/image-upload.tsx` |
-| `GET /files/*` | — _(skip: binary download proxy)_ | Proxy file download from MinIO. Allowlisted prefixes only (#123): `avatars/` (public cache) plus legacy capability prefixes `uploads/` and `helpdesk/` (`Cache-Control: private, no-store`; still to move to owning-app routes, #142); `banter/uploads/` and `bill/receipts/` moved to their apps' authorized routes (#142, #145); any other key, including org-prefixed objects, returns 404 | `apps/frontend/src/components/common/image-upload.tsx` |
+| `POST /upload` | — _(skip: multipart binary upload)_ | Multipart upload to MinIO; records the uploader's active org as the key's owner (#142) | `apps/frontend/src/components/common/image-upload.tsx` |
+| `GET /files/*` | — _(skip: binary download proxy)_ | Proxy file download from MinIO. Allowlisted prefixes only (#123): `avatars/` (public cache) plus legacy prefixes `uploads/` and `helpdesk/` (`Cache-Control: private, no-store`), served only to a caller whose active org owns the key in `file_upload_owners` (written by both upload routes, backfilled by migration 0310; another org or an unrecorded key gets 404, #142); `banter/uploads/` and `bill/receipts/` moved to their apps' authorized routes (#142, #145); any other key, including org-prefixed objects, returns 404 | `apps/frontend/src/components/common/image-upload.tsx` |
 | `GET /version` | — _(skip: build/version probe, not agent surface)_ | Public version info | `apps/frontend/src/hooks/use-version.ts` |
 | `POST /version/check` | — _(skip: SuperUser break-glass)_ | Force version check (SuperUser) | — |
 
@@ -538,6 +541,9 @@ Covers `platform.routes.ts` (`/v1/platform/*`) and `superuser.routes.ts` (`/supe
 | `GET /superuser/deploy/settings` | — _(skip: SuperUser deploy settings — UI/CLI-only)_ | Read deploy branch/repo/token/auto-update | `apps/frontend/src/lib/api/superuser-deploy.ts` |
 | `PUT /superuser/deploy/settings` | — _(skip: SuperUser deploy settings — UI/CLI-only)_ | Write deploy settings (token tri-state) | `apps/frontend/src/components/superuser/deploy-settings-card.tsx` |
 | `POST /superuser/deploy/verify-repo` | — _(skip: SuperUser deploy settings — UI/CLI-only)_ | Verify repo URL+token vs GitHub API | `apps/frontend/src/components/superuser/deploy-settings-card.tsx` |
+| `GET /superuser/config-health` | — _(skip: SuperUser deployment config — UI-only by design)_ | Deployment config health: whether boot secrets are set (never their values) and the permission/RLS enforcement posture | `apps/frontend/src/components/deployment-health-banner.tsx` |
+
+`GET /superuser/config-health` is read-only and makes no service-to-service call, so it answers on a stack whose `INTERNAL_SERVICE_SECRET` is unset. The fix it points to is an environment change and restart, which an agent tool could not perform anyway.
 
 
 ## Bam — Permissions admin (SuperUser)
@@ -856,7 +862,7 @@ X-Internal-Secret gated; not user-facing, no MCP tools.
 
 | REST endpoint | MCP tool | Description | UI call site |
 | --- | --- | --- | --- |
-| `POST /v1/internal/dm` | — _(skip: internal service-to-service route)_ | Send a DM between two users (bureau) | — *(internal)* |
+| `POST /v1/internal/dm` | — _(skip: internal service-to-service route)_ | Send a DM between two users. Callers: bureau-api leave-a-note (`knocks.routes.ts`) and the Bam api assignment notification (`notification-fanout.service.ts`). Body is the shared `banterInternalDmRequestSchema` in `@bigbluebam/shared`; callers reach it at `BANTER_API_URL` | — *(internal)* |
 | `POST /v1/internal/feed` | — _(skip: internal service-to-service route)_ | Post an activity-feed message | — *(internal)* |
 | `POST /v1/internal/share` | — _(skip: internal service-to-service route)_ | Share a Bam entity into a channel | — *(internal)* |
 | `POST /v1/internal/transcript` | — _(skip: internal service-to-service route)_ | Receive one live transcript segment | — *(voice-agent)* |
@@ -994,7 +1000,7 @@ All routes are registered under the `/v1` prefix, so external paths are `/brief/
 | `POST /folders` | `brief_folder_create` | Create a folder | `apps/brief/src/hooks/use-folders.ts` |
 | `PATCH /folders/:id` | `brief_folder_update` | Update a folder | `apps/brief/src/hooks/use-folders.ts` |
 | `DELETE /folders/:id` | `brief_folder_delete` | Delete a folder | `apps/brief/src/hooks/use-folders.ts` |
-| `POST /internal/can-read` | — _(skip: internal service-to-service route)_ | Cross-app read preflight (Bureau summon) | — *(internal service-to-service)* |
+| `POST /internal/can-read` | — _(skip: internal service-to-service route)_ | Cross-app read preflight for Bureau presence and summons, for every suite URL except Board/Brief. Maps the URL to a can_access entity (`lib/suite-url-entity.ts`) and denies what it cannot map (fail closed, #300). Callers go through `@bigbluebam/shared/cross-app-access` | — *(internal service-to-service)* |
 | `POST /internal/visibility/can-access` | — _(skip: internal service-to-service route)_ | General (entity_type, entity_id) preflight for service callers (Banter Feed fan-in worker) | — *(internal service-to-service)* |
 
 
@@ -1030,7 +1036,7 @@ All routes are registered under the `/v1` prefix, so external paths are `/brief/
 | `POST /contacts/import` | — _(skip: bulk import upload)_ | Bulk import contacts | — |
 | `GET /contacts/search` | `bond_search_contacts` | Full-text contact search | — |
 | `POST /contacts/upsert` | `bond_upsert_contact` | Idempotent create-or-update by email | — |
-| `POST /internal/contacts` | — _(skip: internal service-to-service, INTERNAL_SERVICE_SECRET)_ | Internal upsert-by-email for anonymous public bookings (book-api) | `apps/book-api/src/routes/public-booking.routes.ts` |
+| `POST /internal/contacts` | — _(skip: internal service-to-service, INTERNAL_SERVICE_SECRET)_ | Internal upsert-by-email on behalf of a named acting user. Callers: book-api public bookings and blank-api form routing (#305). Body is the shared `bondInternalContactUpsertSchema` | `apps/book-api/src/routes/public-booking.routes.ts`, `apps/blank-api/src/services/routing.service.ts` |
 | `GET /contacts/:id` | `bond_get_contact` | Get contact detail | `apps/bond/src/hooks/use-contacts.ts` |
 | `PATCH /contacts/:id` | `bond_update_contact` | Update contact | `apps/bond/src/hooks/use-contacts.ts` |
 | `DELETE /contacts/:id` | `bond_delete_contact` | Delete contact | `apps/bond/src/hooks/use-contacts.ts` |
@@ -1669,7 +1675,7 @@ or `/helpdesk/agents`) segment in-code.
 | `GET /bureau/api/v1/presence` | `bureau_get_presence` | Org-wide live presence snapshot | — |
 | `GET /bureau/api/v1/presence/here` | `bureau_who_is_here` | Co-presence by URL chip | `apps/bureau/src/hooks/use-bureau-ws.ts` |
 | `GET /bureau/api/v1/presence/locate` | `bureau_locate_user` | Locate a user's current room/floor | — |
-| `GET /bureau/api/v1/presence/where/:userId` | `bureau_where_is_user` | Locate a user ("Hunt") | `apps/bureau/src/hooks/use-bureau-ws.ts` |
+| `GET /bureau/api/v1/presence/where/:userId` | `bureau_where_is_user` | Locate a user ("Hunt"); `located: false` unless the caller passes the fail-closed cross-app preflight for the URL | `apps/bureau/src/hooks/use-bureau-ws.ts` |
 | `PATCH /bureau/api/v1/me/status` | `bureau_set_status` | Set + persist caller's presence status | — |
 | `POST /bureau/api/v1/ring` | — _(skip: realtime ring signal — not wrapped)_ | Ring a user on a surface | `apps/bureau/src/hooks/use-bureau-ws.ts` |
 | `GET /bureau/api/v1/rooms` | `bureau_list_rooms` | List org rooms (bookable filter) + floor name | `apps/bureau/src/hooks/use-rooms.ts` |
@@ -1749,9 +1755,10 @@ the upstream registers, so external path = `/helpdesk/api/` + the part after `/h
 | `POST /helpdesk/api/tickets/:id/update-priority` | — _(skip: customer-portal route — customer JWT, not Bearer)_ | Customer changes priority | `apps/helpdesk/src/pages/ticket-detail.tsx` |
 | `POST /helpdesk/api/tickets/:id/mark-duplicate` | — _(skip: customer-portal route — customer JWT, not Bearer)_ | Customer flags duplicate | `apps/helpdesk/src/pages/ticket-detail.tsx` |
 | `DELETE /helpdesk/api/tickets/:id/mark-duplicate` | — _(skip: customer-portal route — customer JWT, not Bearer)_ | Customer clears duplicate flag | `apps/helpdesk/src/pages/ticket-detail.tsx` |
-| `POST /helpdesk/api/upload` | — _(skip: multipart attachment upload/download)_ | Generic multipart file upload | `apps/helpdesk/src/pages/new-ticket.tsx` |
+| `POST /helpdesk/api/upload` | — _(skip: multipart attachment upload/download)_ | Generic multipart file upload; records the customer's org as the key's owner, so Bam's `/files/helpdesk/...` serves it to that org only (#142) | `apps/helpdesk/src/pages/new-ticket.tsx` |
 | `GET /helpdesk/api/v1/tickets/analytics/count-by-phrase` | `helpdesk_ticket_count_by_phrase` | Ticket counts bucketed by phrase | — |
 | `POST /helpdesk/api/v1/helpdesk-users/upsert` | `helpdesk_upsert_user` | Idempotent helpdesk-user upsert | — |
+| `POST /helpdesk/internal/tickets` | — _(skip: internal service-to-service route, INTERNAL_SERVICE_SECRET, refused through the edge)_ | Open a ticket for a requester (found or created by email in the org). Caller: blank-api form routing. Body is the shared `helpdeskInternalTicketCreateSchema` (#305) | — *(internal)* |
 
 
 ## Cross-app / agentic platform surface
@@ -2201,9 +2208,9 @@ AI procurement leveling & spend-baseline monitor. 20 `bursar_*` tools (spec sect
 
 ## Bastion (app)
 
-- **Service:** `apps/bastion-api` · external `/bastion/api/` · MCP module(s): none yet (handlers accumulate in `apps/mcp-server/src/tools-pending/bastion.ts` from M2 and register as `bastion-tools.ts` at M11) · added on the `suite-brainstorm` branch.
+- **Service:** `apps/bastion-api` · external `/bastion/api/` · MCP module(s): `apps/mcp-server/src/tools/bastion-tools.ts` (66 tools, registered at M11) · added on the `suite-brainstorm` branch.
 
-> **Tools here are written and tested but not yet registered.** The `bastion_*` handlers named below live in `apps/mcp-server/src/tools-pending/bastion.ts` (client: `apps/mcp-server/src/clients/bastion-client.ts`), tested by `apps/mcp-server/test/bastion-pending-tools.test.ts`. They are deliberately outside `src/tools/` so the tool-count and docs-catalog gates stay unchanged until the M11 merge unit registers them together with the Launchpad row (spec 5.4 of `docs/brainstorming/2026_11_25_20_03_APP_DESIGN_bastion.md`). Build rule (orchestrator decision on issue #196): an agent can do everything a human can, so the setup and admin writes have tools like any other route. The only skips are sanctioned categories: binary download, health, internal service-to-service, auth/credentials (feed keys), public-inbound (the machine feed push, authenticated by its own key), and **auth: session required (spec 2.8, #136)** for vouching acts (assertion confirm and reject, restore acknowledgement, manual-evidence upload, supersede and withdrawal, link review and redaction now; attest, decide, room create/revoke/unlock as they ship), whose routes require a cookie session and refuse impersonation, so no API key can ever satisfy them. There is no "human gate" skip category. The decision and the row-by-row table are in `docs/brainstorming/2026_11_25_20_03_WORK_IN_PROGRESS_bastion.md`. `/bastion/api/v1/internal/*` is denied at nginx (404) and will only ever be service-to-service.
+> **Registered tool module.** The `bastion_*` handlers named below live in `apps/mcp-server/src/tools/bastion-tools.ts` (client: `apps/mcp-server/src/clients/bastion-client.ts`), tested by `apps/mcp-server/test/bastion-tools.test.ts` and the parity cross-walk `apps/mcp-server/test/bastion-parity.test.ts`. They were built from M2 to M10 under `src/tools-pending/` and registered in the M11 merge unit (spec 5.4 of `docs/brainstorming/2026_11_25_20_03_APP_DESIGN_bastion.md`); like every satellite app they fail closed for a service account until an operator allowlists `bastion.*`. Build rule (orchestrator decision on issue #196): an agent can do everything a human can, so the setup and admin writes have tools like any other route. The only skips are sanctioned categories: binary download, health, internal service-to-service, auth/credentials (feed keys), public-inbound (the machine feed push, authenticated by its own key), and **auth: session required (spec 2.8, #136)** for vouching acts (assertion confirm and reject, restore acknowledgement, manual-evidence upload, supersede and withdrawal, link review and redaction now; attest, decide, room create/revoke/unlock as they ship), whose routes require a cookie session and refuse impersonation, so no API key can ever satisfy them. There is no "human gate" skip category. The decision and the row-by-row table are in `docs/brainstorming/2026_11_25_20_03_WORK_IN_PROGRESS_bastion.md`. `/bastion/api/v1/internal/*` is denied at nginx (404) and will only ever be service-to-service.
 
 | REST endpoint | MCP tool | Description | UI call site |
 | --- | --- | --- | --- |

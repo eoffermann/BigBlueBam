@@ -62,6 +62,8 @@ import superuserRoutes from '../src/routes/superuser.routes.js';
 import permissionsAdminRoutes from '../src/routes/permissions-admin.routes.js';
 import permissionsDivergencesRoutes from '../src/routes/permissions-divergences.routes.js';
 import deploySettingsRoutes from '../src/routes/deploy-settings.routes.js';
+import systemSettingsRoutes from '../src/routes/system-settings.routes.js';
+import configHealthRoutes from '../src/routes/config-health.routes.js';
 
 type Caller = 'none' | 'member' | 'superuser-session' | 'superuser-apikey' | 'impersonating';
 
@@ -168,6 +170,7 @@ describe('SuperUser route files are guarded with requireCan as a no-op (prod pos
     await app.register(permissionsAdminRoutes);
     await app.register(permissionsDivergencesRoutes);
     await app.register(deploySettingsRoutes);
+    await app.register(configHealthRoutes);
     await app.ready();
   });
   afterAll(() => app.close());
@@ -176,8 +179,9 @@ describe('SuperUser route files are guarded with requireCan as a no-op (prod pos
   const concrete = (url: string) => url.replace(/:[A-Za-z_]+/g, '11111111-1111-4111-8111-111111111111');
 
   it('registers the expected SuperUser routes', () => {
-    // 11 platform + 24 superuser + 13 permissions admin + 2 divergences + 3 deploy.
-    expect(routes.length).toBeGreaterThanOrEqual(50);
+    // 11 platform + 24 superuser + 13 permissions admin + 2 divergences + 3 deploy + 1 config-health.
+    expect(routes.length).toBeGreaterThanOrEqual(51);
+    expect(routes).toContainEqual({ method: 'GET', url: '/superuser/config-health' });
   });
 
   it('returns 403 to a non-SuperUser on every route except stop-impersonation', async () => {
@@ -203,6 +207,36 @@ describe('SuperUser route files are guarded with requireCan as a no-op (prod pos
       if (res.statusCode === 401 || body) blocked.push(`${r.method} ${r.url} -> ${res.statusCode}`);
     }
     expect(blocked).toEqual([]);
+  });
+
+  it('keeps the platform-settings writes in system-settings.routes.ts SuperUser-only', async () => {
+    // These live outside the guarded plugins (the file also serves the public
+    // /root-redirect and the authenticated single-key read), so each write route
+    // carries requirePlatformSuperuser itself. Without it any member could set
+    // smtp_host/smtp_pass and capture every user's password-reset mail.
+    const sys = Fastify({ logger: false });
+    sys.decorate('requireCan', () => async () => {});
+    installAuth(sys);
+    await sys.register(systemSettingsRoutes);
+    await sys.ready();
+    try {
+      const privileged: Array<{ method: InjectOptions['method']; url: string; payload?: unknown }> = [
+        { method: 'GET', url: '/system-settings' },
+        { method: 'PUT', url: '/system-settings/smtp_host', payload: { value: 'attacker.example' } },
+        { method: 'POST', url: '/system-settings/smtp/test', payload: {} },
+        { method: 'POST', url: '/system-settings/password_policy/preview', payload: { policy: {} } },
+      ];
+      for (const r of privileged) {
+        const res = await sys.inject({ ...r, headers: as('member') });
+        expect(`${r.method} ${r.url} -> ${res.statusCode}`).toBe(`${r.method} ${r.url} -> 403`);
+      }
+      // The single-key read stays reachable for ordinary users (it masks secrets);
+      // it reaches the handler, which fails on the test's db stub.
+      const read = await sys.inject({ method: 'GET', url: '/system-settings/smtp_host', headers: as('member') });
+      expect(read.statusCode).not.toBe(403);
+    } finally {
+      await sys.close();
+    }
   });
 
   it('still lets an impersonating SuperUser call stop-impersonation', async () => {

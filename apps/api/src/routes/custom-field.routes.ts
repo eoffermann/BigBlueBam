@@ -24,7 +24,7 @@ export default async function customFieldRoutes(fastify: FastifyInstance) {
 
   fastify.post<{ Params: { id: string } }>(
     '/projects/:id/custom-fields',
-    { preHandler: [requireAuth, fastify.requireCan('bam.project_custom_field.create'), requireScope('read_write')] },
+    { preHandler: [requireAuth, requireProjectAccess(), fastify.requireCan('bam.project_custom_field.create'), requireScope('read_write')] },
     async (request, reply) => {
       const schema = z.object({
         name: z.string().max(255),

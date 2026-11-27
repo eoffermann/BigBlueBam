@@ -31,11 +31,15 @@ interface BinAssetMediaRow {
   proxy_content_type: string | null;
 }
 
-async function getBinAssetMedia(binAssetId: string): Promise<BinAssetMediaRow | null> {
+// orgId is required and applied: bay-api reads Bin's table and object store
+// directly, with no bin-api boundary to enforce Bin's org gate. On the public
+// review surface the caller has no identity, so the org comes from the review
+// link itself (bay_review_links.org_id): a link only serves its own org's bytes.
+async function getBinAssetMedia(binAssetId: string, orgId: string): Promise<BinAssetMediaRow | null> {
   const raw = await db.execute(sql`
     SELECT object_key, content_type, scan_status, scan_override_at,
            proxy_object_key, poster_object_key, proxy_content_type
-    FROM bin_assets WHERE id = ${binAssetId} LIMIT 1
+    FROM bin_assets WHERE id = ${binAssetId} AND org_id = ${orgId} LIMIT 1
   `);
   const list = (Array.isArray(raw) ? raw : ((raw as { rows?: unknown[] }).rows ?? [])) as BinAssetMediaRow[];
   return list[0] ?? null;
@@ -79,9 +83,10 @@ export function hasRangeSupport(): boolean {
 
 export async function statBinMedia(
   binAssetId: string,
+  orgId: string,
   variant: ServeVariant,
 ): Promise<{ total: number; contentType: string } | null> {
-  const row = await getBinAssetMedia(binAssetId);
+  const row = await getBinAssetMedia(binAssetId, orgId);
   if (!row) return null;
   const target = resolveTarget(row, variant);
   if (!target) return null;
@@ -92,9 +97,10 @@ export async function statBinMedia(
 
 export async function streamBinMedia(
   binAssetId: string,
+  orgId: string,
   variant: ServeVariant,
 ): Promise<{ stream: NodeJS.ReadableStream; contentType: string; size: number } | null> {
-  const row = await getBinAssetMedia(binAssetId);
+  const row = await getBinAssetMedia(binAssetId, orgId);
   if (!row) return null;
   const target = resolveTarget(row, variant);
   if (!target) return null;
@@ -104,11 +110,12 @@ export async function streamBinMedia(
 
 export async function rangeBinMedia(
   binAssetId: string,
+  orgId: string,
   variant: ServeVariant,
   start: number,
   end: number,
 ): Promise<{ stream: NodeJS.ReadableStream; contentType: string; size: number; total: number } | null> {
-  const row = await getBinAssetMedia(binAssetId);
+  const row = await getBinAssetMedia(binAssetId, orgId);
   if (!row) return null;
   const target = resolveTarget(row, variant);
   if (!target) return null;

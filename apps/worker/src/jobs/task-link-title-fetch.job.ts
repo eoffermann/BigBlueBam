@@ -11,9 +11,7 @@
  * still null with title_source 'none' (a user rename that lands while the
  * job is queued always wins).
  *
- * Fetch discipline (mirrors the Wave-5 outbound-webhook sender; the guard
- * is duplicated locally because the worker stays decoupled from apps/api
- * imports — see apps/api/src/lib/webhook-url-validator.ts):
+ * Fetch discipline (the guard is the shared @bigbluebam/egress-guard):
  *   - http/https only; hostnames AND every DNS-resolved address are checked
  *     against private/loopback/link-local/metadata ranges (10/8, 172.16/12,
  *     192.168/16, 127/8, 169.254/16, 0/8, ::1, fc00::/7, fe80::/10,
@@ -29,10 +27,13 @@
 
 import type { Job } from 'bullmq';
 import type { Logger } from 'pino';
-import { lookup } from 'node:dns/promises';
-import { lookup as dnsLookupCb } from 'node:dns';
-import { isIP } from 'node:net';
-import { Agent } from 'undici';
+import {
+  checkUrlSync,
+  isBlockedIPv4,
+  isBlockedIPv6,
+  resolveAndCheckHost,
+  safeDispatcher,
+} from '@bigbluebam/egress-guard';
 import { sql } from 'drizzle-orm';
 import {
   TASK_LINK_TITLE_FETCH_QUEUE,
@@ -55,154 +56,9 @@ const USER_AGENT = 'BigBlueBam-LinkTitleFetch/1.0';
 
 // ── SSRF guard ────────────────────────────────────────────────────
 
-const BLOCKED_IPV4_RANGES = [
-  { start: [10, 0, 0, 0] as const, mask: 8 }, // RFC1918
-  { start: [172, 16, 0, 0] as const, mask: 12 }, // RFC1918
-  { start: [192, 168, 0, 0] as const, mask: 16 }, // RFC1918
-  { start: [127, 0, 0, 0] as const, mask: 8 }, // loopback
-  { start: [169, 254, 0, 0] as const, mask: 16 }, // link-local + cloud metadata
-  { start: [0, 0, 0, 0] as const, mask: 8 }, // "this network"
-  { start: [100, 64, 0, 0] as const, mask: 10 }, // CGNAT (Alibaba metadata 100.100.100.200)
-  { start: [198, 18, 0, 0] as const, mask: 15 }, // benchmarking
-] as const;
-
-const BLOCKED_HOSTNAMES = new Set(['localhost', 'metadata.google.internal', 'metadata.google']);
-
-function ipv4ToNum(parts: readonly number[]): number {
-  const [a = 0, b = 0, c = 0, d = 0] = parts;
-  return ((a << 24) | (b << 16) | (c << 8) | d) >>> 0;
-}
-
-function isBlockedIPv4(ip: string): boolean {
-  const parts = ip.split('.').map(Number);
-  if (parts.length !== 4 || parts.some((p) => Number.isNaN(p) || p < 0 || p > 255)) {
-    return false;
-  }
-  const num = ipv4ToNum(parts);
-  return BLOCKED_IPV4_RANGES.some((range) => {
-    const mask = (~0 << (32 - range.mask)) >>> 0;
-    return (num & mask) === (ipv4ToNum(range.start) & mask);
-  });
-}
-
-function isBlockedIPv6(ip: string): boolean {
-  const clean = ip.replace(/^\[|\]$/g, '');
-  if (clean === '::1') return true;
-  if (/^f[cd]/i.test(clean)) return true; // fc00::/7 unique local
-  if (/^fe[89ab]/i.test(clean)) return true; // fe80::/10 link-local
-  const v4Mapped = clean.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/i);
-  if (v4Mapped?.[1]) return isBlockedIPv4(v4Mapped[1]);
-  // URL.hostname normalizes v4-mapped addresses to hex hextets
-  // ("[::ffff:10.0.0.1]" parses as "::ffff:a00:1") — convert back.
-  const v4MappedHex = clean.match(/^::ffff:([0-9a-f]{1,4}):([0-9a-f]{1,4})$/i);
-  if (v4MappedHex?.[1] && v4MappedHex[2]) {
-    const hi = Number.parseInt(v4MappedHex[1], 16);
-    const lo = Number.parseInt(v4MappedHex[2], 16);
-    return isBlockedIPv4(`${hi >> 8}.${hi & 0xff}.${lo >> 8}.${lo & 0xff}`);
-  }
-  return false;
-}
-
-interface UrlCheckResult {
-  safe: boolean;
-  reason?: string;
-  parsed?: URL;
-}
-
-/** Synchronous checks: protocol, blocked hostnames, literal-IP ranges. */
-function checkUrlSync(rawUrl: string): UrlCheckResult {
-  let parsed: URL;
-  try {
-    parsed = new URL(rawUrl);
-  } catch {
-    return { safe: false, reason: 'Invalid URL' };
-  }
-
-  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
-    return { safe: false, reason: 'Only http and https URLs are allowed' };
-  }
-
-  const hostname = parsed.hostname.toLowerCase();
-
-  if (BLOCKED_HOSTNAMES.has(hostname)) {
-    return { safe: false, reason: `Hostname "${hostname}" is not allowed` };
-  }
-  if (hostname.endsWith('.internal')) {
-    return { safe: false, reason: `Hostname "${hostname}" appears to be an internal address` };
-  }
-
-  const ipVersion = isIP(hostname.replace(/^\[|\]$/g, ''));
-  if (ipVersion === 4 && isBlockedIPv4(hostname)) {
-    return { safe: false, reason: 'Private/internal IPv4 addresses are not allowed' };
-  }
-  if ((ipVersion === 6 || hostname.startsWith('[')) && isBlockedIPv6(hostname)) {
-    return { safe: false, reason: 'Private/internal IPv6 addresses are not allowed' };
-  }
-
-  return { safe: true, parsed };
-}
-
-/**
- * Validating dispatcher (closes the DNS-rebind TOCTOU). The pre-fetch
- * resolveAndCheckHost below validates the hostname, but plain fetch then
- * re-resolves independently at connect time — a hostile resolver could
- * answer "public" for the check and a private IP for the actual connect.
- * This undici Agent validates INSIDE the lookup undici uses to connect, so
- * the address that is actually dialed is the one that was vetted; a blocked
- * address fails the connection instead of being reached. Module-level so the
- * connection pool is reused across jobs.
- */
-const pinnedSafeDispatcher = new Agent({
-  connect: {
-    // net.connect-style lookup: resolve all, reject if ANY address is
-    // private, then pin to a single vetted address.
-    lookup(hostname, _options, callback: (err: Error | null, address: string, family: number) => void) {
-      dnsLookupCb(hostname, { all: true, verbatim: true }, (err, addresses) => {
-        if (err) return callback(err, '', 0);
-        if (!Array.isArray(addresses) || addresses.length === 0) {
-          return callback(new Error('DNS resolution returned no addresses'), '', 0);
-        }
-        for (const a of addresses) {
-          const blocked = a.family === 4 ? isBlockedIPv4(a.address) : isBlockedIPv6(a.address);
-          if (blocked) {
-            return callback(new Error('Hostname resolves to a private/internal address'), '', 0);
-          }
-        }
-        const chosen = addresses[0]!;
-        callback(null, chosen.address, chosen.family);
-      });
-    },
-  },
-});
-
-/**
- * Resolve a hostname and reject if ANY resolved address is private.
- * Literal IPs skip the lookup (already vetted by checkUrlSync). This is a
- * fast-fail pre-check; the authoritative rebind close is the pinned
- * dispatcher above (used at actual connect time).
- */
-async function resolveAndCheckHost(hostname: string): Promise<UrlCheckResult> {
-  const clean = hostname.replace(/^\[|\]$/g, '');
-  if (isIP(clean) !== 0) return { safe: true };
-
-  let addresses: Array<{ address: string; family: number }>;
-  try {
-    addresses = await lookup(clean, { all: true, verbatim: true });
-  } catch {
-    return { safe: false, reason: 'DNS resolution failed' };
-  }
-  if (addresses.length === 0) {
-    return { safe: false, reason: 'DNS resolution returned no addresses' };
-  }
-  for (const addr of addresses) {
-    const blocked =
-      addr.family === 4 ? isBlockedIPv4(addr.address) : isBlockedIPv6(addr.address);
-    if (blocked) {
-      return { safe: false, reason: 'Hostname resolves to a private/internal address' };
-    }
-  }
-  return { safe: true };
-}
+// The guard (protocol allowlist, internal-name denylist, v4/v6 literal and
+// DNS-resolved range checks, connect-time pinning) is @bigbluebam/egress-guard,
+// which was lifted from this file so every egress site shares one range table.
 
 // ── Title extraction ──────────────────────────────────────────────
 
@@ -318,7 +174,7 @@ async function fetchPageTitle(
         // Non-standard undici init field (closes DNS-rebind, see dispatcher
         // above). Cast because lib.dom's RequestInit doesn't declare it; the
         // injected fetchImpl in tests simply ignores the extra key.
-        dispatcher: pinnedSafeDispatcher,
+        dispatcher: safeDispatcher,
       } as unknown as RequestInit);
 
       if (res.status >= 300 && res.status < 400) {

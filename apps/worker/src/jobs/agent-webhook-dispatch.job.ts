@@ -32,6 +32,7 @@ import type { Job } from 'bullmq';
 import type { Logger } from 'pino';
 import type Redis from 'ioredis';
 import { createHmac } from 'node:crypto';
+import { safeFetch } from '@bigbluebam/egress-guard';
 import { eq, sql } from 'drizzle-orm';
 import { pgTable, uuid, text, jsonb, integer, timestamp, boolean } from 'drizzle-orm/pg-core';
 import { getDb } from '../utils/db.js';
@@ -175,7 +176,6 @@ export async function processAgentWebhookDispatchJob(
   logger: Logger,
   opts: { fetchImpl?: typeof fetch; nowMs?: () => number } = {},
 ): Promise<void> {
-  const doFetch = opts.fetchImpl ?? fetch;
   const now = opts.nowMs ? new Date(opts.nowMs()) : new Date();
   const db = getDb();
   const deliveryId = job.data.delivery_id;
@@ -260,18 +260,32 @@ export async function processAgentWebhookDispatchJob(
   let responseText: string | null = null;
   let networkError: string | null = null;
   try {
-    const res = await doFetch(row.runner.webhook_url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-BigBlueBam-Signature': signed.signature,
-        'X-BigBlueBam-Timestamp': signed.timestamp,
-        'X-BigBlueBam-Delivery': row.delivery.id,
-        'X-BigBlueBam-Event': `${row.delivery.event_source}.${row.delivery.event_type}`,
+    // Guarded here, at dispatch, on every attempt. The api's configure-time
+    // validator checks literal IPs only (it never resolves DNS), and this job
+    // re-sends a stored URL on every retry and redelivery, days later, so a
+    // configure-time check could not hold even if it resolved names: DNS can
+    // be repointed in between. safeFetch resolves and pins per attempt and
+    // revalidates each redirect hop.
+    const res = await safeFetch(
+      row.runner.webhook_url,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-BigBlueBam-Signature': signed.signature,
+          'X-BigBlueBam-Timestamp': signed.timestamp,
+          'X-BigBlueBam-Delivery': row.delivery.id,
+          'X-BigBlueBam-Event': `${row.delivery.event_source}.${row.delivery.event_type}`,
+        },
+        body: bodyStr,
+        signal: controller.signal,
       },
-      body: bodyStr,
-      signal: controller.signal,
-    });
+      {
+        fetchImpl: opts.fetchImpl,
+        // The signature authenticates us to the configured receiver only.
+        stripHeadersOnCrossOrigin: ['X-BigBlueBam-Signature'],
+      },
+    );
     statusCode = res.status;
     if (!res.ok) {
       try {

@@ -1,4 +1,5 @@
 import { eq, and, desc, lte, isNull, or, sql } from 'drizzle-orm';
+import { checkUrl } from '@bigbluebam/egress-guard';
 import { db } from '../db/index.js';
 import {
   bookExternalConnections,
@@ -96,6 +97,12 @@ export async function createIcsConnection(
   }
   if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
     throw badRequest('feed_url must be an http(s) or webcal URL');
+  }
+  // Fast, actionable error for an internal target. Not the security boundary:
+  // safeFetch in ics-provider.ts revalidates on every sync.
+  const check = await checkUrl(parsed.toString());
+  if (!check.safe) {
+    throw badRequest(`feed_url is not reachable from this service: ${check.reason}`);
   }
 
   // If a target calendar was supplied, verify it belongs to the caller's org.

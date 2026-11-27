@@ -22,6 +22,9 @@ const envSchema = z.object({
   MCP_INTERNAL_URL: z.string().default('http://mcp-server:3001'),
   BBB_API_INTERNAL_URL: z.string().default('http://api:4000'),
   BOLT_API_INTERNAL_URL: z.string().default('http://bolt-api:4006'),
+  // banter-api on the private network, for the leave-a-note DM (#303). The same name the api and
+  // mcp-server read, so the Railway catalog provisions one variable for every caller.
+  BANTER_API_URL: z.string().url().default('http://banter-api:4002'),
   INTERNAL_SERVICE_SECRET: z.string().min(32).optional(),
 
   // Bureau-specific cross-app integrations (per design doc §5):

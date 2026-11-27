@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { db } from '../db/index.js';
 import { slackIntegrations } from '../db/schema/slack-integrations.js';
 import { requireAuth, requireScope } from '../plugins/auth.js';
+import { requireProjectAccess } from '../middleware/authorize.js';
 import { validateExternalUrl } from '../lib/url-validator.js';
 import { shadowOnly } from '../middleware/dual-read.js';
 
@@ -30,7 +31,7 @@ const upsertSchema = z.object({
 export default async function slackIntegrationRoutes(fastify: FastifyInstance) {
   fastify.get<{ Params: { id: string } }>(
     '/projects/:id/slack-integration',
-    { preHandler: [requireAuth, shadowOnly('bam.project_slack_integration.get')] },
+    { preHandler: [requireAuth, requireProjectAccess(), shadowOnly('bam.project_slack_integration.get')] },
     async (request, reply) => {
       const [row] = await db
         .select()
@@ -46,6 +47,7 @@ export default async function slackIntegrationRoutes(fastify: FastifyInstance) {
     {
       preHandler: [
         requireAuth,
+        requireProjectAccess(),
         fastify.requireCan('bam.project_slack_integration.update'),
         requireScope('read_write'),
       ],
@@ -116,6 +118,7 @@ export default async function slackIntegrationRoutes(fastify: FastifyInstance) {
     {
       preHandler: [
         requireAuth,
+        requireProjectAccess(),
         fastify.requireCan('bam.project_slack_integration_test.create'),
         requireScope('read_write'),
       ],
@@ -178,6 +181,7 @@ export default async function slackIntegrationRoutes(fastify: FastifyInstance) {
     {
       preHandler: [
         requireAuth,
+        requireProjectAccess(),
         fastify.requireCan('bam.project_slack_integration.delete'),
         requireScope('read_write'),
       ],

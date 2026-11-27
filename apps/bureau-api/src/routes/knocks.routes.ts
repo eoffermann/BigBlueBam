@@ -27,6 +27,7 @@
 import type { FastifyInstance } from 'fastify';
 import { and, eq, desc } from 'drizzle-orm';
 import { z } from 'zod';
+import type { BanterInternalDmRequest } from '@bigbluebam/shared';
 import { db } from '../db/index.js';
 import { bureauKnocks, bureauRooms } from '../db/schema/bureau.js';
 import { env } from '../env.js';
@@ -275,10 +276,19 @@ export default async function knocksRoutes(fastify: FastifyInstance) {
       // notifies the owner. On any transport failure we still fall back to
       // a logged 202 so the visitor isn't stuck waiting on Banter.
       const internalSecret = env.INTERNAL_SERVICE_SECRET;
-      // Banter API internal base — bureau-api does not yet have a dedicated
-      // env var for it, so derive from the docker-compose service name and
-      // allow override via BANTER_INTERNAL_URL.
-      const banterInternalUrl = process.env.BANTER_INTERNAL_URL ?? 'http://banter-api:4002';
+      // banter-api's private base (#303): BANTER_API_URL, the one name the api,
+      // worker and mcp-server read too, declared in env.ts and provisioned by
+      // the Railway catalog. (This used to read a second name that nothing
+      // provisioned, so every note failed on Railway.)
+      const banterInternalUrl = env.BANTER_API_URL;
+      // The shared contract (#301): banter-api parses this same schema.
+      const dmBody: BanterInternalDmRequest = {
+        org_id: user.org_id,
+        from_user_id: user.id,
+        to_user_id: room.owner_id,
+        content: prefixedMessage,
+        source: 'bureau-knock-note',
+      };
 
       let delivered = false;
       if (internalSecret) {
@@ -290,13 +300,7 @@ export default async function knocksRoutes(fastify: FastifyInstance) {
               'X-Internal-Secret': internalSecret,
               'X-Internal-Service-Secret': internalSecret,
             },
-            body: JSON.stringify({
-              org_id: user.org_id,
-              from_user_id: user.id,
-              to_user_id: room.owner_id,
-              content: prefixedMessage,
-              source: 'bureau-knock-note',
-            }),
+            body: JSON.stringify(dmBody),
             // Short timeout — the visitor is waiting on the response.
             signal: AbortSignal.timeout(3_000),
           });

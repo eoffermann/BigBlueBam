@@ -25,7 +25,7 @@ export default async function phaseRoutes(fastify: FastifyInstance) {
 
   fastify.post<{ Params: { id: string } }>(
     '/projects/:id/phases',
-    { preHandler: [requireAuth, fastify.requireCan('bam.project_phase.create')] },
+    { preHandler: [requireAuth, requireProjectAccess(), fastify.requireCan('bam.project_phase.create')] },
     async (request, reply) => {
       const data = createPhaseSchema.parse(request.body);
 
@@ -130,7 +130,7 @@ export default async function phaseRoutes(fastify: FastifyInstance) {
 
   fastify.post<{ Params: { id: string } }>(
     '/projects/:id/phases/reorder',
-    { preHandler: [requireAuth, fastify.requireCan('bam.project_phase_reorder.create')] },
+    { preHandler: [requireAuth, requireProjectAccess(), fastify.requireCan('bam.project_phase_reorder.create')] },
     async (request, reply) => {
       const data = reorderPhasesSchema.parse(request.body);
 

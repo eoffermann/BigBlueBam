@@ -69,6 +69,11 @@ const envSchema = z.object({
   // '' / undefined falls through to the NODE_ENV-based default below.
   COOKIE_SECURE: envBool(),
 
+  // Platform RLS posture (#302). envBool, so BBB_RLS_ENFORCE=true enforces like 1 and an
+  // unknown spelling refuses to boot instead of flipping the role to BYPASSRLS.
+  BBB_RLS_ENFORCE: envBool(false),
+  BBB_SCHEMA_WAIT_DISABLED: envBool(false),
+
   // SMTP / email (P1-30). Optional — if SMTP_HOST is unset, outbound emails
   // are logged by the worker instead of delivered. The API enqueues jobs to
   // the shared `email` BullMQ queue; the worker owns actual delivery.
@@ -106,8 +111,14 @@ const envSchema = z.object({
   // Bolt workflow automation engine URL (fire-and-forget event publishing)
   BOLT_API_INTERNAL_URL: z.string().default('http://bolt-api:4006'),
 
-  // Helpdesk API internal URL for agent queue proxy
-  HELPDESK_API_INTERNAL_URL: z.string().default('http://helpdesk-api:4001'),
+  // helpdesk-api's private base, for the agent queue proxy. HELPDESK_API_URL is the one name
+  // (mcp-server and blank-api read it too); the api used to read a second name that was
+  // provisioned nowhere, so on Railway it always fell back to the compose host (#305).
+  HELPDESK_API_URL: z.string().url().default('http://helpdesk-api:4001'),
+
+  // banter-api on the private network, for the assignment-notification DM (#278, #303). One name
+  // (BANTER_API_URL) across api, bureau-api, worker and mcp-server.
+  BANTER_API_URL: z.string().url().default('http://banter-api:4002'),
 
   // Per-action permissions enforcement mode (Wave A foundation in this PR).
   //   off  — plugin loads but every requireCan() check no-ops to ALLOW.

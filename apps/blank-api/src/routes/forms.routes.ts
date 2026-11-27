@@ -93,6 +93,11 @@ const updateFormSchema = z.object({
 
 function sanitizeCss(css: string): string {
   return css
+    // custom_css is rendered inside a <style> element on the public form page,
+    // where `</style` ends the element whatever the CSS rules below allow.
+    // Escape every `<` (CSS escape \3C) so it cannot. lib/form-renderer.ts
+    // applies the same rule at render time for rows stored before this one.
+    .replace(/</g, '\\3C ')
     // Strip url() to prevent data exfiltration and external resource loading
     .replace(/url\s*\([^)]*\)/gi, '/* [removed url()] */')
     // Strip @import to prevent loading external stylesheets

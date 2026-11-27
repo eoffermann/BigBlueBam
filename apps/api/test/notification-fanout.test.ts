@@ -24,11 +24,17 @@ vi.mock('../src/env.js', () => ({
     REDIS_URL: 'redis://localhost:6379',
     NODE_ENV: 'test',
     INTERNAL_SERVICE_SECRET: 's'.repeat(40),
+    BANTER_API_URL: 'http://banter-api.railway.internal:8080',
   },
 }));
 
 // ---------- import (after mocks) ----------
-import { enqueueNotification, fanoutNotification } from '../src/services/notification-fanout.service.js';
+import {
+  banterDmRequest,
+  enqueueNotification,
+  fanoutNotification,
+} from '../src/services/notification-fanout.service.js';
+import { BANTER_DM_MAX_CONTENT, banterInternalDmRequestSchema } from '@bigbluebam/shared';
 
 // #278: the Banter DM must match banter-api's POST /v1/internal/dm contract and guard.
 describe('fanoutNotification banter_dm', () => {
@@ -45,7 +51,8 @@ describe('fanoutNotification banter_dm', () => {
     const [result] = await fanoutNotification({ ...base, actor_user_id: '00000000-0000-4000-8000-0000000000c1' }, ['banter_dm']);
     expect(result).toEqual({ channel: 'banter_dm', status: 'sent' });
     const [url, init] = fetchSpy.mock.calls[0]!;
-    expect(String(url)).toMatch(/\/v1\/internal\/dm$/);
+    // #303: the base comes from env.BANTER_API_URL, not a hard-coded compose default.
+    expect(String(url)).toBe('http://banter-api.railway.internal:8080/v1/internal/dm');
     expect((init!.headers as Record<string, string>)['X-Internal-Secret']).toBe('s'.repeat(40));
     const body = JSON.parse(String(init!.body));
     // Exactly the fields banter's zod schema reads: org_id, from_user_id, to_user_id, content, source.
@@ -67,6 +74,19 @@ describe('fanoutNotification banter_dm', () => {
     expect(self!.status).toBe('skipped');
     expect(fetchSpy).not.toHaveBeenCalled();
     fetchSpy.mockRestore();
+  });
+
+  // #301: the body is built as the shared contract banter-api parses, so drift is a type error.
+  it('builds a body that banter-api\'s shared schema accepts, even for an oversized notification', () => {
+    const body = banterDmRequest({
+      ...base,
+      body: 'x'.repeat(BANTER_DM_MAX_CONTENT + 500),
+      actor_user_id: '00000000-0000-4000-8000-0000000000c1',
+    });
+    expect(body).not.toBeNull();
+    const parsed = banterInternalDmRequestSchema.safeParse(body);
+    expect(parsed.success).toBe(true);
+    expect(body!.content.length).toBe(BANTER_DM_MAX_CONTENT);
   });
 });
 

@@ -11,7 +11,7 @@ import {
   RotateCcw,
 } from 'lucide-react';
 import { useDocument, useToggleStar, useArchiveDocument, useDuplicateDocument, usePromoteToBeacon, useRestoreDocument } from '@/hooks/use-documents';
-import { markdownToHtml } from '@/lib/markdown';
+import { markdownToHtml, sanitizeHtml } from '@/lib/markdown';
 import { useCollaboration } from '@/hooks/use-collaboration';
 import { useCollaborativeEditor, BriefEditorContent } from '@/components/editor/brief-editor';
 import { useBureauLocationLabel } from '@bigbluebam/bureau-client';
@@ -134,17 +134,20 @@ export function DocumentDetailPage({ idOrSlug, onNavigate }: DocumentDetailPageP
         </article>
       );
     }
+    // SECURITY: every HTML branch below sanitizes at RENDER time. html_snapshot
+    // used to be injected raw, trusting write-time sanitization alone, and
+    // markdownToHtml passes raw HTML in plain_text through unescaped.
     if (doc.html_snapshot) {
       return (
         <article
           className="prose prose-zinc dark:prose-invert max-w-none text-sm leading-relaxed document-content ProseMirror"
-          dangerouslySetInnerHTML={{ __html: doc.html_snapshot }}
+          dangerouslySetInnerHTML={{ __html: sanitizeHtml(doc.html_snapshot) }}
         />
       );
     }
     const md = doc.plain_text ?? '';
     if (md) {
-      const html = markdownToHtml(md);
+      const html = sanitizeHtml(markdownToHtml(md));
       return (
         <article
           className="prose prose-zinc dark:prose-invert max-w-none text-sm leading-relaxed document-content ProseMirror"
@@ -157,7 +160,9 @@ export function DocumentDetailPage({ idOrSlug, onNavigate }: DocumentDetailPageP
       return (
         <article
           className="prose prose-zinc dark:prose-invert max-w-none text-sm leading-relaxed document-content ProseMirror"
-          dangerouslySetInnerHTML={{ __html: text.replace(/\n/g, '<br>') }}
+          // plain_text with only newline conversion: raw `<` in the text is
+          // live markup, so this branch is sanitized too.
+          dangerouslySetInnerHTML={{ __html: sanitizeHtml(text.replace(/\n/g, '<br>')) }}
         />
       );
     }

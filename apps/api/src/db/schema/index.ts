@@ -11,6 +11,7 @@ export { labels } from './labels.js';
 export { epics } from './epics.js';
 export { comments } from './comments.js';
 export { attachments } from './attachments.js';
+export { fileUploadOwners } from './file-upload-owners.js';
 export { activityLog } from './activity-log.js';
 export { customFieldDefinitions } from './custom-fields.js';
 export { sprintTasks } from './sprint-tasks.js';

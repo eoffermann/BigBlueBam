@@ -1,6 +1,6 @@
 import { and, eq } from 'drizzle-orm';
 import { db } from '../db/index.js';
-import { blueprintNodes, blueprintEdges } from '../db/schema/index.js';
+import { blueprintNodes, blueprintEdges, blueprintDiagrams } from '../db/schema/index.js';
 import { NotFoundError } from '../lib/errors.js';
 import { env } from '../env.js';
 
@@ -93,7 +93,14 @@ export async function updateNode(
     (patch.label !== undefined || patch.description !== undefined) &&
     env.INTERNAL_SERVICE_SECRET
   ) {
-    const payload: Record<string, unknown> = { task_id: row.ref_entity_id };
+    // ref_entity_id is caller-controlled and can name another org's task, so
+    // send the diagram's org: the api only updates a task in that org.
+    const [diagram] = await db
+      .select({ org_id: blueprintDiagrams.org_id })
+      .from(blueprintDiagrams)
+      .where(eq(blueprintDiagrams.id, diagramId))
+      .limit(1);
+    const payload: Record<string, unknown> = { task_id: row.ref_entity_id, org_id: diagram?.org_id };
     if (patch.label !== undefined) payload.title = patch.label;
     if (patch.description !== undefined) payload.description = patch.description;
     // The api registers /internal/* routes at the root, NOT under /v1.

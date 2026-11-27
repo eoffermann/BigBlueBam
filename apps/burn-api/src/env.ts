@@ -63,7 +63,7 @@ const envSchema = z.object({
 
   // Platform RLS posture. Burn binds the app.current_org_id GUC per request regardless
   // (see plugins/rls.ts); this flag only controls whether a binding failure is fatal.
-  BBB_RLS_ENFORCE: z.string().optional(),
+  BBB_RLS_ENFORCE: envBool(false),
 });
 
 export type Env = z.infer<typeof envSchema>;

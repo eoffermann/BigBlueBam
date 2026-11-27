@@ -37,6 +37,13 @@ const exportSchema = z.object({
   format: z.enum(['json', 'svg', 'png']).default('json'),
 });
 
+/** A board name reduced to a safe Content-Disposition filename. */
+function safeDownloadName(name: unknown, fallback: string): string {
+  if (typeof name !== 'string') return fallback;
+  const cleaned = name.replace(/[^A-Za-z0-9 ._-]/g, '').trim().slice(0, 100);
+  return cleaned.length > 0 ? cleaned : fallback;
+}
+
 export default async function elementRoutes(fastify: FastifyInstance) {
   // GET /boards/:id/elements - All elements with positions, text, types
   fastify.get<{ Params: { id: string } }>(
@@ -343,6 +350,10 @@ export default async function elementRoutes(fastify: FastifyInstance) {
         });
       }
 
+      // board.name is user-controlled and went raw into the filename, so a quote
+      // or CR/LF broke out of the header parameter.
+      const filename = safeDownloadName(board.name, 'board');
+
       const scene = await loadScene(board.id, request.user!.org_id);
 
       if (!scene || !scene.elements || (scene.elements as unknown[]).length === 0) {
@@ -351,13 +362,14 @@ export default async function elementRoutes(fastify: FastifyInstance) {
           const pngBuffer = await sceneToPng(emptyScene, board.name);
           return reply
             .header('Content-Type', 'image/png')
-            .header('Content-Disposition', `inline; filename="${board.name || 'board'}.png"`)
+            .header('Content-Disposition', `inline; filename="${filename}.png"`)
             .send(pngBuffer);
         }
         const emptySvg = `<svg xmlns="http://www.w3.org/2000/svg" width="800" height="600"><text x="400" y="300" text-anchor="middle" font-family="sans-serif" fill="#9ca3af">Empty board</text></svg>`;
         return reply
           .header('Content-Type', 'image/svg+xml')
-          .header('Content-Disposition', `inline; filename="${board.name || 'board'}.svg"`)
+          .header('Content-Disposition', `attachment; filename="${filename}.svg"`)
+          .header('Content-Security-Policy', "default-src 'none'; style-src 'unsafe-inline'; sandbox")
           .send(emptySvg);
       }
 
@@ -367,13 +379,14 @@ export default async function elementRoutes(fastify: FastifyInstance) {
         const pngBuffer = await sceneToPng(scene, board.name);
         return reply
           .header('Content-Type', 'image/png')
-          .header('Content-Disposition', `inline; filename="${board.name || 'board'}.png"`)
+          .header('Content-Disposition', `inline; filename="${filename}.png"`)
           .send(pngBuffer);
       }
 
       return reply
         .header('Content-Type', 'image/svg+xml')
-        .header('Content-Disposition', `inline; filename="${board.name || 'board'}.svg"`)
+        .header('Content-Disposition', `attachment; filename="${filename}.svg"`)
+          .header('Content-Security-Policy', "default-src 'none'; style-src 'unsafe-inline'; sandbox")
         .send(svg);
     },
   );

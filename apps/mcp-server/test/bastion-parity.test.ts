@@ -4,7 +4,7 @@ import { join } from 'node:path';
 
 // M10 parity cross-walk (WIP doc M10; orchestrator decision on #196). One fact, three places:
 // the bastion-api route files are the source; every route an API key may call has a client
-// method in clients/bastion-client.ts that a pending tool uses, every other route is one of the
+// method in clients/bastion-client.ts that a bastion_* tool uses, every other route is one of the
 // sanctioned skips below, and docs/reference/mcp-endpoint-mapping.md has a row for each that says
 // the same thing. A route added without a tool or a skip, a stale skip, an orphan client method,
 // or a surface-map row that disagrees fails here.
@@ -12,7 +12,7 @@ import { join } from 'node:path';
 const ROOT = join(__dirname, '..', '..', '..');
 const ROUTES_DIR = join(ROOT, 'apps', 'bastion-api', 'src', 'routes');
 const CLIENT = readFileSync(join(__dirname, '..', 'src', 'clients', 'bastion-client.ts'), 'utf8');
-const PENDING = readFileSync(join(__dirname, '..', 'src', 'tools-pending', 'bastion.ts'), 'utf8');
+const PENDING = readFileSync(join(__dirname, '..', 'src', 'tools', 'bastion-tools.ts'), 'utf8');
 const SEARCH_TOOLS = readFileSync(join(__dirname, '..', 'src', 'tools', 'search-tools.ts'), 'utf8');
 const MAP = readFileSync(join(ROOT, 'docs', 'reference', 'mcp-endpoint-mapping.md'), 'utf8');
 

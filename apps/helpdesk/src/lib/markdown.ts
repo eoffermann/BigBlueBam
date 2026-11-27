@@ -1,8 +1,12 @@
+import DOMPurify from 'dompurify';
+
+const SANITIZE_CONFIG = { ADD_ATTR: ['target'] };
+
 /**
  * Simple markdown-to-HTML converter.
  * Handles: **bold**, *italic*, `inline code`, ```code blocks```,
  * [links](url), ![images](url), ## headings, - lists, newlines.
- * Also sanitizes output by stripping script tags and event handlers.
+ * Output is NOT safe on its own; always pass it through sanitizeHtml().
  */
 export function markdownToHtml(md: string): string {
   if (!md) return '';
@@ -91,9 +95,24 @@ export function markdownToHtml(md: string): string {
   return html;
 }
 
+/**
+ * Sanitize HTML string: strip dangerous tags/attributes.
+ *
+ * SECURITY: this used to be a hand-rolled regex blocklist that stripped
+ * `<script>...</script>` pairs, QUOTED `on*=` handlers and quoted
+ * `href="javascript:..."`. A regex blocklist only filters the payloads its
+ * author thought of; it missed `<img src=x onerror=alert(1)>` (unquoted
+ * handler), `<svg onload=...>`, `<iframe srcdoc=...>`, `<script/src=x>` (no
+ * closing tag) and unquoted `javascript:` URLs. DOMPurify parses the markup
+ * and works from an allowlist, matching apps/frontend and apps/blueprint.
+ *
+ * This matters most here: ticket bodies come from EXTERNAL, unauthenticated
+ * customers, so this sanitizer sits between the public and a support agent's
+ * authenticated session.
+ *
+ * `target` is added to the allowlist only so markdownToHtml's
+ * `target="_blank" rel="noopener noreferrer"` links keep opening in a new tab.
+ */
 export function sanitizeHtml(html: string): string {
-  let clean = html.replace(/<script[\s\S]*?<\/script>/gi, '');
-  clean = clean.replace(/\s+on\w+\s*=\s*["'][^"']*["']/gi, '');
-  clean = clean.replace(/href\s*=\s*["']javascript:[^"']*["']/gi, 'href="#"');
-  return clean;
+  return DOMPurify.sanitize(html, SANITIZE_CONFIG);
 }

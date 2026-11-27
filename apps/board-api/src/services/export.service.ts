@@ -28,6 +28,39 @@ function escapeXml(s: string): string {
     .replace(/'/g, '&apos;');
 }
 
+// Color-valued attributes. strokeColor/backgroundColor come off the untyped
+// scene JSON and were checked only with `typeof === 'string'` before landing
+// inside an SVG attribute, so `#fff" onload="alert(1)` broke out of it and ran
+// when the export was opened. A color is a small grammar, so allowlist it
+// (hex, rgb[a]/hsl[a](), keywords) and fall back to the default otherwise.
+const HEX_COLOR = /^#(?:[0-9a-f]{3}|[0-9a-f]{4}|[0-9a-f]{6}|[0-9a-f]{8})$/i;
+const FUNC_COLOR = /^(?:rgb|rgba|hsl|hsla)\(\s*[0-9a-z.,%\s/]+\)$/i;
+const KEYWORD_COLOR = /^[a-z]{3,20}$/i;
+
+export function safeColor(value: unknown, fallback: string): string {
+  if (typeof value !== 'string') return fallback;
+  const v = value.trim();
+  if (v.length > 64) return fallback;
+  return HEX_COLOR.test(v) || FUNC_COLOR.test(v) || KEYWORD_COLOR.test(v) ? v : fallback;
+}
+
+/** A finite number, for numeric attributes built from untrusted scene data. */
+function safeNum(value: unknown, fallback = 0): number {
+  const n = typeof value === 'number' ? value : Number(value);
+  return Number.isFinite(n) ? n : fallback;
+}
+
+/** SVG path `d` from an untrusted points array (`as number[][]` was a cast,
+ *  not a check, so a string in a coordinate landed raw inside d="..."). */
+function pointsToPath(points: unknown[], x: number, y: number): string {
+  return points
+    .map((p, i) => {
+      const pair = Array.isArray(p) ? (p as unknown[]) : [];
+      return `${i === 0 ? 'M' : 'L'} ${x + safeNum(pair[0])} ${y + safeNum(pair[1])}`;
+    })
+    .join(' ');
+}
+
 interface BBox {
   minX: number;
   minY: number;
@@ -73,8 +106,8 @@ function renderElement(el: Record<string, unknown>): string {
   const y = typeof el.y === 'number' ? el.y : 0;
   const w = typeof el.width === 'number' ? el.width : 100;
   const h = typeof el.height === 'number' ? el.height : 40;
-  const stroke = typeof el.strokeColor === 'string' ? el.strokeColor : '#1e1e1e';
-  const bg = typeof el.backgroundColor === 'string' ? el.backgroundColor : 'transparent';
+  const stroke = safeColor(el.strokeColor, '#1e1e1e');
+  const bg = safeColor(el.backgroundColor, 'transparent');
   const opacity = typeof el.opacity === 'number' ? el.opacity / 100 : 1;
   const angle = typeof el.angle === 'number' ? el.angle : 0;
 
@@ -100,23 +133,19 @@ function renderElement(el: Record<string, unknown>): string {
 
     case 'arrow':
     case 'line': {
-      const points = Array.isArray(el.points) ? el.points as number[][] : [];
+      const points = Array.isArray(el.points) ? (el.points as unknown[]) : [];
       if (points.length < 2) {
         return `<line x1="${x}" y1="${y}" x2="${x + w}" y2="${y + h}" stroke="${stroke}" stroke-width="1" opacity="${opacity}"${transform}/>`;
       }
-      const d = points
-        .map((p, i) => `${i === 0 ? 'M' : 'L'} ${x + (p[0] ?? 0)} ${y + (p[1] ?? 0)}`)
-        .join(' ');
+      const d = pointsToPath(points, x, y);
       const marker = type === 'arrow' ? ' marker-end="url(#arrowhead)"' : '';
       return `<path d="${d}" fill="none" stroke="${stroke}" stroke-width="1" opacity="${opacity}"${marker}${transform}/>`;
     }
 
     case 'freedraw': {
-      const pts = Array.isArray(el.points) ? el.points as number[][] : [];
+      const pts = Array.isArray(el.points) ? (el.points as unknown[]) : [];
       if (pts.length < 2) return '';
-      const d = pts
-        .map((p, i) => `${i === 0 ? 'M' : 'L'} ${x + (p[0] ?? 0)} ${y + (p[1] ?? 0)}`)
-        .join(' ');
+      const d = pointsToPath(pts, x, y);
       return `<path d="${d}" fill="none" stroke="${stroke}" stroke-width="1" opacity="${opacity}"${transform}/>`;
     }
 

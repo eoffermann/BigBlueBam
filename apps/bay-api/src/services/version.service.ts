@@ -2,6 +2,7 @@ import { eq, desc, sql } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import { bayAssets, bayAssetVersions } from '../db/schema/index.js';
 import { getAsset } from './asset.service.js';
+import { binAssetBelongsToOrg } from '../lib/bin-ownership.js';
 import { NotFoundError } from './errors.js';
 
 export interface CreateVersionInput {
@@ -57,6 +58,11 @@ export async function createVersion(
   input: CreateVersionInput,
 ) {
   await getAsset(assetId, orgId);
+  // getAsset proves the Bay asset is ours; bin_asset_id is client-supplied and
+  // must be a Bin asset in this org too, or the version would serve foreign bytes.
+  if (input.bin_asset_id && !(await binAssetBelongsToOrg(input.bin_asset_id, orgId))) {
+    throw new NotFoundError('Bin asset not found');
+  }
   const nextNumber = await nextVersionNumber(assetId);
 
   // Copy forward the Bin probe metadata (Bay FBX §3, §9). When the bin asset has

@@ -7,6 +7,12 @@ vi.mock('../src/utils/db.js', () => ({
   getDb: vi.fn(),
 }));
 
+// Dispatch goes through @bigbluebam/egress-guard, which resolves DNS. The
+// fixtures use example.test, a reserved name that never resolves, so allowlist
+// exactly that host to keep these tests hermetic while still exercising the
+// real guard (private targets are covered by 'refuses to POST to ...').
+process.env.EGRESS_ALLOW_PRIVATE_HOSTS = 'example.test';
+
 vi.mock('../src/utils/bolt-events.js', () => ({
   publishBoltEvent: vi.fn(),
 }));
@@ -235,13 +241,62 @@ describe('agent webhook dispatcher', () => {
       const [calledUrl, options] = mockFetch.mock.calls[0]!;
       expect(calledUrl).toBe('https://example.test/hook');
       expect(options.method).toBe('POST');
-      const headers = options.headers as Record<string, string>;
-      expect(headers['Content-Type']).toBe('application/json');
-      expect(headers['X-BigBlueBam-Signature'].startsWith('sha256=')).toBe(true);
-      expect(headers['X-BigBlueBam-Timestamp']).toMatch(/^\d+$/);
-      expect(headers['X-BigBlueBam-Delivery']).toBe(delivery.id);
-      expect(headers['X-BigBlueBam-Event']).toBe('bond.deal.rotting');
+      const headers = new Headers(options.headers);
+      expect(headers.get('Content-Type')).toBe('application/json');
+      expect(headers.get('X-BigBlueBam-Signature')!.startsWith('sha256=')).toBe(true);
+      expect(headers.get('X-BigBlueBam-Timestamp')).toMatch(/^\d+$/);
+      expect(headers.get('X-BigBlueBam-Delivery')).toBe(delivery.id);
+      expect(headers.get('X-BigBlueBam-Event')).toBe('bond.deal.rotting');
     });
+
+    // The stored webhook_url is re-sent on every retry and redelivery, and the
+    // api's configure-time validator never resolves DNS, so the guard has to
+    // run at dispatch: a private target is refused before any request leaves.
+    it.each(['http://169.254.169.254/latest/meta-data/', 'http://10.0.0.7/hook', 'http://[::ffff:a00:1]/hook'])(
+      'refuses to POST to %s',
+      async (webhookUrl) => {
+        const delivery = {
+          id: '00000000-0000-0000-0000-000000000001',
+          org_id: '00000000-0000-0000-0000-0000000000aa',
+          runner_id: '00000000-0000-0000-0000-0000000000bb',
+          event_id: '00000000-0000-0000-0000-0000000000cc',
+          event_source: 'bond',
+          event_type: 'deal.rotting',
+          payload: { a: 1 },
+          status: 'pending',
+          attempt_count: 0,
+          last_attempt_at: null,
+          last_error: null,
+          response_status_code: null,
+          created_at: new Date(),
+          delivered_at: null,
+          next_retry_at: null,
+        };
+        const runner = {
+          id: '00000000-0000-0000-0000-0000000000bb',
+          org_id: '00000000-0000-0000-0000-0000000000aa',
+          user_id: '00000000-0000-0000-0000-0000000000dd',
+          webhook_url: webhookUrl,
+          webhook_enabled: true,
+          webhook_consecutive_failures: 0,
+          webhook_last_success_at: null,
+          webhook_last_failure_at: null,
+        };
+        const mockDb = {
+          select: vi.fn().mockReturnValue(makeSelect([{ delivery, runner }])),
+          update: vi.fn().mockReturnValue(makeUpdate()),
+          insert: vi.fn().mockReturnValue({ values: vi.fn().mockResolvedValue(undefined) }),
+        };
+        vi.mocked(getDb).mockReturnValue(mockDb as any);
+        const mockFetch = vi.fn().mockResolvedValue({ ok: true, status: 200, text: async () => '' });
+
+        await processAgentWebhookDispatchJob(createMockJob(), createMockRedis('signing-secret-xyz'), mockLogger, {
+          fetchImpl: mockFetch as any,
+        }).catch(() => undefined);
+
+        expect(mockFetch).not.toHaveBeenCalled();
+      },
+    );
 
     it('skips a delivery whose status is already terminal', async () => {
       const delivery = {

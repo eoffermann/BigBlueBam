@@ -89,7 +89,7 @@ export default async function taskRoutes(fastify: FastifyInstance) {
 
   fastify.post<{ Params: { id: string } }>(
     '/projects/:id/tasks',
-    { preHandler: [requireAuth, fastify.requireCan('bam.project_task.create'), requireScope('read_write')] },
+    { preHandler: [requireAuth, requireProjectAccess(), fastify.requireCan('bam.project_task.create'), requireScope('read_write')] },
     async (request, reply) => {
       const data = createTaskSchema.parse(request.body);
 

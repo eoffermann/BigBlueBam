@@ -32,6 +32,25 @@ export const banterReactionSchema = z.object({
   emoji: z.string().min(1).max(50),
 });
 
+/** The longest DM body banter-api's POST /v1/internal/dm accepts (#301). */
+export const BANTER_DM_MAX_CONTENT = 4000;
+
+/**
+ * banter-api's POST /v1/internal/dm body (#278, #301): a DM from one real user to another, sent by
+ * a sibling service behind the shared internal secret. banter-api parses with it; every caller
+ * (the api's assignment notification, bureau-api's leave-a-note) builds its body as this type, so
+ * a contract change is a typecheck error in every caller instead of a silently refused DM.
+ */
+export const banterInternalDmRequestSchema = z.object({
+  org_id: z.string().uuid(),
+  from_user_id: z.string().uuid(),
+  to_user_id: z.string().uuid(),
+  content: z.string().min(1).max(BANTER_DM_MAX_CONTENT),
+  source: z.string().max(100).optional(),
+});
+
+export type BanterInternalDmRequest = z.infer<typeof banterInternalDmRequestSchema>;
+
 export type CreateBanterChannelInput = z.infer<typeof createBanterChannelSchema>;
 export type UpdateBanterChannelInput = z.infer<typeof updateBanterChannelSchema>;
 export type CreateBanterMessageInput = z.infer<typeof createBanterMessageSchema>;

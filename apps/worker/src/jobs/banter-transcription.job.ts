@@ -1,5 +1,6 @@
 import type { Job } from 'bullmq';
 import type { Logger } from 'pino';
+import type { Env } from '../env.js';
 
 export interface BanterTranscriptionJobData {
   call_id: string;
@@ -17,6 +18,7 @@ export interface BanterTranscriptionJobData {
  */
 export async function processBanterTranscriptionJob(
   job: Job<BanterTranscriptionJobData>,
+  env: Pick<Env, 'BANTER_API_URL'>,
   logger: Logger,
 ): Promise<void> {
   const { call_id, recording_url, org_id } = job.data;
@@ -26,7 +28,9 @@ export async function processBanterTranscriptionJob(
 
   // Build callback URL so the voice-agent can post results back,
   // but we also poll synchronously as a fallback.
-  const callbackUrl = `${process.env.BANTER_API_INTERNAL_URL || 'http://banter-api:4002'}/v1/internal/transcription-callback`;
+  // #303: BANTER_API_URL is the one name for banter-api's private base (this used to read a
+  // second name that nothing provisioned).
+  const callbackUrl = `${env.BANTER_API_URL}/v1/internal/transcription-callback`;
 
   // Request transcription from the voice-agent
   const response = await fetch(`${voiceAgentUrl}/transcribe`, {

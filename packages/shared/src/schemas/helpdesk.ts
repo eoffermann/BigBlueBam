@@ -43,6 +43,23 @@ export const helpdeskSlaConfigSchema = z.object({
   resolution_minutes: z.number().int().min(1),
 });
 
+/**
+ * helpdesk-api's POST /helpdesk/internal/tickets body (#305): open a ticket for a requester (found
+ * or created as a helpdesk user of the org by email), for sibling services with no helpdesk
+ * session (Blank form routing). helpdesk-api parses with it; callers build their body as this type.
+ */
+export const helpdeskInternalTicketCreateSchema = z.object({
+  org_id: z.string().uuid(),
+  requester_email: z.string().email().max(320),
+  requester_name: z.string().min(1).max(200).optional(),
+  subject: z.string().min(1).max(500),
+  description: z.string().min(1).max(50_000),
+  priority: z.enum(['low', 'medium', 'high']).default('medium'),
+  category: z.string().max(100).optional(),
+});
+
+export type HelpdeskInternalTicketCreate = z.input<typeof helpdeskInternalTicketCreateSchema>;
+
 export type CreateHelpdeskTicketInput = z.infer<typeof createHelpdeskTicketSchema>;
 export type UpdateHelpdeskTicketInput = z.infer<typeof updateHelpdeskTicketSchema>;
 export type CreateHelpdeskMessageInput = z.infer<typeof createHelpdeskMessageSchema>;

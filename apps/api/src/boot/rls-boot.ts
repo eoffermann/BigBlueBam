@@ -1,6 +1,7 @@
 import { sql } from 'drizzle-orm';
 import type { Logger } from 'pino';
 import { db } from '../db/index.js';
+import { env } from '../env.js';
 
 /**
  * Boot-time RLS role gating (Wave 1.A, Platform G1).
@@ -9,8 +10,9 @@ import { db } from '../db/index.js';
  * Reads `BBB_RLS_ENFORCE` and `DATABASE_ROLE` env vars and toggles the
  * configured database role between BYPASSRLS and NOBYPASSRLS:
  *
- *   - `BBB_RLS_ENFORCE=1` -> NOBYPASSRLS (policies are binding on every query).
- *   - anything else -> BYPASSRLS (policies are advisory only, existing code works).
+ *   - `BBB_RLS_ENFORCE=1` / `true` / `yes` / `on` -> NOBYPASSRLS (policies bind on every query).
+ *   - unset / `0` / `false` / `no` / `off` -> BYPASSRLS (policies are advisory only).
+ *   - any other value -> env.ts refuses to boot (#302).
  *
  * `DATABASE_ROLE` defaults to `bam_app`. The role must already exist in the
  * target database (typically created by 0000_init.sql or equivalent
@@ -21,7 +23,9 @@ import { db } from '../db/index.js';
  * This is idempotent: running it twice with the same flag is a no-op.
  */
 export async function rlsBoot(logger: Logger): Promise<void> {
-  const enforce = process.env.BBB_RLS_ENFORCE === '1';
+  // #302: parsed once by env.ts through envBool, so `true`/`yes`/`on` enforce exactly like `1`
+  // and an unrecognized value fails boot before this hook can pick BYPASSRLS.
+  const enforce = env.BBB_RLS_ENFORCE === true;
   const role = process.env.DATABASE_ROLE || 'bam_app';
 
   try {

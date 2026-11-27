@@ -41,6 +41,8 @@ const envSchema = z.object({
 
   COOKIE_DOMAIN: z.string().optional(),
   COOKIE_SECURE: envBool(false),
+  // Platform RLS posture (#302): envBool, so 'true' enforces and an unknown value fails boot.
+  BBB_RLS_ENFORCE: envBool(false),
 
   // One LLM call's deadline, sent to the proxy as timeout_ms (#283). The spec names no value, so
   // it is the proxy's own default; refused at boot outside the proxy's 1 s..180 s bounds.

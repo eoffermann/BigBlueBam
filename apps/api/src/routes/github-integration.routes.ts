@@ -6,7 +6,7 @@ import { githubIntegrations, taskGithubRefs } from '../db/schema/github-integrat
 import { tasks } from '../db/schema/tasks.js';
 import { phases } from '../db/schema/phases.js';
 import { requireAuth, requireScope } from '../plugins/auth.js';
-import { requireProjectAccessForEntity } from '../middleware/authorize.js';
+import { requireProjectAccess, requireProjectAccessForEntity } from '../middleware/authorize.js';
 import { generateWebhookSecret } from '../services/github-integration.service.js';
 import { shadowOnly } from '../middleware/dual-read.js';
 
@@ -31,7 +31,7 @@ const putIntegrationBodySchema = z.object({
 export default async function githubIntegrationRoutes(fastify: FastifyInstance) {
   fastify.get<{ Params: { id: string } }>(
     '/projects/:id/github-integration',
-    { preHandler: [requireAuth, fastify.requireCan('bam.project_github_integration.get')] },
+    { preHandler: [requireAuth, requireProjectAccess(), fastify.requireCan('bam.project_github_integration.get')] },
     async (request, reply) => {
       const [row] = await db
         .select({
@@ -59,6 +59,7 @@ export default async function githubIntegrationRoutes(fastify: FastifyInstance) 
     {
       preHandler: [
         requireAuth,
+        requireProjectAccess(),
         fastify.requireCan('bam.project_github_integration.update'),
         requireScope('read_write'),
       ],
@@ -174,6 +175,7 @@ export default async function githubIntegrationRoutes(fastify: FastifyInstance) 
     {
       preHandler: [
         requireAuth,
+        requireProjectAccess(),
         fastify.requireCan('bam.project_github_integration.delete'),
         requireScope('read_write'),
       ],

@@ -175,16 +175,24 @@ export async function getPublicReviewByToken(token: string) {
   };
 }
 
-/** Resolve the bin_asset_id behind a token's review (for the media stream). */
-export async function resolveTokenBinAsset(token: string): Promise<string | null> {
+/**
+ * Resolve the bin_asset_id behind a token's review (for the media stream),
+ * with the org that minted the link. The guest request has no identity, so
+ * the link's org is what scopes the bin_assets read in lib/bin-media.ts: a
+ * link only ever serves its own org's bytes.
+ */
+export async function resolveTokenBinAsset(
+  token: string,
+): Promise<{ binAssetId: string; orgId: string } | null> {
   const link = await getActiveLink(token);
   const rows = await db
     .select({ bin_asset_id: bayAssetVersions.bin_asset_id })
     .from(bayAssets)
     .leftJoin(bayAssetVersions, eq(bayAssetVersions.id, bayAssets.current_version_id))
-    .where(eq(bayAssets.id, link.asset_id))
+    .where(and(eq(bayAssets.id, link.asset_id), eq(bayAssets.org_id, link.org_id)))
     .limit(1);
-  return rows[0]?.bin_asset_id ?? null;
+  const binAssetId = rows[0]?.bin_asset_id;
+  return binAssetId ? { binAssetId, orgId: link.org_id } : null;
 }
 
 export interface GuestCommentInput {

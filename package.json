@@ -34,6 +34,7 @@
     "help:check": "node scripts/help/build-help-index.mjs --check",
     "check:bolt-catalog": "node scripts/check-bolt-catalog.mjs",
     "check:bolt-enum": "node scripts/check-bolt-enum.mjs",
+    "check:csp-hashes": "node scripts/check-csp-hashes.mjs",
     "check:nginx-spa": "node scripts/check-nginx-spa-lists.mjs",
     "check:workflow-timeouts": "node scripts/check-workflow-timeouts.mjs",
     "check:dockerfile-chown": "node scripts/check-dockerfile-chown.mjs",

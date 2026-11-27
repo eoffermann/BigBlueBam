@@ -10,49 +10,14 @@
 // the same way settings.routes.ts does.
 // ---------------------------------------------------------------------------
 
-import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
+import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { sql } from 'drizzle-orm';
-import { db } from '../db/index.js';
-import { verifyAgentApiKey } from '../lib/agent-auth.js';
+import { requireAdminAuth } from '../lib/admin-auth.js';
 import {
   upsertHelpdeskUserByEmail,
   UserUpsertError,
 } from '../services/user-upsert.service.js';
 import { publishBoltEvent } from '../lib/bolt-events.js';
-
-/**
- * Require admin auth — accepts a Bam session cookie OR a per-agent
- * helpdesk API key. Mirrors settings.routes.ts's requireAdminAuth.
- */
-async function requireAdminAuth(request: FastifyRequest, reply: FastifyReply) {
-  const sessionCookie = request.cookies?.session;
-  if (sessionCookie) {
-    try {
-      const result = await db.execute(
-        sql`SELECT s.id FROM sessions s JOIN users u ON u.id = s.user_id
-            WHERE s.id = ${sessionCookie} AND s.expires_at > now() LIMIT 1`,
-      );
-      if (result && (Array.isArray(result) ? result.length > 0 : (result as any).rows?.length > 0)) {
-        return;
-      }
-    } catch {
-      // Fall through to X-Agent-Key.
-    }
-  }
-  const token = request.headers['x-agent-key'] as string | undefined;
-  const agentUserId = await verifyAgentApiKey(request, token);
-  if (agentUserId) return;
-
-  return reply.status(401).send({
-    error: {
-      code: 'UNAUTHORIZED',
-      message: 'Authentication required',
-      details: [],
-      request_id: request.id,
-    },
-  });
-}
 
 const upsertUserSchema = z.object({
   email: z.string().email().max(320),

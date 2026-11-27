@@ -10,6 +10,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@bigbluebam/egress-guard": "workspace:*",
     "@bigbluebam/shared": "workspace:*",
     "@bigbluebam/smtp-resolver": "workspace:*",
     "@bigbluebam/storage": "workspace:*",

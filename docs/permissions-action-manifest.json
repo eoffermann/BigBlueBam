@@ -1,9 +1,9 @@
 {
   "counts": {
-    "total": 1570,
-    "mcp_tools_scanned": 885,
-    "rest_routes_scanned": 889,
-    "read_permissions": 607,
+    "total": 1571,
+    "mcp_tools_scanned": 951,
+    "rest_routes_scanned": 890,
+    "read_permissions": 608,
     "destructive_permissions": 148
   },
   "permissions": [
@@ -509,7 +509,7 @@
       "is_destructive": false,
       "is_read": true,
       "requires_confirmation": false,
-      "requires_superuser": false,
+      "requires_superuser": true,
       "sources": [
         {
           "source": "rest",
@@ -679,7 +679,7 @@
       "is_destructive": false,
       "is_read": true,
       "requires_confirmation": false,
-      "requires_superuser": false,
+      "requires_superuser": true,
       "sources": [
         {
           "source": "rest",
@@ -815,7 +815,7 @@
       "is_destructive": false,
       "is_read": false,
       "requires_confirmation": false,
-      "requires_superuser": false,
+      "requires_superuser": true,
       "sources": [
         {
           "source": "rest",
@@ -2280,7 +2280,7 @@
       "is_destructive": false,
       "is_read": true,
       "requires_confirmation": false,
-      "requires_superuser": false,
+      "requires_superuser": true,
       "sources": [
         {
           "source": "rest",
@@ -2297,7 +2297,7 @@
       "is_destructive": false,
       "is_read": true,
       "requires_confirmation": false,
-      "requires_superuser": false,
+      "requires_superuser": true,
       "sources": [
         {
           "source": "rest",
@@ -2314,7 +2314,7 @@
       "is_destructive": false,
       "is_read": true,
       "requires_confirmation": false,
-      "requires_superuser": false,
+      "requires_superuser": true,
       "sources": [
         {
           "source": "rest",
@@ -2421,7 +2421,7 @@
       "is_destructive": false,
       "is_read": true,
       "requires_confirmation": false,
-      "requires_superuser": false,
+      "requires_superuser": true,
       "sources": [
         {
           "source": "rest",
@@ -2438,7 +2438,7 @@
       "is_destructive": false,
       "is_read": false,
       "requires_confirmation": false,
-      "requires_superuser": false,
+      "requires_superuser": true,
       "sources": [
         {
           "source": "rest",
@@ -2455,7 +2455,7 @@
       "is_destructive": false,
       "is_read": true,
       "requires_confirmation": false,
-      "requires_superuser": false,
+      "requires_superuser": true,
       "sources": [
         {
           "source": "rest",
@@ -2472,7 +2472,7 @@
       "is_destructive": false,
       "is_read": true,
       "requires_confirmation": false,
-      "requires_superuser": false,
+      "requires_superuser": true,
       "sources": [
         {
           "source": "rest",
@@ -2489,7 +2489,7 @@
       "is_destructive": false,
       "is_read": false,
       "requires_confirmation": false,
-      "requires_superuser": false,
+      "requires_superuser": true,
       "sources": [
         {
           "source": "rest",
@@ -2506,7 +2506,7 @@
       "is_destructive": true,
       "is_read": false,
       "requires_confirmation": true,
-      "requires_superuser": false,
+      "requires_superuser": true,
       "sources": [
         {
           "source": "rest",
@@ -2523,7 +2523,7 @@
       "is_destructive": false,
       "is_read": true,
       "requires_confirmation": false,
-      "requires_superuser": false,
+      "requires_superuser": true,
       "sources": [
         {
           "source": "rest",
@@ -2540,7 +2540,7 @@
       "is_destructive": false,
       "is_read": true,
       "requires_confirmation": false,
-      "requires_superuser": false,
+      "requires_superuser": true,
       "sources": [
         {
           "source": "rest",
@@ -2557,7 +2557,7 @@
       "is_destructive": false,
       "is_read": false,
       "requires_confirmation": false,
-      "requires_superuser": false,
+      "requires_superuser": true,
       "sources": [
         {
           "source": "rest",
@@ -2574,7 +2574,7 @@
       "is_destructive": false,
       "is_read": true,
       "requires_confirmation": false,
-      "requires_superuser": false,
+      "requires_superuser": true,
       "sources": [
         {
           "source": "rest",
@@ -2591,7 +2591,7 @@
       "is_destructive": false,
       "is_read": false,
       "requires_confirmation": false,
-      "requires_superuser": false,
+      "requires_superuser": true,
       "sources": [
         {
           "source": "rest",
@@ -2625,7 +2625,7 @@
       "is_destructive": false,
       "is_read": false,
       "requires_confirmation": false,
-      "requires_superuser": false,
+      "requires_superuser": true,
       "sources": [
         {
           "source": "rest",
@@ -4180,6 +4180,23 @@
       ]
     },
     {
+      "id": "bam.superuser_config_health.list",
+      "app": "bam",
+      "resource": "superuser_config_health",
+      "verb": "list",
+      "is_destructive": false,
+      "is_read": true,
+      "requires_confirmation": false,
+      "requires_superuser": true,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "GET /superuser/config-health",
+          "file": "config-health.routes.ts"
+        }
+      ]
+    },
+    {
       "id": "bam.superuser_deploy_settings.get",
       "app": "bam",
       "resource": "superuser_deploy_settings",
@@ -4612,7 +4629,7 @@
       "is_destructive": false,
       "is_read": true,
       "requires_confirmation": false,
-      "requires_superuser": false,
+      "requires_superuser": true,
       "sources": [
         {
           "source": "rest",
@@ -4629,7 +4646,7 @@
       "is_destructive": false,
       "is_read": false,
       "requires_confirmation": false,
-      "requires_superuser": false,
+      "requires_superuser": true,
       "sources": [
         {
           "source": "rest",
@@ -5283,7 +5300,7 @@
       "is_destructive": false,
       "is_read": false,
       "requires_confirmation": false,
-      "requires_superuser": false,
+      "requires_superuser": true,
       "sources": [
         {
           "source": "rest",
@@ -5334,7 +5351,7 @@
       "is_destructive": false,
       "is_read": false,
       "requires_confirmation": false,
-      "requires_superuser": false,
+      "requires_superuser": true,
       "sources": [
         {
           "source": "rest",
@@ -5351,7 +5368,7 @@
       "is_destructive": false,
       "is_read": true,
       "requires_confirmation": false,
-      "requires_superuser": false,
+      "requires_superuser": true,
       "sources": [
         {
           "source": "rest",
@@ -5368,7 +5385,7 @@
       "is_destructive": false,
       "is_read": false,
       "requires_confirmation": false,
-      "requires_superuser": false,
+      "requires_superuser": true,
       "sources": [
         {
           "source": "rest",
@@ -5385,7 +5402,7 @@
       "is_destructive": true,
       "is_read": false,
       "requires_confirmation": true,
-      "requires_superuser": false,
+      "requires_superuser": true,
       "sources": [
         {
           "source": "rest",
@@ -5402,7 +5419,7 @@
       "is_destructive": false,
       "is_read": false,
       "requires_confirmation": false,
-      "requires_superuser": false,
+      "requires_superuser": true,
       "sources": [
         {
           "source": "rest",
@@ -5419,7 +5436,7 @@
       "is_destructive": false,
       "is_read": true,
       "requires_confirmation": false,
-      "requires_superuser": false,
+      "requires_superuser": true,
       "sources": [
         {
           "source": "rest",
@@ -5453,7 +5470,7 @@
       "is_destructive": false,
       "is_read": false,
       "requires_confirmation": false,
-      "requires_superuser": false,
+      "requires_superuser": true,
       "sources": [
         {
           "source": "rest",
@@ -5470,7 +5487,7 @@
       "is_destructive": true,
       "is_read": false,
       "requires_confirmation": true,
-      "requires_superuser": false,
+      "requires_superuser": true,
       "sources": [
         {
           "source": "rest",
@@ -5487,7 +5504,7 @@
       "is_destructive": false,
       "is_read": true,
       "requires_confirmation": false,
-      "requires_superuser": false,
+      "requires_superuser": true,
       "sources": [
         {
           "source": "rest",
@@ -5504,7 +5521,7 @@
       "is_destructive": false,
       "is_read": false,
       "requires_confirmation": false,
-      "requires_superuser": false,
+      "requires_superuser": true,
       "sources": [
         {
           "source": "rest",
@@ -5521,7 +5538,7 @@
       "is_destructive": true,
       "is_read": false,
       "requires_confirmation": true,
-      "requires_superuser": false,
+      "requires_superuser": true,
       "sources": [
         {
           "source": "rest",
@@ -27768,6 +27785,270 @@
     {
       "tool": "basis_update_settings",
       "file": "basis-tools.ts"
+    },
+    {
+      "tool": "bastion_list_frameworks",
+      "file": "bastion-tools.ts"
+    },
+    {
+      "tool": "bastion_not_applicable_suggestions",
+      "file": "bastion-tools.ts"
+    },
+    {
+      "tool": "bastion_compile_framework",
+      "file": "bastion-tools.ts"
+    },
+    {
+      "tool": "bastion_list_controls",
+      "file": "bastion-tools.ts"
+    },
+    {
+      "tool": "bastion_control_status",
+      "file": "bastion-tools.ts"
+    },
+    {
+      "tool": "bastion_propose_assertion",
+      "file": "bastion-tools.ts"
+    },
+    {
+      "tool": "bastion_list_probes",
+      "file": "bastion-tools.ts"
+    },
+    {
+      "tool": "bastion_get_setup_status",
+      "file": "bastion-tools.ts"
+    },
+    {
+      "tool": "bastion_run_evaluation",
+      "file": "bastion-tools.ts"
+    },
+    {
+      "tool": "bastion_list_evaluations",
+      "file": "bastion-tools.ts"
+    },
+    {
+      "tool": "bastion_evidence_for",
+      "file": "bastion-tools.ts"
+    },
+    {
+      "tool": "bastion_get_evidence",
+      "file": "bastion-tools.ts"
+    },
+    {
+      "tool": "bastion_verify_evidence",
+      "file": "bastion-tools.ts"
+    },
+    {
+      "tool": "bastion_list_seals",
+      "file": "bastion-tools.ts"
+    },
+    {
+      "tool": "bastion_list_restores",
+      "file": "bastion-tools.ts"
+    },
+    {
+      "tool": "bastion_adopt_framework",
+      "file": "bastion-tools.ts"
+    },
+    {
+      "tool": "bastion_update_framework",
+      "file": "bastion-tools.ts"
+    },
+    {
+      "tool": "bastion_archive_framework",
+      "file": "bastion-tools.ts"
+    },
+    {
+      "tool": "bastion_upsert_control",
+      "file": "bastion-tools.ts"
+    },
+    {
+      "tool": "bastion_decide_applicability",
+      "file": "bastion-tools.ts"
+    },
+    {
+      "tool": "bastion_save_company_profile",
+      "file": "bastion-tools.ts"
+    },
+    {
+      "tool": "bastion_set_compliance_project",
+      "file": "bastion-tools.ts"
+    },
+    {
+      "tool": "bastion_list_auditor_rooms",
+      "file": "bastion-tools.ts"
+    },
+    {
+      "tool": "bastion_list_auditor_requests",
+      "file": "bastion-tools.ts"
+    },
+    {
+      "tool": "bastion_create_feed",
+      "file": "bastion-tools.ts"
+    },
+    {
+      "tool": "bastion_update_feed",
+      "file": "bastion-tools.ts"
+    },
+    {
+      "tool": "bastion_list_manual_evidence",
+      "file": "bastion-tools.ts"
+    },
+    {
+      "tool": "bastion_link_manual_evidence",
+      "file": "bastion-tools.ts"
+    },
+    {
+      "tool": "bastion_unlink_manual_evidence",
+      "file": "bastion-tools.ts"
+    },
+    {
+      "tool": "bastion_check_evidence_scan_again",
+      "file": "bastion-tools.ts"
+    },
+    {
+      "tool": "bastion_list_feeds",
+      "file": "bastion-tools.ts"
+    },
+    {
+      "tool": "bastion_list_feed_records",
+      "file": "bastion-tools.ts"
+    },
+    {
+      "tool": "bastion_coverage_summary",
+      "file": "bastion-tools.ts"
+    },
+    {
+      "tool": "bastion_coverage_gaps",
+      "file": "bastion-tools.ts"
+    },
+    {
+      "tool": "bastion_propose_fix",
+      "file": "bastion-tools.ts"
+    },
+    {
+      "tool": "bastion_dismiss_gap",
+      "file": "bastion-tools.ts"
+    },
+    {
+      "tool": "bastion_list_fix_drafts",
+      "file": "bastion-tools.ts"
+    },
+    {
+      "tool": "bastion_mark_fix_applied",
+      "file": "bastion-tools.ts"
+    },
+    {
+      "tool": "bastion_list_exceptions",
+      "file": "bastion-tools.ts"
+    },
+    {
+      "tool": "bastion_propose_exception",
+      "file": "bastion-tools.ts"
+    },
+    {
+      "tool": "bastion_list_drift",
+      "file": "bastion-tools.ts"
+    },
+    {
+      "tool": "bastion_acknowledge_drift",
+      "file": "bastion-tools.ts"
+    },
+    {
+      "tool": "bastion_attestation_status",
+      "file": "bastion-tools.ts"
+    },
+    {
+      "tool": "bastion_get_policy_body",
+      "file": "bastion-tools.ts"
+    },
+    {
+      "tool": "bastion_my_attestations",
+      "file": "bastion-tools.ts"
+    },
+    {
+      "tool": "bastion_create_policy",
+      "file": "bastion-tools.ts"
+    },
+    {
+      "tool": "bastion_update_policy",
+      "file": "bastion-tools.ts"
+    },
+    {
+      "tool": "bastion_request_attestations",
+      "file": "bastion-tools.ts"
+    },
+    {
+      "tool": "bastion_list_questionnaires",
+      "file": "bastion-tools.ts"
+    },
+    {
+      "tool": "bastion_get_questionnaire",
+      "file": "bastion-tools.ts"
+    },
+    {
+      "tool": "bastion_create_questionnaire",
+      "file": "bastion-tools.ts"
+    },
+    {
+      "tool": "bastion_update_questionnaire",
+      "file": "bastion-tools.ts"
+    },
+    {
+      "tool": "bastion_questionnaire_autofill",
+      "file": "bastion-tools.ts"
+    },
+    {
+      "tool": "bastion_answer_questionnaire_item",
+      "file": "bastion-tools.ts"
+    },
+    {
+      "tool": "bastion_draft_answer",
+      "file": "bastion-tools.ts"
+    },
+    {
+      "tool": "bastion_search_answer_library",
+      "file": "bastion-tools.ts"
+    },
+    {
+      "tool": "bastion_update_answer_library",
+      "file": "bastion-tools.ts"
+    },
+    {
+      "tool": "bastion_auditor_room_view",
+      "file": "bastion-tools.ts"
+    },
+    {
+      "tool": "bastion_respond_auditor_request",
+      "file": "bastion-tools.ts"
+    },
+    {
+      "tool": "bastion_create_export",
+      "file": "bastion-tools.ts"
+    },
+    {
+      "tool": "bastion_list_exports",
+      "file": "bastion-tools.ts"
+    },
+    {
+      "tool": "bastion_get_settings",
+      "file": "bastion-tools.ts"
+    },
+    {
+      "tool": "bastion_update_settings",
+      "file": "bastion-tools.ts"
+    },
+    {
+      "tool": "bastion_list_delivery_problems",
+      "file": "bastion-tools.ts"
+    },
+    {
+      "tool": "bastion_retry_delivery",
+      "file": "bastion-tools.ts"
+    },
+    {
+      "tool": "bastion_audit_log",
+      "file": "bastion-tools.ts"
     },
     {
       "tool": "blueprint_list",

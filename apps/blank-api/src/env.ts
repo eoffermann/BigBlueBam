@@ -23,6 +23,10 @@ const envSchema = z.object({
   MCP_INTERNAL_URL: z.string().default('http://mcp-server:3001'),
   BBB_API_INTERNAL_URL: z.string().default('http://api:4000'),
   BOLT_API_INTERNAL_URL: z.string().default('http://bolt-api:4006'),
+  // Form routing actions (#305): bond-api's POST /v1/internal/contacts and helpdesk-api's
+  // POST /helpdesk/internal/tickets. The same names book-api and mcp-server read.
+  BOND_API_INTERNAL_URL: z.string().url().default('http://bond-api:4009'),
+  HELPDESK_API_URL: z.string().url().default('http://helpdesk-api:4001'),
   INTERNAL_SERVICE_SECRET: z.string().min(32).optional(),
 
   PUBLIC_URL: z.string().default('http://localhost'),

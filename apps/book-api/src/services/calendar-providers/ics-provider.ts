@@ -1,3 +1,4 @@
+import { safeFetch } from '@bigbluebam/egress-guard';
 import type { CalendarProvider, NormalizedEvent, ProviderContext } from './types.js';
 import { parseIcs } from './ics-parser.js';
 
@@ -28,10 +29,13 @@ export class IcsCalendarProvider implements CalendarProvider {
     const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
     let res: Response;
     try {
-      res = await fetch(url, {
+      // The stored feed URL is user-supplied and the sync worker re-fetches it
+      // unattended forever, so it is vetted here on every fetch (and every
+      // redirect hop), not only when the connection is created: DNS can be
+      // repointed at any time. A blocked target surfaces as a sync error.
+      res = await safeFetch(url, {
         signal: controller.signal,
         headers: { Accept: 'text/calendar, text/plain, */*' },
-        redirect: 'follow',
       });
     } finally {
       clearTimeout(timer);
