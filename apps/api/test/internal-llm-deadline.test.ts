@@ -92,15 +92,22 @@ describe('internal LLM proxy deadline (#257)', () => {
   });
 
   it('a shutdown drain stops a call still running and answers 503 SHUTTING_DOWN with Retry-After (#294)', async () => {
+    // The route registers the call as in flight before it reaches the upstream fetch, so the
+    // fetch being entered is the exact condition the drain needs; waiting on it instead of a
+    // fixed sleep keeps the test deterministic under full-suite load (#383).
+    let fetchEntered!: () => void;
+    const entered = new Promise<void>((r) => {
+      fetchEntered = r;
+    });
     vi.stubGlobal(
       'fetch',
-      vi.fn(
-        (_u: string, init: { signal: AbortSignal }) =>
-          new Promise((_r, reject) => init.signal.addEventListener('abort', () => reject(init.signal.reason))),
-      ),
+      vi.fn((_u: string, init: { signal: AbortSignal }) => {
+        fetchEntered();
+        return new Promise((_r, reject) => init.signal.addEventListener('abort', () => reject(init.signal.reason)));
+      }),
     );
     const pending = chat({ timeout_ms: 120_000 });
-    await new Promise((r) => setTimeout(r, 30));
+    await entered;
     expect(await drainInternalLlmCalls(20, 5)).toBe(1);
     const res = await pending;
     expect(res.statusCode).toBe(503);
