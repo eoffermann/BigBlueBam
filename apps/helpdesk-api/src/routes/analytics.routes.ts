@@ -14,48 +14,14 @@
 //               approximate:false, generated_at }
 // ---------------------------------------------------------------------------
 
-import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
+import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { sql } from 'drizzle-orm';
-import { db } from '../db/index.js';
-import { verifyAgentApiKey } from '../lib/agent-auth.js';
+import { requireAdminAuth } from '../lib/admin-auth.js';
 import {
   countTicketsByPhrase,
   PhraseCountError,
 } from '../services/phrase-count.service.js';
 
-/**
- * Require admin auth - accepts a Bam session cookie OR a per-agent
- * helpdesk API key. Mirrors users.routes.ts::requireAdminAuth.
- */
-async function requireAdminAuth(request: FastifyRequest, reply: FastifyReply) {
-  const sessionCookie = request.cookies?.session;
-  if (sessionCookie) {
-    try {
-      const result = await db.execute(
-        sql`SELECT s.id FROM sessions s JOIN users u ON u.id = s.user_id
-            WHERE s.id = ${sessionCookie} AND s.expires_at > now() LIMIT 1`,
-      );
-      if (result && (Array.isArray(result) ? result.length > 0 : (result as any).rows?.length > 0)) {
-        return;
-      }
-    } catch {
-      // Fall through to X-Agent-Key.
-    }
-  }
-  const token = request.headers['x-agent-key'] as string | undefined;
-  const agentUserId = await verifyAgentApiKey(request, token);
-  if (agentUserId) return;
-
-  return reply.status(401).send({
-    error: {
-      code: 'UNAUTHORIZED',
-      message: 'Authentication required',
-      details: [],
-      request_id: request.id,
-    },
-  });
-}
 
 const bucketEnum = z.enum(['hour', 'day', 'week']);
 
@@ -108,6 +74,8 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
 
       try {
         const result = await countTicketsByPhrase({
+          // Set and authorized by requireAdminAuth.
+          orgId: request.tenantContext.orgId!,
           phrase: q.phrase,
           buckets: q.buckets,
           since,

@@ -26,6 +26,10 @@ import { db } from '../db/index.js';
 export type BucketGranularity = 'hour' | 'day' | 'week';
 
 export interface PhraseCountOptions {
+  /** Required: the count is confined to this org's tickets. Without it the
+   *  query counted every tenant's tickets, an oracle for another org's
+   *  support volume on any phrase. */
+  orgId: string;
   phrase: string;
   buckets: BucketGranularity;
   since: Date;
@@ -80,6 +84,9 @@ function normalizeBucket(bucket: BucketGranularity): string {
 export async function countTicketsByPhrase(
   opts: PhraseCountOptions,
 ): Promise<PhraseCountResult> {
+  if (!opts.orgId) {
+    throw new PhraseCountError('INVALID_ORG', 'orgId is required');
+  }
   if (!opts.phrase || opts.phrase.trim().length === 0) {
     throw new PhraseCountError('INVALID_PHRASE', 'Phrase must be non-empty');
   }
@@ -117,7 +124,12 @@ export async function countTicketsByPhrase(
       SELECT ${bucketExpr} AS bucket_start,
              COUNT(*)::int AS count
         FROM tickets
-       WHERE tickets.search_vector @@ ${tsQuery}
+        -- Org via the ticket's helpdesk user, not projects.org_id:
+        -- tickets.project_id is nullable and a projects join would drop
+        -- every unassigned ticket from the count.
+        JOIN helpdesk_users hu ON hu.id = tickets.helpdesk_user_id
+       WHERE hu.org_id = ${opts.orgId}
+         AND tickets.search_vector @@ ${tsQuery}
          AND tickets.created_at >= ${opts.since}
          AND tickets.created_at < ${until}
          ${statusClause}

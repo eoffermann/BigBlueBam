@@ -1,4 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { PgDialect } from 'drizzle-orm/pg-core';
+import type { SQL } from 'drizzle-orm';
 
 // ---- hoisted mocks ----
 const { mockTx, mockTransaction } = vi.hoisted(() => {
@@ -37,9 +39,30 @@ import {
   __test__,
 } from '../src/services/phrase-count.service.js';
 
+const ORG = '00000000-0000-4000-8000-0000000000aa';
+
 beforeEach(() => {
   mockTx.execute.mockReset();
   mockTransaction.mockClear();
+});
+
+describe('countTicketsByPhrase org scoping', () => {
+  const since = new Date('2026-04-01T00:00:00Z');
+  const until = new Date('2026-04-18T00:00:00Z');
+
+  it('requires an org', async () => {
+    await expect(
+      countTicketsByPhrase({ orgId: '', phrase: 'login', buckets: 'day', since, until }),
+    ).rejects.toThrow(/orgId is required/);
+  });
+
+  it("counts only the org's tickets", async () => {
+    mockTx.execute.mockResolvedValueOnce([]).mockResolvedValueOnce([]);
+    await countTicketsByPhrase({ orgId: ORG, phrase: 'login', buckets: 'day', since, until });
+    const q = new PgDialect().sqlToQuery(mockTx.execute.mock.calls[1]![0] as SQL);
+    expect(q.sql).toMatch(/hu\.org_id = \$\d+/);
+    expect(q.params).toContain(ORG);
+  });
 });
 
 describe('phrase-count.service', () => {
@@ -65,6 +88,7 @@ describe('phrase-count.service', () => {
     it('rejects empty phrase', async () => {
       await expect(
         countTicketsByPhrase({
+          orgId: ORG,
           phrase: '',
           buckets: 'day',
           since,
@@ -76,6 +100,7 @@ describe('phrase-count.service', () => {
     it('rejects whitespace-only phrase', async () => {
       await expect(
         countTicketsByPhrase({
+          orgId: ORG,
           phrase: '   ',
           buckets: 'day',
           since,
@@ -87,6 +112,7 @@ describe('phrase-count.service', () => {
     it('rejects invalid since', async () => {
       await expect(
         countTicketsByPhrase({
+          orgId: ORG,
           phrase: 'login',
           buckets: 'day',
           since: new Date('not-a-date'),
@@ -98,6 +124,7 @@ describe('phrase-count.service', () => {
     it('rejects until <= since', async () => {
       await expect(
         countTicketsByPhrase({
+          orgId: ORG,
           phrase: 'login',
           buckets: 'day',
           since,
@@ -109,6 +136,7 @@ describe('phrase-count.service', () => {
     it('rejects invalid bucket', async () => {
       await expect(
         countTicketsByPhrase({
+          orgId: ORG,
           phrase: 'login',
           buckets: 'minute' as never,
           since,
@@ -132,6 +160,7 @@ describe('phrase-count.service', () => {
           { bucket_start: new Date('2026-04-11T00:00:00Z'), count: 5 },
         ]);
       const res = await countTicketsByPhrase({
+        orgId: ORG,
         phrase: 'login error',
         buckets: 'day',
         since,
@@ -152,6 +181,7 @@ describe('phrase-count.service', () => {
     it('empty result returns zero total and empty buckets', async () => {
       mockTx.execute.mockResolvedValueOnce([]).mockResolvedValueOnce([]);
       const res = await countTicketsByPhrase({
+        orgId: ORG,
         phrase: 'xyz',
         buckets: 'hour',
         since,
@@ -165,6 +195,7 @@ describe('phrase-count.service', () => {
       mockTx.execute.mockResolvedValueOnce([]).mockResolvedValueOnce([]);
       const before = Date.now();
       const res = await countTicketsByPhrase({
+        orgId: ORG,
         phrase: 'x',
         buckets: 'week',
         since,
@@ -176,6 +207,7 @@ describe('phrase-count.service', () => {
     it('applies statement_timeout inside the transaction', async () => {
       mockTx.execute.mockResolvedValueOnce([]).mockResolvedValueOnce([]);
       await countTicketsByPhrase({
+        orgId: ORG,
         phrase: 'x',
         buckets: 'day',
         since,
@@ -201,6 +233,7 @@ describe('phrase-count.service', () => {
         { bucket_start: '2026-04-10T00:00:00Z', count: '7' },
       ]);
       const res = await countTicketsByPhrase({
+        orgId: ORG,
         phrase: 'x',
         buckets: 'day',
         since,
