@@ -45,7 +45,7 @@
 import type { FastifyInstance } from 'fastify';
 import { and, eq } from 'drizzle-orm';
 import { z } from 'zod';
-import { deriveUrlSurfaceId } from '@bigbluebam/shared';
+import { BUREAU_SURFACE_APPS, deriveUrlSurfaceId } from '@bigbluebam/shared';
 import { db } from '../db/index.js';
 import { organizationMemberships, users } from '../db/schema/index.js';
 import { requireAuth } from '../plugins/auth.js';
@@ -53,25 +53,11 @@ import { badRequest, forbidden, notFound } from '../middleware/room-access.js';
 import { isUserInDnd } from '../services/dnd-check.service.js';
 import { forceNavigateUser, ringUser } from '../services/ring.service.js';
 
-const SURFACE_APPS = [
-  'brief',
-  'blueprint',
-  'board',
-  'bond',
-  'bam',
-  'beacon',
-  'helpdesk',
-  // D-14: Banter channels/DMs are ring-capable surfaces — surface_id is the
-  // channel id, and the receiver resolves it via /banter/go/:channelId.
-  'banter',
-  // D-4: Book event pages (surface_id = event id, URL /book/events/:id).
-  'book',
-  // "Every place is a room": URL-derived surfaces. surface_id is the
-  // synthetic hash from @bigbluebam/shared deriveUrlSurfaceId and the
-  // body must carry surface_url (the recipient can't reconstruct a URL
-  // from a hash).
-  'url',
-] as const;
+// Ring-capable surfaces: defined once in @bigbluebam/shared (issue #161), the
+// same list the surface-huddle token route accepts. For 'url' the surface_id is
+// the synthetic hash from deriveUrlSurfaceId and the body must carry
+// surface_url (the recipient can't reconstruct a URL from a hash).
+const SURFACE_APPS = BUREAU_SURFACE_APPS;
 
 const SURFACE_ID_REGEX = /^(?:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|[a-z0-9][a-z0-9-]{0,63})$/;
 

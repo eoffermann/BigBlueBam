@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
+  BUREAU_ENTITY_SURFACE_APPS,
+  BUREAU_SURFACE_APPS,
   URL_SURFACE_APP,
+  bureauSurfaceAppForLocationApp,
   deriveUrlSurfaceId,
   normalizeSurfacePath,
 } from './bureau-surface.js';
@@ -64,5 +67,27 @@ describe('deriveUrlSurfaceId', () => {
 
   it('exports the pseudo-app constant the routes allowlist', () => {
     expect(URL_SURFACE_APP).toBe('url');
+  });
+});
+
+describe('Bureau surface app list (issue #161)', () => {
+  it('is the entity surfaces plus the URL pseudo surface, with no duplicates', () => {
+    expect([...BUREAU_SURFACE_APPS]).toEqual([...BUREAU_ENTITY_SURFACE_APPS, URL_SURFACE_APP]);
+    expect(new Set(BUREAU_SURFACE_APPS).size).toBe(BUREAU_SURFACE_APPS.length);
+  });
+
+  it('maps a client location app to the ring surface_app the routes accept', () => {
+    expect(bureauSurfaceAppForLocationApp('b3')).toBe('bam');
+    expect(bureauSurfaceAppForLocationApp('bam')).toBe('bam');
+    for (const app of BUREAU_ENTITY_SURFACE_APPS) {
+      expect(bureauSurfaceAppForLocationApp(app)).toBe(app);
+      expect(BUREAU_SURFACE_APPS).toContain(bureauSurfaceAppForLocationApp(app));
+    }
+    // Apps without an entity surface get no Invite button.
+    expect(bureauSurfaceAppForLocationApp('bureau')).toBeUndefined();
+    expect(bureauSurfaceAppForLocationApp('bolt')).toBeUndefined();
+    // 'url' is chosen from surface_kind, never from location.app.
+    expect(bureauSurfaceAppForLocationApp('url')).toBeUndefined();
+    expect(bureauSurfaceAppForLocationApp(undefined)).toBeUndefined();
   });
 });

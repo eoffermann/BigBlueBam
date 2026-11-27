@@ -62,11 +62,9 @@ describe('no hand-kept Launchpad app rosters (issue #158)', () => {
   });
 
   it('no source file in apps/frontend or apps/bureau-api hand-codes a list of Launchpad app ids', () => {
-    // Deliberate SUBSETS, not app rosters. A new entry needs a reason.
-    const ALLOWED: Record<string, string> = {
-      'bureau-api/src/routes/livekit.routes.ts': 'SURFACE_APPS: the huddle-capable surfaces, a curated subset',
-      'bureau-api/src/routes/ring.routes.ts': 'SURFACE_APPS: the ring-capable surfaces, a curated subset',
-    };
+    // Deliberate SUBSETS, not app rosters. A new entry needs a reason. Bureau's
+    // ring/huddle surface list now lives once in @bigbluebam/shared (issue #161).
+    const ALLOWED: Record<string, string> = {};
     const root = resolve(__dirname, '..', '..');
     const ids = new Set<string>(shared.LAUNCHPAD_APP_IDS);
     const offenders: string[] = [];

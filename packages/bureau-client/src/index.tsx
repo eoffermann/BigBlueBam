@@ -76,7 +76,7 @@ import { BringPopover } from './bring-popover.js';
 import { PeopleHereButton } from './people-here.js';
 import { VideoTilesWindow } from './video-tiles.js';
 import { AudioUnblockChip } from './audio-unblock-chip.js';
-import { URL_SURFACE_APP, deriveUrlSurfaceId } from '@bigbluebam/shared';
+import { URL_SURFACE_APP, bureauSurfaceAppForLocationApp, deriveUrlSurfaceId } from '@bigbluebam/shared';
 import { crossAppNavigate } from './cross-app-navigate.js';
 import { formatLocationDisplay, humanizeLocationTitle, appDisplayName } from './format-location.js';
 import {
@@ -1416,22 +1416,6 @@ const bringActiveBtnStyle: CSSProperties = {
   fontWeight: 600,
 };
 
-// location.app → ring-API surface_app. Mirrors SURFACE_APPS in
-// apps/bureau-api/src/routes/ring.routes.ts; apps absent here (bureau,
-// bolt, …) don't get an Invite button because the ring endpoint would
-// reject them.
-const RING_SURFACE_APP_BY_LOCATION_APP: Record<string, string> = {
-  brief: 'brief',
-  blueprint: 'blueprint',
-  board: 'board',
-  bond: 'bond',
-  b3: 'bam',
-  bam: 'bam',
-  beacon: 'beacon',
-  helpdesk: 'helpdesk',
-  banter: 'banter',
-  book: 'book',
-};
 
 /**
  * Internal: the actual floating-box markup. Always renders the same UI
@@ -1491,9 +1475,9 @@ function BureauDockedBoxInner({
   const ringSurfaceApp =
     state.location?.surface_kind === 'url'
       ? URL_SURFACE_APP
-      : state.location?.app
-        ? RING_SURFACE_APP_BY_LOCATION_APP[state.location.app]
-        : undefined;
+      : // location.app to ring surface_app, from the one list bureau-api's ring route
+        // accepts (issue #161); apps without an entity surface get no Invite button.
+        bureauSurfaceAppForLocationApp(state.location?.app);
   const inviteSurfaceId = state.location?.surface_id;
   const canInvite = !!ringSurfaceApp && !!inviteSurfaceId;
   const callConnected = call.status === 'connected';

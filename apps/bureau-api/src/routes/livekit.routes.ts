@@ -27,6 +27,7 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { buildLiveKitIdentity, mintRoomToken } from '@bigbluebam/livekit-tokens';
+import { BUREAU_SURFACE_APPS } from '@bigbluebam/shared';
 import { requireAuth } from '../plugins/auth.js';
 import {
   badRequest,
@@ -58,33 +59,15 @@ export function buildBureauRoomName(roomId: string): string {
 }
 
 /**
- * Allowed surface apps for surface-scoped huddles. Each one is a content
- * surface a user can be co-present on — the URL of the surface itself is
- * already the access gate, since the recipient must be on that URL (and
+ * Allowed surface apps for surface-scoped huddles: the same list the ring
+ * route accepts (issue #161), defined once in @bigbluebam/shared. Each one is
+ * a content surface a user can be co-present on; the URL of the surface itself
+ * is already the access gate, since the recipient must be on that URL (and
  * therefore have access to it) for their bureau-client to be reporting the
- * matching locationUrl in the first place.
+ * matching locationUrl in the first place. The 'url' room is org-scoped at
+ * mint time below, because URL paths are not unique across tenants.
  */
-const SURFACE_APPS = [
-  'brief',
-  'blueprint',
-  'board',
-  'bond',
-  'bam',
-  'beacon',
-  'helpdesk',
-  // D-14 follow-up: ring.routes.ts accepts banter surfaces, so the huddle
-  // token mint must too (the SDK joins huddle-banter-{channelId} on accept).
-  'banter',
-  // D-4: Book event pages advertise the event id as surface_id; the
-  // event's meeting_url deep-links there and the docked box joins
-  // huddle-book-{eventId}.
-  'book',
-  // "Every place is a room": pages with no entity-specific surface get a
-  // synthetic surface derived from the URL path (see @bigbluebam/shared
-  // bureau-surface.ts). The room is org-scoped at mint time below —
-  // unlike entity ids, URL paths are NOT unique across tenants.
-  'url',
-] as const;
+const SURFACE_APPS = BUREAU_SURFACE_APPS;
 
 /** uuid or 1-64 char lowercase-alphanumeric-and-dash slug. */
 const SURFACE_ID_REGEX = /^(?:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|[a-z0-9][a-z0-9-]{0,63})$/;

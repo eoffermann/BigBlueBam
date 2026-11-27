@@ -27,6 +27,55 @@
 /** Pseudo surface_app for URL-derived rooms. */
 export const URL_SURFACE_APP = 'url';
 
+/**
+ * The entity-scoped Bureau surfaces (issue #161): the apps whose pages report
+ * an explicit `surface_id`, so a user can ring someone onto that surface and
+ * mint a surface huddle for it. A curated subset of the Launchpad apps, NOT a
+ * roster: an app joins this list only once its pages advertise a surface id.
+ * The receiver resolves each (app, id) to a URL, so a new entry also needs a
+ * resolver on the client side.
+ *
+ * - banter: surface_id is the channel id; resolved via /banter/go/:channelId.
+ * - book: surface_id is the event id; the event's meeting_url deep-links to
+ *   /book/events/:id and the docked box joins huddle-book-{eventId}.
+ *
+ * Single source for bureau-api's ring and huddle-token routes and for the
+ * bureau-client Invite button's location-app mapping.
+ */
+export const BUREAU_ENTITY_SURFACE_APPS = [
+  'brief',
+  'blueprint',
+  'board',
+  'bond',
+  'bam',
+  'beacon',
+  'helpdesk',
+  'banter',
+  'book',
+] as const;
+
+/**
+ * Every surface_app bureau-api accepts on ring and surface-huddle routes: the
+ * entity surfaces plus the URL-derived pseudo surface. The URL room is
+ * org-scoped at mint time because URL paths are not unique across tenants.
+ */
+export const BUREAU_SURFACE_APPS = [...BUREAU_ENTITY_SURFACE_APPS, URL_SURFACE_APP] as const;
+
+export type BureauSurfaceApp = (typeof BUREAU_SURFACE_APPS)[number];
+
+/**
+ * The ring surface_app for a bureau-client `location.app` (Bam reports `b3`
+ * or `bam`), or undefined when the app has no entity surface, in which case
+ * the client shows no Invite button because the ring route would reject it.
+ */
+export function bureauSurfaceAppForLocationApp(app: string | null | undefined): BureauSurfaceApp | undefined {
+  if (!app) return undefined;
+  const normalized = app === 'b3' ? 'bam' : app;
+  return (BUREAU_ENTITY_SURFACE_APPS as readonly string[]).includes(normalized)
+    ? (normalized as BureauSurfaceApp)
+    : undefined;
+}
+
 /** 32-bit FNV-1a — tiny, dependency-free, stable across JS engines. */
 function fnv1a32(input: string, seed: number): number {
   let hash = seed >>> 0;
