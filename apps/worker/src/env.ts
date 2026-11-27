@@ -45,6 +45,9 @@ const envSchema = z.object({
   S3_SECRET_KEY: z.string().default('minioadmin'),
   S3_BUCKET: z.string().default('bigbluebam-uploads'),
   S3_REGION: z.string().default('us-east-1'),
+  // Bastion's own bucket (Bastion spec 7, 9.1). Only bastion-export-packet touches it, with the
+  // shared S3_* credentials above and THIS bucket name, never S3_BUCKET.
+  BASTION_S3_BUCKET: z.string().min(3).default('bigbluebam-bastion'),
 
   // Database backup (Backup app, Platform scope).
   //  - BACKUP_SCHEDULE_CRON: when the nightly automatic backup runs (UTC).

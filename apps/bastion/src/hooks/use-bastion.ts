@@ -10,6 +10,11 @@ import type {
   BastionQuestionnaireAutofill,
   BastionQuestionnaireItemReview,
   BastionTemplateKey,
+  BastionAuditorRequestUpdate,
+  BastionAuditorRoomCreate,
+  BastionExportCreate,
+  BastionRestoreResolution,
+  BastionSettingsUpdate,
   bastionQuestionnaireCreateSchema,
   bastionQuestionnaireUpdateSchema,
 } from '@bigbluebam/shared';
@@ -43,6 +48,14 @@ import {
   type RequirementsResponse,
   type SetupState,
   type TemplateRow,
+  type AccessLogRow,
+  type AuditorRequestRow,
+  type AuditorRoomRow,
+  type CreatedRoom,
+  type DeliveryProblemRow,
+  type ExportRow,
+  type RoomOverview,
+  type SettingsView,
 } from '@/lib/api';
 
 const key = (...parts: unknown[]) => ['bastion', ...parts];
@@ -573,6 +586,116 @@ export function useAcknowledgeDrift() {
   const invalidate = useInvalidate();
   return useMutation({
     mutationFn: (id: string) => api.post(`/drift/${id}/acknowledge`, {}),
+    onSuccess: invalidate,
+  });
+}
+
+/* ------------------------------ M9: sharing and settings ------------------------------ */
+
+export function useAuditorRooms(enabled = true) {
+  return useQuery({ queryKey: key('auditor-rooms'), queryFn: () => api.get<{ data: AuditorRoomRow[] }>('/auditor-rooms'), enabled, retry: false });
+}
+
+export function useRoomAccessLog(id: string | null) {
+  return useQuery({
+    queryKey: key('auditor-room-access-log', id),
+    queryFn: () => api.get<{ data: AccessLogRow[] }>(`/auditor-rooms/${id}/access-log`),
+    enabled: !!id,
+  });
+}
+
+export function useRoomPreview(id: string | null) {
+  return useQuery({
+    queryKey: key('auditor-room-preview', id),
+    queryFn: () => api.get<{ data: RoomOverview }>(`/auditor-rooms/${id}/preview`),
+    enabled: !!id,
+  });
+}
+
+export function useCreateRoom() {
+  const invalidate = useInvalidate();
+  return useMutation({
+    mutationFn: (body: Omit<BastionAuditorRoomCreate, 'confirm'>) => api.post<{ data: CreatedRoom }>('/auditor-rooms', { ...body, confirm: true }),
+    onSuccess: invalidate,
+  });
+}
+
+export function useRevokeRoom() {
+  const invalidate = useInvalidate();
+  return useMutation({
+    mutationFn: (id: string) => api.post<{ data: AuditorRoomRow }>(`/auditor-rooms/${id}/revoke`, { confirm: true }),
+    onSuccess: invalidate,
+  });
+}
+
+export function useUnlockRoom() {
+  const invalidate = useInvalidate();
+  return useMutation({
+    mutationFn: (id: string) => api.post<{ data: AuditorRoomRow }>(`/auditor-rooms/${id}/unlock`, {}),
+    onSuccess: invalidate,
+  });
+}
+
+export function useAuditorRequests(enabled = true) {
+  return useQuery({ queryKey: key('auditor-requests'), queryFn: () => api.get<{ data: AuditorRequestRow[] }>('/auditor-requests'), enabled, retry: false });
+}
+
+export function useUpdateAuditorRequest() {
+  const invalidate = useInvalidate();
+  return useMutation({
+    mutationFn: (args: { id: string; body: BastionAuditorRequestUpdate }) => api.patch(`/auditor-requests/${args.id}`, args.body),
+    onSuccess: invalidate,
+  });
+}
+
+export function useExports(enabled = true) {
+  return useQuery({
+    queryKey: key('exports'),
+    queryFn: () => api.get<{ data: ExportRow[] }>('/exports'),
+    enabled,
+    retry: false,
+    // Poll only while a packet is being built (spec 6.3).
+    refetchInterval: (q) => ((q.state.data?.data ?? []).some((p) => p.status === 'queued' || p.status === 'running') ? 5000 : false),
+  });
+}
+
+export function useCreateExport() {
+  const invalidate = useInvalidate();
+  return useMutation({
+    mutationFn: (body: BastionExportCreate) => api.post<{ data: ExportRow }>('/exports', body),
+    onSuccess: invalidate,
+  });
+}
+
+export function useSettings() {
+  return useQuery({ queryKey: key('settings'), queryFn: () => api.get<{ data: SettingsView }>('/settings'), retry: false });
+}
+
+export function useUpdateSettings() {
+  const invalidate = useInvalidate();
+  return useMutation({
+    mutationFn: (body: BastionSettingsUpdate) => api.patch<{ data: SettingsView }>('/settings', body),
+    onSuccess: invalidate,
+  });
+}
+
+export function useDeliveryProblems(enabled = true) {
+  return useQuery({ queryKey: key('delivery-problems'), queryFn: () => api.get<{ data: DeliveryProblemRow[] }>('/delivery-problems'), enabled, retry: false });
+}
+
+export function useRetryDelivery() {
+  const invalidate = useInvalidate();
+  return useMutation({
+    mutationFn: (id: string) => api.post<{ data: { id: string; result: string; message: string } }>(`/delivery-problems/${id}/retry`, {}),
+    onSuccess: invalidate,
+  });
+}
+
+export function useAcknowledgeRestore() {
+  const invalidate = useInvalidate();
+  return useMutation({
+    mutationFn: (args: { id: string; resolution: BastionRestoreResolution }) =>
+      api.post(`/ledger/restores/${args.id}/acknowledge`, { resolution: args.resolution, confirm: true }),
     onSuccess: invalidate,
   });
 }

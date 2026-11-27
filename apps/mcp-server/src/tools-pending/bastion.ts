@@ -49,6 +49,14 @@ import {
 } from '@bigbluebam/shared';
 // M7 policy tools (registerBastionPolicyTools at the very end).
 import { bastionPolicyAudienceSchema, bastionPolicyCreateFields, bastionPolicyCreateSchema, bastionPolicyUpdateSchema } from '@bigbluebam/shared';
+// M9 sharing, settings and audit tools (registerBastionSharingTools at the very end).
+import {
+  BastionExportStatus,
+  bastionAuditorRequestUpdateSchema,
+  bastionExportCreateSchema,
+  bastionSettingsUpdateFields,
+  bastionSettingsUpdateSchema,
+} from '@bigbluebam/shared';
 import {
   BastionAuditorRequestStatus,
   bastionAdoptFrameworkSchema,
@@ -136,6 +144,7 @@ export function registerBastionTools(
   registerBastionDecisionTools(server, client);
   registerBastionPolicyTools(server, client);
   registerBastionQuestionnaireTools(server, client);
+  registerBastionSharingTools(server, client);
 
   // ── 1. bastion_list_frameworks (rows 1, 2, 4, 7) ───────────────────────────
   registerTool(server, {
@@ -1309,6 +1318,171 @@ export function registerBastionQuestionnaireTools(server: McpServer, client: Bas
       if (!parsed.success) return err('changing the answer', { code: 'VALIDATION_ERROR', message: parsed.error.errors[0]?.message });
       const r = await client.updateAnswerLibrary(answer_id, parsed.data);
       return r.ok ? ok(r.data) : err('changing the answer', r.data);
+    },
+  });
+}
+
+/* ══════════════════════════════════════════════════════════════════════════════
+ * M9 sharing, settings and audit-log tools (spec 5.1 rows 84-100, plus the room Preview).
+ *
+ * Deliberately NO tool for rows 85-87 (create, revoke and unlock an auditor room): category "auth:
+ * session required (spec 2.8, #136)". Opening a room discloses evidence to an outsider; only a
+ * person signed in to Bastion, not impersonated, may do it. None for row 93 (the packet zip,
+ * multipart/binary) or rows 101-104 (the public room, public-inbound, its own token credential).
+ * Rows 84, 88 and 89 are bastion_list_auditor_rooms and bastion_list_auditor_requests (above).
+ * ════════════════════════════════════════════════════════════════════════════ */
+export const BASTION_SHARING_TOOL_NAMES = [
+  'bastion_auditor_room_view',
+  'bastion_respond_auditor_request',
+  'bastion_create_export',
+  'bastion_list_exports',
+  'bastion_get_settings',
+  'bastion_update_settings',
+  'bastion_list_delivery_problems',
+  'bastion_retry_delivery',
+  'bastion_audit_log',
+] as const;
+
+export function registerBastionSharingTools(server: McpServer, client: BastionClient): void {
+  const strip = (o: Record<string, unknown>) => Object.fromEntries(Object.entries(o).filter(([, v]) => v !== undefined));
+
+  // S1. bastion_auditor_room_view (GET /auditor-rooms/:id/preview)
+  registerTool(server, {
+    name: 'bastion_auditor_room_view',
+    description:
+      'Exactly what an auditor sees in one auditor room (GET /auditor-rooms/:id/preview), without logging a visit: the controls in the room with their state words (Met, Not met, Not met risk accepted, Can\'t prove yet, Not assessed), the restricted items the room shares, accepted risks, the Statement of Applicability for ISO, the signed seal history with public keys, and any restore or missing-file notices. Read-only; floored: needs bastion.auditor_room.read.',
+    input: { room_id: z.string().uuid() },
+    returns: z.record(z.unknown()),
+    handler: async ({ room_id }) => {
+      const r = await client.previewAuditorRoom(room_id);
+      return r.ok ? ok(r.data) : err('previewing the auditor room', r.data);
+    },
+  });
+
+  // S2. bastion_respond_auditor_request (row 90)
+  registerTool(server, {
+    name: 'bastion_respond_auditor_request',
+    description:
+      'Answer or close a question an auditor sent from an auditor room (PATCH /auditor-requests/:id). status "answered" needs answer_note (the reply the team keeps); "closed" just closes it. 409 REQUEST_CLOSED if it was closed already. Needs bastion.auditor_room.respond (owners and admins).',
+    input: {
+      request_id: z.string().uuid(),
+      status: z.enum(['answered', 'closed']),
+      answer_note: z.string().min(1).max(5000).optional(),
+    },
+    returns: z.record(z.unknown()),
+    handler: async ({ request_id, ...rest }) => {
+      const parsed = bastionAuditorRequestUpdateSchema.safeParse(strip(rest));
+      if (!parsed.success) return err('answering the question', { code: 'VALIDATION_ERROR', message: parsed.error.errors[0]?.message });
+      const r = await client.respondAuditorRequest(request_id, parsed.data);
+      return r.ok ? ok(r.data) : err('answering the question', r.data);
+    },
+  });
+
+  // S3. bastion_create_export (row 91: a JSON request; the worker builds the zip)
+  registerTool(server, {
+    name: 'bastion_create_export',
+    description:
+      'Start building an audit packet (POST /exports, 202): a zip of the framework\'s controls and state words, the evidence and uploaded files in the period (at most 400 days), attestations, exceptions, drift, the Statement of Applicability for ISO, a summary PDF and a manifest with every signed seal and public key. include_restricted needs bastion.evidence.read_restricted (403 RESTRICTED_NOT_ALLOWED). An ISO packet is refused until every Annex A requirement has an applicability decision (409 SOA_INCOMPLETE). Follow progress with bastion_list_exports; a person downloads the zip in Bastion. Needs bastion.export.create.',
+    input: {
+      framework_id: z.string().uuid(),
+      period_start: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+      period_end: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+      include_restricted: z.boolean().optional(),
+    },
+    returns: z.record(z.unknown()),
+    handler: async (args) => {
+      const parsed = bastionExportCreateSchema.safeParse(strip(args));
+      if (!parsed.success) return err('starting the packet', { code: 'VALIDATION_ERROR', message: parsed.error.errors[0]?.message });
+      const r = await client.createExport(parsed.data);
+      return r.ok ? ok(r.data) : err('starting the packet', r.data);
+    },
+  });
+
+  // S4. bastion_list_exports (row 92)
+  registerTool(server, {
+    name: 'bastion_list_exports',
+    description:
+      'Audit packets, newest first (GET /exports): framework, period, whether restricted evidence is included, status (queued, running, succeeded, failed, expired), the current stage in words ("Writing evidence", "Zipping", "Ready to download") and any failure reason. Read-only; floored: needs bastion.export.read.',
+    input: {
+      status: BastionExportStatus.optional(),
+      limit: z.number().int().min(1).max(100).optional(),
+    },
+    returns: z.record(z.unknown()),
+    handler: async (q) => {
+      const r = await client.listExports(strip(q));
+      return r.ok ? ok(r.data) : err('listing audit packets', r.data);
+    },
+  });
+
+  // S5. bastion_get_settings (row 96)
+  registerTool(server, {
+    name: 'bastion_get_settings',
+    description:
+      "Bastion's settings for the organization (GET /settings): remediation mode, check time and timezone, AI provider and the providers available, expiry warnings, staleness, auditor-link and packet limits, questionnaire floors and limits; plus evidence integrity (seal and personal-data key fingerprints, restores awaiting an owner's acknowledgement), the off-site evidence backup status and how many deliveries failed. Read-only; needs bastion.settings.read.",
+    input: {},
+    returns: z.record(z.unknown()),
+    handler: async () => {
+      const r = await client.getSettings();
+      return r.ok ? ok(r.data) : err('reading settings', r.data);
+    },
+  });
+
+  // S6. bastion_update_settings (row 97)
+  registerTool(server, {
+    name: 'bastion_update_settings',
+    description:
+      'Change Bastion settings (PATCH /settings); send only the fields to change. Each change is audited with its old and new value. 400 BAD_TIMEZONE for an unknown zone, FLOORS_OUT_OF_ORDER when the "Check this" floor is not below the "Sure" floor; 404 for an AI provider the organization cannot use. Needs bastion.settings.write (owners and admins).',
+    input: { settings: bastionSettingsUpdateFields },
+    returns: z.record(z.unknown()),
+    handler: async ({ settings }) => {
+      const parsed = bastionSettingsUpdateSchema.safeParse(strip(settings as Record<string, unknown>));
+      if (!parsed.success) return err('changing settings', { code: 'VALIDATION_ERROR', message: parsed.error.errors[0]?.message });
+      const r = await client.updateSettings(parsed.data);
+      return r.ok ? ok(r.data) : err('changing settings', r.data);
+    },
+  });
+
+  // S7. bastion_list_delivery_problems (row 98)
+  registerTool(server, {
+    name: 'bastion_list_delivery_problems',
+    description:
+      'Updates Bastion could not deliver to other apps after every retry (GET /delivery-problems): what it was (a Bolt event, a Compliance task, a comment, a seal copy), how many attempts, when, and the last error. Retry one with bastion_retry_delivery. Needs bastion.settings.write (owners and admins).',
+    input: { limit: z.number().int().min(1).max(200).optional() },
+    returns: z.record(z.unknown()),
+    handler: async (q) => {
+      const r = await client.listDeliveryProblems(strip(q));
+      return r.ok ? ok(r.data) : err('listing delivery problems', r.data);
+    },
+  });
+
+  // S8. bastion_retry_delivery (row 99)
+  registerTool(server, {
+    name: 'bastion_retry_delivery',
+    description:
+      'Try one failed delivery again (POST /delivery-problems/:id/retry). If a newer update of the same kind for the same thing was already delivered, the old one is marked no longer needed (result "superseded") instead of being replayed. 409 NOT_DEAD when it is not a failed delivery. Needs bastion.settings.write.',
+    input: { delivery_id: z.string().uuid() },
+    returns: z.record(z.unknown()),
+    handler: async ({ delivery_id }) => {
+      const r = await client.retryDelivery(delivery_id);
+      return r.ok ? ok(r.data) : err('retrying the delivery', r.data);
+    },
+  });
+
+  // S9. bastion_audit_log (row 100)
+  registerTool(server, {
+    name: 'bastion_audit_log',
+    description:
+      "Bastion's audit log, newest first (GET /audit): every change made in Bastion with who did it (person or agent), whether they were impersonated, how they signed in, and the details. Filter by action (e.g. auditor_room.create, settings.update) or subject_type; page with cursor. Read-only; floored: needs bastion.audit.read.",
+    input: {
+      action: z.string().min(1).max(64).optional(),
+      subject_type: z.string().min(1).max(48).optional(),
+      cursor: z.string().min(1).max(200).optional(),
+      limit: z.number().int().min(1).max(200).optional(),
+    },
+    returns: z.record(z.unknown()),
+    handler: async (q) => {
+      const r = await client.auditLog(strip(q));
+      return r.ok ? ok(r.data) : err('reading the audit log', r.data);
     },
   });
 }

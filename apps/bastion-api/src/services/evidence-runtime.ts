@@ -18,6 +18,10 @@ import { llmChat } from '../lib/llm-client.js';
 import { createLlmPermits } from '../lib/llm-permits.js';
 import { resolveLlmProviderId } from './compile-ai.service.js';
 import { createReworder } from './fix-reword.service.js';
+import { enqueueExportPacket } from '../lib/queue.js';
+import { createBackupStorage } from '../lib/storage.js';
+import type { SharingDeps } from './sharing.service.js';
+import type { RoomCounters, RoomDeps } from './room.service.js';
 
 let binStorage: ReturnType<typeof createBinStorage> | undefined;
 
@@ -75,5 +79,45 @@ export function policyDeps(log: FastifyBaseLogger, redis: Redis): PolicyDeps {
 
 /** BASTION_BACKUP_S3_* set (spec 9.7): drives the "off-site backup not configured" banner. */
 export function offsiteBackupConfigured(): boolean {
-  return !!(env.BASTION_BACKUP_S3_BUCKET && env.BASTION_BACKUP_S3_ENDPOINT && env.BASTION_BACKUP_S3_ACCESS_KEY && env.BASTION_BACKUP_S3_SECRET_KEY);
+  return backupStorage() !== null;
+}
+
+let backupDriver: ReturnType<typeof createBackupStorage> | undefined;
+
+/** The off-site mirror destination (memoized), or null when it is not configured. */
+export function backupStorage(): ReturnType<typeof createBackupStorage> {
+  if (backupDriver === undefined) backupDriver = createBackupStorage(env);
+  return backupDriver;
+}
+
+/** M9: rooms, questions and packets on the creator's side. */
+export function sharingDeps(log: FastifyBaseLogger, redis: Redis): SharingDeps {
+  return {
+    engine: engineDeps(log, redis),
+    enqueuePacket: (orgId, packetId) => enqueueExportPacket({ organization_id: orgId, packet_id: packetId }),
+  };
+}
+
+/**
+ * Redis counters for the public room (spec 5.2). INCR and EXPIRE NX in one round-trip, so a key
+ * never lives without a TTL. Callers fail open on an error (the room service's safeCount).
+ */
+export function roomCounters(redis: Redis): RoomCounters {
+  return {
+    incr: async (key, ttl) => {
+      const res = await redis.multi().incr(key).expire(key, ttl, 'NX').exec();
+      const first = res?.[0];
+      if (!first || first[0]) throw first?.[0] ?? new Error('empty MULTI reply');
+      return Number(first[1]);
+    },
+    get: async (key) => Number((await redis.get(key)) ?? 0),
+    set: async (key, ttl) => {
+      await redis.set(key, '1', 'EX', ttl);
+    },
+  };
+}
+
+/** M9: the public auditor room. */
+export function roomDeps(log: FastifyBaseLogger, redis: Redis, userCan: RoomDeps['userCan']): RoomDeps {
+  return { engine: engineDeps(log, redis), counters: roomCounters(redis), userCan, ipSalt: env.BASTION_ROOM_IP_SALT };
 }

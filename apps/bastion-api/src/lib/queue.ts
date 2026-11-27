@@ -4,6 +4,9 @@ import {
   BASTION_COMPILE_QUEUE,
   BASTION_EVALUATE_RUN_QUEUE,
   BASTION_EVIDENCE_INGEST_QUEUE,
+  BASTION_EXPORT_PACKET_QUEUE,
+  bastionExportPacketJobId,
+  type BastionExportPacketJobData,
   BASTION_QUESTIONNAIRE_AUTOFILL_QUEUE,
   bastionCompileJobId,
   bastionEvaluateRunJobId,
@@ -135,7 +138,32 @@ export async function enqueueQuestionnaireAutofill(data: BastionQuestionnaireJob
   }
 }
 
+let packetQueue: Queue<BastionExportPacketJobData> | null = null;
+
+function getPacketQueue(): Queue<BastionExportPacketJobData> {
+  if (!packetQueue) {
+    if (!connection) connection = new IORedis(env.REDIS_URL, { maxRetriesPerRequest: null });
+    packetQueue = new Queue<BastionExportPacketJobData>(BASTION_EXPORT_PACKET_QUEUE, { connection });
+  }
+  return packetQueue;
+}
+
+/**
+ * Ask the worker to build an audit packet (M9, spec 7.2), jobId = the packet. Best effort: the run
+ * reaper fails a packet nobody claimed within 30 minutes, with a plain "build it again".
+ */
+export async function enqueueExportPacket(data: BastionExportPacketJobData): Promise<boolean> {
+  try {
+    await getPacketQueue().add('packet', data, { jobId: bastionExportPacketJobId(data.packet_id), ...EVALUATE_RUN_JOB_RETENTION });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export async function closeBastionQueues(): Promise<void> {
+  await packetQueue?.close().catch(() => {});
+  packetQueue = null;
   await autofillQueue?.close().catch(() => {});
   autofillQueue = null;
   await compileQueue?.close().catch(() => {});
