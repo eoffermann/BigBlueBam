@@ -596,10 +596,14 @@ export async function requireAuth(request: FastifyRequest, reply: FastifyReply) 
   }
 }
 
+/** Org roles that satisfy an `admin`-scoped gate under session auth. */
+const ORG_ADMIN_ROLES: ReadonlySet<string> = new Set(['admin', 'owner']);
+
 /** Requires the API key scope to allow the given operation type.
  *  Hierarchy: admin > read_write > read
- *  Session auth (no API key) always passes.
- *  SuperUsers always pass. */
+ *  SuperUsers always pass.
+ *  Session auth (no API key): `read` / `read_write` pass, but an `admin` gate
+ *  requires the caller's active-org role to be admin or owner. */
 export function requireScope(minScope: 'read' | 'read_write' | 'admin') {
   const scopeHierarchy = ['read', 'read_write', 'admin'];
   const minLevel = scopeHierarchy.indexOf(minScope);
@@ -620,7 +624,29 @@ export function requireScope(minScope: 'read' | 'read_write' | 'admin') {
       });
     }
     if (request.user.is_superuser) return;
-    if (request.user.api_key_scope === null) return; // Session auth, no scope restriction
+    // requireScope('admin') is the org-admin gate on ~40 routes (org settings
+    // and SMTP override, member invites/removal, password resets, minting API
+    // keys for other members, guests, priorities). A session carries no key
+    // scope, and requireCan blocks nothing unless BBB_PERMISSIONS_ENFORCE=on,
+    // so before this check any member, viewer or guest passed every one of
+    // them. Enforced in every posture; read / read_write have no role analog.
+    if (request.user.api_key_scope === null) {
+      if (minScope === 'admin' && !ORG_ADMIN_ROLES.has(request.user.role)) {
+        request.log.warn(
+          { userId: request.user.id, role: request.user.role, path: request.url, method: request.method },
+          'requireScope(admin): denied a non-admin session on an org-admin route',
+        );
+        return reply.status(403).send({
+          error: {
+            code: 'FORBIDDEN',
+            message: 'Organization admin privileges required',
+            details: [],
+            request_id: request.id,
+          },
+        });
+      }
+      return;
+    }
 
     const userScopeLevel = scopeHierarchy.indexOf(request.user.api_key_scope);
     if (userScopeLevel < minLevel) {
