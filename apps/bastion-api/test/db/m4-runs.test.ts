@@ -195,7 +195,12 @@ describe.skipIf(!DATABASE_URL)('M4 evaluation runs and the outbox (live database
       });
     }
     const order: string[] = [];
-    const deliverer: Deliverer = { deliver: async (row) => (order.push(row.idempotency_key), { ok: true }) };
+    const deliverer: Deliverer = {
+      async deliver(row) {
+        order.push(row.idempotency_key);
+        return { ok: true };
+      },
+    };
     // #347: a drain stops at its wall-clock budget, which a loaded host can reach before 15 rows;
     // the worker simply drains again a minute later. Drain until nothing is left, as it does, so
     // the assertion is about ORDER, not about how much one drain gets through.
