@@ -109,3 +109,28 @@ export function findSameFileAddDropColumn(strippedText) {
   }
   return drops.filter((d) => adds.has(d.table));
 }
+
+/**
+ * Rule `unique-sequence-prefix` (#386). Two migrations sharing a 4-digit
+ * prefix apply in alphabetical order of the rest of the name, which is an
+ * accident, not a decision (two branches merged a 0360 each on 2026-11-27).
+ * The runner keys on the full filename so it tolerates them, which is why the
+ * linter has to catch it. Returns one entry per shared prefix, with every file
+ * that carries it, sorted.
+ *
+ * @param {string[]} filenames
+ * @returns {Array<{ prefix: string, files: string[] }>}
+ */
+export function findDuplicateSequencePrefixes(filenames) {
+  const byPrefix = new Map();
+  for (const f of filenames) {
+    const m = /^([0-9]{4})_/.exec(f);
+    if (!m) continue;
+    if (!byPrefix.has(m[1])) byPrefix.set(m[1], []);
+    byPrefix.get(m[1]).push(f);
+  }
+  return [...byPrefix.entries()]
+    .filter(([, files]) => files.length > 1)
+    .map(([prefix, files]) => ({ prefix, files: [...files].sort() }))
+    .sort((a, b) => a.prefix.localeCompare(b.prefix));
+}

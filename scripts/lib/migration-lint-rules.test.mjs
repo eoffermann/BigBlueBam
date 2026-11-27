@@ -2,9 +2,12 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
+import { mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
   findBareOrgGucCasts,
+  findDuplicateSequencePrefixes,
   findSameFileAddDropColumn,
   stripSqlComments,
 } from './migration-lint-rules.mjs';
@@ -78,4 +81,83 @@ test('lint-migrations passes on the tree (historical hits are suppressed off-fil
     encoding: 'utf8',
   });
   assert.match(out, /0 violation\(s\), 0 warning\(s\)/);
+});
+
+test('OFF_FILE_SUPPRESSIONS names each file once (a second key silently replaces the first)', () => {
+  const src = readFileSync(join(REPO_ROOT, 'scripts', 'lint-migrations.mjs'), 'utf8');
+  const keys = [...src.matchAll(/^ {2}'([0-9]{4}_[a-z0-9_]+\.sql)':/gm)].map((m) => m[1]);
+  assert.ok(keys.length > 10, 'expected to find the suppression map keys');
+  assert.deepEqual(keys.filter((k, i) => keys.indexOf(k) !== i), []);
+});
+
+test('unique-sequence-prefix groups every file that shares a 4-digit prefix', () => {
+  assert.deepEqual(
+    findDuplicateSequencePrefixes([
+      '0360_b.sql',
+      '0001_a.sql',
+      '0360_a.sql',
+      '0141_x.sql',
+      '0141_y.sql',
+      '0141_z.sql',
+      '0002_b.sql',
+      'README.md',
+    ]),
+    [
+      { prefix: '0141', files: ['0141_x.sql', '0141_y.sql', '0141_z.sql'] },
+      { prefix: '0360', files: ['0360_a.sql', '0360_b.sql'] },
+    ],
+  );
+  assert.deepEqual(findDuplicateSequencePrefixes(['0001_a.sql', '0002_a.sql']), []);
+});
+
+test('the tree has exactly the three historical duplicate prefixes, none new', () => {
+  const files = readdirSync(join(REPO_ROOT, 'infra', 'postgres', 'migrations')).filter((f) => f.endsWith('.sql'));
+  assert.deepEqual(
+    findDuplicateSequencePrefixes(files).map((d) => d.prefix),
+    ['0141', '0226', '0227'],
+  );
+});
+
+function lintFixture(names) {
+  const dir = mkdtempSync(join(tmpdir(), 'lint-mig-'));
+  for (const n of names) {
+    const body = [`-- ${n}`, '-- Why: fixture.', '-- Client impact: none.', '', 'SELECT 1;', ''].join('\n');
+    writeFileSync(join(dir, n), body);
+  }
+  try {
+    const out = execFileSync(process.execPath, [join(REPO_ROOT, 'scripts', 'lint-migrations.mjs')], {
+      stdio: 'pipe',
+      encoding: 'utf8',
+      env: { ...process.env, LINT_MIGRATIONS_DIR: dir },
+    });
+    return { code: 0, out };
+  } catch (e) {
+    return { code: e.status, out: `${e.stdout}${e.stderr}` };
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+test('lint-migrations: the suppressed historical pair passes, a new duplicate of it fails (#386)', () => {
+  const historical = ['0141_book_event_livekit_room.sql', '0141_users_created_by.sql', '0142_next.sql'];
+  const ok = lintFixture(historical);
+  assert.equal(ok.code, 0, ok.out);
+  assert.match(ok.out, /0 violation\(s\)/);
+
+  const bad = lintFixture([...historical, '0141_new_feature.sql']);
+  assert.equal(bad.code, 1);
+  const hits = bad.out.split('\n').filter((l) => l.includes('[unique-sequence-prefix]'));
+  assert.equal(hits.length, 1, bad.out);
+  assert.match(hits[0], /^0141_new_feature\.sql:0 {2}\[unique-sequence-prefix\] sequence 0141 is also used by /);
+});
+
+test('lint-migrations: a brand-new pair is flagged on both files (the 0360 merge of 2026-11-27)', () => {
+  const r = lintFixture(['0359_a.sql', '0360_api_key_legacy.sql', '0360_projects_ensure_key.sql']);
+  assert.equal(r.code, 1);
+  const hits = r.out.split('\n').filter((l) => l.includes('[unique-sequence-prefix]'));
+  assert.deepEqual(
+    hits.map((l) => l.split(':')[0]),
+    ['0360_api_key_legacy.sql', '0360_projects_ensure_key.sql'],
+  );
+  assert.match(r.out, /2 violation\(s\)/);
 });
