@@ -96,13 +96,14 @@ export async function searchBastion(
   if (opts.includePolicies) {
     const { data: policies } = await listPolicies(d, viewer, { status: 'active' });
     for (const p of policies) {
-      const score = scoreMatch(query.q, p.title);
+      const title = String(p.title);
+      const score = scoreMatch(query.q, title);
       if (score === 0) continue;
       hits.push({
         entity_type: 'bastion.policy',
-        id: p.id,
-        title: p.title,
-        snippet: snippet(p.attestation_label ?? 'Policy linked from Beacon'),
+        id: String(p.id),
+        title,
+        snippet: snippet(String(p.attestation_label ?? 'Policy linked from Beacon')),
         score,
         url: SEARCH_URLS.policy(),
       });

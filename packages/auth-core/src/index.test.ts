@@ -206,6 +206,21 @@ describe('verifyApiKeyToken', () => {
     expect(warn).toHaveBeenCalledWith(expect.anything(), expect.stringMatching(/DEPRECATED/));
   });
 
+  // #372: dead keys used more recently than the live one must not fill the 3 verify slots.
+  it('verifies a live bbam_svc key behind 3 more recently used dead keys', async () => {
+    const past = new Date(Date.now() - 60_000);
+    const cs = [
+      candidate({ id: 'expired', expires_at: past }, { kind: 'service' }),
+      candidate({ id: 'rotated', rotated_at: past, rotation_grace_expires_at: past }, { kind: 'service' }),
+      candidate({ id: 'owner-off' }, { kind: 'service', is_active: false }),
+      candidate({ id: 'live' }, { kind: 'service' }),
+    ];
+    const verifyHash = vi.fn(async () => true);
+    const got = await verifyApiKeyToken('bbam_svc_live', { findCandidates: async () => cs, verifyHash }, { warn: vi.fn() });
+    expect(got?.apiKey.id).toBe('live');
+    expect(verifyHash).toHaveBeenCalledTimes(1);
+  });
+
   it('caps an unauthenticated bbam_svc probe at 3 Argon2 verifies even with 64 legacy keys', async () => {
     const cs = Array.from({ length: SVC_BUCKET_MAX }, (_, i) => candidate({ id: `s${i}` }, { kind: 'service' }));
     const verifyHash = vi.fn(async () => false);

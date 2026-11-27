@@ -1,16 +1,26 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import postgres from 'postgres';
-import { bastionExceptionSchema, bastionFixDraftSchema } from '@bigbluebam/shared';
+import {
+  bastionDriftAcknowledgeResponseSchema,
+  bastionDriftListResponseSchema,
+  bastionExceptionListResponseSchema,
+  bastionExceptionSchema,
+  bastionFixDraftListResponseSchema,
+  bastionFixDraftSchema,
+  bastionGapsResponseSchema,
+} from '@bigbluebam/shared';
 import { aggregateControl, type RunRow } from '../../src/engine/evaluator.js';
 import { orgTx, type EngineDeps } from '../../src/engine/context.js';
 import { GAP_RANK_LOCK_TIMEOUT_MS } from '../../src/engine/budgets.js';
 import { lockOrgGapRank, rankOrgGaps } from '../../src/engine/gaps.js';
 import { deliverToBam, type Deliverer, drainOutbox } from '../../src/engine/outbox.js';
 import { proposalReconcile, type DecisionDeps } from '../../src/services/decisions.service.js';
-import { decideException, expireExceptions, proposeException } from '../../src/services/exceptions.service.js';
-import { decideFix, listGaps, proposeFix } from '../../src/services/fixes.service.js';
+import { acknowledgeDrift, listDrift } from '../../src/services/drift.service.js';
+import { decideException, expireExceptions, listExceptions, proposeException } from '../../src/services/exceptions.service.js';
+import { decideFix, listFixDrafts, listGaps, proposeFix } from '../../src/services/fixes.service.js';
 import type { Viewer } from '../../src/services/types.js';
 import { clock, DATABASE_URL, makeDeps, seedOrg, wipeOrg } from './engine-harness.js';
+import { expectWire } from './wire.js';
 
 /**
  * M6 gates against a real migrated database and the real engine code (spec 2.4-2.6, 11.1, 11.2):
@@ -146,7 +156,10 @@ describe.skipIf(!DATABASE_URL)('M6 gaps, fixes, exceptions and drift (live datab
     const key = { entity_type: 'api_key', entity_id: '0b5e0000-0000-4000-8000-00000000b001' };
     await evaluate(deps, s.org, control, assertion, 'fail', [key], new Date());
     await orgTx(sql, s.org, (tx) => rankOrgGaps(tx, s.org, deps.now()));
-    expect((await listGaps(d, viewer(s.org, s.owner), { status: 'active', sort: 'risk', limit: 50 })).data.map((g) => g.gap_kind)).toContain('failing');
+    const openGaps = await listGaps(d, viewer(s.org, s.owner), { status: 'active', sort: 'risk', limit: 50 });
+    expect(openGaps.data.map((g) => g.gap_kind)).toContain('failing');
+    // #371: the Gaps page's response, as the route sends it, is the shared shape.
+    expectWire(bastionGapsResponseSchema, openGaps);
 
     const professor = s.extra[0]!;
     const until = new Date(Date.now() + 10 * DAY).toISOString().slice(0, 10);
@@ -192,6 +205,10 @@ describe.skipIf(!DATABASE_URL)('M6 gaps, fixes, exceptions and drift (live datab
     };
     expect(gaps.data.map((g) => g.gap_kind)).not.toContain('failing');
     expect(gaps.accepted_risks.map((r) => r.id)).toContain(proposed.id);
+    expectWire(bastionGapsResponseSchema, gaps);
+    const exceptions = await listExceptions(deps, viewer(s.org, s.owner), { limit: 50 });
+    expect(exceptions.data.map((e) => e.id)).toContain(proposed.id);
+    expectWire(bastionExceptionListResponseSchema, exceptions);
     const ctl = await outbox(s.org, `control:${control}`);
     expect(ctl.some((r) => r.kind === 'bam_task_comment' && /^Risk accepted until \d{4}-\d{2}-\d{2}: The Radio Relay key/.test((r.payload as { request: { body: string } }).request.body))).toBe(true);
     const close = await outbox(s.org, `exception:${proposed.id}`);
@@ -210,6 +227,12 @@ describe.skipIf(!DATABASE_URL)('M6 gaps, fixes, exceptions and drift (live datab
     const [drift] = await sql`SELECT reason, exception_id, from_status, to_status, task_status FROM bastion_drift_events
                                WHERE organization_id = ${s.org} AND exception_id IS NOT NULL`;
     expect(drift).toMatchObject({ reason: 'exception_expired', exception_id: proposed.id, from_status: 'pass_with_exception', to_status: 'fail', task_status: 'pending' });
+    // #371: the drift list and its acknowledgement, as the routes send them.
+    const drifts = await listDrift(deps, viewer(s.org, s.owner), { limit: 50 });
+    expect(drifts.data.map((x) => x.exception_id)).toContain(proposed.id);
+    expectWire(bastionDriftListResponseSchema, drifts);
+    const acked = await acknowledgeDrift(deps, viewer(s.org, s.owner), drifts.data[0]!.id, null);
+    expectWire(bastionDriftAcknowledgeResponseSchema, acked);
     const after = await outbox(s.org, `control:${control}`);
     const reopen = after.filter((r) => r.idempotency_key === `drift:exception:${proposed.id}:bam_task_upsert`);
     expect(reopen).toHaveLength(1);
@@ -268,6 +291,7 @@ describe.skipIf(!DATABASE_URL)('M6 gaps, fixes, exceptions and drift (live datab
     const draft = (await proposeFix(d, viewer(s.org, s.owner, 'api_key'), gap.id, null)).data;
     expect(draft).toMatchObject({ status: 'proposed', template: 'config_change' });
     expect(bastionFixDraftSchema.safeParse(wire(draft)).error).toBeUndefined();
+    expectWire(bastionFixDraftListResponseSchema, await listFixDrafts(d, viewer(s.org, s.owner), { limit: 50 }));
     await expect(proposeFix(d, viewer(s.org, s.owner), gap.id, null)).rejects.toMatchObject({ code: 'FIX_ALREADY_PROPOSED' });
     const [mirror] = await sql`SELECT proposed_action, owning_app, require_human_decider FROM agent_proposals WHERE id = ${draft.proposal_id}`;
     expect(mirror).toMatchObject({ proposed_action: 'bastion.fix.config_change', owning_app: 'bastion', require_human_decider: true });

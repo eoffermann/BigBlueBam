@@ -3,11 +3,23 @@
 
 import { and, desc, eq, inArray } from 'drizzle-orm';
 import type {
+  BastionAssertion,
+  BastionAssertionListResponse,
   BastionControlCreate,
+  BastionControlDetailResponse,
+  BastionControlLink,
   BastionControlListQuery,
+  BastionControlListRow,
+  BastionControlRequirementResponse,
+  BastionControlRequirementRow,
+  BastionControlRow,
+  BastionControlRowResponse,
+  BastionControlsResponse,
   BastionControlUpdate,
+  BastionPopulationView,
   BastionRequirementApplicabilityUpdate,
 } from '@bigbluebam/shared';
+import type { Served } from '../lib/served.js';
 import { runInOrgScope } from '../plugins/rls.js';
 import type { DbTx } from '../db/index.js';
 import {
@@ -59,7 +71,7 @@ async function orgLinks(tx: DbTx, orgId: string, controlIds?: string[]) {
 }
 
 /** Population view of a probe assertion's params, labels instead of raw ids (spec 6.2). */
-export function populationView(probeKey: string | null, params: unknown) {
+export function populationView(probeKey: string | null, params: unknown): BastionPopulationView | null {
   const entry = probeKey ? probeEntry(probeKey) : undefined;
   if (!entry?.population_kind) return null;
   const p = (params ?? {}) as Record<string, unknown>;
@@ -73,17 +85,48 @@ export function populationView(probeKey: string | null, params: unknown) {
   };
 }
 
-export function assertionView(a: typeof bastionAssertions.$inferSelect) {
+/**
+ * One assertion as the routes send it (bastionAssertionSchema, #371). The varchar columns hold the
+ * shared enums (CHECK constraints in migration 0274); drizzle types them as plain strings.
+ */
+export function assertionView(a: typeof bastionAssertions.$inferSelect): Served<BastionAssertion> {
   const entry = a.probe_key ? probeEntry(a.probe_key) : undefined;
   return {
     ...a,
+    kind: a.kind as BastionAssertion['kind'],
+    proposed_by: a.proposed_by as BastionAssertion['proposed_by'],
+    review_status: a.review_status as BastionAssertion['review_status'],
+    params: (a.params ?? {}) as Record<string, unknown>,
+    predicate: (a.predicate ?? {}) as Record<string, unknown>,
+    manual_evidence_spec: (a.manual_evidence_spec as BastionAssertion['manual_evidence_spec']) ?? null,
     probe_title: entry?.title ?? null,
     probe_inherited: entry?.inherited ?? false,
     population: populationView(a.probe_key, a.params),
   };
 }
 
-export async function listControls(viewer: Viewer, query: BastionControlListQuery) {
+/** A bastion_controls row as the routes send it: the enums typed, the generated search column left out. */
+function controlRowOut(c: typeof bastionControls.$inferSelect): Served<BastionControlRow> {
+  const { tsv: _tsv, ...row } = c;
+  return {
+    ...row,
+    lifecycle: c.lifecycle as BastionControlRow['lifecycle'],
+    status: c.status as BastionControlRow['status'],
+    coverage_kind: c.coverage_kind as BastionControlRow['coverage_kind'],
+  };
+}
+
+/** A live link with its framework, as GET /controls/:id lists it. */
+function linkOut(l: Awaited<ReturnType<typeof orgLinks>>[number]): Served<BastionControlLink> {
+  return {
+    ...l,
+    framework_status: l.framework_status as BastionControlLink['framework_status'],
+    applicability: l.applicability as BastionControlLink['applicability'],
+    source: l.source as BastionControlLink['source'],
+  };
+}
+
+export async function listControls(viewer: Viewer, query: BastionControlListQuery): Promise<Served<BastionControlsResponse>> {
   return runInOrgScope(viewer.org_id, async (tx) => {
     const frameworks = await liveFrameworks(tx, viewer.org_id);
     if (query.framework_id && !frameworks.some((f) => f.id === query.framework_id)) {
@@ -106,36 +149,32 @@ export async function listControls(viewer: Viewer, query: BastionControlListQuer
       const ca = assertions.filter((a) => a.control_id === c.id);
       const setup_state = setupStateFor({ lifecycle: c.lifecycle, links: cl, assertions: ca }, view);
       const tally = (s: string) => ca.filter((a) => a.review_status === s).length;
-      return {
-        control: c,
-        links: cl,
-        assertions: ca,
-        row: {
-          id: c.id,
-          control_key: c.control_key,
-          title: c.title,
-          plain_summary: c.plain_summary,
-          category: c.category,
-          risk_weight: c.risk_weight,
-          owner_user_id: c.owner_user_id,
-          lifecycle: c.lifecycle,
-          status: c.status,
-          status_reason: c.status_reason,
-          coverage_kind: c.coverage_kind,
-          setup_state,
-          derived_applicability: derivedApplicability(cl),
-          requirements: cl
-            .filter((l) => !l.removed_at && view.has(l.framework_id))
-            .map((l) => ({
-              id: l.id,
-              framework_id: l.framework_id,
-              framework_name: l.framework_name,
-              ref_code: l.ref_code,
-              applicability: l.applicability,
-            })),
-          assertion_counts: { proposed: tally('proposed'), confirmed: tally('confirmed'), rejected: tally('rejected') },
-        },
+      const row: Served<BastionControlListRow> = {
+        id: c.id,
+        control_key: c.control_key,
+        title: c.title,
+        plain_summary: c.plain_summary,
+        category: c.category,
+        risk_weight: c.risk_weight,
+        owner_user_id: c.owner_user_id,
+        lifecycle: c.lifecycle as BastionControlListRow['lifecycle'],
+        status: c.status as BastionControlListRow['status'],
+        status_reason: c.status_reason,
+        coverage_kind: c.coverage_kind as BastionControlListRow['coverage_kind'],
+        setup_state,
+        derived_applicability: derivedApplicability(cl),
+        requirements: cl
+          .filter((l) => !l.removed_at && view.has(l.framework_id))
+          .map((l) => ({
+            id: l.id,
+            framework_id: l.framework_id,
+            framework_name: l.framework_name,
+            ref_code: l.ref_code,
+            applicability: l.applicability as BastionControlListRow['derived_applicability'],
+          })),
+        assertion_counts: { proposed: tally('proposed'), confirmed: tally('confirmed'), rejected: tally('rejected') },
       };
+      return { control: c, links: cl, assertions: ca, row };
     });
 
     const counts = setupCounts(
@@ -154,7 +193,7 @@ export async function listControls(viewer: Viewer, query: BastionControlListQuer
   });
 }
 
-export async function getControl(viewer: Viewer, id: string) {
+export async function getControl(viewer: Viewer, id: string): Promise<Served<BastionControlDetailResponse>> {
   return runInOrgScope(viewer.org_id, async (tx) => {
     const c = await loadControl(tx, viewer.org_id, id);
     const links = await orgLinks(tx, viewer.org_id, [id]);
@@ -170,18 +209,17 @@ export async function getControl(viewer: Viewer, id: string) {
     );
     return {
       data: {
-        ...c,
-        tsv: undefined,
+        ...controlRowOut(c),
         setup_state,
         derived_applicability: derivedApplicability(links),
-        requirements: links.filter((l) => !l.removed_at),
+        requirements: links.filter((l) => !l.removed_at).map(linkOut),
         assertions: assertions.map(assertionView),
       },
     };
   });
 }
 
-export async function listControlAssertions(viewer: Viewer, id: string) {
+export async function listControlAssertions(viewer: Viewer, id: string): Promise<Served<BastionAssertionListResponse>> {
   return runInOrgScope(viewer.org_id, async (tx) => {
     await loadControl(tx, viewer.org_id, id);
     const rows = await tx
@@ -203,7 +241,7 @@ async function assertMember(tx: DbTx, orgId: string, userId: string) {
 }
 
 /** POST /controls: an org-authored custom control, `control_key = custom:<slug>` (spec 2.1). */
-export async function createControl(viewer: Viewer, body: BastionControlCreate) {
+export async function createControl(viewer: Viewer, body: BastionControlCreate): Promise<Served<BastionControlRowResponse>> {
   return runInOrgScope(viewer.org_id, async (tx) => {
     if (body.owner_user_id) await assertMember(tx, viewer.org_id, body.owner_user_id);
     const links: Array<{ framework_id: string; ref_code: string; title: string }> = [];
@@ -244,11 +282,11 @@ export async function createControl(viewer: Viewer, body: BastionControlCreate) 
       control_key: row.control_key,
       requirement_links: links.map((l) => l.ref_code),
     });
-    return { data: { ...row, tsv: undefined } };
+    return { data: controlRowOut(row) };
   });
 }
 
-export async function updateControl(viewer: Viewer, id: string, body: BastionControlUpdate) {
+export async function updateControl(viewer: Viewer, id: string, body: BastionControlUpdate): Promise<Served<BastionControlRowResponse>> {
   return runInOrgScope(viewer.org_id, async (tx) => {
     await loadControl(tx, viewer.org_id, id);
     if (body.owner_user_id) await assertMember(tx, viewer.org_id, body.owner_user_id);
@@ -258,12 +296,12 @@ export async function updateControl(viewer: Viewer, id: string, body: BastionCon
       .where(and(eq(bastionControls.id, id), eq(bastionControls.organization_id, viewer.org_id)))
       .returning(), 'row');
     await audit(tx, viewer, 'control.update', { type: 'control', id }, { fields: Object.keys(body) });
-    return { data: { ...row, tsv: undefined } };
+    return { data: controlRowOut(row) };
   });
 }
 
 /** PATCH /control-requirements/:id: one link's applicability decision (audited). */
-export async function decideRequirementLink(viewer: Viewer, id: string, body: BastionRequirementApplicabilityUpdate) {
+export async function decideRequirementLink(viewer: Viewer, id: string, body: BastionRequirementApplicabilityUpdate): Promise<Served<BastionControlRequirementResponse>> {
   return runInOrgScope(viewer.org_id, async (tx) => {
     const [row] = await tx
       .update(bastionControlRequirements)
@@ -280,6 +318,12 @@ export async function decideRequirementLink(viewer: Viewer, id: string, body: Ba
       ref_code: row.ref_code,
       applicability: row.applicability,
     });
-    return { data: row };
+    return {
+      data: {
+        ...row,
+        applicability: row.applicability as BastionControlRequirementRow['applicability'],
+        source: row.source as BastionControlRequirementRow['source'],
+      },
+    };
   });
 }

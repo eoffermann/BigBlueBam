@@ -95,7 +95,12 @@ const TEMPLATES: Record<string, KanbanTemplate> = {
   },
 };
 
-export async function createProject(orgId: string, data: CreateProjectInput, creatorUserId: string) {
+export async function createProject(
+  orgId: string,
+  data: CreateProjectInput,
+  creatorUserId: string,
+  extra: { ensure_key?: string } = {},
+) {
   const slug = data.slug ?? slugify(data.name);
   const template = data.template ?? 'kanban_standard';
 
@@ -112,6 +117,7 @@ export async function createProject(orgId: string, data: CreateProjectInput, cre
         task_id_prefix: data.task_id_prefix,
         default_sprint_duration_days: data.default_sprint_duration_days ?? 14,
         created_by: creatorUserId,
+        ensure_key: extra.ensure_key ?? null,
       })
       .returning();
 
@@ -195,29 +201,63 @@ async function projectBySlug(orgId: string, slug: string) {
   return row ?? null;
 }
 
+async function projectByEnsureKey(orgId: string, ensureKey: string) {
+  const [row] = await db
+    .select()
+    .from(projects)
+    .where(and(eq(projects.org_id, orgId), eq(projects.ensure_key, ensureKey)))
+    .limit(1);
+  return row ?? null;
+}
+
+const SLUG_MAX = 100;
+const ENSURE_SLUG_ATTEMPTS = 50;
+
+/** `base`, then `base-2`, `base-3`, ... trimmed so the suffixed slug still fits the column. */
+export function suffixedSlug(base: string, n: number): string {
+  if (n <= 1) return base.slice(0, SLUG_MAX);
+  const suffix = `-${n}`;
+  return `${base.slice(0, SLUG_MAX - suffix.length).replace(/-+$/, '')}${suffix}`;
+}
+
 /**
- * Create-or-get a project by (org_id, slug) for server-to-server callers (#364, the worker's
- * Slack import). A new project goes through createProject, so the creator gets the admin
- * membership and the template's phases and task states exactly as from POST /projects. A slug
- * the org already holds answers that project with created=false; a concurrent create that loses
- * the unique race on projects_org_slug_idx re-reads the winner.
+ * Create-or-get a project for server-to-server callers (#364, the worker's Slack import).
+ *
+ * Idempotent on (org_id, ensure_key), never on the slug (#373). The key belongs to the caller's
+ * own operation (the Slack import uses its import id), so a replay answers the project that same
+ * operation created, while a slug some other project already holds (a user's project, an archived
+ * one, another import's) is never handed back: the new project takes the first free suffixed slug
+ * instead (engineering-2, engineering-3, ...). A new project goes through createProject, so the
+ * creator gets the admin membership and the template's phases and task states exactly as from
+ * POST /projects. Concurrent creates with one key converge on the winner of the unique race on
+ * projects_org_ensure_key_idx.
  */
 export async function ensureProject(
   orgId: string,
-  data: CreateProjectInput & { slug: string },
+  data: CreateProjectInput & { slug: string; ensure_key: string },
   creatorUserId: string,
 ): Promise<{ project: NonNullable<Awaited<ReturnType<typeof projectBySlug>>>; created: boolean }> {
-  const existing = await projectBySlug(orgId, data.slug);
-  if (existing) return { project: existing, created: false };
-  try {
-    const project = await createProject(orgId, data, creatorUserId);
-    return { project, created: true };
-  } catch (err) {
-    if (!isUniqueViolation(err)) throw err;
-    const winner = await projectBySlug(orgId, data.slug);
-    if (!winner) throw err;
-    return { project: winner, created: false };
+  const { ensure_key, ...input } = data;
+  const mine = await projectByEnsureKey(orgId, ensure_key);
+  if (mine) return { project: mine, created: false };
+
+  for (let n = 1; n <= ENSURE_SLUG_ATTEMPTS; n++) {
+    const slug = suffixedSlug(input.slug, n);
+    if (await projectBySlug(orgId, slug)) continue;
+    try {
+      const project = await createProject(orgId, { ...input, slug }, creatorUserId, { ensure_key });
+      return { project, created: true };
+    } catch (err) {
+      if (!isUniqueViolation(err)) throw err;
+      // Lost a race: either a concurrent ensure with the same key (answer its project) or a
+      // concurrent create of this slug (try the next suffix).
+      const winner = await projectByEnsureKey(orgId, ensure_key);
+      if (winner) return { project: winner, created: false };
+    }
   }
+  throw new Error(
+    `ensureProject: no free slug for "${input.slug}" after ${ENSURE_SLUG_ATTEMPTS} attempts in org ${orgId}`,
+  );
 }
 
 export async function listProjects(

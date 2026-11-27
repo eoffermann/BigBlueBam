@@ -127,6 +127,7 @@ if (IN_CI && !usable) {
     name: 'Castaway Rescue',
     slug,
     task_id_prefix: 'RESCUE',
+    ensure_key: `slack-import:imp-${tag}`,
   };
 
   it('creates the project with the creator membership and default phases and states', async () => {
@@ -146,7 +147,7 @@ if (IN_CI && !usable) {
     expect(states).toHaveLength(5);
   });
 
-  it('is idempotent on (org_id, slug): a replay answers the same project and creates nothing', async () => {
+  it('is idempotent on (org_id, ensure_key): a replay answers the same project and creates nothing', async () => {
     const res = await ensure({ ...body, name: 'Castaway Rescue (replay)' });
     expect(res.statusCode, res.body).toBe(200);
     expect(res.json().created).toBe(false);
@@ -158,9 +159,44 @@ if (IN_CI && !usable) {
     expect(count!.n).toBe(5);
   });
 
-  it('concurrent creates of one slug yield one project', async () => {
+  it('never answers a project the caller did not create, even when it holds the slug (#373)', async () => {
+    // A project the org already has under the slug a new import derives (created through the
+    // normal UI path, so no ensure_key).
+    const taken = `engineering-${tag}`;
+    const [foreign] = await admin`INSERT INTO projects (org_id, name, slug, task_id_prefix)
+      VALUES (${orgA}, 'Professor Lab Notes', ${taken}, 'LAB') RETURNING id`;
+
+    const first = await ensure({ ...body, slug: taken, name: 'Engineering', ensure_key: `slack-import:eng1-${tag}` });
+    expect(first.statusCode, first.body).toBe(201);
+    expect(first.json().data.id).not.toBe(foreign!.id);
+    expect(first.json().data.slug).toBe(`${taken}-2`);
+
+    // A second, unrelated import asking for the same slug gets its own project too.
+    const second = await ensure({ ...body, slug: taken, name: 'Engineering', ensure_key: `slack-import:eng2-${tag}` });
+    expect(second.statusCode, second.body).toBe(201);
+    expect(second.json().data.slug).toBe(`${taken}-3`);
+
+    // The first import's retry answers the first import's project.
+    const retry = await ensure({ ...body, slug: taken, name: 'Engineering', ensure_key: `slack-import:eng1-${tag}` });
+    expect(retry.statusCode).toBe(200);
+    expect(retry.json().data.id).toBe(first.json().data.id);
+
+    const [foreignAfter] = await admin`SELECT name FROM projects WHERE id = ${foreign!.id}`;
+    expect(foreignAfter!.name).toBe('Professor Lab Notes');
+  });
+
+  it('requires an ensure_key', async () => {
+    const { ensure_key: _omit, ...noKey } = body;
+    const res = await ensure({ ...noKey, slug: `nokey-${tag}` });
+    expect(res.statusCode).toBe(400);
+  });
+
+  it('concurrent creates with one ensure_key yield one project', async () => {
     const raceSlug = `luau-race-${tag}`;
-    const results = await Promise.all([1, 2, 3].map(() => ensure({ ...body, slug: raceSlug, name: 'Howell Luau RSVP' })));
+    const raceKey = `slack-import:race-${tag}`;
+    const results = await Promise.all(
+      [1, 2, 3].map(() => ensure({ ...body, slug: raceSlug, name: 'Howell Luau RSVP', ensure_key: raceKey })),
+    );
     const ids = new Set(results.map((r: { json: () => { data: { id: string } } }) => r.json().data.id));
     expect(results.map((r: { statusCode: number }) => r.statusCode).sort()).toEqual([200, 200, 201]);
     expect(ids.size).toBe(1);

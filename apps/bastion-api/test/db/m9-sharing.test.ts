@@ -11,6 +11,21 @@ import {
   BASTION_ROOM_PASSCODE_MAX_FAILURES,
   BASTION_ROOM_REQUESTS_PER_HOUR,
   BASTION_ROOM_TOKEN_MISSES,
+  bastionAccessLogResponseSchema,
+  bastionAuditLogResponseSchema,
+  bastionAuditorRequestListResponseSchema,
+  bastionAuditorRequestResponseSchema,
+  bastionAuditorRoomListResponseSchema,
+  bastionAuditorRoomResponseSchema,
+  bastionCreatedAuditorRoomResponseSchema,
+  bastionDeliveryProblemListResponseSchema,
+  bastionExportCreateResponseSchema,
+  bastionExportListResponseSchema,
+  bastionPublicRoomRequestResponseSchema,
+  bastionRoomControlDetailResponseSchema,
+  bastionRoomEvidenceDetailResponseSchema,
+  bastionRoomOverviewResponseSchema,
+  bastionSettingsResponseSchema,
 } from '@bigbluebam/shared';
 import type { EngineDeps } from '../../src/engine/context.js';
 import { verifyCommitments } from '../../src/engine/commitments.js';
@@ -18,6 +33,7 @@ import { mirrorCopyTimeoutMs, mirrorObjects, objectSweep, restoreObjectsFromBack
 import { storeBuffer } from '../../src/engine/evidence-store.js';
 import { sha256Hex } from '../../src/lib/ledger-canonical.js';
 import { clock, DATABASE_URL, fakeBucket, type FakeBucket, makeDeps, seedOrg, type SeededOrg, wipeOrg } from './engine-harness.js';
+import { expectWire } from './wire.js';
 
 /**
  * M9 gates against a real migrated database and the real engine and service code (spec 5.2, 7.2,
@@ -157,11 +173,15 @@ describe.skipIf(!DATABASE_URL)('M9 sharing, packets, sweep and mirror (live data
     }, false);
     const token = created.data.token;
     expect(created.data.link).toBe(`/bastion/room#${token}`);
+    // #371: every room response, as the route sends it, is the shared shape the SPA is typed from.
+    expectWire(bastionCreatedAuditorRoomResponseSchema, created);
     const stored = (await sql`SELECT * FROM bastion_auditor_rooms WHERE id = ${created.data.id as string}`)[0]!;
     expect(stored.token_sha256).toBe(sha256Hex(token));
     expect(JSON.stringify(stored)).not.toContain(token);
     // The list never carries a token.
-    expect(JSON.stringify(await sharing.listRooms(d.sharing, viewerOf(s), {}))).not.toContain(token);
+    const listedRooms = await sharing.listRooms(d.sharing, viewerOf(s), {});
+    expect(JSON.stringify(listedRooms)).not.toContain(token);
+    expectWire(bastionAuditorRoomListResponseSchema, listedRooms);
     // auditor_room.created is in the outbox.
     expect((await sql`SELECT count(*)::int AS n FROM bastion_outbox WHERE organization_id = ${s.org} AND payload->>'event_type' = 'auditor_room.created'`)[0]!.n).toBe(1);
 
@@ -169,8 +189,13 @@ describe.skipIf(!DATABASE_URL)('M9 sharing, packets, sweep and mirror (live data
     expect(overview.data.room.label).toBe('Lagoon & Reef CPAs, Type I readiness');
     expect(overview.data.controls).toHaveLength(2);
     expect(overview.data.controls.every((c) => typeof c.state_words === 'string')).toBe(true);
+    expectWire(bastionRoomOverviewResponseSchema, overview);
     const control = await room.publicRoomControl(d.room, ctx(token), s.controls[0]!);
     expect(control.data.control.id).toBe(s.controls[0]);
+    expectWire(bastionRoomControlDetailResponseSchema, control);
+    const accessLog = await sharing.roomAccessLog(d.sharing, viewerOf(s), created.data.id as string, { limit: 50 });
+    expect(accessLog.data.map((r) => r.view_kind)).toEqual(['control', 'overview']);
+    expectWire(bastionAccessLogResponseSchema, accessLog);
     const log = await sql`SELECT view_kind, ip_hash FROM bastion_auditor_access_log WHERE organization_id = ${s.org} ORDER BY accessed_at`;
     expect(log.map((r) => r.view_kind)).toEqual(['overview', 'control']);
     expect(log[0]!.ip_hash).not.toContain('203.0.113.7');
@@ -197,6 +222,7 @@ describe.skipIf(!DATABASE_URL)('M9 sharing, packets, sweep and mirror (live data
     // Revoked.
     const revoked = await sharing.revokeRoom(d.sharing, viewerOf(s), created.data.id as string);
     expect(revoked.data.state).toBe('revoked');
+    expectWire(bastionAuditorRoomResponseSchema, revoked);
     await expect(room.publicRoomOverview(d.room, ctx(token))).rejects.toThrow(room.ROOM_GONE);
     expect((await sql`SELECT count(*)::int AS n FROM bastion_outbox WHERE organization_id = ${s.org} AND payload->>'event_type' = 'auditor_room.revoked'`)[0]!.n).toBe(1);
   });
@@ -227,6 +253,7 @@ describe.skipIf(!DATABASE_URL)('M9 sharing, packets, sweep and mirror (live data
     expect((locked[0]!.payload as { payload: { reason: string } }).payload.reason).toBe('locked');
     const unlocked = await sharing.unlockRoom(d.sharing, viewerOf(s), created.data.id as string);
     expect(unlocked.data.state).toBe('active');
+    expectWire(bastionAuditorRoomResponseSchema, unlocked);
     await expect(room.publicRoomOverview(d.room, ctx(token, { passcode: '482913' }))).resolves.toBeDefined();
   });
 
@@ -344,21 +371,38 @@ describe.skipIf(!DATABASE_URL)('M9 sharing, packets, sweep and mirror (live data
     const control = await room.publicRoomControl(d.room, ctx(token), s.controls[0]!);
     const titles = control.data.files.map((f) => f.title).sort();
     expect(titles).toEqual(['Background checks (restricted, shared)', 'Laptop list (standard)']);
-    await expect(room.publicRoomEvidence(d.room, ctx(token), open)).resolves.toBeDefined();
+    const openDetail = await room.publicRoomEvidence(d.room, ctx(token), open);
+    expect(openDetail.data).toMatchObject({ kind: 'statement', title: 'Laptop list (standard)' });
+    expectWire(bastionRoomEvidenceDetailResponseSchema, openDetail);
     await expect(room.publicRoomEvidence(d.room, ctx(token), shared)).resolves.toBeDefined();
     await expect(room.publicRoomEvidence(d.room, ctx(token), hidden)).rejects.toThrow(/not part of this room/);
     // Preview shows the shared restricted item by title.
     const preview = await sharing.previewRoom(d.sharing, viewerOf(s), created.data.id as string);
     expect(preview.data.restricted_items.map((r) => r.title)).toEqual(['Background checks (restricted, shared)']);
+    expectWire(bastionRoomOverviewResponseSchema, preview);
     // Questions.
     for (let i = 0; i < BASTION_ROOM_REQUESTS_PER_HOUR; i++) {
-      await room.publicRoomRequest(d.room, ctx(token), { requester_name: 'Lagoon & Reef CPAs', body: `Question ${i}` });
+      const asked = await room.publicRoomRequest(d.room, ctx(token), { requester_name: 'Lagoon & Reef CPAs', body: `Question ${i}` });
+      if (i === 0) expectWire(bastionPublicRoomRequestResponseSchema, asked);
     }
     await expect(room.publicRoomRequest(d.room, ctx(token), { requester_name: 'Lagoon & Reef CPAs', body: 'One too many' })).rejects.toThrow(/most questions/);
     const reqs = await sharing.listRequests(d.sharing, viewerOf(s), { room_id: created.data.id as string });
     expect(reqs.data).toHaveLength(BASTION_ROOM_REQUESTS_PER_HOUR);
+    expectWire(bastionAuditorRequestListResponseSchema, reqs);
     const answered = await sharing.updateRequest(d.sharing, viewerOf(s), reqs.data[0]!.id as string, { status: 'answered', answer_note: 'See the report.' });
     expect(answered.data!.status).toBe('answered');
+    // #371: the update answers with the row the list shows (it used to drop room_label and the names).
+    expect(answered.data).toMatchObject({ room_label: 'Allowlist', answer_note: 'See the report.', answered_by_name: expect.any(String) });
+    expectWire(bastionAuditorRequestResponseSchema, answered);
+
+    // Settings, delivery problems and the audit log of the same org.
+    const settingsMod = await import('../../src/services/settings.service.js');
+    const facts = { offsite_backup_configured: false, storage_ok: true };
+    expectWire(bastionSettingsResponseSchema, await settingsMod.getSettings(d.sharing.engine, viewerOf(s), facts));
+    expectWire(bastionDeliveryProblemListResponseSchema, await settingsMod.listDeliveryProblems(d.sharing.engine, viewerOf(s), { limit: 50 }));
+    const auditLog = await settingsMod.listAudit(d.sharing.engine, viewerOf(s), { limit: 50 });
+    expect(auditLog.data.length).toBeGreaterThan(0);
+    expectWire(bastionAuditLogResponseSchema, auditLog);
     await sharing.revokeRoom(d.sharing, viewerOf(s), created.data.id as string);
   });
 
@@ -453,6 +497,9 @@ describe.skipIf(!DATABASE_URL)('M9 sharing, packets, sweep and mirror (live data
     const d = deps(engine);
     const today = new Date().toISOString().slice(0, 10);
     const created = await sharing.createExport(d.sharing, viewerOf(s), { framework_id: s.framework, period_start: '2026-01-01', period_end: today, include_restricted: false }, false);
+    // #371: the create answers with the row the list shows (stage, size_bytes, error and the requester's name included).
+    expect(created.data).toMatchObject({ status: 'queued', stage: null, size_bytes: null, error: null, queued_for_worker: true, requested_by_name: expect.any(String) });
+    expectWire(bastionExportCreateResponseSchema, created);
     const claim = await packet.exportPacketEngine(engine, { action: 'claim', organization_id: s.org, packet_id: created.data.id as string, claimant: 'w1' });
     expect('claimed' in claim && claim.claimed).toBe(true);
     const contents = 'contents' in claim ? claim.contents! : null;
@@ -479,6 +526,9 @@ describe.skipIf(!DATABASE_URL)('M9 sharing, packets, sweep and mirror (live data
     expect((await sql`SELECT 1 FROM bastion_object_intents WHERE object_key = ${attemptKey}`).length).toBe(0);
     const listed = await sharing.listExports(d.sharing, viewerOf(s), { limit: 25 });
     expect(listed.data[0]).toMatchObject({ status: 'succeeded', stage_words: 'Ready to download' });
+    // #371: size_bytes is bigint in the table and a number on the wire.
+    expect(listed.data[0]!.size_bytes).toBe(10);
+    expectWire(bastionExportListResponseSchema, listed);
 
     // A worker restart mid-build (#326): the dead attempt's heartbeat is past the lease but inside the
     // reap grace. The reaper leaves it alone and the stalled re-run (a new claimant) takes it over.

@@ -110,6 +110,31 @@ describe('processBanterScheduledPostJob — happy path', () => {
   });
 });
 
+describe('processBanterScheduledPostJob — thread parent deleted (#368)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('marks the row failed instead of retrying when the reference trigger answers 23503', async () => {
+    const fk = Object.assign(new Error('violates the banter_messages reference on "thread_parent_id"'), {
+      code: '23503',
+    });
+    const execute = vi.fn()
+      .mockResolvedValueOnce([{ ...SCHEDULED_ROW, thread_parent_id: 'gone-parent' }])
+      .mockResolvedValueOnce([
+        { channel_role: 'member', user_role: 'member', is_superuser: false, user_org_id: 'org-1', channel_org_id: 'org-1' },
+      ])
+      .mockRejectedValueOnce(fk)
+      .mockResolvedValueOnce([]);
+    vi.mocked(getDb).mockReturnValue({ execute } as any);
+
+    await expect(processBanterScheduledPostJob(makeJob('sched-1'), makeRedis(), mockLogger)).resolves.toBeUndefined();
+    expect(execute).toHaveBeenCalledTimes(4);
+    expect(JSON.stringify(execute.mock.calls[3]![0])).toContain('thread_parent_deleted');
+    expect(publishBoltEvent).not.toHaveBeenCalled();
+  });
+});
+
 describe('processBanterScheduledPostJob — membership revoked', () => {
   beforeEach(() => {
     vi.clearAllMocks();

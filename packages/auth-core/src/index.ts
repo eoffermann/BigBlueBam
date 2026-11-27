@@ -82,6 +82,20 @@ export {
   type ProjectRestrictedUser,
 } from './key-project.js';
 
+// The satellites' Fastify auth plugin (#369): session, API key, org context, impersonation.
+export {
+  createSatelliteAuth,
+  requireAuthenticated,
+  sqlSatelliteAuthStore,
+  type SatelliteAuth,
+  type SatelliteAuthOptions,
+  type SatelliteAuthStore,
+  type SatelliteAuthUser,
+  type SatelliteSessionRow,
+  type SatelliteUserRow,
+  type SqlSatelliteAuthStoreDeps,
+} from './satellite-plugin.js';
+
 // ─────────────────────────────────────────────────────────────────────
 // Scopes and roles
 // ─────────────────────────────────────────────────────────────────────
@@ -185,6 +199,8 @@ export interface ApiKeyStore {
   /**
    * LEGACY keys (minted before api_keys.key_lookup existed, so with no lookup id) whose 8-char
    * key_prefix matches, joined to their owner, most recently used first, at most `limit` (<= 64).
+   * Only keys that could authenticate (isApiKeyUsable, owner active) count toward `limit` (#372):
+   * otherwise dead rows used more recently than a live key fill the verify cap and lock it out.
    */
   findCandidates(prefix: string, limit: number): Promise<ApiKeyCandidate[]>;
   /**
@@ -239,7 +255,9 @@ export function apiKeyLookup(token: string): string {
  *    candidates signals a forced-Argon2 attempt (P2-11) and the lookup collapses to the first.
  *    The 'bbam_svc' prefix is shared by every legacy service-account key (#40); that bucket is
  *    read most recently used first and only its first 3 are verified, and overflow is logged as
- *    a deprecation: rotate legacy service-account keys so they gain a lookup id.
+ *    a deprecation: rotate legacy service-account keys so they gain a lookup id. Dead keys
+ *    (expired, rotated past grace, owner inactive) never take one of those 3 slots (#372): the
+ *    store filters them before the limit, and they are re-ordered behind live ones here too.
  *  - A legacy key that authenticates is given its lookup id on the spot (store.adoptLookup), so
  *    active legacy keys leave the prefix bucket on first use, with no rotation needed.
  *  - P2-10: the hash verify always runs before the expiry check, so expired and wrong keys cost
@@ -277,11 +295,16 @@ export async function verifyApiKeyToken(
     if (hit) return (await check(hit)) ? hit : null;
   }
 
-  const candidates = await store.findCandidates(
+  const fetched = await store.findCandidates(
     prefix,
     isSvcBucket ? MAX_VERIFY_CANDIDATES + 1 : PREFIX_FETCH_LIMIT,
   );
-  if (candidates.length === 0) return null;
+  if (fetched.length === 0) return null;
+  // #372: the SQL store already drops dead keys before its limit; this keeps any store that
+  // does not from spending the verify cap on keys that cannot authenticate.
+  const at = now();
+  const live = (c: ApiKeyCandidate) => isApiKeyUsable(c.apiKey, at) && c.user.is_active;
+  const candidates = [...fetched.filter(live), ...fetched.filter((c) => !live(c))];
 
   let verifyCandidates = candidates;
   if (isSvcBucket) {

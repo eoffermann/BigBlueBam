@@ -4,11 +4,24 @@
 import { and, desc, eq, inArray, isNull, ne } from 'drizzle-orm';
 import type {
   BastionAdoptFramework,
+  BastionAdoptFrameworkResponse,
+  BastionApplicabilityResponse,
+  BastionArchiveFrameworkResponse,
   BastionBulkApplicability,
+  BastionFrameworkListResponse,
+  BastionFrameworkResponse,
+  BastionFrameworkRow,
+  BastionFrameworkRowResponse,
   BastionFrameworkUpdate,
+  BastionFrameworkView,
   BastionNotApplicableSuggestion,
   BastionNotApplicableSuggestions,
+  BastionRequirementLink,
+  BastionRequirementsResponse,
+  BastionTemplateListResponse,
+  BastionTemplateSummary,
 } from '@bigbluebam/shared';
+import type { Served } from '../lib/served.js';
 import { runInOrgScope } from '../plugins/rls.js';
 import type { DbTx } from '../db/index.js';
 import {
@@ -34,7 +47,7 @@ import { ensureSettings, liveFrameworks, loadFramework } from './shared.js';
 import type { Viewer } from './types.js';
 
 /** GET /library/templates: the built-in templates, and whether this org has adopted each. */
-export async function listTemplates(viewer: Viewer) {
+export async function listTemplates(viewer: Viewer): Promise<BastionTemplateListResponse> {
   return runInOrgScope(viewer.org_id, async (tx) => {
     const adopted = await liveFrameworks(tx, viewer.org_id);
     return {
@@ -43,7 +56,12 @@ export async function listTemplates(viewer: Viewer) {
   });
 }
 
-function templateSummary(t: FrameworkTemplate, adoptedFrameworkId: string | null) {
+/** A bastion_frameworks row as the routes send it (status is the shared enum, CHECK in 0274). */
+export function frameworkRowOut(f: typeof bastionFrameworks.$inferSelect): Served<BastionFrameworkRow> {
+  return { ...f, status: f.status as BastionFrameworkRow['status'] };
+}
+
+function templateSummary(t: FrameworkTemplate, adoptedFrameworkId: string | null): BastionTemplateSummary {
   return {
     template_key: t.template_key,
     template_version: t.template_version,
@@ -83,14 +101,14 @@ async function loadSetupInputs(tx: DbTx, orgId: string) {
   }));
 }
 
-async function frameworkView(tx: DbTx, orgId: string, f: typeof bastionFrameworks.$inferSelect) {
+async function frameworkView(tx: DbTx, orgId: string, f: typeof bastionFrameworks.$inferSelect): Promise<Served<BastionFrameworkView>> {
   const template = frameworkTemplate(f.template_key);
   const inputs = await loadSetupInputs(tx, orgId);
   const counts = setupCounts(inputs, new Set([f.id]));
   let soa = null;
   if (template?.is_iso) soa = soaCompleteness(template, await soaLinks(tx, orgId, f.id));
   return {
-    ...f,
+    ...frameworkRowOut(f),
     is_iso: template?.is_iso ?? false,
     requirement_count: template?.requirements.length ?? 0,
     setup: counts,
@@ -98,7 +116,7 @@ async function frameworkView(tx: DbTx, orgId: string, f: typeof bastionFramework
   };
 }
 
-export async function listFrameworks(viewer: Viewer, opts: { include_archived?: boolean } = {}) {
+export async function listFrameworks(viewer: Viewer, opts: { include_archived?: boolean } = {}): Promise<Served<BastionFrameworkListResponse>> {
   return runInOrgScope(viewer.org_id, async (tx) => {
     const rows = await tx
       .select()
@@ -115,7 +133,7 @@ export async function listFrameworks(viewer: Viewer, opts: { include_archived?: 
   });
 }
 
-export async function getFramework(viewer: Viewer, id: string) {
+export async function getFramework(viewer: Viewer, id: string): Promise<Served<BastionFrameworkResponse>> {
   return runInOrgScope(viewer.org_id, async (tx) => {
     const f = await loadFramework(tx, viewer.org_id, id);
     return { data: await frameworkView(tx, viewer.org_id, f) };
@@ -127,7 +145,7 @@ export async function getFramework(viewer: Viewer, id: string) {
  * control comes back to life), and always creates the requirement links for this framework. The
  * framework stays `compiling` until a compile succeeds.
  */
-export async function adoptFramework(viewer: Viewer, body: BastionAdoptFramework) {
+export async function adoptFramework(viewer: Viewer, body: BastionAdoptFramework): Promise<Served<BastionAdoptFrameworkResponse>> {
   const template = requireTemplate(body.template_key);
   return runInOrgScope(viewer.org_id, async (tx) => {
     const live = await liveFrameworks(tx, viewer.org_id);
@@ -205,21 +223,24 @@ export async function adoptFramework(viewer: Viewer, body: BastionAdoptFramework
       template_key: template.template_key,
       ...summary,
     });
-    return { data: { ...framework, ...summary } };
+    return { data: { ...frameworkRowOut(framework), ...summary } };
   });
 }
 
-export async function updateFramework(viewer: Viewer, id: string, body: BastionFrameworkUpdate) {
+export async function updateFramework(viewer: Viewer, id: string, body: BastionFrameworkUpdate): Promise<Served<BastionFrameworkRowResponse>> {
   return runInOrgScope(viewer.org_id, async (tx) => {
     const f = await loadFramework(tx, viewer.org_id, id);
     if (f.status === 'archived') throw new ConflictError('This framework is archived.', 'FRAMEWORK_ARCHIVED');
-    const [row] = await tx
-      .update(bastionFrameworks)
-      .set({ ...body })
-      .where(and(eq(bastionFrameworks.id, id), eq(bastionFrameworks.organization_id, viewer.org_id)))
-      .returning();
+    const row = one(
+      await tx
+        .update(bastionFrameworks)
+        .set({ ...body })
+        .where(and(eq(bastionFrameworks.id, id), eq(bastionFrameworks.organization_id, viewer.org_id)))
+        .returning(),
+      'framework',
+    );
     await audit(tx, viewer, 'framework.update', { type: 'framework', id }, { fields: Object.keys(body) });
-    return { data: row };
+    return { data: frameworkRowOut(row) };
   });
 }
 
@@ -227,7 +248,7 @@ export async function updateFramework(viewer: Viewer, id: string, body: BastionF
  * POST /frameworks/:id/archive. Retires every control whose only live links were to this
  * framework (spec 2.1); retired controls keep their history and leave every number.
  */
-export async function archiveFramework(viewer: Viewer, id: string) {
+export async function archiveFramework(viewer: Viewer, id: string): Promise<Served<BastionArchiveFrameworkResponse>> {
   return runInOrgScope(viewer.org_id, async (tx) => {
     const f = await loadFramework(tx, viewer.org_id, id);
     if (f.status === 'archived') throw new ConflictError('This framework is already archived.', 'FRAMEWORK_ARCHIVED');
@@ -250,7 +271,7 @@ export async function archiveFramework(viewer: Viewer, id: string) {
       .where(and(eq(bastionFrameworks.id, id), eq(bastionFrameworks.organization_id, viewer.org_id)))
       .returning(), 'row');
     await audit(tx, viewer, 'framework.archive', { type: 'framework', id }, { controls_retired: retire.length });
-    return { data: { ...row, controls_retired: retire.length } };
+    return { data: { ...frameworkRowOut(row), controls_retired: retire.length } };
   });
 }
 
@@ -277,7 +298,7 @@ export async function soaLinks(tx: DbTx, orgId: string, frameworkId: string): Pr
 }
 
 /** GET /frameworks/:id/requirements: every template requirement with its links and decisions. */
-export async function listRequirements(viewer: Viewer, id: string) {
+export async function listRequirements(viewer: Viewer, id: string): Promise<Served<BastionRequirementsResponse>> {
   return runInOrgScope(viewer.org_id, async (tx) => {
     const f = await loadFramework(tx, viewer.org_id, id);
     const template = requireTemplate(f.template_key);
@@ -307,16 +328,22 @@ export async function listRequirements(viewer: Viewer, id: string) {
       const ls = links.filter((l) => l.ref_code === req.ref_code);
       const decided = ls.length > 0 && ls.every((l) => l.decided_at);
       const applicability = !decided
-        ? 'undecided'
+        ? ('undecided' as const)
         : ls.some((l) => l.applicability === 'applicable')
-          ? 'applicable'
-          : 'not_applicable';
+          ? ('applicable' as const)
+          : ('not_applicable' as const);
       return {
         ref_code: req.ref_code,
         title: req.title,
         plain_summary: req.plain_summary,
         applicability,
-        links: ls,
+        links: ls.map(
+          (l): Served<BastionRequirementLink> => ({
+            ...l,
+            applicability: l.applicability as BastionRequirementLink['applicability'],
+            source: l.source as BastionRequirementLink['source'],
+          }),
+        ),
       };
     });
     const soa = template.is_iso ? soaCompleteness(template, await soaLinks(tx, viewer.org_id, id)) : null;
@@ -357,10 +384,11 @@ export async function listNotApplicableSuggestions(viewer: Viewer, id: string): 
   for (const n of entriesOf(run.drop_reasons)) {
     const req = undecided.get(n.ref_code);
     if (!req) continue; // decided already, or not a requirement of this framework
-    const title = req.links.find((l) => l.control_key === n.control_key)?.control_title ?? null;
+    const linked = req.links.find((l) => l.control_key === n.control_key);
+    const title = linked ? String(linked.control_title) : null;
     const cur = byRef.get(n.ref_code);
     if (cur) cur.controls.push({ control_key: n.control_key, control_title: title, reason: n.reason });
-    else byRef.set(n.ref_code, { ref_code: n.ref_code, title: req.title, suggested_reason: n.reason, controls: [{ control_key: n.control_key, control_title: title, reason: n.reason }] });
+    else byRef.set(n.ref_code, { ref_code: n.ref_code, title: String(req.title), suggested_reason: n.reason, controls: [{ control_key: n.control_key, control_title: title, reason: n.reason }] });
   }
   return { data: [...byRef.values()].sort((a, b) => a.ref_code.localeCompare(b.ref_code)), compile_run_id: run.id };
 }
@@ -369,7 +397,7 @@ export async function listNotApplicableSuggestions(viewer: Viewer, id: string): 
  * POST /frameworks/:id/applicability. Decides one or more requirements: every live link of each
  * ref code takes the decision (spec 2.1 per-requirement applicability).
  */
-export async function decideApplicability(viewer: Viewer, id: string, body: BastionBulkApplicability) {
+export async function decideApplicability(viewer: Viewer, id: string, body: BastionBulkApplicability): Promise<BastionApplicabilityResponse> {
   return runInOrgScope(viewer.org_id, async (tx) => {
     const f = await loadFramework(tx, viewer.org_id, id);
     if (f.status === 'archived') throw new ConflictError('This framework is archived.', 'FRAMEWORK_ARCHIVED');

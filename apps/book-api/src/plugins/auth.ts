@@ -1,199 +1,27 @@
+// book-api authentication: session cookie, bbam_ API key, org context and SuperUser
+// impersonation are @bigbluebam/auth-core's shared satellite plugin (#369). This file only
+// binds it to this service's db, drizzle sql tag and argon2; do not add auth logic here
+// (scripts/lib/auth-core-single-source.test.mjs enforces it).
 import fp from 'fastify-plugin';
-import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
-import { eq, sql } from 'drizzle-orm';
+import { sql } from 'drizzle-orm';
 import argon2 from 'argon2';
-import {
-  applyKeyOrgPin,
-  bearerToken,
-  isApiKeyOrgPinned,
-  type OrgMembership,
-  OrgMembershipError,
-  refuseProjectRestrictedKey,
-  requestedOrgIdFromHeader,
-  resolveOrgContext,
-  sqlApiKeyStore,
-  sqlOrgContextStore,
-  verifyApiKeyToken,
-} from '@bigbluebam/auth-core';
+import '@bigbluebam/auth-core/fastify-request';
+import { createSatelliteAuth } from '@bigbluebam/auth-core';
 import { db } from '../db/index.js';
-import {
-  sessions,
-  users,
-} from '../db/schema/index.js';
 
-/** This service's binding of the shared bbam_ key store: its own db.execute and argon2. */
-const apiKeyStore = sqlApiKeyStore({
+const auth = createSatelliteAuth({
   sql,
   execute: (query) => db.execute(query),
   verifyHash: (hash, token) => argon2.verify(hash, token),
 });
 
-/**
- * This service's binding of the shared org-context store: memberships, roles and org liveness
- * read through migration 0311's identity functions, so soft-deleted orgs never resolve and the
- * reads work before any org is bound under BBB_RLS_ENFORCE=1 (#350).
- */
-const orgContextStore = sqlOrgContextStore({ sql, execute: (query) => db.execute(query) });
+export default fp(auth.plugin, { name: 'auth', dependencies: ['@fastify/cookie'] });
+export const requireAuth = auth.requireAuth;
 
-// Org-context errors and membership shape are auth-core's; re-exported for existing importers.
-export { OrgMembershipError };
-export type { OrgMembership };
-
-export interface AuthUser {
-  id: string;
-  org_id: string;
-  email: string;
-  display_name: string;
-  avatar_url: string | null;
-  role: string;
-  timezone: string;
-  is_active: boolean;
-  is_superuser: boolean;
-  /** users.kind; set for API-key auth (requireScope's #336 role cap exempts service/agent). */
-  kind?: 'human' | 'agent' | 'service';
-  api_key_scope: string | null;
-  org_memberships: OrgMembership[];
-  active_org_id: string;
-}
-
-declare module 'fastify' {
-  interface FastifyRequest {
-    user: AuthUser | null;
-    sessionId: string | null;
-  }
-}
-
-interface BaseUserRow {
-  id: string;
-  org_id: string;
-  email: string;
-  display_name: string;
-  avatar_url: string | null;
-  timezone: string;
-  is_active: boolean;
-  is_superuser: boolean;
-}
-
-async function buildAuthUser(
-  row: BaseUserRow,
-  apiKeyScope: string | null,
-  request: FastifyRequest,
-): Promise<AuthUser> {
-  const requestedOrgId = requestedOrgIdFromHeader(request.headers['x-org-id']);
-  const { memberships, activeOrgId, activeRole } = await resolveOrgContext(
-    orgContextStore,
-    row.id,
-    row.org_id,
-    requestedOrgId,
-  );
-
-  return {
-    id: row.id,
-    org_id: activeOrgId,
-    email: row.email,
-    display_name: row.display_name,
-    avatar_url: row.avatar_url,
-    role: activeRole,
-    timezone: row.timezone,
-    is_active: row.is_active,
-    is_superuser: row.is_superuser,
-    api_key_scope: apiKeyScope,
-    org_memberships: memberships,
-    active_org_id: activeOrgId,
-  };
-}
-
-async function authPlugin(fastify: FastifyInstance) {
-  fastify.decorateRequest('user', null);
-  fastify.decorateRequest('sessionId', null);
-
-  fastify.addHook('preHandler', async (request: FastifyRequest, reply: FastifyReply) => {
-    try {
-      // Try session cookie first
-      const sessionId = request.cookies?.session;
-      if (sessionId) {
-        const result = await db
-          .select({
-            session: sessions,
-            user: {
-              id: users.id,
-              org_id: users.org_id,
-              email: users.email,
-              display_name: users.display_name,
-              avatar_url: users.avatar_url,
-              timezone: users.timezone,
-              is_active: users.is_active,
-              is_superuser: users.is_superuser,
-            },
-          })
-          .from(sessions)
-          .innerJoin(users, eq(sessions.user_id, users.id))
-          .where(eq(sessions.id, sessionId))
-          .limit(1);
-
-        const row = result[0];
-        if (row && new Date(row.session.expires_at) > new Date() && row.user.is_active) {
-          request.user = await buildAuthUser(row.user, null, request);
-          request.sessionId = sessionId;
-          return;
-        }
-      }
-
-      // Bearer API key. Verification (expiry, rotation grace, DoS caps, owner state), the
-      // org pin and requireScope are @bigbluebam/auth-core's, shared by every service (#340).
-      const token = bearerToken(request.headers.authorization);
-      const verified = token ? await verifyApiKeyToken(token, apiKeyStore, request.log) : null;
-      if (verified) {
-        // #352: this service has no Bam project context to confine a project-restricted key to,
-        // so such a key is refused here rather than handed the holder's whole org.
-        const restricted = refuseProjectRestrictedKey(request, reply, verified.apiKey.project_ids);
-        if (restricted) return restricted;
-        // P2-8: a non-SuperUser key acts only in its own org, whatever X-Org-Id says, so the
-        // header is dropped rather than resolved (or probed) against the user's memberships.
-        if (isApiKeyOrgPinned(verified.apiKey.org_id, verified.user.is_superuser)) {
-          request.headers['x-org-id'] = undefined;
-        }
-        const user = await buildAuthUser(verified.user, verified.apiKey.scope, request);
-        applyKeyOrgPin(user, verified.apiKey.org_id);
-        user.kind = verified.user.kind;
-        request.user = user;
-        apiKeyStore.touch(verified.apiKey.id).catch((err: unknown) => {
-          request.log.warn({ err }, 'Failed to update api_keys.last_used_at');
-        });
-        return;
-      }
-    } catch (err) {
-      if (err instanceof OrgMembershipError) {
-        return reply.status(403).send({
-          error: {
-            code: 'FORBIDDEN',
-            message: err.message,
-            details: [],
-            request_id: request.id,
-          },
-        });
-      }
-      throw err;
-    }
-  });
-}
-
-export default fp(authPlugin, {
-  name: 'auth',
-  dependencies: ['@fastify/cookie'],
-});
-
-export async function requireAuth(request: FastifyRequest, reply: FastifyReply) {
-  if (!request.user) {
-    return reply.status(401).send({
-      error: {
-        code: 'UNAUTHORIZED',
-        message: 'Authentication required',
-        details: [],
-        request_id: request.id,
-      },
-    });
-  }
-}
-// requireScope is @bigbluebam/auth-core's, the one gate every service uses (#340).
-export { requireScope } from '@bigbluebam/auth-core';
+// requireScope is the one gate every service uses (#340); the rest keep existing importers working.
+export {
+  type OrgMembership,
+  OrgMembershipError,
+  requireScope,
+  type SatelliteAuthUser as AuthUser,
+} from '@bigbluebam/auth-core';

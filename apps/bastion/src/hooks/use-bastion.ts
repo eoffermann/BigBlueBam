@@ -1,6 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { z } from 'zod';
 import type {
+  BastionAdoptFrameworkResponse,
+  BastionCheckScanAgainResponse,
+  BastionDeliveryRetryResponse,
+  BastionQuestionnaireItemReviewResponse,
+  BastionQuestionnaireItemsResponse,
+  BastionRequestAttestationsResponse,
   BastionAnswerLibraryUpdate,
   BastionBulkApplicability,
   BastionCompanyProfile,
@@ -41,8 +47,6 @@ import {
   type PolicyBody,
   type PolicyRow,
   type AnswerLibraryRow,
-  type QuestionnaireApproval,
-  type QuestionnaireItemRow,
   type QuestionnaireRow,
   type SummaryResponse,
   type RequirementsResponse,
@@ -144,7 +148,7 @@ export function useCreateEvidence() {
 export function useCheckScanAgain() {
   const invalidate = useInvalidate();
   return useMutation({
-    mutationFn: (id: string) => api.post<{ data: EvidenceItem & { check_result: string } }>(`/manual-evidence/${id}/check-again`, {}),
+    mutationFn: (id: string) => api.post<BastionCheckScanAgainResponse>(`/manual-evidence/${id}/check-again`, {}),
     onSuccess: invalidate,
   });
 }
@@ -217,7 +221,7 @@ export function useMembers(enabled = true) {
 export function useAdoptFramework() {
   const invalidate = useInvalidate();
   return useMutation({
-    mutationFn: (template_key: BastionTemplateKey) => api.post<{ data: { id: string } }>('/frameworks', { template_key }),
+    mutationFn: (template_key: BastionTemplateKey) => api.post<BastionAdoptFrameworkResponse>('/frameworks', { template_key }),
     onSuccess: invalidate,
   });
 }
@@ -255,7 +259,7 @@ export function useQuestionnaire(id: string) {
 export function useQuestionnaireItems(id: string, drafting: boolean) {
   return useQuery({
     queryKey: key('questionnaire-items', id),
-    queryFn: () => api.get<{ data: QuestionnaireItemRow[]; approval: QuestionnaireApproval }>(`/questionnaires/${id}/items`),
+    queryFn: () => api.get<BastionQuestionnaireItemsResponse>(`/questionnaires/${id}/items`),
     refetchInterval: drafting ? 5000 : false,
   });
 }
@@ -293,11 +297,11 @@ export function useReviewItem(questionnaireId: string) {
   return useMutation({
     mutationFn: (args: { id: string } & BastionQuestionnaireItemReview) => {
       const { id, ...body } = args;
-      return api.patch<{ data: QuestionnaireItemRow; approval: QuestionnaireApproval }>(`/questionnaire-items/${id}`, body);
+      return api.patch<BastionQuestionnaireItemReviewResponse>(`/questionnaire-items/${id}`, body);
     },
     onMutate: async (args) => {
       await qc.cancelQueries({ queryKey: itemsKey });
-      const prev = qc.getQueryData<{ data: QuestionnaireItemRow[]; approval: QuestionnaireApproval }>(itemsKey);
+      const prev = qc.getQueryData<BastionQuestionnaireItemsResponse>(itemsKey);
       if (prev) {
         qc.setQueryData(itemsKey, {
           ...prev,
@@ -396,7 +400,7 @@ export function useAttest() {
 export function useRequestAttestations() {
   const invalidate = useInvalidate();
   return useMutation({
-    mutationFn: (id: string) => api.post<{ data: { due: number; asked: number; nudged: number } }>(`/policies/${id}/request-attestations`, {}),
+    mutationFn: (id: string) => api.post<BastionRequestAttestationsResponse>(`/policies/${id}/request-attestations`, {}),
     onSuccess: invalidate,
   });
 }
@@ -686,7 +690,7 @@ export function useDeliveryProblems(enabled = true) {
 export function useRetryDelivery() {
   const invalidate = useInvalidate();
   return useMutation({
-    mutationFn: (id: string) => api.post<{ data: { id: string; result: string; message: string } }>(`/delivery-problems/${id}/retry`, {}),
+    mutationFn: (id: string) => api.post<BastionDeliveryRetryResponse>(`/delivery-problems/${id}/retry`, {}),
     onSuccess: invalidate,
   });
 }

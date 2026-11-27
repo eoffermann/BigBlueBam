@@ -32,6 +32,8 @@ import { decodeIdCursor, encodeIdCursor } from '../lib/cursor.js';
 import { planCompile } from '../library/compile-plan.js';
 import { derivedApplicability } from '../library/setup-state.js';
 import { connectedPopulations, isUniqueViolation, loadFramework } from './shared.js';
+import type { BastionCompileRun, BastionCompileRunListResponse, BastionCompileRunResponse } from '@bigbluebam/shared';
+import type { Served } from '../lib/served.js';
 import type { Viewer } from './types.js';
 
 /** The claim an inline (in-request) compile records. No worker ever resumes such a run. */
@@ -110,9 +112,10 @@ async function recordFailedRun(viewer: Viewer, frameworkId: string, cause: unkno
   }
 }
 
-export async function compileFramework(viewer: Viewer, frameworkId: string, log: CompileLogger = defaultLogger()) {
+export async function compileFramework(viewer: Viewer, frameworkId: string, log: CompileLogger = defaultLogger()): Promise<Served<BastionCompileRunResponse>> {
   try {
-    return await compileInOneTransaction(viewer, frameworkId);
+    const { data } = await compileInOneTransaction(viewer, frameworkId);
+    return { data: compileRunOut(data) };
   } catch (err) {
     // A refusal (not found, archived, already running, bad input) started nothing: nothing to record.
     if (err instanceof ConflictError || err instanceof NotFoundError || err instanceof ValidationFailure) throw err;
@@ -289,7 +292,16 @@ export function decodeRunCursor(cursor: string): string {
  * GET /frameworks/:id/compile-runs, newest first, cursor-paginated (issue #193: the list used to
  * stop at 50 while claiming to be complete). `next_cursor` is null only on the last page.
  */
-export async function listCompileRuns(viewer: Viewer, frameworkId: string, query: { cursor?: string; limit?: number } = {}) {
+/** A bastion_compile_runs row as the routes send it (bastionCompileRunSchema, #371). */
+export function compileRunOut(r: typeof bastionCompileRuns.$inferSelect): Served<BastionCompileRun> {
+  return { ...r, status: r.status as BastionCompileRun['status'], drop_reasons: (r.drop_reasons ?? {}) as Record<string, unknown> };
+}
+
+export async function listCompileRuns(
+  viewer: Viewer,
+  frameworkId: string,
+  query: { cursor?: string; limit?: number } = {},
+): Promise<Served<BastionCompileRunListResponse>> {
   const limit = Math.min(Math.max(query.limit ?? COMPILE_RUNS_DEFAULT_LIMIT, 1), COMPILE_RUNS_MAX_LIMIT);
   const after = query.cursor ? decodeRunCursor(query.cursor) : null;
   return runInOrgScope(viewer.org_id, async (tx) => {
@@ -314,6 +326,6 @@ export async function listCompileRuns(viewer: Viewer, frameworkId: string, query
     const page = rows.slice(0, limit);
     const last = page[page.length - 1];
     const has_more = rows.length > limit;
-    return { data: page, has_more, next_cursor: has_more && last ? encodeRunCursor(last) : null };
+    return { data: page.map(compileRunOut), has_more, next_cursor: has_more && last ? encodeRunCursor(last) : null };
   });
 }

@@ -2466,3 +2466,1562 @@ export const bastionRestoreListResponseSchema = z.object({
   bucket_rejected: z.number().int(),
 });
 export type BastionRestoreListResponse = z.infer<typeof bastionRestoreListResponseSchema>;
+
+// ── Response shapes, every route (#371) ─────────────────────────────────────────────────
+// #348 moved three response shapes here; #371 moves the rest. Each schema is what the route sends
+// as JSON (timestamps and dates are strings, bigint columns are numbers), derived from the
+// service that builds it. bastion-api's services return these types (Served<T> in
+// apps/bastion-api/src/lib/served.ts lets a service hold a Date where the wire has a string), the
+// SPA's apps/bastion/src/lib/api.ts only aliases them (scripts/lib/bastion-spa-response-types
+// .test.mjs fails on a hand-written copy), and the MCP bastion tools read responses through them.
+// The objects are not strict: a schema lists what a client may rely on.
+
+const ts = z.string();
+const uuid = z.string().uuid();
+/** A list's cursor; most Bastion lists are a single page and send null. */
+const nextCursor = z.string().nullable();
+
+/* ------------------------------- setup, frameworks, controls ------------------------------- */
+
+/** A population check's list, with labels instead of raw ids (spec 6.2, #195). */
+export const bastionPopulationViewSchema = z.object({
+  kind: BastionPopulationKind,
+  members: z.array(z.object({ value: z.string(), label: z.string() })),
+  confirmed_at: z.string().nullable(),
+  confirmed_by: z.string().nullable(),
+});
+export type BastionPopulationView = z.infer<typeof bastionPopulationViewSchema>;
+
+/** One assertion (a "check"): assertionView in apps/bastion-api/src/services/controls.service.ts. */
+export const bastionAssertionSchema = z.object({
+  id: uuid,
+  organization_id: uuid,
+  control_id: uuid,
+  kind: BastionAssertionKind,
+  probe_key: z.string().nullable(),
+  probe_version: z.number().int().nullable(),
+  params: z.record(z.unknown()),
+  predicate: z.record(z.unknown()),
+  manual_evidence_spec: z
+    .object({ title: z.string(), description: z.string(), kind: BastionManualEvidenceKind, cadence_days: z.number().int() })
+    .nullable(),
+  feed_id: uuid.nullable(),
+  plain_statement: z.string(),
+  proposed_by: BastionAssertionProposedBy,
+  compile_run_id: uuid.nullable(),
+  review_status: BastionAssertionReviewStatus,
+  supersedes_id: uuid.nullable(),
+  confirmed_by: uuid.nullable(),
+  confirmed_at: ts.nullable(),
+  created_by: uuid.nullable(),
+  created_at: ts,
+  updated_at: ts,
+  probe_title: z.string().nullable(),
+  probe_inherited: z.boolean(),
+  population: bastionPopulationViewSchema.nullable(),
+});
+export type BastionAssertion = z.infer<typeof bastionAssertionSchema>;
+
+/** A proposed check waiting for review in Setup: the assertion plus its control's title. */
+export const bastionProposedCheckSchema = bastionAssertionSchema.extend({ control_title: z.string() });
+export type BastionProposedCheck = z.infer<typeof bastionProposedCheckSchema>;
+
+/** POST /controls/:id/assertions, /assertions/:id/revise|confirm|reject. */
+export const bastionAssertionResponseSchema = z.object({ data: bastionAssertionSchema });
+export type BastionAssertionResponse = z.infer<typeof bastionAssertionResponseSchema>;
+
+/** GET /controls/:id/assertions. */
+export const bastionAssertionListResponseSchema = z.object({ data: z.array(bastionAssertionSchema), next_cursor: nextCursor });
+export type BastionAssertionListResponse = z.infer<typeof bastionAssertionListResponseSchema>;
+
+/** How far an ISO framework's Statement of Applicability is (library/soa.ts soaCompleteness). */
+export const bastionSoaCompletenessSchema = z.object({
+  complete: z.boolean(),
+  unmapped_ref_codes: z.array(z.string()),
+  undecided_ref_codes: z.array(z.string()),
+  decided_count: z.number().int(),
+  requirement_count: z.number().int(),
+});
+export type BastionSoaCompleteness = z.infer<typeof bastionSoaCompletenessSchema>;
+
+/** "N of M set up" (library/setup-state.ts setupCounts). */
+export const bastionSetupCountsSchema = z.object({
+  total: z.number().int(),
+  set_up: z.number().int(),
+  not_set_up: z.number().int(),
+  not_applicable: z.number().int(),
+});
+export type BastionSetupCounts = z.infer<typeof bastionSetupCountsSchema>;
+
+/** One compile run (a bastion_compile_runs row). */
+export const bastionCompileRunSchema = z.object({
+  id: uuid,
+  organization_id: uuid,
+  framework_id: uuid,
+  status: BastionRunStatus,
+  controls_total: z.number().int(),
+  controls_done: z.number().int(),
+  assertions_proposed: z.number().int(),
+  assertions_dropped: z.number().int(),
+  drop_reasons: z.record(z.unknown()),
+  llm_calls_used: z.number().int(),
+  used_fallback: z.boolean(),
+  resume_count: z.number().int(),
+  claimed_by: z.string().nullable(),
+  heartbeat_at: ts.nullable(),
+  slice_token: uuid.nullable(),
+  error: z.string().nullable(),
+  started_by: uuid.nullable(),
+  started_at: ts.nullable(),
+  completed_at: ts.nullable(),
+  created_at: ts,
+  updated_at: ts,
+});
+export type BastionCompileRun = z.infer<typeof bastionCompileRunSchema>;
+
+/** A bastion_frameworks row as the routes send it. */
+export const bastionFrameworkRowSchema = z.object({
+  id: uuid,
+  organization_id: uuid,
+  template_key: z.string(),
+  template_version: z.string(),
+  name: z.string(),
+  status: BastionFrameworkStatus,
+  audit_target_date: z.string().nullable(),
+  period_start: z.string().nullable(),
+  period_end: z.string().nullable(),
+  adopted_at: ts.nullable(),
+  adopted_by: uuid.nullable(),
+  created_at: ts,
+  updated_at: ts,
+});
+export type BastionFrameworkRow = z.infer<typeof bastionFrameworkRowSchema>;
+
+/** One framework with its setup counts: GET /frameworks, GET /frameworks/:id. */
+export const bastionFrameworkViewSchema = bastionFrameworkRowSchema.extend({
+  is_iso: z.boolean(),
+  requirement_count: z.number().int(),
+  setup: bastionSetupCountsSchema,
+  statement_of_applicability: bastionSoaCompletenessSchema.nullable(),
+});
+export type BastionFrameworkView = z.infer<typeof bastionFrameworkViewSchema>;
+
+export const bastionFrameworkListResponseSchema = z.object({ data: z.array(bastionFrameworkViewSchema), next_cursor: nextCursor });
+export type BastionFrameworkListResponse = z.infer<typeof bastionFrameworkListResponseSchema>;
+
+export const bastionFrameworkResponseSchema = z.object({ data: bastionFrameworkViewSchema });
+export type BastionFrameworkResponse = z.infer<typeof bastionFrameworkResponseSchema>;
+
+/** POST /frameworks: the new framework row and what adopting it created. */
+export const bastionAdoptFrameworkResponseSchema = z.object({
+  data: bastionFrameworkRowSchema.extend({
+    controls_created: z.number().int(),
+    controls_reused: z.number().int(),
+    controls_revived: z.number().int(),
+    requirement_links: z.number().int(),
+  }),
+});
+export type BastionAdoptFrameworkResponse = z.infer<typeof bastionAdoptFrameworkResponseSchema>;
+
+/** PATCH /frameworks/:id. */
+export const bastionFrameworkRowResponseSchema = z.object({ data: bastionFrameworkRowSchema });
+export type BastionFrameworkRowResponse = z.infer<typeof bastionFrameworkRowResponseSchema>;
+
+/** POST /frameworks/:id/archive. */
+export const bastionArchiveFrameworkResponseSchema = z.object({ data: bastionFrameworkRowSchema.extend({ controls_retired: z.number().int() }) });
+export type BastionArchiveFrameworkResponse = z.infer<typeof bastionArchiveFrameworkResponseSchema>;
+
+/** One built-in template: GET /library/templates. */
+export const bastionTemplateSummarySchema = z.object({
+  template_key: z.string(),
+  template_version: z.string(),
+  name: z.string(),
+  description: z.string(),
+  is_iso: z.boolean(),
+  requirement_count: z.number().int(),
+  control_count: z.number().int(),
+  adopted_framework_id: uuid.nullable(),
+});
+export type BastionTemplateSummary = z.infer<typeof bastionTemplateSummarySchema>;
+
+export const bastionTemplateListResponseSchema = z.object({ data: z.array(bastionTemplateSummarySchema) });
+export type BastionTemplateListResponse = z.infer<typeof bastionTemplateListResponseSchema>;
+
+/** A framework in Setup: its view, its newest compile run, and the template's name. */
+export const bastionSetupFrameworkSchema = bastionFrameworkViewSchema.extend({
+  latest_compile_run: bastionCompileRunSchema.nullable(),
+  template_name: z.string(),
+});
+export type BastionSetupFramework = z.infer<typeof bastionSetupFrameworkSchema>;
+
+const populationMembers = z.array(z.object({ value: z.string(), label: z.string() }));
+
+/** GET /setup: the wizard's whole state (setup.service.ts getSetup). */
+export const bastionSetupViewSchema = z.object({
+  frameworks: z.array(bastionSetupFrameworkSchema),
+  company_profile: z.record(z.unknown()),
+  compliance_project: z.object({ id: uuid, name: z.string(), archived: z.boolean() }).nullable(),
+  remediation_tasks: BastionRemediationTasks,
+  proposed_checks: z.array(bastionProposedCheckSchema),
+  /** The connected sets a population check may list, by name (#195). */
+  connected_populations: z.object({ github_repos: populationMembers, blip_apps: populationMembers }),
+  steps: z.object({
+    frameworks: z.object({ done: z.boolean() }),
+    profile: z.object({ done: z.boolean(), answered: z.number().int(), total: z.number().int() }),
+    compliance_project: z.object({ done: z.boolean() }),
+    compile: z.object({ done: z.boolean() }),
+    review: z.object({ done: z.boolean(), waiting: z.number().int(), populations_waiting: z.number().int() }),
+    applicability: z.object({
+      done: z.boolean(),
+      frameworks: z.array(z.object({ framework_id: uuid, name: z.string(), decided: z.number().int(), total: z.number().int() })),
+    }),
+  }),
+  complete: z.boolean(),
+});
+export type BastionSetupView = z.infer<typeof bastionSetupViewSchema>;
+
+export const bastionSetupResponseSchema = z.object({ data: bastionSetupViewSchema });
+export type BastionSetupResponse = z.infer<typeof bastionSetupResponseSchema>;
+
+/** PATCH /setup/profile. */
+export const bastionSaveProfileResponseSchema = z.object({ data: z.object({ company_profile: z.record(z.unknown()), answered: z.number().int() }) });
+export type BastionSaveProfileResponse = z.infer<typeof bastionSaveProfileResponseSchema>;
+
+/** POST /setup/compliance-project. */
+export const bastionComplianceProjectResponseSchema = z.object({
+  data: z.object({ compliance_project: z.object({ id: uuid, name: z.string(), archived: z.boolean() }) }),
+});
+export type BastionComplianceProjectResponse = z.infer<typeof bastionComplianceProjectResponseSchema>;
+
+/** One requirement link with its control, as GET /frameworks/:id/requirements lists it. */
+export const bastionRequirementLinkSchema = z.object({
+  id: uuid,
+  ref_code: z.string(),
+  control_id: uuid,
+  control_key: z.string(),
+  control_title: z.string(),
+  applicability: BastionRequirementApplicability,
+  not_applicable_reason: z.string().nullable(),
+  decided_at: ts.nullable(),
+  decided_by: uuid.nullable(),
+  source: BastionRequirementSource,
+});
+export type BastionRequirementLink = z.infer<typeof bastionRequirementLinkSchema>;
+
+export const bastionRequirementRowSchema = z.object({
+  ref_code: z.string(),
+  title: z.string(),
+  plain_summary: z.string(),
+  applicability: z.enum(['applicable', 'not_applicable', 'undecided']),
+  links: z.array(bastionRequirementLinkSchema),
+});
+export type BastionRequirementRow = z.infer<typeof bastionRequirementRowSchema>;
+
+/** GET /frameworks/:id/requirements. */
+export const bastionRequirementsResponseSchema = z.object({
+  data: z.array(bastionRequirementRowSchema),
+  framework: z.object({ id: uuid, name: z.string(), is_iso: z.boolean() }),
+  statement_of_applicability: bastionSoaCompletenessSchema.nullable(),
+});
+export type BastionRequirementsResponse = z.infer<typeof bastionRequirementsResponseSchema>;
+
+/** POST /frameworks/:id/applicability. */
+export const bastionApplicabilityResponseSchema = z.object({
+  data: z.object({ links_updated: z.number().int(), statement_of_applicability: bastionSoaCompletenessSchema.nullable() }),
+});
+export type BastionApplicabilityResponse = z.infer<typeof bastionApplicabilityResponseSchema>;
+
+/** A bastion_control_requirements row: PATCH /control-requirements/:id. */
+export const bastionControlRequirementRowSchema = z.object({
+  id: uuid,
+  organization_id: uuid,
+  control_id: uuid,
+  framework_id: uuid,
+  ref_code: z.string(),
+  requirement_title: z.string(),
+  applicability: BastionRequirementApplicability,
+  not_applicable_reason: z.string().nullable(),
+  decided_by: uuid.nullable(),
+  decided_at: ts.nullable(),
+  source: BastionRequirementSource,
+  removed_at: ts.nullable(),
+  created_at: ts,
+  updated_at: ts,
+});
+export type BastionControlRequirementRow = z.infer<typeof bastionControlRequirementRowSchema>;
+
+export const bastionControlRequirementResponseSchema = z.object({ data: bastionControlRequirementRowSchema });
+export type BastionControlRequirementResponse = z.infer<typeof bastionControlRequirementResponseSchema>;
+
+/** A bastion_controls row as the routes send it (the generated search column is left out). */
+export const bastionControlRowSchema = z.object({
+  id: uuid,
+  organization_id: uuid,
+  control_key: z.string(),
+  title: z.string(),
+  plain_summary: z.string().nullable(),
+  category: z.string().nullable(),
+  risk_weight: z.number().int(),
+  owner_user_id: uuid.nullable(),
+  lifecycle: BastionControlLifecycle,
+  status: BastionStoredStatus,
+  status_reason: z.string().nullable(),
+  stale_reason: z.string().nullable(),
+  consecutive_error_nights: z.number().int(),
+  last_error_night: z.string().nullable(),
+  coverage_kind: BastionCoverageKind,
+  active_exception_count: z.number().int(),
+  last_evaluated_at: ts.nullable(),
+  status_changed_at: ts.nullable(),
+  created_at: ts,
+  updated_at: ts,
+});
+export type BastionControlRow = z.infer<typeof bastionControlRowSchema>;
+
+/** POST /controls, PATCH /controls/:id. */
+export const bastionControlRowResponseSchema = z.object({ data: bastionControlRowSchema });
+export type BastionControlRowResponse = z.infer<typeof bastionControlRowResponseSchema>;
+
+/** One control in GET /controls. */
+export const bastionControlListRowSchema = z.object({
+  id: uuid,
+  control_key: z.string(),
+  title: z.string(),
+  plain_summary: z.string().nullable(),
+  category: z.string().nullable(),
+  risk_weight: z.number().int(),
+  owner_user_id: uuid.nullable(),
+  lifecycle: BastionControlLifecycle,
+  status: BastionStoredStatus,
+  status_reason: z.string().nullable(),
+  coverage_kind: BastionCoverageKind,
+  setup_state: BastionSetupState.nullable(),
+  derived_applicability: BastionRequirementApplicability,
+  requirements: z.array(
+    z.object({ id: uuid, framework_id: uuid, framework_name: z.string(), ref_code: z.string(), applicability: BastionRequirementApplicability }),
+  ),
+  assertion_counts: z.object({ proposed: z.number().int(), confirmed: z.number().int(), rejected: z.number().int() }),
+});
+export type BastionControlListRow = z.infer<typeof bastionControlListRowSchema>;
+
+/** GET /controls. */
+export const bastionControlsResponseSchema = z.object({
+  data: z.array(bastionControlListRowSchema),
+  counts: bastionSetupCountsSchema,
+  framework_id: uuid.nullable(),
+  next_cursor: nextCursor,
+});
+export type BastionControlsResponse = z.infer<typeof bastionControlsResponseSchema>;
+
+/** One live requirement link on a control, with its framework (controls.service.ts orgLinks). */
+export const bastionControlLinkSchema = z.object({
+  id: uuid,
+  control_id: uuid,
+  framework_id: uuid,
+  framework_name: z.string(),
+  framework_status: BastionFrameworkStatus,
+  ref_code: z.string(),
+  requirement_title: z.string(),
+  applicability: BastionRequirementApplicability,
+  not_applicable_reason: z.string().nullable(),
+  decided_at: ts.nullable(),
+  source: BastionRequirementSource,
+  removed_at: ts.nullable(),
+});
+export type BastionControlLink = z.infer<typeof bastionControlLinkSchema>;
+
+/** GET /controls/:id. */
+export const bastionControlDetailSchema = bastionControlRowSchema.extend({
+  setup_state: BastionSetupState.nullable(),
+  derived_applicability: BastionRequirementApplicability,
+  requirements: z.array(bastionControlLinkSchema),
+  assertions: z.array(bastionAssertionSchema),
+});
+export type BastionControlDetail = z.infer<typeof bastionControlDetailSchema>;
+
+export const bastionControlDetailResponseSchema = z.object({ data: bastionControlDetailSchema });
+export type BastionControlDetailResponse = z.infer<typeof bastionControlDetailResponseSchema>;
+
+/* ------------------------------- readiness and the evidence map ------------------------------- */
+
+/** A framework the Readiness and Evidence map pages can narrow to. */
+export const bastionFrameworkOptionSchema = z.object({
+  id: uuid,
+  template_key: z.string(),
+  name: z.string(),
+  audit_target_date: z.string().nullable(),
+});
+export type BastionFrameworkOption = z.infer<typeof bastionFrameworkOptionSchema>;
+
+/** A not-applicable control, named for the "Not applicable" list. */
+export const bastionNotApplicableControlSchema = z.object({ control_id: uuid, control_key: z.string(), title: z.string() });
+export type BastionNotApplicableControl = z.infer<typeof bastionNotApplicableControlSchema>;
+
+/** GET /summary `data` (coverage.service.ts readinessSummary). */
+export const bastionSummarySchema = z.object({
+  frameworks: z.array(bastionFrameworkOptionSchema),
+  selected: bastionFrameworkOptionSchema.extend({ status: BastionFrameworkStatus }).nullable(),
+  nearest_audit_date: z.string().nullable(),
+  days_to_audit: z.number().int().nullable(),
+  numbers: bastionReadinessNumbersSchema,
+  headline: z.string(),
+  not_met_label: z.string(),
+  not_applicable: z.array(bastionNotApplicableControlSchema),
+  banners: z.array(z.object({ code: BastionReadinessBanner, message: z.string(), count: z.number().int().optional() })),
+  top_gaps: z.array(
+    z.object({
+      id: uuid,
+      control_id: uuid,
+      control_title: z.string(),
+      gap_kind: BastionGapKind,
+      risk_score: z.number(),
+      fix_template: BastionFixTemplate.nullable(),
+      fix_cost: z.number().int().nullable(),
+    }),
+  ),
+  gaps_ranked: z.boolean(),
+  expiring_evidence: z.array(
+    z.object({ id: uuid, title: z.string(), owner_name: z.string().nullable(), valid_until: ts, days_left: z.number().int() }),
+  ),
+  last_full_run_at: ts.nullable(),
+  timezone: z.string(),
+  as_of: ts,
+});
+export type BastionSummary = z.infer<typeof bastionSummarySchema>;
+
+export const bastionSummaryResponseSchema = z.object({ data: bastionSummarySchema });
+export type BastionSummaryResponse = z.infer<typeof bastionSummaryResponseSchema>;
+
+/** Evidence counts by source column (the Evidence map's columns). */
+export const bastionSourceColumnsSchema = z.object({
+  native: z.number().int(),
+  feed: z.number().int(),
+  manual_file: z.number().int(),
+  self_attested: z.number().int(),
+});
+export type BastionSourceColumns = z.infer<typeof bastionSourceColumnsSchema>;
+
+/** One control on the Evidence map (coverage.service.ts coverageMap). */
+export const bastionCoverageRowSchema = z.object({
+  control_id: uuid,
+  control_key: z.string(),
+  title: z.string(),
+  category: z.string().nullable(),
+  owner_name: z.string().nullable(),
+  set_up: z.boolean(),
+  bucket: z.enum(['proven_by_suite', 'proven_by_evidence', 'not_met', 'cant_prove', 'not_set_up']),
+  state: BastionEffectiveState.nullable(),
+  state_words: z.string(),
+  reason: BastionUnprovableReason.nullable(),
+  reason_words: z.string().nullable(),
+  risk_accepted: z.boolean(),
+  columns: bastionSourceColumnsSchema,
+  coverage_kind: BastionCoverageKind,
+  manual_expires_at: ts.nullable(),
+  manual_days_left: z.number().int().nullable(),
+  last_evaluated_at: ts.nullable(),
+});
+export type BastionCoverageRow = z.infer<typeof bastionCoverageRowSchema>;
+
+/** GET /coverage. */
+export const bastionCoverageResponseSchema = z.object({
+  data: z.array(bastionCoverageRowSchema),
+  totals: bastionSourceColumnsSchema.extend({ none: z.number().int() }),
+  numbers: bastionReadinessNumbersSchema,
+  headline: z.string(),
+  not_applicable: z.array(bastionNotApplicableControlSchema),
+  frameworks: z.array(bastionFrameworkOptionSchema),
+});
+export type BastionCoverageResponse = z.infer<typeof bastionCoverageResponseSchema>;
+
+/* ------------------------------- manual evidence and feeds ------------------------------- */
+
+/** One assertion a manual-evidence item is linked to, and its review. */
+export const bastionManualEvidenceLinkViewSchema = z.object({
+  assertion_id: uuid,
+  control_id: uuid,
+  control_title: z.string(),
+  plain_statement: z.string(),
+  review_verdict: BastionReviewVerdict,
+  reviewed_by: uuid.nullable(),
+  reviewed_by_name: z.string().nullable(),
+  reviewed_at: ts.nullable(),
+  review_note: z.string().nullable(),
+  small_team_self_review: z.boolean(),
+  linked_at: ts,
+});
+export type BastionManualEvidenceLinkView = z.infer<typeof bastionManualEvidenceLinkViewSchema>;
+
+/** One manual-evidence item (manual-evidence.service.ts shape); masked when restricted and unreadable. */
+export const bastionManualEvidenceItemSchema = z.object({
+  id: uuid,
+  kind: BastionManualEvidenceKind,
+  title: z.string(),
+  description: z.string().nullable(),
+  source_system: z.string().nullable(),
+  content_sha256: z.string().nullable(),
+  size_bytes: z.number().int().nullable(),
+  content_type: z.string().nullable(),
+  scan_label: BastionScanLabel.nullable(),
+  owner_user_id: uuid.nullable(),
+  owner_name: z.string().nullable(),
+  uploaded_by: uuid,
+  uploaded_by_name: z.string().nullable(),
+  produced_on: z.string().nullable(),
+  period_start: z.string().nullable(),
+  period_end: z.string().nullable(),
+  valid_until: ts.nullable(),
+  sensitivity: BastionEvidenceSensitivity,
+  status: BastionManualEvidenceStatus,
+  blocked_reason: BastionManualEvidenceBlockedReason.nullable(),
+  attempts: z.number().int(),
+  next_attempt_at: ts.nullable(),
+  superseded_by_id: uuid.nullable(),
+  withdrawn_reason: z.string().nullable(),
+  withdrawn_at: ts.nullable(),
+  redacted_at: ts.nullable(),
+  ledger_seq: z.number().int().nullable(),
+  created_at: ts,
+  updated_at: ts,
+  personal_data_id: uuid.nullable(),
+  restricted: z.boolean(),
+  masked: z.boolean(),
+  trust_label: z.string(),
+  scan_note: z.string().nullable(),
+  days_left: z.number().int().nullable(),
+  stuck_scan: z.boolean(),
+  links: z.array(bastionManualEvidenceLinkViewSchema),
+});
+export type BastionManualEvidenceItem = z.infer<typeof bastionManualEvidenceItemSchema>;
+
+/** GET /manual-evidence/:id, POST /manual-evidence, POST /manual-evidence/:id/supersede. */
+export const bastionManualEvidenceResponseSchema = z.object({ data: bastionManualEvidenceItemSchema });
+export type BastionManualEvidenceResponse = z.infer<typeof bastionManualEvidenceResponseSchema>;
+
+/** POST /manual-evidence/:id/check-again: the item and what the check found. */
+export const bastionCheckScanAgainResponseSchema = z.object({ data: bastionManualEvidenceItemSchema.extend({ check_result: z.string() }) });
+export type BastionCheckScanAgainResponse = z.infer<typeof bastionCheckScanAgainResponseSchema>;
+
+/** GET /manual-evidence. */
+export const bastionManualEvidenceListResponseSchema = z.object({
+  data: z.array(bastionManualEvidenceItemSchema),
+  counts: z.object({
+    active: z.number().int(),
+    pending_scan: z.number().int(),
+    stuck: z.number().int(),
+    blocked: z.number().int(),
+    not_scanned: z.number().int(),
+  }),
+  next_cursor: nextCursor,
+});
+export type BastionManualEvidenceListResponse = z.infer<typeof bastionManualEvidenceListResponseSchema>;
+
+/** POST /manual-evidence/:id/links/:assertion_id/unlink. */
+export const bastionManualEvidenceUnlinkResponseSchema = z.object({
+  data: z.object({ manual_evidence_id: uuid, assertion_id: uuid, unlinked: z.literal(true), reevaluating: z.boolean() }),
+});
+export type BastionManualEvidenceUnlinkResponse = z.infer<typeof bastionManualEvidenceUnlinkResponseSchema>;
+
+/** POST /manual-evidence/:id/withdraw. */
+export const bastionManualEvidenceWithdrawResponseSchema = z.object({
+  data: z.object({ manual_evidence_id: uuid, status: z.literal('withdrawn'), reevaluating_controls: z.number().int() }),
+});
+export type BastionManualEvidenceWithdrawResponse = z.infer<typeof bastionManualEvidenceWithdrawResponseSchema>;
+
+/** POST /personal-data/:id/redact. */
+export const bastionRedactResponseSchema = z.object({
+  data: z.object({
+    personal_data_id: uuid,
+    holder_kind: BastionPersonalDataHolderKind,
+    holder_id: uuid,
+    redacted: z.literal(true),
+    bytes_deleted: z.boolean(),
+    bytes_delete_pending: z.boolean(),
+    reevaluating_controls: z.number().int(),
+  }),
+});
+export type BastionRedactResponse = z.infer<typeof bastionRedactResponseSchema>;
+
+/** One machine feed (feeds.service.ts shapeFeed). */
+export const bastionFeedSchema = z.object({
+  id: uuid,
+  feed_key: z.string(),
+  label: z.string(),
+  feed_kind: z.string().nullable(),
+  source_kind: BastionFeedSourceKind,
+  bolt_source: z.string().nullable(),
+  bolt_event_type: z.string().nullable(),
+  cadence_days: z.number().int(),
+  daily_record_quota: z.number().int(),
+  quota_day: z.string().nullable(),
+  records_on_quota_day: z.number().int(),
+  bytes_total: z.number().int(),
+  status: BastionFeedStatus,
+  last_record_at: ts.nullable(),
+  created_at: ts,
+  updated_at: ts,
+  /** Only GET /feeds counts these. */
+  active_keys: z.number().int().optional(),
+  record_count: z.number().int().optional(),
+  records_today: z.number().int(),
+  quota_remaining_today: z.number().int(),
+  fresh: z.boolean(),
+  freshness: z.string(),
+});
+export type BastionFeed = z.infer<typeof bastionFeedSchema>;
+
+export const bastionFeedListResponseSchema = z.object({ data: z.array(bastionFeedSchema), next_cursor: nextCursor });
+export type BastionFeedListResponse = z.infer<typeof bastionFeedListResponseSchema>;
+
+/** POST /feeds, PATCH /feeds/:id. */
+export const bastionFeedResponseSchema = z.object({ data: bastionFeedSchema });
+export type BastionFeedResponse = z.infer<typeof bastionFeedResponseSchema>;
+
+/** One feed key, never its secret (GET /feeds/:id/keys). */
+export const bastionFeedKeySchema = z.object({
+  id: uuid,
+  feed_id: uuid,
+  key_id: z.string(),
+  fingerprint: z.string().nullable(),
+  last4: z.string().nullable(),
+  label: z.string().nullable(),
+  status: BastionFeedKeyStatus,
+  grace_expires_at: ts.nullable(),
+  predecessor_id: uuid.nullable(),
+  created_by: uuid.nullable(),
+  created_at: ts,
+  last_used_at: ts.nullable(),
+  revoked_at: ts.nullable(),
+  usable: z.boolean(),
+});
+export type BastionFeedKey = z.infer<typeof bastionFeedKeySchema>;
+
+export const bastionFeedKeyListResponseSchema = z.object({ data: z.array(bastionFeedKeySchema) });
+export type BastionFeedKeyListResponse = z.infer<typeof bastionFeedKeyListResponseSchema>;
+
+/** POST /feeds/:id/keys: the token is in this response and nowhere else. */
+export const bastionMintedFeedKeySchema = z.object({
+  id: uuid,
+  feed_id: uuid,
+  key_id: z.string(),
+  fingerprint: z.string(),
+  last4: z.string(),
+  label: z.string().nullable(),
+  status: z.literal('active'),
+  created_at: ts,
+  token: z.string(),
+  rotated_keys: z.number().int(),
+  grace_expires_at: ts.nullable(),
+  push_path: z.string(),
+});
+export type BastionMintedFeedKey = z.infer<typeof bastionMintedFeedKeySchema>;
+
+export const bastionMintedFeedKeyResponseSchema = z.object({ data: bastionMintedFeedKeySchema });
+export type BastionMintedFeedKeyResponse = z.infer<typeof bastionMintedFeedKeyResponseSchema>;
+
+/** POST /feed-keys/:id/revoke. */
+export const bastionRevokedFeedKeyResponseSchema = z.object({ data: z.object({ id: uuid, status: z.literal('revoked'), revoked_at: ts }) });
+export type BastionRevokedFeedKeyResponse = z.infer<typeof bastionRevokedFeedKeyResponseSchema>;
+
+/** One feed record (GET /feeds/:id/records); the subject is personal data, null once redacted. */
+export const bastionFeedRecordRowSchema = z.object({
+  id: uuid,
+  idempotency_key: z.string(),
+  occurred_at: ts,
+  received_at: ts,
+  payload_sha256: z.string(),
+  ledger_seq: z.number().int().nullable(),
+  personal_data_id: uuid.nullable(),
+  redacted_at: ts.nullable(),
+  subject: z.string().nullable(),
+});
+export type BastionFeedRecordRow = z.infer<typeof bastionFeedRecordRowSchema>;
+
+export const bastionFeedRecordListResponseSchema = z.object({
+  data: z.array(bastionFeedRecordRowSchema),
+  next_cursor: nextCursor,
+  has_more: z.boolean(),
+});
+export type BastionFeedRecordListResponse = z.infer<typeof bastionFeedRecordListResponseSchema>;
+
+/* ------------------------------- gaps, drift, evidence snapshots ------------------------------- */
+
+/** One stored gap (fixes.service.ts listGaps). */
+export const bastionGapRowSchema = z.object({
+  id: uuid,
+  control_id: uuid,
+  control_title: z.string(),
+  owner_name: z.string().nullable(),
+  assertion_id: uuid.nullable(),
+  assertion_statement: z.string().nullable(),
+  gap_kind: BastionGapKind,
+  gap_words: z.string(),
+  risk_score: z.number(),
+  fix_template: BastionFixTemplate.nullable(),
+  fix_words: z.string().nullable(),
+  fix_cost: z.number().int().nullable(),
+  status: BastionGapStatus,
+  dismissed_reason: z.string().nullable(),
+  latest_fix_draft_id: uuid.nullable(),
+  computed_at: ts,
+});
+export type BastionGapRow = z.infer<typeof bastionGapRowSchema>;
+
+/** An active exception shown under "Accepted risks" on the Gaps page. */
+export const bastionAcceptedRiskSchema = z.object({
+  id: uuid,
+  control_id: uuid,
+  control_title: z.string(),
+  scope: BastionExceptionScope,
+  reason: z.string(),
+  expires_at: ts,
+  owner_name: z.string().nullable(),
+  approved_by_name: z.string().nullable(),
+  small_team_self_approval: z.boolean(),
+  approval_label: z.string().nullable(),
+});
+export type BastionAcceptedRisk = z.infer<typeof bastionAcceptedRiskSchema>;
+
+/** GET /gaps. `stale` is the org-level row derived at read time (spec 2.3). */
+export const bastionGapsResponseSchema = z.object({
+  data: z.array(bastionGapRowSchema),
+  stale: z
+    .object({ gap_kind: z.literal(BASTION_STALE_GAP_KIND), gap_words: z.string(), control_count: z.number().int(), message: z.string() })
+    .nullable(),
+  accepted_risks: z.array(bastionAcceptedRiskSchema),
+  sort: z.enum(['risk', 'quick_wins']),
+  next_cursor: nextCursor,
+});
+export type BastionGapsResponse = z.infer<typeof bastionGapsResponseSchema>;
+
+/** POST /gaps/:id/dismiss. */
+export const bastionGapDismissResponseSchema = z.object({ data: z.object({ id: uuid, status: z.literal('dismissed'), dismissed_reason: z.string() }) });
+export type BastionGapDismissResponse = z.infer<typeof bastionGapDismissResponseSchema>;
+
+/** GET /fix-drafts. */
+export const bastionFixDraftListResponseSchema = z.object({ data: z.array(bastionFixDraftSchema), next_cursor: nextCursor });
+export type BastionFixDraftListResponse = z.infer<typeof bastionFixDraftListResponseSchema>;
+
+/** GET /fix-drafts/:id, POST /gaps/:id/propose-fix, POST /fix-drafts/:id/decide|mark-applied. */
+export const bastionFixDraftResponseSchema = z.object({ data: bastionFixDraftSchema });
+export type BastionFixDraftResponse = z.infer<typeof bastionFixDraftResponseSchema>;
+
+/** GET /exceptions. */
+export const bastionExceptionListResponseSchema = z.object({ data: z.array(bastionExceptionSchema), next_cursor: nextCursor });
+export type BastionExceptionListResponse = z.infer<typeof bastionExceptionListResponseSchema>;
+
+/** GET /exceptions/:id, POST /exceptions, POST /exceptions/:id/decide. */
+export const bastionExceptionResponseSchema = z.object({ data: bastionExceptionSchema });
+export type BastionExceptionResponse = z.infer<typeof bastionExceptionResponseSchema>;
+
+/** One drift event (drift.service.ts listDrift). */
+export const bastionDriftRowSchema = z.object({
+  id: uuid,
+  control_id: uuid,
+  control_title: z.string(),
+  evaluation_run_id: uuid.nullable(),
+  exception_id: uuid.nullable(),
+  from_status: z.string(),
+  to_status: z.string(),
+  reason: z.string(),
+  task_status: BastionDriftTaskStatus,
+  bam_task_id: uuid.nullable(),
+  bam_task_human_id: z.string().nullable(),
+  acknowledged_by: uuid.nullable(),
+  acknowledged_by_name: z.string().nullable(),
+  acknowledged_at: ts.nullable(),
+  detected_at: ts,
+  from_words: z.string(),
+  to_words: z.string(),
+  reason_words: z.string(),
+  task_words: z.string(),
+});
+export type BastionDriftRow = z.infer<typeof bastionDriftRowSchema>;
+
+/** GET /drift: newest first; next_cursor is the last row's detected_at (pass it as `before`). */
+export const bastionDriftListResponseSchema = z.object({ data: z.array(bastionDriftRowSchema), has_more: z.boolean(), next_cursor: nextCursor });
+export type BastionDriftListResponse = z.infer<typeof bastionDriftListResponseSchema>;
+
+/** POST /drift/:id/acknowledge. */
+export const bastionDriftAcknowledgeResponseSchema = z.object({ data: z.object({ id: uuid, acknowledged_by: uuid, acknowledged_at: ts }) });
+export type BastionDriftAcknowledgeResponse = z.infer<typeof bastionDriftAcknowledgeResponseSchema>;
+
+/**
+ * One evidence snapshot as a reader sees it (evidence.service.ts present + withVisibleRefs):
+ * counts-only unless detail_visible, citations re-checked for the reader.
+ */
+export const bastionEvidenceSnapshotSchema = z.object({
+  id: uuid,
+  evaluation_run_id: uuid,
+  assertion_id: uuid,
+  control_id: uuid,
+  outcome: BastionStoredStatus,
+  unprovable_reason: z.string().nullable(),
+  probe_key: z.string().nullable(),
+  probe_version: z.number().int().nullable(),
+  params: z.record(z.unknown()),
+  query_fingerprint: z.string().nullable(),
+  population_checked: z.array(z.string()).nullable(),
+  population_unlisted: z.array(z.string()).nullable(),
+  population_hidden_count: z.number().int(),
+  window_start: ts.nullable(),
+  window_end: ts.nullable(),
+  summary: z.record(z.unknown()),
+  cited_refs: z.array(bastionCitedRefSchema),
+  overflow_count: z.number().int(),
+  manual_evidence_ids: z.array(uuid),
+  exception_ids: z.array(uuid),
+  feed_record_count: z.number().int(),
+  replica_lag_ms: z.number().int().nullable(),
+  content_sha256: z.string().nullable(),
+  ledger_seq: z.number().int().nullable(),
+  created_at: ts,
+  explanation: z.string().nullable(),
+  detail_visible: z.boolean(),
+  hidden_citation_count: z.number().int(),
+  /** Plain names of the cited items (detail readers only), e.g. "PR #42 in rescue-radio-firmware: ...". */
+  cited_labels: z.array(z.string()),
+  cited_items: z.array(z.object({ entity_type: z.string(), entity_id: z.string(), label: z.string().nullable() })),
+});
+export type BastionEvidenceSnapshot = z.infer<typeof bastionEvidenceSnapshotSchema>;
+
+/** GET /controls/:id/evidence. */
+export const bastionEvidenceSnapshotListResponseSchema = z.object({
+  data: z.array(bastionEvidenceSnapshotSchema),
+  has_more: z.boolean(),
+  next_cursor: nextCursor,
+});
+export type BastionEvidenceSnapshotListResponse = z.infer<typeof bastionEvidenceSnapshotListResponseSchema>;
+
+/** GET /evidence/:id. */
+export const bastionEvidenceSnapshotResponseSchema = z.object({ data: bastionEvidenceSnapshotSchema });
+export type BastionEvidenceSnapshotResponse = z.infer<typeof bastionEvidenceSnapshotResponseSchema>;
+
+/* ------------------------------- policies ------------------------------- */
+
+/** One policy (policies.service.ts shapePolicy). Live article facts only for who may open it (#236). */
+export const bastionPolicyRowSchema = z.object({
+  id: uuid,
+  beacon_entry_id: uuid,
+  title: z.string(),
+  audience: bastionPolicyAudienceSchema,
+  cadence_days: z.number().int(),
+  owner_user_id: uuid.nullable(),
+  owner_name: z.string().nullable(),
+  status: BastionPolicyStatus,
+  beacon_status: z.string().nullable(),
+  visibility: z.string().nullable(),
+  shared_with_everyone: z.boolean(),
+  sharing_problem: z.string().nullable(),
+  current_version: z.number().int().nullable(),
+  expires_at: ts.nullable(),
+  days_to_expiry: z.number().int().nullable(),
+  last_verified_at: ts.nullable(),
+  required_people: z.number().int(),
+  attested_count: z.number().int(),
+  not_attested_count: z.number().int(),
+  attestation_label: z.string().nullable(),
+  /** Only 'current' can be acknowledged (#244); null when the viewer may not see the article's state (#296). */
+  article_state: BastionPolicyArticleState.nullable(),
+  /** What the owner should do when the article is missing, retired or expired. */
+  article_problem: z.string().nullable(),
+  created_at: ts,
+  updated_at: ts,
+});
+export type BastionPolicyRow = z.infer<typeof bastionPolicyRowSchema>;
+
+export const bastionPolicyListResponseSchema = z.object({ data: z.array(bastionPolicyRowSchema), next_cursor: nextCursor });
+export type BastionPolicyListResponse = z.infer<typeof bastionPolicyListResponseSchema>;
+
+/** GET /policies/:id, PATCH /policies/:id. */
+export const bastionPolicyResponseSchema = z.object({ data: bastionPolicyRowSchema });
+export type BastionPolicyResponse = z.infer<typeof bastionPolicyResponseSchema>;
+
+/** POST /policies: the policy and the checks it proposed for the control it was linked to. */
+export const bastionPolicyCreateResponseSchema = z.object({ data: bastionPolicyRowSchema.extend({ proposed_assertion_ids: z.array(uuid) }) });
+export type BastionPolicyCreateResponse = z.infer<typeof bastionPolicyCreateResponseSchema>;
+
+/** GET /policies/:id/attestations. */
+export const bastionPolicyAttestationsSchema = z.object({
+  policy: bastionPolicyRowSchema,
+  attested: z.array(z.object({ user_id: uuid, name: z.string(), attested_at: ts })),
+  not_attested: z.array(z.object({ user_id: uuid, name: z.string(), can_open: z.boolean() })),
+  cannot_open_count: z.number().int(),
+  cannot_open_label: z.string().nullable(),
+});
+export type BastionPolicyAttestations = z.infer<typeof bastionPolicyAttestationsSchema>;
+
+export const bastionPolicyAttestationsResponseSchema = z.object({ data: bastionPolicyAttestationsSchema });
+export type BastionPolicyAttestationsResponse = z.infer<typeof bastionPolicyAttestationsResponseSchema>;
+
+/** GET /policies/:id/body: the frozen current version, and where the reader stands. */
+export const bastionPolicyBodySchema = z.object({
+  policy_id: uuid,
+  beacon_entry_id: uuid,
+  title: z.string(),
+  beacon_version: z.number().int(),
+  body_markdown: z.string(),
+  body_sha256: z.string(),
+  saved_at: ts,
+  expires_at: ts.nullable(),
+  cadence_days: z.number().int(),
+  in_audience: z.boolean(),
+  attested_at: ts.nullable(),
+  due: z.boolean(),
+});
+export type BastionPolicyBody = z.infer<typeof bastionPolicyBodySchema>;
+
+export const bastionPolicyBodyResponseSchema = z.object({ data: bastionPolicyBodySchema });
+export type BastionPolicyBodyResponse = z.infer<typeof bastionPolicyBodyResponseSchema>;
+
+/** One row of GET /me/attestations. */
+export const bastionMyAttestationRowSchema = z.object({
+  policy_id: uuid,
+  title: z.string(),
+  current_version: z.number().int().nullable(),
+  shared_with_everyone: z.boolean(),
+  due: z.boolean(),
+  /** Nothing can be read or acknowledged right now (the article is not current) (#296). */
+  paused: z.boolean(),
+  /** Whether the article can be read and acknowledged (#244); null when the reader may not see it (#296). */
+  article_state: BastionPolicyArticleState.nullable(),
+  state_words: z.string(),
+  last_attested_version: z.number().int().nullable(),
+  last_attested_at: ts.nullable(),
+  next_due_at: ts.nullable(),
+});
+export type BastionMyAttestationRow = z.infer<typeof bastionMyAttestationRowSchema>;
+
+export const bastionMyAttestationsResponseSchema = z.object({ data: z.array(bastionMyAttestationRowSchema) });
+export type BastionMyAttestationsResponse = z.infer<typeof bastionMyAttestationsResponseSchema>;
+
+/** POST /policies/:id/request-attestations. */
+export const bastionRequestAttestationsResponseSchema = z.object({
+  data: z.object({ policy_id: uuid, due: z.number().int(), asked: z.number().int(), nudged: z.number().int(), already_nudged_today: z.number().int() }),
+});
+export type BastionRequestAttestationsResponse = z.infer<typeof bastionRequestAttestationsResponseSchema>;
+
+/* ------------------------------- questionnaires ------------------------------- */
+
+/** One questionnaire (questionnaires.service.ts shapeQuestionnaire). */
+export const bastionQuestionnaireSchema = z.object({
+  id: uuid,
+  title: z.string(),
+  requester_label: z.string().nullable(),
+  bond_deal_id: uuid.nullable(),
+  bond_company_id: uuid.nullable(),
+  source_bin_asset_id: uuid.nullable(),
+  source_bin_asset_version_id: uuid.nullable(),
+  source_sha256: z.string().nullable(),
+  format: BastionQuestionnaireFormat,
+  status: BastionQuestionnaireStatus,
+  injection_suspected: z.boolean(),
+  row_count: z.number().int(),
+  rows_done: z.number().int(),
+  low_count: z.number().int(),
+  medium_count: z.number().int(),
+  high_count: z.number().int(),
+  resume_count: z.number().int(),
+  llm_calls_used: z.number().int(),
+  ai_failure_streak: z.number().int(),
+  autofill_use_ai: z.boolean(),
+  due_date: z.string().nullable(),
+  owner_user_id: uuid.nullable(),
+  owner_name: z.string().nullable(),
+  drafting_now: z.boolean(),
+  approved_by: uuid.nullable(),
+  approved_by_name: z.string().nullable(),
+  approved_at: ts.nullable(),
+  created_by: uuid.nullable(),
+  created_by_name: z.string().nullable(),
+  created_at: ts,
+  updated_at: ts,
+  column_map: z.object({ sheets: z.array(bastionQuestionnaireSheetMapSchema), guessed: z.boolean() }).nullable(),
+  source_truncated: z.boolean(),
+  /** Only GET /questionnaires/:id (and the routes that answer with it) carry the preview. */
+  sheet_preview: z
+    .array(z.object({ name: z.string(), row_count: z.number().int(), column_count: z.number().int(), rows: z.array(z.array(z.string())) }))
+    .optional(),
+  counts_label: z.string().nullable(),
+});
+export type BastionQuestionnaire = z.infer<typeof bastionQuestionnaireSchema>;
+
+export const bastionQuestionnaireListResponseSchema = z.object({ data: z.array(bastionQuestionnaireSchema), next_cursor: nextCursor });
+export type BastionQuestionnaireListResponse = z.infer<typeof bastionQuestionnaireListResponseSchema>;
+
+/** GET /questionnaires/:id and every route that changes one (create, update, autofill, approve). */
+export const bastionQuestionnaireResponseSchema = z.object({ data: bastionQuestionnaireSchema });
+export type BastionQuestionnaireResponse = z.infer<typeof bastionQuestionnaireResponseSchema>;
+
+/** A citation chip on an answer: a control or policy the reader may see, by name. */
+export const bastionQuestionnaireCitationSchema = z.object({
+  entity_type: z.string(),
+  entity_id: z.string(),
+  label: z.string().nullable(),
+  state_words: z.string().nullable().optional(),
+});
+export type BastionQuestionnaireCitation = z.infer<typeof bastionQuestionnaireCitationSchema>;
+
+/** One question and its answer (questionnaires.service.ts shapeItems). */
+export const bastionQuestionnaireItemSchema = z.object({
+  id: uuid,
+  questionnaire_id: uuid,
+  sheet_name: z.string(),
+  row_index: z.number().int(),
+  section: z.string().nullable(),
+  question_text: z.string(),
+  answer_kind: BastionAnswerKind,
+  draft_answer: z.string().nullable(),
+  draft_yes_no: z.boolean().nullable(),
+  final_answer: z.string().nullable(),
+  final_yes_no: z.boolean().nullable(),
+  cited_refs: z.array(bastionQuestionnaireCitationSchema),
+  dropped_citation_count: z.number().int(),
+  hidden_citation_count: z.number().int(),
+  confidence: z.number().nullable(),
+  confidence_band: BastionConfidenceBand.nullable(),
+  confidence_words: z.string().nullable(),
+  band_reasons: z.array(z.object({ code: z.string(), words: z.string() })),
+  review_status: BastionItemReviewStatus,
+  assigned_to: uuid.nullable(),
+  assigned_to_name: z.string().nullable(),
+  reviewed_by: uuid.nullable(),
+  reviewed_by_name: z.string().nullable(),
+  reviewed_at: ts.nullable(),
+  needs_review: z.boolean(),
+});
+export type BastionQuestionnaireItem = z.infer<typeof bastionQuestionnaireItemSchema>;
+
+/** What still blocks approval (spec 2.7 step 7). */
+export const bastionQuestionnaireApprovalSchema = z.object({
+  low_unreviewed: z.number().int(),
+  waiting_on_owner: z.number().int(),
+  undrafted: z.number().int(),
+  medium_unreviewed: z.number().int(),
+  can_approve: z.boolean(),
+  blocked_because: z.array(z.string()),
+});
+export type BastionQuestionnaireApproval = z.infer<typeof bastionQuestionnaireApprovalSchema>;
+
+/** GET /questionnaires/:id/items. */
+export const bastionQuestionnaireItemsResponseSchema = z.object({
+  data: z.array(bastionQuestionnaireItemSchema),
+  approval: bastionQuestionnaireApprovalSchema,
+  next_cursor: nextCursor,
+});
+export type BastionQuestionnaireItemsResponse = z.infer<typeof bastionQuestionnaireItemsResponseSchema>;
+
+/** PATCH /questionnaire-items/:id: the reviewed answer and the questionnaire's blockers after it. */
+export const bastionQuestionnaireItemReviewResponseSchema = z.object({ data: bastionQuestionnaireItemSchema, approval: bastionQuestionnaireApprovalSchema });
+export type BastionQuestionnaireItemReviewResponse = z.infer<typeof bastionQuestionnaireItemReviewResponseSchema>;
+
+/** One approved answer in the answer library (questionnaires.service.ts shapeLibrary). */
+export const bastionAnswerLibraryRowSchema = z.object({
+  id: uuid,
+  question_text: z.string(),
+  answer_text: z.string(),
+  yes_no: z.boolean().nullable(),
+  cited_refs: z.array(bastionQuestionnaireCitationSchema),
+  hidden_citation_count: z.number().int(),
+  source_item_id: uuid.nullable(),
+  approved_by: uuid.nullable(),
+  approved_by_name: z.string().nullable(),
+  approved_at: ts.nullable(),
+  stale: z.boolean(),
+  stale_reason: z.string().nullable(),
+  stale_words: z.string().nullable(),
+  retired_at: ts.nullable(),
+  created_at: ts,
+  updated_at: ts,
+  rank: z.number(),
+});
+export type BastionAnswerLibraryRow = z.infer<typeof bastionAnswerLibraryRowSchema>;
+
+export const bastionAnswerLibraryListResponseSchema = z.object({ data: z.array(bastionAnswerLibraryRowSchema), next_cursor: nextCursor });
+export type BastionAnswerLibraryListResponse = z.infer<typeof bastionAnswerLibraryListResponseSchema>;
+
+/** PATCH /answer-library/:id. */
+export const bastionAnswerLibraryResponseSchema = z.object({ data: bastionAnswerLibraryRowSchema });
+export type BastionAnswerLibraryResponse = z.infer<typeof bastionAnswerLibraryResponseSchema>;
+
+/* ------------------------------- sharing: auditor rooms, requests, packets ------------------------------- */
+
+export const BastionRoomState = z.enum(['active', 'expired', 'revoked', 'locked']);
+export type BastionRoomState = z.infer<typeof BastionRoomState>;
+
+/** One auditor room on the creator's side (sharing.service.ts roomOut); never its token. */
+export const bastionAuditorRoomSchema = z.object({
+  id: uuid,
+  label: z.string(),
+  framework_id: uuid.nullable(),
+  framework_name: z.string().nullable(),
+  period_start: z.string().nullable(),
+  period_end: z.string().nullable(),
+  expires_at: ts,
+  revoked_at: ts.nullable(),
+  locked_at: ts.nullable(),
+  state: BastionRoomState,
+  has_passcode: z.boolean(),
+  passcode_failures: z.number().int(),
+  link_hint: z.string().nullable(),
+  control_count: z.number().int(),
+  restricted_count: z.number().int(),
+  access_count: z.number().int(),
+  last_accessed_at: ts.nullable(),
+  open_requests: z.number().int(),
+  created_by_name: z.string().nullable(),
+  created_at: ts,
+});
+export type BastionAuditorRoom = z.infer<typeof bastionAuditorRoomSchema>;
+
+export const bastionAuditorRoomListResponseSchema = z.object({ data: z.array(bastionAuditorRoomSchema), next_cursor: nextCursor });
+export type BastionAuditorRoomListResponse = z.infer<typeof bastionAuditorRoomListResponseSchema>;
+
+/** POST /auditor-rooms/:id/revoke|unlock. */
+export const bastionAuditorRoomResponseSchema = z.object({ data: bastionAuditorRoomSchema });
+export type BastionAuditorRoomResponse = z.infer<typeof bastionAuditorRoomResponseSchema>;
+
+/** POST /auditor-rooms: the room plus its link, shown once. */
+export const bastionCreatedAuditorRoomSchema = bastionAuditorRoomSchema.extend({ token: z.string(), link: z.string(), token_notice: z.string() });
+export type BastionCreatedAuditorRoom = z.infer<typeof bastionCreatedAuditorRoomSchema>;
+
+export const bastionCreatedAuditorRoomResponseSchema = z.object({ data: bastionCreatedAuditorRoomSchema });
+export type BastionCreatedAuditorRoomResponse = z.infer<typeof bastionCreatedAuditorRoomResponseSchema>;
+
+/** One visit in a room's access log: what, when, which visitor, which device (never the raw address). */
+export const bastionAccessLogRowSchema = z.object({
+  id: uuid,
+  accessed_at: ts,
+  view_kind: BastionAuditorViewKind,
+  what: z.string(),
+  visitor: z.string(),
+  device: z.string(),
+});
+export type BastionAccessLogRow = z.infer<typeof bastionAccessLogRowSchema>;
+
+/** GET /auditor-rooms/:id/access-log. */
+export const bastionAccessLogResponseSchema = z.object({
+  data: z.array(bastionAccessLogRowSchema),
+  room: bastionAuditorRoomSchema,
+  has_more: z.boolean(),
+  next_cursor: nextCursor,
+});
+export type BastionAccessLogResponse = z.infer<typeof bastionAccessLogResponseSchema>;
+
+/** One auditor question (GET /auditor-requests). */
+export const bastionAuditorRequestSchema = z.object({
+  id: uuid,
+  room_id: uuid,
+  room_label: z.string(),
+  control_id: uuid.nullable(),
+  control_title: z.string().nullable(),
+  requester_name: z.string().nullable(),
+  body: z.string(),
+  status: BastionAuditorRequestStatus,
+  answer_note: z.string().nullable(),
+  answered_by_name: z.string().nullable(),
+  created_at: ts,
+  updated_at: ts,
+});
+export type BastionAuditorRequest = z.infer<typeof bastionAuditorRequestSchema>;
+
+export const bastionAuditorRequestListResponseSchema = z.object({ data: z.array(bastionAuditorRequestSchema), next_cursor: nextCursor });
+export type BastionAuditorRequestListResponse = z.infer<typeof bastionAuditorRequestListResponseSchema>;
+
+/** PATCH /auditor-requests/:id: the same row the list shows. */
+export const bastionAuditorRequestResponseSchema = z.object({ data: bastionAuditorRequestSchema });
+export type BastionAuditorRequestResponse = z.infer<typeof bastionAuditorRequestResponseSchema>;
+
+/** One audit packet (GET /exports). */
+export const bastionExportPacketSchema = z.object({
+  id: uuid,
+  framework_id: uuid.nullable(),
+  framework_name: z.string().nullable(),
+  period_start: z.string(),
+  period_end: z.string(),
+  include_restricted: z.boolean(),
+  status: BastionExportStatus,
+  stage: z.string().nullable(),
+  stage_progress: z.number().int(),
+  stage_words: z.string().nullable(),
+  size_bytes: z.number().int().nullable(),
+  error: z.string().nullable(),
+  requested_by_name: z.string().nullable(),
+  created_at: ts,
+  updated_at: ts,
+});
+export type BastionExportPacket = z.infer<typeof bastionExportPacketSchema>;
+
+export const bastionExportListResponseSchema = z.object({ data: z.array(bastionExportPacketSchema), next_cursor: nextCursor });
+export type BastionExportListResponse = z.infer<typeof bastionExportListResponseSchema>;
+
+/** POST /exports: the queued packet (the same row the list shows) and whether the worker was told. */
+export const bastionExportCreateResponseSchema = z.object({ data: bastionExportPacketSchema.extend({ queued_for_worker: z.boolean() }) });
+export type BastionExportCreateResponse = z.infer<typeof bastionExportCreateResponseSchema>;
+
+/** One control as an auditor sees it (audit-view.ts auditControls); `id` is the control id. */
+export const bastionRoomControlSchema = z.object({
+  id: uuid,
+  control_id: uuid,
+  control_key: z.string(),
+  title: z.string(),
+  category: z.string().nullable(),
+  owner: z.string().nullable(),
+  state: BastionRoomControlState,
+  state_words: z.string(),
+  reason: z.string().nullable(),
+  requirement_codes: z.array(z.string()),
+  last_evaluated_at: ts.nullable(),
+});
+export type BastionRoomControl = z.infer<typeof bastionRoomControlSchema>;
+
+/** An accepted risk as an auditor sees it (audit-view.ts acceptedRisks). */
+export const bastionRoomRiskSchema = z.object({
+  id: uuid,
+  control_key: z.string(),
+  control_title: z.string(),
+  reason: z.string(),
+  compensating_note: z.string().nullable(),
+  expires_at: ts,
+  owner: z.string().nullable(),
+});
+export type BastionRoomRisk = z.infer<typeof bastionRoomRiskSchema>;
+
+/** One Statement of Applicability row (library/soa.ts soaRows). */
+export const bastionSoaRowSchema = z.object({
+  ref_code: z.string(),
+  title: z.string(),
+  applicable: z.enum(['Yes', 'No', 'Not decided']),
+  justification: z.string(),
+  implementing_controls: z.string(),
+  current_status: z.string(),
+});
+export type BastionSoaRow = z.infer<typeof bastionSoaRowSchema>;
+
+/**
+ * What an auditor sees on opening a room (sharing.service.ts roomOverview): GET /public/room and
+ * the creator's GET /auditor-rooms/:id/preview, which adds `state`.
+ */
+export const bastionRoomOverviewSchema = z.object({
+  room: z.object({
+    label: z.string(),
+    organization_name: z.string(),
+    framework_name: z.string().nullable(),
+    is_iso: z.boolean(),
+    period_start: z.string().nullable(),
+    period_end: z.string().nullable(),
+    expires_at: ts,
+  }),
+  numbers: z.object({
+    met: z.number().int(),
+    not_met: z.number().int(),
+    risk_accepted: z.number().int(),
+    cant_prove: z.number().int(),
+    not_assessed: z.number().int(),
+    total: z.number().int(),
+  }),
+  controls: z.array(bastionRoomControlSchema),
+  accepted_risks: z.array(bastionRoomRiskSchema),
+  restricted_items: z.array(z.object({ id: uuid, title: z.string() })),
+  statement_of_applicability: z.array(bastionSoaRowSchema).nullable(),
+  seals: z.array(
+    z.object({
+      seal_date: z.string(),
+      epoch: z.number().int(),
+      head_seq: z.number().int(),
+      head_hash: z.string(),
+      signature: z.string(),
+      signing_key_id: z.string(),
+    }),
+  ),
+  public_keys: z.array(z.object({ signing_key_id: z.string(), public_key_hex: z.string(), current: z.boolean() })),
+  notices: z.array(z.string()),
+  not_an_audit: z.string(),
+  /** The creator's Preview only. */
+  state: BastionRoomState.optional(),
+});
+export type BastionRoomOverview = z.infer<typeof bastionRoomOverviewSchema>;
+
+export const bastionRoomOverviewResponseSchema = z.object({ data: bastionRoomOverviewSchema });
+export type BastionRoomOverviewResponse = z.infer<typeof bastionRoomOverviewResponseSchema>;
+
+/** A manual-evidence item as an auditor sees it (room.service.ts fileOut). */
+export const bastionRoomFileSchema = z.object({
+  id: uuid,
+  kind: z.enum(['file', 'statement']),
+  title: z.string(),
+  description: z.string().nullable(),
+  source_system: z.string().nullable(),
+  produced_on: z.string().nullable(),
+  period_start: z.string().nullable(),
+  period_end: z.string().nullable(),
+  valid_until: ts.nullable(),
+  restricted: z.boolean(),
+  review: z.string(),
+  scan: z.string().nullable(),
+  superseded: z.boolean(),
+});
+export type BastionRoomFile = z.infer<typeof bastionRoomFileSchema>;
+
+/** One check result as an auditor sees it: counts-only, no cited item ever leaves. */
+export const bastionRoomCheckSchema = z.object({
+  id: uuid,
+  recorded_at: ts,
+  what: z.string().nullable(),
+  outcome: BastionStoredStatus,
+  outcome_words: z.string(),
+  explanation: z.string().nullable(),
+});
+export type BastionRoomCheck = z.infer<typeof bastionRoomCheckSchema>;
+
+/** GET /public/room/controls/:id. */
+export const bastionRoomControlDetailSchema = z.object({
+  control: bastionRoomControlSchema,
+  requirements: z.array(z.object({ ref_code: z.string(), title: z.string().nullable() })),
+  evidence: z.array(bastionRoomCheckSchema),
+  files: z.array(bastionRoomFileSchema),
+  accepted_risks: z.array(bastionRoomRiskSchema),
+});
+export type BastionRoomControlDetail = z.infer<typeof bastionRoomControlDetailSchema>;
+
+export const bastionRoomControlDetailResponseSchema = z.object({ data: bastionRoomControlDetailSchema });
+export type BastionRoomControlDetailResponse = z.infer<typeof bastionRoomControlDetailResponseSchema>;
+
+const roomEvidenceFile = {
+  file: z.enum(['available', 'missing', 'redacted', 'none']),
+  file_words: z.string().nullable(),
+};
+
+/** GET /public/room/evidence/:id: a check, or a manual-evidence file or statement. */
+export const bastionRoomEvidenceDetailSchema = z.discriminatedUnion('kind', [
+  bastionRoomCheckSchema.extend({ kind: z.literal('check'), control_title: z.string(), ...roomEvidenceFile }),
+  bastionRoomFileSchema.extend({ kind: z.literal('file'), ...roomEvidenceFile }),
+  bastionRoomFileSchema.extend({ kind: z.literal('statement'), ...roomEvidenceFile }),
+]);
+export type BastionRoomEvidenceDetail = z.infer<typeof bastionRoomEvidenceDetailSchema>;
+
+export const bastionRoomEvidenceDetailResponseSchema = z.object({ data: bastionRoomEvidenceDetailSchema });
+export type BastionRoomEvidenceDetailResponse = z.infer<typeof bastionRoomEvidenceDetailResponseSchema>;
+
+/** POST /public/room/requests. */
+export const bastionPublicRoomRequestResponseSchema = z.object({
+  data: z.object({ id: uuid, status: BastionAuditorRequestStatus, created_at: ts, message: z.string() }),
+});
+export type BastionPublicRoomRequestResponse = z.infer<typeof bastionPublicRoomRequestResponseSchema>;
+
+/* ------------------------------- settings and delivery problems ------------------------------- */
+
+/** GET /settings `data` (settings.service.ts getSettings). */
+export const bastionSettingsViewSchema = z.object({
+  settings: z.object({
+    remediation_tasks: BastionRemediationTasks,
+    timezone: z.string(),
+    evaluation_hour_local: z.number().int(),
+    llm_provider_id: uuid.nullable(),
+    stale_after_hours: z.number().int(),
+    not_assessed_grace_days: z.number().int(),
+    manual_expiry_warn_days: z.number().int(),
+    questionnaire_high_floor: z.number(),
+    questionnaire_medium_floor: z.number(),
+    max_llm_calls_per_compile: z.number().int(),
+    max_llm_calls_per_questionnaire: z.number().int(),
+    max_rows_per_questionnaire: z.number().int(),
+    auditor_room_max_days: z.number().int(),
+    max_packet_bytes: z.number().int(),
+  }),
+  compliance_project: z.object({ id: uuid, name: z.string().nullable() }).nullable(),
+  ai_providers: z.array(z.object({ id: uuid, name: z.string(), model: z.string(), scope: z.string(), is_default: z.boolean() })),
+  evidence_integrity: z.object({
+    seal_keys: z.array(z.object({ fingerprint: z.string(), current: z.boolean() })),
+    personal_data_key: z.string(),
+    restores_awaiting: z.array(
+      z.object({
+        id: uuid,
+        detected_at: ts,
+        status: BastionRestoreStatus,
+        lost_from_seq: z.number().int().nullable(),
+        lost_to_seq: z.number().int().nullable(),
+        bucket_epoch: z.number().int().nullable(),
+        provisional_epoch: z.number().int(),
+      }),
+    ),
+  }),
+  offsite_backup: z.object({
+    configured: z.boolean(),
+    last_backup_at: ts.nullable(),
+    last_mirror_status: z.string().nullable(),
+    current_through: ts.nullable(),
+  }),
+  storage_ok: z.boolean(),
+  delivery_problems: z.number().int(),
+  updated_at: ts,
+});
+export type BastionSettingsView = z.infer<typeof bastionSettingsViewSchema>;
+
+/** GET /settings, PATCH /settings. */
+export const bastionSettingsResponseSchema = z.object({ data: bastionSettingsViewSchema });
+export type BastionSettingsResponse = z.infer<typeof bastionSettingsResponseSchema>;
+
+/** One delivery that gave up (a dead outbox row), in plain words. */
+export const bastionDeliveryProblemSchema = z.object({
+  id: uuid,
+  what: z.string(),
+  event: z.string().nullable(),
+  attempts: z.number().int(),
+  retried_before: z.number().int(),
+  last_error: z.string().nullable(),
+  created_at: ts,
+});
+export type BastionDeliveryProblem = z.infer<typeof bastionDeliveryProblemSchema>;
+
+export const bastionDeliveryProblemListResponseSchema = z.object({ data: z.array(bastionDeliveryProblemSchema), next_cursor: nextCursor });
+export type BastionDeliveryProblemListResponse = z.infer<typeof bastionDeliveryProblemListResponseSchema>;
+
+/** One row of GET /audit (bastion_audit_log, with names). */
+export const bastionAuditLogRowSchema = z.object({
+  id: uuid,
+  created_at: ts,
+  action: z.string(),
+  subject_type: z.string().nullable(),
+  subject_id: uuid.nullable(),
+  actor_id: uuid.nullable(),
+  actor_kind: z.string().nullable(),
+  impersonator_id: uuid.nullable(),
+  details: z.record(z.unknown()),
+  actor_name: z.string().nullable(),
+  impersonator_name: z.string().nullable(),
+});
+export type BastionAuditLogRow = z.infer<typeof bastionAuditLogRowSchema>;
+
+/** GET /audit: newest first, cursor-paginated. */
+export const bastionAuditLogResponseSchema = z.object({ data: z.array(bastionAuditLogRowSchema), has_more: z.boolean(), next_cursor: nextCursor });
+export type BastionAuditLogResponse = z.infer<typeof bastionAuditLogResponseSchema>;
+
+/* ------------------------------- evaluations, compile runs, the ledger ------------------------------- */
+
+/** One evaluation run (bastion_evaluation_runs). */
+export const bastionEvaluationRunSchema = z.object({
+  id: uuid,
+  trigger: BastionEvaluationTrigger,
+  scope: BastionEvaluationScope,
+  control_id: uuid.nullable(),
+  nightly_for_date: z.string().nullable(),
+  as_of: ts,
+  status: BastionRunStatus,
+  partial_reason: z.string().nullable(),
+  resume_count: z.number().int(),
+  controls_total: z.number().int(),
+  controls_done: z.number().int(),
+  pass_count: z.number().int(),
+  fail_count: z.number().int(),
+  unprovable_count: z.number().int(),
+  started_by: uuid.nullable(),
+  started_at: ts.nullable(),
+  completed_at: ts.nullable(),
+  created_at: ts,
+  updated_at: ts,
+});
+export type BastionEvaluationRun = z.infer<typeof bastionEvaluationRunSchema>;
+
+/** GET /evaluations. */
+export const bastionEvaluationListResponseSchema = z.object({ data: z.array(bastionEvaluationRunSchema), has_more: z.boolean(), next_cursor: nextCursor });
+export type BastionEvaluationListResponse = z.infer<typeof bastionEvaluationListResponseSchema>;
+
+/** GET /evaluations/:id. */
+export const bastionEvaluationResponseSchema = z.object({ data: bastionEvaluationRunSchema });
+export type BastionEvaluationResponse = z.infer<typeof bastionEvaluationResponseSchema>;
+
+/** POST /evaluations (202): the queued run and whether the worker was told. */
+export const bastionStartEvaluationResponseSchema = z.object({ data: bastionEvaluationRunSchema.extend({ enqueued: z.boolean() }) });
+export type BastionStartEvaluationResponse = z.infer<typeof bastionStartEvaluationResponseSchema>;
+
+/** GET /frameworks/:id/compile-runs. */
+export const bastionCompileRunListResponseSchema = z.object({ data: z.array(bastionCompileRunSchema), has_more: z.boolean(), next_cursor: nextCursor });
+export type BastionCompileRunListResponse = z.infer<typeof bastionCompileRunListResponseSchema>;
+
+/** POST /frameworks/:id/compile (202): the run, queued for the worker (AI) or already finished (library). */
+export const bastionCompileRunResponseSchema = z.object({ data: bastionCompileRunSchema });
+export type BastionCompileRunResponse = z.infer<typeof bastionCompileRunResponseSchema>;
+
+/** One daily seal (GET /ledger/seals). */
+export const bastionSealRowSchema = z.object({
+  seal_date: z.string(),
+  epoch: z.number().int(),
+  head_seq: z.number().int(),
+  head_hash: z.string(),
+  signature: z.string(),
+  signing_key_id: z.string(),
+  object_written_at: ts.nullable(),
+  published_at: ts.nullable(),
+});
+export type BastionSealRow = z.infer<typeof bastionSealRowSchema>;
+
+/** GET /ledger/seals: the seals, every key that signed one, and how a seal is signed. */
+export const bastionSealListResponseSchema = z.object({
+  data: z.array(bastionSealRowSchema),
+  has_more: z.boolean(),
+  next_cursor: nextCursor,
+  signing_keys: z.array(z.object({ signing_key_id: z.string(), public_key_hex: z.string(), current: z.boolean() })),
+  canonical_form: z.string(),
+});
+export type BastionSealListResponse = z.infer<typeof bastionSealListResponseSchema>;
+
+/** POST /evidence/:id/verify. */
+export const bastionVerifyEvidenceResponseSchema = z.object({
+  data: z.object({
+    evidence_id: uuid,
+    result: BastionVerificationResult,
+    content_sha256: z.string().nullable(),
+    ledger: z.object({ epoch: z.number().int(), seq: z.number().int(), entry_hash: z.string() }).nullable(),
+    seal: z
+      .object({
+        seal_date: z.string(),
+        head_seq: z.number().int(),
+        signing_key_id: z.string(),
+        signature_valid: z.boolean(),
+        chain_intact: z.boolean(),
+      })
+      .nullable(),
+    notes: z.array(z.string()),
+  }),
+});
+export type BastionVerifyEvidenceResponse = z.infer<typeof bastionVerifyEvidenceResponseSchema>;
+
+/** POST /ledger/restores/:id/acknowledge. */
+export const bastionRestoreAcknowledgeResponseSchema = z.object({
+  data: z.object({
+    id: uuid,
+    status: BastionRestoreStatus,
+    resolution: BastionRestoreResolution,
+    provisional_epoch: z.number().int().nullable(),
+    first_seq: z.number().int().nullable(),
+  }),
+});
+export type BastionRestoreAcknowledgeResponse = z.infer<typeof bastionRestoreAcknowledgeResponseSchema>;
+
+/** POST /policies/:id/attest: the attestation (idempotent: created is false on a repeat). */
+export const bastionAttestResponseSchema = z.object({
+  data: z.object({
+    id: uuid,
+    policy_id: uuid,
+    beacon_version: z.number().int(),
+    body_sha256: z.string(),
+    attested_at: ts,
+    ledger_seq: z.number().int().nullable(),
+    created: z.boolean(),
+    rechecking_controls: z.number().int(),
+  }),
+});
+export type BastionAttestResponse = z.infer<typeof bastionAttestResponseSchema>;
+
+/** POST /feeds/:feed_key/records (the machine push). */
+export const bastionFeedIngestResponseSchema = z.object({
+  data: z.object({ accepted: z.number().int(), duplicates: z.number().int(), quota_remaining: z.number().int() }),
+});
+export type BastionFeedIngestResponse = z.infer<typeof bastionFeedIngestResponseSchema>;
+
+/** POST /delivery-problems/:id/retry. */
+export const bastionDeliveryRetryResponseSchema = z.object({
+  data: z.object({ id: uuid, result: z.enum(['retrying', 'superseded']), message: z.string() }),
+});
+export type BastionDeliveryRetryResponse = z.infer<typeof bastionDeliveryRetryResponseSchema>;

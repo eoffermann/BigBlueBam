@@ -20,8 +20,19 @@ import { createHash } from 'node:crypto';
 import {
   BASTION_CONFIDENCE_WORDS,
   BASTION_QUESTIONNAIRE_MAX_SOURCE_BYTES,
+  type BastionAnswerLibraryListResponse,
   type BastionAnswerLibraryQuery,
+  type BastionAnswerLibraryResponse,
+  type BastionAnswerLibraryRow,
   type BastionAnswerLibraryUpdate,
+  type BastionQuestionnaire,
+  type BastionQuestionnaireApproval,
+  type BastionQuestionnaireCitation,
+  type BastionQuestionnaireItem,
+  type BastionQuestionnaireItemReviewResponse,
+  type BastionQuestionnaireItemsResponse,
+  type BastionQuestionnaireListResponse,
+  type BastionQuestionnaireResponse,
   type BastionQuestionnaireAutofill,
   type BastionQuestionnaireColumnMap,
   type BastionQuestionnaireCreate,
@@ -52,6 +63,7 @@ import {
 } from '../library/questionnaire-parse.js';
 import { STATE_WORDS, tsQueryTerms } from '../library/questionnaire-draft.js';
 import { assertHumanDecider } from './decisions.service.js';
+import type { Served } from '../lib/served.js';
 import type { Viewer } from './types.js';
 
 export interface QuestionnaireDeps {
@@ -152,11 +164,12 @@ async function insertItems(tx: Tx, orgId: string, questionnaireId: string, parse
   return items.length;
 }
 
-function shapeQuestionnaire(r: Record<string, unknown>, opts: { preview?: ReturnType<typeof previewSheets> | null } = {}) {
+/** One questionnaire as the routes send it (bastionQuestionnaireSchema, #371). */
+function shapeQuestionnaire(r: Record<string, unknown>, opts: { preview?: ReturnType<typeof previewSheets> | null } = {}): Served<BastionQuestionnaire> {
   const map = storedMap(r.column_map);
   const { column_map: _omit, ...rest } = r;
   return {
-    ...rest,
+    ...(rest as unknown as Served<BastionQuestionnaire>),
     column_map: map ? { sheets: map.sheets, guessed: map.guessed } : null,
     source_truncated: r.source_truncated === true,
     sheet_preview: opts.preview ?? undefined,
@@ -196,7 +209,7 @@ async function assertDeal(d: QuestionnaireDeps, tx: Tx, viewer: Viewer, dealId: 
 
 /* ------------------------------ list, get ------------------------------ */
 
-export async function listQuestionnaires(d: QuestionnaireDeps, viewer: Viewer, q: BastionQuestionnaireListQuery) {
+export async function listQuestionnaires(d: QuestionnaireDeps, viewer: Viewer, q: BastionQuestionnaireListQuery): Promise<Served<BastionQuestionnaireListResponse>> {
   const rows = await orgTx(d.engine.sql, viewer.org_id, (tx) =>
     tx.unsafe(`SELECT ${Q_SELECT} ${Q_FROM} WHERE q.organization_id = $1 AND ($2::text IS NULL OR q.status = $2) ORDER BY q.created_at DESC LIMIT $3`, [
       viewer.org_id,
@@ -207,7 +220,7 @@ export async function listQuestionnaires(d: QuestionnaireDeps, viewer: Viewer, q
   return { data: rows.map((r) => shapeQuestionnaire(r as Record<string, unknown>)), next_cursor: null };
 }
 
-export async function getQuestionnaire(d: QuestionnaireDeps, viewer: Viewer, id: string) {
+export async function getQuestionnaire(d: QuestionnaireDeps, viewer: Viewer, id: string): Promise<Served<BastionQuestionnaireResponse>> {
   const { row, preview } = await orgTx(d.engine.sql, viewer.org_id, async (tx) => {
     const r = await loadQ(tx, viewer.org_id, id);
     return { row: r, preview: await loadPreview(tx, viewer.org_id, id) };
@@ -217,7 +230,7 @@ export async function getQuestionnaire(d: QuestionnaireDeps, viewer: Viewer, id:
 
 /* ------------------------------ create, update ------------------------------ */
 
-export async function createQuestionnaire(d: QuestionnaireDeps, viewer: Viewer, body: BastionQuestionnaireCreate) {
+export async function createQuestionnaire(d: QuestionnaireDeps, viewer: Viewer, body: BastionQuestionnaireCreate): Promise<Served<BastionQuestionnaireResponse>> {
   // Read the source outside the write transaction (a Bin read is a network hop).
   let parsed: ParsedQuestionnaire;
   let sha: string;
@@ -270,7 +283,7 @@ export async function createQuestionnaire(d: QuestionnaireDeps, viewer: Viewer, 
   return getQuestionnaire(d, viewer, id);
 }
 
-export async function updateQuestionnaire(d: QuestionnaireDeps, viewer: Viewer, id: string, body: BastionQuestionnaireUpdate) {
+export async function updateQuestionnaire(d: QuestionnaireDeps, viewer: Viewer, id: string, body: BastionQuestionnaireUpdate): Promise<Served<BastionQuestionnaireResponse>> {
   await orgTx(d.engine.sql, viewer.org_id, async (tx) => {
     const row = await loadQ(tx, viewer.org_id, id, true);
     if (body.owner_user_id) await assertMember(tx, viewer.org_id, body.owner_user_id, 'owner_user_id');
@@ -326,7 +339,7 @@ export async function updateQuestionnaire(d: QuestionnaireDeps, viewer: Viewer, 
 
 /* ------------------------------ autofill ------------------------------ */
 
-export async function startAutofill(d: QuestionnaireDeps, viewer: Viewer, id: string, body: BastionQuestionnaireAutofill) {
+export async function startAutofill(d: QuestionnaireDeps, viewer: Viewer, id: string, body: BastionQuestionnaireAutofill): Promise<Served<BastionQuestionnaireResponse>> {
   const resume = await orgTx(d.engine.sql, viewer.org_id, async (tx) => {
     const row = await loadQ(tx, viewer.org_id, id, true);
     const status = String(row.status);
@@ -403,14 +416,21 @@ function visibilityCheck(d: QuestionnaireDeps, viewer: Viewer, asker: string | n
   };
 }
 
-async function shapeItems(d: QuestionnaireDeps, viewer: Viewer, tx: Tx, rows: Record<string, unknown>[], asker: string | null = null) {
+/** Questions and answers as the routes send them (bastionQuestionnaireItemSchema, #371). */
+async function shapeItems(
+  d: QuestionnaireDeps,
+  viewer: Viewer,
+  tx: Tx,
+  rows: Record<string, unknown>[],
+  asker: string | null = null,
+): Promise<Served<BastionQuestionnaireItem>[]> {
   const all = rows.flatMap((r) => (r.cited_refs as Array<{ entity_type: string; entity_id: string }> | null) ?? []);
   const labels = await citationLabels(tx, viewer.org_id, all);
   const visibleTo = visibilityCheck(d, viewer, asker);
-  const out = [];
+  const out: Served<BastionQuestionnaireItem>[] = [];
   for (const r of rows) {
     const refs = (r.cited_refs as Array<{ entity_type: string; entity_id: string }> | null) ?? [];
-    const visible = [];
+    const visible: BastionQuestionnaireCitation[] = [];
     for (const ref of refs) {
       const k = `${ref.entity_type}:${ref.entity_id}`;
       const ok = await visibleTo(ref);
@@ -418,8 +438,10 @@ async function shapeItems(d: QuestionnaireDeps, viewer: Viewer, tx: Tx, rows: Re
     }
     const band = r.confidence_band as keyof typeof BASTION_CONFIDENCE_WORDS | null;
     out.push({
-      ...r,
+      ...(r as unknown as Served<BastionQuestionnaireItem>),
       confidence: r.confidence === null ? null : Number(r.confidence),
+      dropped_citation_count: Number(r.dropped_citation_count ?? 0),
+      band_reasons: (r.band_reasons as BastionQuestionnaireItem['band_reasons'] | null) ?? [],
       cited_refs: visible,
       hidden_citation_count: refs.length - visible.length + Number(r.dropped_citation_count ?? 0),
       confidence_words: band ? BASTION_CONFIDENCE_WORDS[band] : null,
@@ -429,7 +451,13 @@ async function shapeItems(d: QuestionnaireDeps, viewer: Viewer, tx: Tx, rows: Re
   return out;
 }
 
-export async function listItems(d: QuestionnaireDeps, viewer: Viewer, id: string, q: BastionQuestionnaireItemListQuery, asker: string | null = null) {
+export async function listItems(
+  d: QuestionnaireDeps,
+  viewer: Viewer,
+  id: string,
+  q: BastionQuestionnaireItemListQuery,
+  asker: string | null = null,
+): Promise<Served<BastionQuestionnaireItemsResponse>> {
   return orgTx(d.engine.sql, viewer.org_id, async (tx) => {
     await loadQ(tx, viewer.org_id, id);
     const rows = await tx.unsafe(
@@ -448,7 +476,7 @@ export async function listItems(d: QuestionnaireDeps, viewer: Viewer, id: string
 }
 
 /** What still stands between this questionnaire and approval (spec 2.7 step 7, story 7). */
-async function approvalBlockers(tx: Tx, orgId: string, id: string) {
+async function approvalBlockers(tx: Tx, orgId: string, id: string): Promise<BastionQuestionnaireApproval> {
   const r = (await tx`
     SELECT count(*) FILTER (WHERE confidence_band = 'low' AND review_status = 'pending')::int AS low_unreviewed,
            count(*) FILTER (WHERE review_status = 'needs_owner')::int AS waiting_on_owner,
@@ -467,7 +495,12 @@ async function approvalBlockers(tx: Tx, orgId: string, id: string) {
   return { ...r, can_approve: reasons.length === 0, blocked_because: reasons };
 }
 
-export async function reviewItem(d: QuestionnaireDeps, viewer: Viewer, itemId: string, body: BastionQuestionnaireItemReview) {
+export async function reviewItem(
+  d: QuestionnaireDeps,
+  viewer: Viewer,
+  itemId: string,
+  body: BastionQuestionnaireItemReview,
+): Promise<Served<BastionQuestionnaireItemReviewResponse>> {
   const qid = await orgTx(d.engine.sql, viewer.org_id, async (tx) => {
     const it = (await tx`
       SELECT i.id, i.questionnaire_id, i.confidence_band, i.draft_answer, i.draft_yes_no, q.status
@@ -501,7 +534,8 @@ export async function reviewItem(d: QuestionnaireDeps, viewer: Viewer, itemId: s
     return String(it.questionnaire_id);
   });
   const items = await listItems(d, viewer, qid, {});
-  const item = items.data.find((x) => (x as unknown as { id: string }).id === itemId);
+  const item = items.data.find((x) => x.id === itemId);
+  if (!item) throw new NotFoundError('We could not find that question.');
   return { data: item, approval: items.approval };
 }
 
@@ -513,7 +547,7 @@ export async function reviewItem(d: QuestionnaireDeps, viewer: Viewer, itemId: s
  * someone; the approver's approval accepts the remaining drafts as they stand (recorded on each
  * row). Approved answers enter the answer library with their citations re-checked for the approver.
  */
-export async function approveQuestionnaire(d: QuestionnaireDeps, viewer: Viewer, id: string) {
+export async function approveQuestionnaire(d: QuestionnaireDeps, viewer: Viewer, id: string): Promise<Served<BastionQuestionnaireResponse>> {
   await orgTx(d.engine.sql, viewer.org_id, async (tx) => {
     await assertHumanDecider(tx, viewer);
     const row = await loadQ(tx, viewer.org_id, id, true);
@@ -600,7 +634,12 @@ export async function exportQuestionnaire(d: QuestionnaireDeps, viewer: Viewer, 
 
 /* ------------------------------ answer library ------------------------------ */
 
-export async function listAnswerLibrary(d: QuestionnaireDeps, viewer: Viewer, q: BastionAnswerLibraryQuery, asker: string | null = null) {
+export async function listAnswerLibrary(
+  d: QuestionnaireDeps,
+  viewer: Viewer,
+  q: BastionAnswerLibraryQuery,
+  asker: string | null = null,
+): Promise<Served<BastionAnswerLibraryListResponse>> {
   return orgTx(d.engine.sql, viewer.org_id, async (tx) => {
     const terms = q.q ? tsQueryTerms(q.q) : '';
     const rows = await tx.unsafe(
@@ -618,21 +657,28 @@ export async function listAnswerLibrary(d: QuestionnaireDeps, viewer: Viewer, q:
   });
 }
 
-async function shapeLibrary(d: QuestionnaireDeps, viewer: Viewer, tx: Tx, rows: Record<string, unknown>[], asker: string | null = null) {
+/** Answer-library rows as the routes send them (bastionAnswerLibraryRowSchema, #371). */
+async function shapeLibrary(
+  d: QuestionnaireDeps,
+  viewer: Viewer,
+  tx: Tx,
+  rows: Record<string, unknown>[],
+  asker: string | null = null,
+): Promise<Served<BastionAnswerLibraryRow>[]> {
   const all = rows.flatMap((r) => (r.cited_refs as Array<{ entity_type: string; entity_id: string }> | null) ?? []);
   const labels = await citationLabels(tx, viewer.org_id, all);
   const visibleTo = visibilityCheck(d, viewer, asker);
-  const out = [];
+  const out: Served<BastionAnswerLibraryRow>[] = [];
   for (const r of rows) {
     const refs = (r.cited_refs as Array<{ entity_type: string; entity_id: string }> | null) ?? [];
-    const visible = [];
+    const visible: BastionQuestionnaireCitation[] = [];
     for (const ref of refs) {
       if (await visibleTo(ref)) {
         visible.push({ ...ref, label: labels.get(`${ref.entity_type}:${ref.entity_id}`)?.label ?? null });
       }
     }
     out.push({
-      ...r,
+      ...(r as unknown as Served<BastionAnswerLibraryRow>),
       rank: Number(r.rank ?? 0),
       cited_refs: visible,
       hidden_citation_count: refs.length - visible.length,
@@ -642,7 +688,7 @@ async function shapeLibrary(d: QuestionnaireDeps, viewer: Viewer, tx: Tx, rows: 
   return out;
 }
 
-export async function updateAnswerLibrary(d: QuestionnaireDeps, viewer: Viewer, id: string, body: BastionAnswerLibraryUpdate) {
+export async function updateAnswerLibrary(d: QuestionnaireDeps, viewer: Viewer, id: string, body: BastionAnswerLibraryUpdate): Promise<Served<BastionAnswerLibraryResponse>> {
   return orgTx(d.engine.sql, viewer.org_id, async (tx) => {
     const cur = (await tx`SELECT id FROM bastion_answer_library WHERE organization_id = ${viewer.org_id} AND id = ${id} FOR UPDATE`)[0];
     if (!cur) throw new NotFoundError('We could not find that answer.');
@@ -657,6 +703,7 @@ export async function updateAnswerLibrary(d: QuestionnaireDeps, viewer: Viewer, 
              l.approved_at, l.stale, l.stale_reason, l.retired_at, l.created_at, l.updated_at, 0 AS rank
         FROM bastion_answer_library l LEFT JOIN users u ON u.id = l.approved_by WHERE l.id = ${id}`;
     const [shaped] = await shapeLibrary(d, viewer, tx, rows as unknown as Record<string, unknown>[]);
+    if (!shaped) throw new NotFoundError('We could not find that answer.');
     return { data: shaped };
   });
 }

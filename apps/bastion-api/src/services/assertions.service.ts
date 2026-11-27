@@ -7,9 +7,11 @@ import type {
   BastionAssertionConfirm,
   BastionAssertionPropose,
   BastionAssertionReject,
+  BastionAssertionResponse,
   BastionAssertionRevise,
   BastionPopulationKind,
 } from '@bigbluebam/shared';
+import type { Served } from '../lib/served.js';
 import { runInOrgScope } from '../plugins/rls.js';
 import type { DbTx } from '../db/index.js';
 import { bastionAssertions, bastionControls, bastionEvidenceFeeds } from '../db/schema/index.js';
@@ -102,7 +104,7 @@ function withoutConfirmation(params: Record<string, unknown>): Record<string, un
   return rest;
 }
 
-export async function proposeAssertion(viewer: Viewer, controlId: string, body: BastionAssertionPropose) {
+export async function proposeAssertion(viewer: Viewer, controlId: string, body: BastionAssertionPropose): Promise<Served<BastionAssertionResponse>> {
   return runInOrgScope(viewer.org_id, async (tx) => {
     await loadActiveControl(tx, viewer.org_id, controlId);
     const kind = await actorKind(tx, viewer.id);
@@ -170,7 +172,7 @@ export async function proposeAssertion(viewer: Viewer, controlId: string, body: 
  * content-immutable). A proposed or rejected original is marked superseded at once; a confirmed
  * original stays in force until the revision is confirmed.
  */
-export async function reviseAssertion(viewer: Viewer, id: string, body: BastionAssertionRevise) {
+export async function reviseAssertion(viewer: Viewer, id: string, body: BastionAssertionRevise): Promise<Served<BastionAssertionResponse>> {
   return runInOrgScope(viewer.org_id, async (tx) => {
     const old = await loadAssertion(tx, viewer.org_id, id);
     if (old.review_status === 'superseded') {
@@ -249,7 +251,7 @@ export async function reviseAssertion(viewer: Viewer, id: string, body: BastionA
  * the complete list"), stored as population_confirmed_at/by in the params, and at least one
  * member: an empty list would make the probe silently check whatever happens to be connected.
  */
-export async function confirmAssertion(viewer: Viewer, id: string, body: BastionAssertionConfirm) {
+export async function confirmAssertion(viewer: Viewer, id: string, body: BastionAssertionConfirm): Promise<Served<BastionAssertionResponse>> {
   return runInOrgScope(viewer.org_id, async (tx) => {
     const a = await loadAssertion(tx, viewer.org_id, id);
     if (a.review_status !== 'proposed') {
@@ -309,7 +311,7 @@ export async function confirmAssertion(viewer: Viewer, id: string, body: Bastion
   });
 }
 
-export async function rejectAssertion(viewer: Viewer, id: string, body: BastionAssertionReject) {
+export async function rejectAssertion(viewer: Viewer, id: string, body: BastionAssertionReject): Promise<Served<BastionAssertionResponse>> {
   return runInOrgScope(viewer.org_id, async (tx) => {
     const a = await loadAssertion(tx, viewer.org_id, id);
     if (a.review_status !== 'proposed') {

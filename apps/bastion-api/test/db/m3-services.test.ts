@@ -3,6 +3,23 @@ import postgres from 'postgres';
 import { templateControlKeys, crosswalk } from '../../src/library/index.js';
 import { SOC2 } from '../../src/library/soc2.js';
 import { ISO27001 } from '../../src/library/iso27001.js';
+import {
+  bastionAdoptFrameworkResponseSchema,
+  bastionApplicabilityResponseSchema,
+  bastionAssertionListResponseSchema,
+  bastionAssertionResponseSchema,
+  bastionCompileRunListResponseSchema,
+  bastionCompileRunResponseSchema,
+  bastionControlDetailResponseSchema,
+  bastionControlsResponseSchema,
+  bastionFrameworkListResponseSchema,
+  bastionFrameworkResponseSchema,
+  bastionNotApplicableSuggestionsSchema,
+  bastionRequirementsResponseSchema,
+  bastionSetupResponseSchema,
+  bastionTemplateListResponseSchema,
+} from '@bigbluebam/shared';
+import { expectWire } from './wire.js';
 
 /**
  * The M3 gate against a real migrated database: SOC 2 then ISO 27001 share controls; the
@@ -85,13 +102,27 @@ describe.skipIf(!DATABASE_URL)('Bastion M3 services (live database)', { timeout:
     const adopted = await s.frameworks.adoptFramework(viewer, { template_key: 'soc2' });
     soc2Id = adopted.data.id;
     expect(adopted.data.controls_created).toBe(templateControlKeys(SOC2).length);
+    // #371: what each route sends (the service result through JSON) is the shared response shape.
+    expectWire(bastionAdoptFrameworkResponseSchema, adopted);
     const run = await s.compile.compileFramework(viewer, soc2Id);
     expect(run.data.status).toBe('succeeded');
+    expectWire(bastionCompileRunResponseSchema, run);
     expect(run.data.used_fallback).toBe(true);
     expect(run.data.assertions_dropped).toBe(0);
     const list = await s.controls.listControls(viewer, { framework_id: soc2Id });
     expect(list.counts.not_set_up).toBe(templateControlKeys(SOC2).length);
     expect(list.data.every((c) => c.assertion_counts.proposed > 0)).toBe(true);
+    expectWire(bastionControlsResponseSchema, list);
+    const setup = await s.setup.getSetup(viewer);
+    expect(setup.data.proposed_checks.length).toBeGreaterThan(0);
+    expect(setup.data.frameworks[0]!.latest_compile_run?.status).toBe('succeeded');
+    expectWire(bastionSetupResponseSchema, setup);
+    expectWire(bastionFrameworkListResponseSchema, await s.frameworks.listFrameworks(viewer));
+    expectWire(bastionTemplateListResponseSchema, await s.frameworks.listTemplates(viewer));
+    const detail = await s.controls.getControl(viewer, list.data[0]!.id);
+    expect(detail.data.assertions.length).toBeGreaterThan(0);
+    expect(detail.data).not.toHaveProperty('tsv');
+    expectWire(bastionControlDetailResponseSchema, detail);
     // A second compile proposes nothing new.
     const again = await s.compile.compileFramework(viewer, soc2Id);
     expect(again.data.assertions_proposed).toBe(0);
@@ -115,14 +146,16 @@ describe.skipIf(!DATABASE_URL)('Bastion M3 services (live database)', { timeout:
   it('completes the Statement of Applicability only when every Annex A requirement is decided', async () => {
     const before = await s.frameworks.getFramework(viewer, isoId);
     expect(before.data.statement_of_applicability?.complete).toBe(false);
+    expectWire(bastionFrameworkResponseSchema, before);
     const physical = ['A.7.1', 'A.7.2', 'A.7.3', 'A.7.4', 'A.7.5', 'A.7.6', 'A.7.8', 'A.7.11', 'A.7.12', 'A.7.13'];
-    await s.frameworks.decideApplicability(viewer, isoId, {
+    const decided = await s.frameworks.decideApplicability(viewer, isoId, {
       decisions: ISO27001.requirements.map((r) =>
         physical.includes(r.ref_code)
           ? { ref_code: r.ref_code, applicability: 'not_applicable' as const, not_applicable_reason: 'No server room' }
           : { ref_code: r.ref_code, applicability: 'applicable' as const },
       ),
     });
+    expectWire(bastionApplicabilityResponseSchema, decided);
     const after = await s.frameworks.getFramework(viewer, isoId);
     expect(after.data.statement_of_applicability?.complete).toBe(true);
     const iso = await s.controls.listControls(viewer, { framework_id: isoId });
@@ -138,6 +171,7 @@ describe.skipIf(!DATABASE_URL)('Bastion M3 services (live database)', { timeout:
     const list = await s.controls.listControls(viewer, {});
     const peer = list.data.find((c) => c.control_key === 'change.peer_review')!;
     const as = await s.controls.listControlAssertions(viewer, peer.id);
+    expectWire(bastionAssertionListResponseSchema, as);
     const proposed = as.data.find((a) => a.review_status === 'proposed')!;
     await expect(s.assertions.confirmAssertion(viewer, proposed.id, { population_confirmed: true })).rejects.toMatchObject({
       code: 'POPULATION_EMPTY',
@@ -150,6 +184,8 @@ describe.skipIf(!DATABASE_URL)('Bastion M3 services (live database)', { timeout:
     });
     const ok = await s.assertions.confirmAssertion(viewer, revised.data.id, { population_confirmed: true });
     expect(ok.data.review_status).toBe('confirmed');
+    expectWire(bastionAssertionResponseSchema, revised);
+    expectWire(bastionAssertionResponseSchema, ok);
     expect(ok.data.population?.confirmed_by).toBe(USER);
     expect(ok.data.population?.members).toHaveLength(2);
     await expect(s.assertions.confirmAssertion(viewer, revised.data.id, {})).rejects.toMatchObject({
@@ -161,6 +197,7 @@ describe.skipIf(!DATABASE_URL)('Bastion M3 services (live database)', { timeout:
 
   it('#238: the AI compile\'s not-applicable suggestions are served for undecided requirements until a person decides', async () => {
     const reqs = await s.frameworks.listRequirements(viewer, soc2Id);
+    expectWire(bastionRequirementsResponseSchema, reqs);
     const [a, b] = reqs.data.filter((r) => r.applicability === 'undecided' && r.links.length > 0);
     const na = [
       { control_key: a!.links[0]!.control_key, ref_code: a!.ref_code, reason: 'We have no physical office.' },
@@ -173,6 +210,7 @@ describe.skipIf(!DATABASE_URL)('Bastion M3 services (live database)', { timeout:
       RETURNING id`;
     const first = await s.frameworks.listNotApplicableSuggestions(viewer, soc2Id);
     expect(first.compile_run_id).toBe(run!.id);
+    expectWire(bastionNotApplicableSuggestionsSchema, first);
     expect(first.data.map((x) => x.ref_code).sort()).toEqual([a!.ref_code, b!.ref_code].sort());
     const sa = first.data.find((x) => x.ref_code === a!.ref_code)!;
     expect(sa).toMatchObject({ suggested_reason: 'We have no physical office.', title: a!.title });
@@ -231,6 +269,7 @@ describe.skipIf(!DATABASE_URL)('Bastion M3 services (live database)', { timeout:
   it('#193: compile-run history is cursor-paginated and says when there is more', async () => {
     const first = await s.compile.listCompileRuns(viewer, soc2Id, { limit: 2 });
     expect(first.data).toHaveLength(2);
+    expectWire(bastionCompileRunListResponseSchema, first);
     expect(first.has_more).toBe(true);
     expect(first.next_cursor).toEqual(expect.any(String));
     const all = await s.compile.listCompileRuns(viewer, soc2Id, { limit: 200 });

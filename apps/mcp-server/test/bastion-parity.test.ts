@@ -86,9 +86,10 @@ function routes(): string[] {
 /** method name -> `METHOD /path` (shaped) for every client method that sends a request. */
 function clientMethods(): Map<string, string> {
   const out = new Map<string, string>();
-  const re = /^ {4}(\w+): \([^]*?request\(\s*'(GET|POST|PATCH|PUT|DELETE)',\s*[`']([^`']*)[`']/gm;
+  // `request<T>(` too: the methods whose responses the tools take apart are typed from the shared schemas (#371).
+  const re = /^ {4}(\w+): \([\s\S]*?request(?:<\w+>)?\(\s*'(GET|POST|PATCH|PUT|DELETE)',\s*[`']([^`']*)[`']/gm;
   for (const m of CLIENT.matchAll(re)) {
-    const path = m[3]!.replace(/\$\{qs\([^]*$/, '').replace(/\$\{[^}]+\}/g, ':p');
+    const path = m[3]!.replace(/\$\{qs\([\s\S]*$/, '').replace(/\$\{[^}]+\}/g, ':p');
     out.set(m[1]!, `${m[2]} ${path}`);
   }
   return out;
