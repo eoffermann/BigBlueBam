@@ -35,6 +35,9 @@ importers:
 
   apps/api:
     dependencies:
+      '@bigbluebam/egress-guard':
+        specifier: workspace:*
+        version: link:../../packages/egress-guard
       '@bigbluebam/logging':
         specifier: workspace:*
         version: link:../../packages/logging

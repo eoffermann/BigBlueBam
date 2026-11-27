@@ -15,6 +15,7 @@
     "db:migrate": "tsx src/db/migrate.ts"
   },
   "dependencies": {
+    "@bigbluebam/egress-guard": "workspace:*",
     "@bigbluebam/logging": "workspace:*",
     "@bigbluebam/permissions": "workspace:*",
     "@bigbluebam/service-health": "workspace:*",
