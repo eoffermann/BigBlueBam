@@ -68,6 +68,41 @@ export function sqlstateOf(err: unknown): string | null {
   return null;
 }
 
+/** SQLSTATEs that say "try again", not "this statement can never succeed" (#295). */
+const TRANSIENT_SQLSTATES = new Set([
+  '40001', // serialization_failure
+  '40P01', // deadlock_detected
+  '55P03', // lock_not_available
+  '57014', // query_canceled (statement timeout)
+  '57P01', // admin_shutdown
+  '57P02', // crash_shutdown
+  '57P03', // cannot_connect_now
+  '53300', // too_many_connections
+]);
+/** postgres.js and socket error codes for a connection that went away under the statement. */
+const TRANSIENT_CONNECTION_CODES = new Set([
+  'CONNECTION_ENDED',
+  'CONNECTION_CLOSED',
+  'CONNECTION_DESTROYED',
+  'CONNECT_TIMEOUT',
+  'ECONNRESET',
+  'ECONNREFUSED',
+  'ETIMEDOUT',
+  'EPIPE',
+]);
+
+/**
+ * A database error that says nothing about the work itself (#295): a deadlock, a serialization
+ * failure, a statement or lock timeout, a server restart, or a connection that was reset (class
+ * 08, or the driver's own connection codes). Callers release and retry these instead of treating
+ * them as a deterministic failure of whatever they were doing.
+ */
+export function isTransientDbError(err: unknown): boolean {
+  const code = sqlstateOf(err);
+  if (!code) return false;
+  return TRANSIENT_SQLSTATES.has(code) || code.startsWith('08') || TRANSIENT_CONNECTION_CODES.has(code);
+}
+
 /** UTC calendar date (YYYY-MM-DD). */
 export function utcDate(d: Date): string {
   return d.toISOString().slice(0, 10);

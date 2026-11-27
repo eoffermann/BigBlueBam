@@ -30,7 +30,7 @@ import { claimNoticeEvery } from '../engine/notice-markers.js';
 import { enqueueBastionEvent } from '../engine/outbox.js';
 import { queueControlRuns, type QueuedRun } from '../engine/evidence-store.js';
 import type { CanAccess } from './decisions.service.js';
-import { ARTICLE_PROBLEM, type ArticleState, articleStateFromSummary, articleStateOf, cannotOpen, entriesOpenTo } from '../lib/policy-access.js';
+import { ARTICLE_PAUSED_NEUTRAL_WORDS, ARTICLE_PROBLEM, ARTICLE_READER_WORDS, type ArticleState, articleStateFromSummary, articleStateOf, cannotOpen, entriesOpenTo } from '../lib/policy-access.js';
 import { beginLedgerBatch, mapAppendError } from './ledger-batch.js';
 import { isUniqueViolation } from './shared.js';
 import type { Viewer } from './types.js';
@@ -172,12 +172,27 @@ function titleOf(p: PolicyRow, live: boolean): string {
   return (live ? p.entry_title : null) ?? p.title_cache ?? 'Untitled policy';
 }
 
-function shapePolicy(p: PolicyRow, facts: PolicyFacts | null, now: Date, live: boolean) {
+/**
+ * Who may manage a policy (its owner, or someone with bastion.policy.write): they are told the
+ * article's state even when they cannot open it, because they are the ones who act on it.
+ */
+export interface PolicyAccessOpts {
+  /** The caller holds bastion.policy.write (routes resolve it with bastionCan). */
+  policyWrite?: boolean;
+}
+
+function mayManage(p: PolicyRow, viewer: Viewer, opts: PolicyAccessOpts): boolean {
+  return opts.policyWrite === true || (p.owner_user_id !== null && p.owner_user_id === viewer.id);
+}
+
+function shapePolicy(p: PolicyRow, facts: PolicyFacts | null, now: Date, live: boolean, manage = false) {
   const shared = sharedWithEveryone(p.visibility);
   const expires = live && p.expires_at ? new Date(p.expires_at) : null;
   const attested = facts ? facts.required_people - facts.not_attested_ids.length : 0;
-  const state = facts?.article_state ?? null;
-  const readable = state === null || state === 'current';
+  // #296: the article's state (retired, past review, deleted) is a Beacon fact like beacon_status,
+  // so it is shown only to a viewer who may open the article (live) or who manages the policy.
+  const state = live || manage ? (facts?.article_state ?? null) : null;
+  const readable = !facts || facts.article_state === 'current';
   return {
     id: p.id,
     beacon_entry_id: p.beacon_entry_id,
@@ -208,7 +223,7 @@ function shapePolicy(p: PolicyRow, facts: PolicyFacts | null, now: Date, live: b
 }
 
 /** GET /policies (row 64). */
-export async function listPolicies(d: PolicyDeps, viewer: Viewer, q: BastionPolicyListQuery) {
+export async function listPolicies(d: PolicyDeps, viewer: Viewer, q: BastionPolicyListQuery, opts: PolicyAccessOpts = {}) {
   const now = d.engine.now();
   const loaded = await orgTx(d.engine.sql, viewer.org_id, async (tx) => {
     // Ordered after shaping, by the title this viewer sees (never by a live title they may not).
@@ -222,7 +237,7 @@ export async function listPolicies(d: PolicyDeps, viewer: Viewer, q: BastionPoli
   });
   const open = await liveFor(d, viewer, loaded.map((r) => r.p));
   const data = loaded
-    .map((r) => shapePolicy(r.p, r.facts, now, isLive(r.p, open)))
+    .map((r) => shapePolicy(r.p, r.facts, now, isLive(r.p, open), mayManage(r.p, viewer, opts)))
     .sort((a, b) => a.title.localeCompare(b.title));
   return { data, next_cursor: null };
 }
@@ -282,18 +297,19 @@ export async function createPolicy(d: PolicyDeps, viewer: Viewer, body: BastionP
     return pid;
   });
   const proposed = body.control_id && d.pinChecks ? await d.pinChecks(viewer, body.control_id, id) : [];
-  const out = await getPolicy(d, viewer, id);
+  // Linking needs bastion.policy.write (row 65), so the caller manages it.
+  const out = await getPolicy(d, viewer, id, { policyWrite: true });
   return { data: { ...out.data, proposed_assertion_ids: proposed } };
 }
 
-export async function getPolicy(d: PolicyDeps, viewer: Viewer, id: string) {
+export async function getPolicy(d: PolicyDeps, viewer: Viewer, id: string, opts: PolicyAccessOpts = {}) {
   const now = d.engine.now();
   const { p, facts } = await orgTx(d.engine.sql, viewer.org_id, async (tx) => {
     const row = await loadPolicy(tx, viewer.org_id, id);
     return { p: row, facts: row.status === 'active' ? await policyFacts(tx, viewer.org_id, id, now) : null };
   });
   const open = await liveFor(d, viewer, [p]);
-  return { data: shapePolicy(p, facts, now, isLive(p, open)) };
+  return { data: shapePolicy(p, facts, now, isLive(p, open), mayManage(p, viewer, opts)) };
 }
 
 /** PATCH /policies/:id (row 66). */
@@ -311,7 +327,8 @@ export async function updatePolicy(d: PolicyDeps, viewer: Viewer, id: string, bo
        WHERE organization_id = ${viewer.org_id} AND id = ${id}`;
     await auditRaw(tx, viewer, 'policy.update', { type: 'policy', id }, { changed: Object.keys(body) });
   });
-  return getPolicy(d, viewer, id);
+  // Changing a policy needs bastion.policy.write (row 66), so the caller manages it.
+  return getPolicy(d, viewer, id, { policyWrite: true });
 }
 
 /**
@@ -377,7 +394,7 @@ async function isInAudience(tx: Tx, orgId: string, p: PolicyRow, userId: string)
 }
 
 /** GET /policies/:id/attestations (row 68). */
-export async function listPolicyAttestations(d: PolicyDeps, viewer: Viewer, id: string) {
+export async function listPolicyAttestations(d: PolicyDeps, viewer: Viewer, id: string, opts: PolicyAccessOpts = {}) {
   const now = d.engine.now();
   const r = await orgTx(d.engine.sql, viewer.org_id, async (tx) => {
     const p = await loadPolicy(tx, viewer.org_id, id);
@@ -392,7 +409,7 @@ export async function listPolicyAttestations(d: PolicyDeps, viewer: Viewer, id: 
   const open = await liveFor(d, viewer, [r.p]);
   return {
     data: {
-      policy: shapePolicy(r.p, r.facts, now, isLive(r.p, open)),
+      policy: shapePolicy(r.p, r.facts, now, isLive(r.p, open), mayManage(r.p, viewer, opts)),
       attested: r.attested
         .filter((a) => !notAttested.includes(String(a.user_id)))
         .map((a) => ({ user_id: String(a.user_id), name: String(a.display_name), attested_at: a.attested_at as string })),
@@ -425,15 +442,22 @@ export async function myAttestations(d: PolicyDeps, viewer: Viewer) {
       const due = facts.not_attested_ids.includes(viewer.id);
       const paused = facts.article_state !== 'current';
       const nextDue = !due && !paused && last ? new Date(new Date(last.attested_at as string).getTime() + p.cadence_days * DAY_MS).toISOString() : null;
+      // #296: the article's state is echoed (and named in the words) only to someone who may open
+      // the article or who owns the policy; anyone else is told only that there is nothing to do.
+      const live = isLive(p, open);
+      const told = live || mayManage(p, viewer, {});
       data.push({
         policy_id: p.id,
-        title: titleOf(p, isLive(p, open)),
+        title: titleOf(p, live),
         current_version: p.version,
         shared_with_everyone: sharedWithEveryone(p.visibility),
         due,
-        article_state: facts.article_state,
+        paused,
+        article_state: told ? facts.article_state : null,
         state_words: paused
-          ? 'Nothing to do for now: this policy is being updated'
+          ? told
+            ? ARTICLE_READER_WORDS[facts.article_state as Exclude<ArticleState, 'current'>]
+            : ARTICLE_PAUSED_NEUTRAL_WORDS
           : due
             ? last
               ? 'A new version or a new year: please read it again'
@@ -563,14 +587,26 @@ async function duePeople(tx: Tx, orgId: string, policyId: string, now: Date) {
 }
 
 /** POST /policies/:id/request-attestations (row 71). One attestation.overdue per person, version and day. */
-export async function requestAttestations(d: PolicyDeps, viewer: Viewer, id: string, body: BastionRequestAttestations) {
+export async function requestAttestations(d: PolicyDeps, viewer: Viewer, id: string, body: BastionRequestAttestations, opts: PolicyAccessOpts = {}) {
   const now = d.engine.now();
+  // #296: which state the article is in is told only to someone who may open it or manage the
+  // policy; anyone else gets the generic "you cannot open this policy" refusal. can_access is an
+  // HTTP call, so it runs here, outside the transaction below.
+  const pre = await orgTx(d.engine.sql, viewer.org_id, async (tx) => {
+    const p = await loadPolicy(tx, viewer.org_id, id);
+    return { p, state: p.status === 'active' ? (await policyFacts(tx, viewer.org_id, id, now)).article_state : 'current' };
+  });
+  if (pre.state !== 'current' && !mayManage(pre.p, viewer, opts) && !(await d.canAccess(viewer.id, 'beacon.entry', pre.p.beacon_entry_id).catch(() => false))) {
+    throw new ForbiddenError('You cannot open this policy in Beacon, so you cannot ask people to read it.', 'POLICY_NOT_READABLE');
+  }
   return orgTx(d.engine.sql, viewer.org_id, async (tx) => {
     const p = await loadPolicy(tx, viewer.org_id, id);
     if (p.status !== 'active') throw new ConflictError('This policy was retired.', 'POLICY_RETIRED');
     const facts = await duePeople(tx, viewer.org_id, id, now);
-    // Never ask people to read an article that cannot be read (#244): the owner is told why instead.
-    if (facts.article_state !== 'current') throw new ConflictError(ARTICLE_PROBLEM[facts.article_state], `POLICY_ARTICLE_${facts.article_state.toUpperCase()}`);
+    // Never ask people to read an article that cannot be read (#244). The same refusal as body and
+    // attest (#285): one state, one status and one literal code (missing is a 404).
+    const refused = articleRefusal(facts.article_state);
+    if (refused) throw refused;
     const only = body.user_ids;
     const targets = only ? facts.not_attested_ids.filter((u) => only.includes(u)) : facts.not_attested_ids;
     let nudged = 0;

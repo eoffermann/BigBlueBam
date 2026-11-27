@@ -14,6 +14,7 @@ import type {
   BastionFixTemplate,
   BastionGapKind,
   BastionGapStatus,
+  BastionPolicyArticleState,
   BastionReadinessBanner,
   BastionReadinessNumbersOut,
 } from '@bigbluebam/shared';
@@ -283,7 +284,8 @@ export interface AnswerLibraryRow {
 export type PolicyAudience = { kind: 'all' } | { kind: 'users'; user_ids: string[] };
 
 /** One linked Beacon article (shapePolicy in apps/bastion-api/src/services/policies.service.ts). */
-export type PolicyArticleState = 'current' | 'missing' | 'retired' | 'expired';
+/** The linked article's state: one union with bastion-api and the MCP tools (#285). */
+export type PolicyArticleState = BastionPolicyArticleState;
 
 export interface PolicyRow {
   id: string;
@@ -343,8 +345,10 @@ export interface MyAttestationRow {
   current_version: number | null;
   shared_with_everyone: boolean;
   due: boolean;
-  /** Whether the Beacon article can be read and acknowledged (#244). */
-  article_state?: PolicyArticleState;
+  /** Nothing can be read or acknowledged right now (the article is not current) (#296). */
+  paused?: boolean;
+  /** Whether the Beacon article can be read and acknowledged (#244); null when you cannot open the article (#296). */
+  article_state?: PolicyArticleState | null;
   state_words: string;
   last_attested_version: number | null;
   last_attested_at: string | null;

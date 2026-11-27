@@ -20,8 +20,8 @@
 // verbatim. Everything lands as `proposed`; a person confirms.
 
 import { type BastionCompileSlice, LLM_CALL_TIMEOUT_MAX_MS, LLM_HOLD_MARGIN_MS } from '@bigbluebam/shared';
-import { type EngineDeps, orgTx, type Tx } from '../engine/context.js';
-import { LLM_CALL_TIMEOUT_MS, LLM_SLICE_START_CUTOFF_MS, MAX_RESUMES, STALE_HEARTBEAT_MS } from '../engine/budgets.js';
+import { type EngineDeps, isTransientDbError, orgTx, sqlstateOf, type Tx } from '../engine/context.js';
+import { LLM_CALL_TIMEOUT_MS, LLM_SLICE_START_CUTOFF_MS, MAX_RESUMES, STALE_HEARTBEAT_MS, TRANSIENT_RELEASE_LIMIT } from '../engine/budgets.js';
 import { RunLeaseHeldError, RunNotFoundError } from '../engine/evaluator.js';
 import { enqueueBastionEvent } from '../engine/outbox.js';
 import { LlmError, LlmThrottledError, LlmTimeoutError, type LlmChat } from '../lib/llm-errors.js';
@@ -107,6 +107,11 @@ export interface CompileProgress {
   withheld_labels: number;
   /** Controls whose write failed after an AI answer (#241): the next slice proposes the library's suggestions for them. */
   retry_with_library: string[];
+  /**
+   * Slices released after a transient database error (#295): not counted against MAX_RESUMES and
+   * no control downgraded, up to TRANSIENT_RELEASE_LIMIT; past that a release counts as usual.
+   */
+  transient_releases: number;
 }
 
 function progressOf(raw: unknown, providerId: string | null): CompileProgress {
@@ -124,6 +129,7 @@ function progressOf(raw: unknown, providerId: string | null): CompileProgress {
     not_applicable: Array.isArray(p.not_applicable) ? p.not_applicable : [],
     withheld_labels: Number(p.withheld_labels ?? 0),
     retry_with_library: Array.isArray(p.retry_with_library) ? p.retry_with_library : [],
+    transient_releases: Number(p.transient_releases ?? 0),
   };
 }
 
@@ -298,9 +304,23 @@ export async function compileSlice(d: CompileAiDeps, body: { organization_id: st
         d.engine.log.info({ run_id: runId }, 'bastion-compile: slice stopped; another slice owns the run now');
         return;
       }
+      // A transient database error (a reset connection, a deadlock, a timeout) says nothing about
+      // the control (#295): the run is released without downgrading any control to the library and
+      // without spending a resume, up to TRANSIENT_RELEASE_LIMIT per run.
+      if (isTransientDbError(err)) {
+        const t = await releaseTransient(d, mine, fence).catch(() => null);
+        if (t) {
+          d.engine.log.warn(
+            { run_id: runId, err: (err as Error).message, sqlstate: sqlstateOf(err), transient_releases: t.transient_releases },
+            `bastion-compile: slice interrupted by a transient database error; run released to resume where it left off (${t.transient_releases} of ${TRANSIENT_RELEASE_LIMIT} free retries)`,
+          );
+          return;
+        }
+      }
       // A slice that throws is recorded and released (#241), never silently re-driven: the run
       // goes back to `queued` with resume_count + 1 and, at MAX_RESUMES, to `partial`, so a
-      // deterministic failure costs at most a bounded number of slices.
+      // deterministic failure costs at most a bounded number of slices. The control is named only
+      // when the throw came from writing its AI answer (#295).
       const r = await failSlice(d, mine, fence, current.control_key).catch(() => null);
       d.engine.log.error(
         { run_id: runId, err: (err as Error).message, resume_count: r?.resume_count ?? null, status: r?.status ?? null },
@@ -369,7 +389,11 @@ async function loadPlanContext(tx: Tx, orgId: string, frameworkId: string) {
   };
 }
 
-/** The control a slice is on, so a slice that throws can name it (#241). */
+/**
+ * The control whose AI answer the slice is WRITING, so a slice that throws there can name it
+ * (#241). Set only around the per-control transaction after an AI answer (#295): a throw anywhere
+ * else (a heartbeat, the call count, a fallback write) never downgrades the control.
+ */
 interface SliceCursor {
   control_key: string | null;
 }
@@ -439,6 +463,27 @@ async function failSlice(d: CompileAiDeps, run: RunRow, f: Fence, controlKey: st
      WHERE id = ${run.id} AND organization_id = ${run.organization_id} AND claimed_by = ${f.claimant} AND slice_token = ${f.token} AND status = 'running'
     RETURNING status, resume_count`);
   return r[0] ? { status: String(r[0].status), resume_count: Number(r[0].resume_count) } : null;
+}
+
+export const SLICE_INTERRUPTED_RETRYING = 'Setup lost its connection to the database for a moment and is picking up where it left off.';
+
+/**
+ * Give the run back after a transient database error (#295), fenced: queued again with nothing
+ * downgraded and resume_count untouched. Null once the run has used TRANSIENT_RELEASE_LIMIT free
+ * releases (or lost its fence); the caller then records the slice as failed, so a database that
+ * keeps failing still parks the run after MAX_RESUMES.
+ */
+async function releaseTransient(d: CompileAiDeps, run: RunRow, f: Fence): Promise<{ transient_releases: number } | null> {
+  const r = await orgTx(d.engine.sql, run.organization_id, (tx) => tx`
+    UPDATE bastion_compile_runs
+       SET drop_reasons = jsonb_set(coalesce(drop_reasons, '{}'::jsonb), '{transient_releases}',
+                                    to_jsonb(coalesce((drop_reasons->>'transient_releases')::int, 0) + 1)),
+           status = 'queued', error = ${SLICE_INTERRUPTED_RETRYING},
+           claimed_by = NULL, heartbeat_at = NULL, slice_token = NULL
+     WHERE id = ${run.id} AND organization_id = ${run.organization_id} AND claimed_by = ${f.claimant} AND slice_token = ${f.token} AND status = 'running'
+       AND coalesce((drop_reasons->>'transient_releases')::int, 0) < ${TRANSIENT_RELEASE_LIMIT}
+    RETURNING (drop_reasons->>'transient_releases')::int AS transient_releases`);
+  return r[0] ? { transient_releases: Number(r[0].transient_releases) } : null;
 }
 
 type AiOutcome =
@@ -540,7 +585,7 @@ async function runSlice(d: CompileAiDeps, run: RunRow, fence: Fence, current: Sl
     // Stop starting controls at the cutoff (spec 7.3), but always do at least one per slice.
     if (processed > 0 && Date.now() - sliceStart > cutoff) break;
     processed += 1;
-    current.control_key = c.control_key;
+    current.control_key = null;
     const lib = libraryControl(c.control_key);
 
     // Ask the AI (outside any transaction), unless there is no provider, no library entry to
@@ -551,6 +596,7 @@ async function runSlice(d: CompileAiDeps, run: RunRow, fence: Fence, current: Sl
     let withheld = 0;
     let cutOff = false;
     let timedOut = false;
+    let answered = false;
     if (!lib) fallbackReason = null;
     else if (progress.retry_with_library.includes(c.control_key)) fallbackReason = 'the AI answer for this control could not be saved, so the library suggestions were proposed';
     else if (!providerId) fallbackReason = 'no AI provider is set up, so the library suggestions were proposed';
@@ -581,6 +627,7 @@ async function runSlice(d: CompileAiDeps, run: RunRow, fence: Fence, current: Sl
         timedOut = outcome.timedOut === true;
         if (timedOut) d.engine.log.warn({ run_id: run.id, control_key: c.control_key }, timeoutAdvice(d));
       } else {
+        answered = true;
         withheld = outcome.withheld;
         const parsed = parseTailoringResponse(outcome.content, outcome.finish_reason);
         if (parsed.ok) tailored = tailoredSuggestions(c.control_key, parsed.value, { requirements: c.requirements, connected: populations, control: lib });
@@ -597,7 +644,9 @@ async function runSlice(d: CompileAiDeps, run: RunRow, fence: Fence, current: Sl
     // One transaction per control: lock the run row ON OUR FENCE (#242), re-read the progress it
     // holds (never this slice's in-memory copy, which another slice may have moved), skip a control
     // already written, then plan, insert and record progress. A slice that lost its fence stops
-    // here, before writing a single assertion.
+    // here, before writing a single assertion. Only a throw from writing an AI answer names the
+    // control for the library retry (#295).
+    current.control_key = answered ? c.control_key : null;
     const written = await orgTx(d.engine.sql, orgId, async (tx) => {
       const locked = (await tx`
         SELECT drop_reasons FROM bastion_compile_runs

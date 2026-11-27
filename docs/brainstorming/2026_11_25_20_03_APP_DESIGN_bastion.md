@@ -677,6 +677,13 @@ policy is no longer shared with everyone" if it was narrowed), then serves the e
 records the version and body hash. A new version resets the requirement. Agents and impersonated
 sessions cannot attest.
 
+A policy whose article is deleted, retired or archived, or past its Beacon review date is paused
+(build decisions #244, #285, #296): nobody is due or nudged, body, attest and request-attestations
+refuse it (404 for a deleted article, 409 `POLICY_ARTICLE_RETIRED` / `POLICY_ARTICLE_EXPIRED`),
+and "Policies to read" says which in plain words and offers no read action. Which of the three
+happened is a Beacon fact, so it is shown only to a viewer who can open the article or who
+manages the policy (its owner or `bastion.policy.write`); anyone else sees "Nothing to do for now."
+
 ---
 
 ## 4. Data model and migrations
@@ -1396,7 +1403,8 @@ starting LLM calls, lets the current call finish, and releases its claims (statu
 `resume_count` incremented). Compose sets **`stop_grace_period: 75s`** on bastion-api (Docker's
 default 10 s would kill a 60 s LLM call), and Railway gets the equivalent
 `RAILWAY_DEPLOYMENT_DRAINING_SECONDS=75` as a `literal` hint. Every release increments
-`resume_count`, and every re-enqueue uses `jobId = run.id + ':' + resume_count`, so it is never
+`resume_count` (build decision #295: except an LLM slice released after a transient database
+error, which is free up to 10 times per run and downgrades no control), and every re-enqueue uses `jobId = run.id + ':' + resume_count`, so it is never
 deduplicated against a completed job still retained by `removeOnComplete`. The tick re-enqueues
 any `queued` run idle for more than 2 minutes, so a released run is never orphaned and never
 holds the partial unique index against tomorrow's nightly run. Completed items are kept and
@@ -1426,7 +1434,8 @@ aborts every org's claim. M4 must therefore:
 **LLM fairness (leased permits).** Copied from `admitLlmCall` in
 `apps/api/src/routes/internal-llm.routes.ts`: Redis sorted sets (`bastion:llm:svc`, and
 `bastion:llm:org:<org>`) of random tokens scored by admit time; on every admit, tokens older than
-the hold window (90 s, above `BASTION_LLM_TIMEOUT_MS`) are purged; `ZREM` in `finally`. Limits:
+the hold window (`BASTION_LLM_TIMEOUT_MS` plus a 30 s margin, `llmHoldWindowMs`; the deadline is
+capped at 180 s; build decision, fix batch 11, #257: this was a fixed 90 s) are purged; `ZREM` in `finally`. Limits:
 3 service-wide, 1 per org. **Fails open when Redis is down**, as the proxy does (its own cap still
 applies). **Throughput, restated:** at roughly 10-20 s per call, the service does at most about
 9-18 calls per minute and one org about 3-6, so a 96-row questionnaire takes roughly 16-32 minutes
@@ -1456,7 +1465,7 @@ same change as the outbox. The drainer calls `publishBoltEvent` positionally.
 | `evidence.uploaded` | manual evidence becomes active |
 | `evidence.expiring` | warning window |
 | `evidence.expired` | expiry |
-| `evidence.integrity_failed` | hash mismatch or an unmatched ledger gap |
+| `evidence.integrity_failed` | hash mismatch or an unmatched ledger gap; a chain break alerts once per break as observed (epoch, seq, problem, row digest), so a new tamper of an already-alerted row alerts again (build decision #297) |
 | `evidence.redacted` | personal data redacted |
 | `ledger.sealed` | daily |
 | `ledger.restore_detected` | the database head is behind the bucket seal |

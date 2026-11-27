@@ -71,6 +71,12 @@ export const MAX_REPLICA_LAG_MS = 30_000;
 export const ORPHAN_REQUEUE_AFTER_MS = 120_000;
 /** Resumable runs are released at most this many times before they go `partial`. */
 export const MAX_RESUMES = 3;
+/**
+ * LLM slices (compile, autofill) released after a transient database error do not count against
+ * MAX_RESUMES, up to this many per run (#295); past it a release counts as usual, so a database
+ * that keeps failing still parks the run.
+ */
+export const TRANSIENT_RELEASE_LIMIT = 10;
 
 /** The worker's evaluate-run poll loop (spec 7). */
 export const EVALUATE_POLL_INTERVAL_MS = 10_000;

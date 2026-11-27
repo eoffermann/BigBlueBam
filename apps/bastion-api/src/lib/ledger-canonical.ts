@@ -142,6 +142,27 @@ export function verifyChain(rows: LedgerRow[], startPrev?: string): ChainProblem
   return problems;
 }
 
+/** The prefix every chain-break notice marker shares (cleared together after a clean full pass). */
+export const CHAIN_BREAK_MARKER_PREFIX = 'evidence.integrity_failed:chain:';
+
+/**
+ * The dedupe key for one chain break, keyed on the OBSERVED broken state (#297): the epoch, the
+ * seq, the problem, and a digest of the row as found (its stored hash, the hash its fields give
+ * now, its stored prev, and the prev the chain expected). An unrepaired break keeps its key and
+ * alerts once; a fresh tamper of the same row (repaired, then changed again; or the same seq in a
+ * later epoch) gives a new key and alerts again.
+ */
+export function chainBreakKey(row: LedgerRow, p: ChainProblem): string {
+  let computed = '';
+  try {
+    computed = entryHash(fieldsOfRow(row));
+  } catch {
+    computed = 'unhashable';
+  }
+  const observed = [row.entry_hash, computed, row.prev_entry_hash ?? '', p.problem === 'prev_mismatch' ? p.expected_prev : ''].join('|');
+  return `${CHAIN_BREAK_MARKER_PREFIX}${Number(row.epoch)}:${p.seq}:${p.problem}:${sha256Hex(observed).slice(0, 32)}`;
+}
+
 // ── Seals (Ed25519) ─────────────────────────────────────────────────────────────────────
 
 /** The fields a seal signs. The same object is the body of `seals/<org>/<seal_date>.json`. */
