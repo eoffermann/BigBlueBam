@@ -157,8 +157,8 @@ if (IN_CI && !usable) {
     registeredOrgId = result.org.id;
     const [m] = await admin`SELECT count(*)::int AS n FROM organization_memberships WHERE org_id = ${result.org.id}`;
     const [r] = await admin`SELECT count(*)::int AS n FROM account_group_memberships WHERE scope_id = ${result.org.id}`;
-    expect(m.n).toBe(1);
-    expect(r.n).toBe(1);
+    expect(m!.n).toBe(1);
+    expect(r!.n).toBe(1);
   });
 
   it('serves the public project calendar for a valid token', async () => {
@@ -183,7 +183,7 @@ if (IN_CI && !usable) {
     expect(res.statusCode, res.body).toBe(201);
     const [m] = await admin`SELECT count(*)::int AS n FROM organization_memberships om
       JOIN users u ON u.id = om.user_id WHERE u.email = ${guestEmail} AND om.org_id = ${orgA}`;
-    expect(m.n).toBe(1);
+    expect(m!.n).toBe(1);
   });
 
   it('answers a Slack slash command for the integration org', async () => {
