@@ -18,7 +18,9 @@ export const bearingGoals = pgTable('bearing_goals', {
   status: varchar('status', { length: 20 }).notNull().default('draft'),
   status_override: boolean('status_override').notNull().default(false),
   progress: numeric('progress', { precision: 5, scale: 2 }).notNull().default('0'),
-  owner_id: uuid('owner_id').references(() => users.id, { onDelete: 'set null' }),
+  // #160: the database FK (migration 0028) is ON DELETE NO ACTION, and owner_id is NOT NULL
+  // there, so 'set null' was never possible.
+  owner_id: uuid('owner_id').references(() => users.id),
   created_by: uuid('created_by').notNull().references(() => users.id),
   created_at: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updated_at: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),

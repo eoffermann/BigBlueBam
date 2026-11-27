@@ -11,7 +11,6 @@ import {
 import { sql } from 'drizzle-orm';
 import { users } from './bbb-refs.js';
 import { banterChannels } from './channels.js';
-import { banterMessages } from './messages.js';
 
 export const banterChannelMemberships = pgTable(
   'banter_channel_memberships',
@@ -27,9 +26,9 @@ export const banterChannelMemberships = pgTable(
     notifications: varchar('notifications', { length: 20 }).notNull().default('default'),
     is_muted: boolean('is_muted').notNull().default(false),
     joined_at: timestamp('joined_at', { withTimezone: true }).defaultNow().notNull(),
-    last_read_message_id: uuid('last_read_message_id').references(() => banterMessages.id, {
-      onDelete: 'set null',
-    }),
+    // -> banter_messages.id ON DELETE SET NULL, enforced by triggers (migration 0335, #160):
+    // banter_messages is partitioned, so no foreign key can reference its id.
+    last_read_message_id: uuid('last_read_message_id'),
     last_read_at: timestamp('last_read_at', { withTimezone: true }),
   },
   (table) => [

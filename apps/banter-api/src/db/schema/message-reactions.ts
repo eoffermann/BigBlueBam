@@ -1,14 +1,13 @@
 import { pgTable, uuid, varchar, timestamp, jsonb, index, uniqueIndex } from 'drizzle-orm/pg-core';
 import { users } from './bbb-refs.js';
-import { banterMessages } from './messages.js';
 
 export const banterMessageReactions = pgTable(
   'banter_message_reactions',
   {
     id: uuid('id').primaryKey().defaultRandom(),
-    message_id: uuid('message_id')
-      .notNull()
-      .references(() => banterMessages.id, { onDelete: 'cascade' }),
+    // -> banter_messages.id ON DELETE CASCADE, enforced by triggers (migration 0335, #160):
+    // banter_messages is partitioned, so no foreign key can reference its id.
+    message_id: uuid('message_id').notNull(),
     user_id: uuid('user_id')
       .notNull()
       .references(() => users.id, { onDelete: 'cascade' }),

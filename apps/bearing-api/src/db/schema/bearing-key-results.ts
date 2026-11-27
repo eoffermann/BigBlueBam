@@ -16,7 +16,8 @@ export const bearingKeyResults = pgTable('bearing_key_results', {
   progress_mode: varchar('progress_mode', { length: 20 }).notNull().default('manual'),
   linked_query: jsonb('linked_query'),
   progress: numeric('progress', { precision: 5, scale: 2 }).notNull().default('0'),
-  owner_id: uuid('owner_id').references(() => users.id, { onDelete: 'set null' }),
+  // #160: the database FK (migration 0028) is ON DELETE NO ACTION.
+  owner_id: uuid('owner_id').references(() => users.id),
   sort_order: integer('sort_order').notNull().default(0),
   created_at: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updated_at: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),

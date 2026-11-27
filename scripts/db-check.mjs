@@ -15,6 +15,12 @@
  * Type mismatches are reported as WARNINGS and do not fail the build, because
  * the regex parser can't perfectly reproduce Postgres's canonical type names.
  *
+ * Single-column foreign keys are compared too (issue #160): a Drizzle
+ * `.references()` the database does not enforce, a different target, or an
+ * explicit `onDelete` that differs from the database fails the build. A
+ * database FK Drizzle leaves out, or an `onDelete` Drizzle leaves out, is a
+ * warning. See diffForeignKeys.
+ *
  * Debugging:
  *   Set DEBUG_DB_CHECK=1 to print the discovered SCHEMA_ROOTS list on stderr
  *   before parsing. Useful for confirming a new product's schema directory
@@ -169,7 +175,7 @@ const PGTABLE_RE = /pgTable\s*\(\s*['"`]([^'"`]+)['"`]\s*,\s*\{/g;
 const COLUMN_RE =
   /^\s*([A-Za-z_][A-Za-z0-9_]*)\s*:\s*([A-Za-z_][A-Za-z0-9_]*)\s*\(\s*(?:['"`]([^'"`]+)['"`])?/;
 
-function parseSchemaFile(filePath) {
+function parseSchemaFile(filePath, root) {
   const src = readFileSync(filePath, 'utf8');
   const relPath = relative(repoRoot, filePath).replaceAll('\\', '/');
 
@@ -195,6 +201,8 @@ function parseSchemaFile(filePath) {
     // Compute the absolute line number the columns object starts on.
     const startLine = src.slice(0, braceOpen).split('\n').length;
     const lines = body.split('\n');
+    /** @type {{sqlName: string, jsKey: string, line: number, idx: number}[]} */
+    const colStarts = [];
     for (let i = 0; i < lines.length; i++) {
       const cm = lines[i].match(COLUMN_RE);
       if (!cm) continue;
@@ -203,6 +211,7 @@ function parseSchemaFile(filePath) {
       const sqlName = cm[3] ?? jsKey;
       // Skip things that look like nested callbacks / non-column helpers.
       if (builderName === 'sql' || builderName === 'index') continue;
+      colStarts.push({ sqlName, jsKey, line: startLine + i, idx: i });
       if (!existing.columns.has(sqlName)) {
         existing.columns.set(sqlName, {
           name: sqlName,
@@ -213,8 +222,163 @@ function parseSchemaFile(filePath) {
       }
     }
 
+    // Foreign keys (issue #160): a column's builder chain runs from its own
+    // line to the next column's line; a `.references(() => table.col, {...})`
+    // inside it is a declared single-column FK.
+    for (let k = 0; k < colStarts.length; k++) {
+      const c = colStarts[k];
+      const end = k + 1 < colStarts.length ? colStarts[k + 1].idx : lines.length;
+      const chain = lines.slice(c.idx, end).join('\n');
+      const fk = parseReferences(chain);
+      if (fk) {
+        drizzleForeignKeys.push({
+          table: tableName,
+          column: c.sqlName,
+          refVar: fk.refVar,
+          refKey: fk.refKey,
+          onDelete: fk.onDelete,
+          onDeleteExplicit: fk.onDeleteExplicit,
+          root,
+          file: relPath,
+          line: c.line,
+        });
+      }
+    }
+
     drizzleTables.set(tableName, existing);
   }
+}
+
+/**
+ * The single-column FK declared in one Drizzle column builder chain, or null.
+ * Exported for scripts/db-check.fk.test.mjs.
+ * @param {string} chain
+ * @returns {{refVar: string, refKey: string, onDelete: string} | null}
+ */
+export function parseReferences(chain) {
+  const m = /\.references\(\s*\(\s*\)\s*(?::\s*[A-Za-z_][A-Za-z0-9_]*\s*)?=>\s*([A-Za-z_][A-Za-z0-9_]*)\.([A-Za-z_][A-Za-z0-9_]*)/.exec(
+    chain,
+  );
+  if (!m) return null;
+  const rest = chain.slice(m.index);
+  // The options object, if any, sits between the target and the call's closing paren.
+  const close = rest.indexOf(')', m[0].length);
+  const od = /onDelete:\s*['"`]([a-z ]+)['"`]/.exec(close === -1 ? rest : rest.slice(0, close));
+  return { refVar: m[1], refKey: m[2], onDelete: od ? od[1] : 'no action', onDeleteExplicit: !!od };
+}
+
+/**
+ * Maps a Drizzle table variable to its SQL table name and its column keys to
+ * SQL column names. Built per schema root first (a variable name means the
+ * table its own app declares), then globally as a fallback for refs stubs.
+ */
+/** @type {Map<string, Map<string, {table: string, keys: Map<string, string>}>>} */
+const tableVarsByRoot = new Map();
+
+function collectTableVars(root, filePath) {
+  const src = readFileSync(filePath, 'utf8');
+  const re = /(?:export\s+)?const\s+([A-Za-z_][A-Za-z0-9_]*)\s*=\s*pgTable\s*\(\s*['"`]([^'"`]+)['"`]\s*,\s*\{/g;
+  let m;
+  let vars = tableVarsByRoot.get(root);
+  if (!vars) {
+    vars = new Map();
+    tableVarsByRoot.set(root, vars);
+  }
+  while ((m = re.exec(src)) !== null) {
+    const braceOpen = m.index + m[0].length - 1;
+    const braceClose = matchBrace(src, braceOpen);
+    const keys = new Map();
+    if (braceClose !== -1) {
+      for (const line of src.slice(braceOpen + 1, braceClose).split('\n')) {
+        const cm = line.match(COLUMN_RE);
+        if (cm && cm[2] !== 'sql' && cm[2] !== 'index') keys.set(cm[1], cm[3] ?? cm[1]);
+      }
+    }
+    vars.set(m[1], { table: m[2], keys });
+  }
+}
+
+/** @type {Array<{table: string, column: string, refVar: string, refKey: string, onDelete: string, root: string, file: string, line: number}>} */
+const drizzleForeignKeys = [];
+
+/** Resolve each declared FK's table variable to SQL names (own root first, then any root). */
+function resolveDrizzleForeignKeys() {
+  /** @type {Map<string, {refTable: string, refColumn: string, onDelete: string, file: string, line: number}>} */
+  const out = new Map();
+  for (const fk of drizzleForeignKeys) {
+    let target = tableVarsByRoot.get(fk.root)?.get(fk.refVar);
+    if (!target) {
+      for (const vars of tableVarsByRoot.values()) {
+        if (vars.has(fk.refVar)) {
+          target = vars.get(fk.refVar);
+          break;
+        }
+      }
+    }
+    if (!target) continue; // unresolvable variable: nothing to compare
+    out.set(`${fk.table}.${fk.column}`, {
+      refTable: target.table,
+      refColumn: target.keys.get(fk.refKey) ?? fk.refKey,
+      onDelete: fk.onDelete,
+      onDeleteExplicit: fk.onDeleteExplicit,
+      file: fk.file,
+      line: fk.line,
+    });
+  }
+  return out;
+}
+
+/**
+ * Compare declared and live single-column FKs. Pure; exported for
+ * scripts/db-check.fk.test.mjs.
+ *   - declared in Drizzle, absent in the DB: error (code relies on a constraint
+ *     nothing enforces; the #160 class)
+ *   - same FK, different referenced table: error
+ *   - an explicit Drizzle onDelete that differs from the DB: error
+ *   - Drizzle left onDelete out but the DB has one: warning (the declaration
+ *     is incomplete, the database is still enforcing something)
+ *   - present in the DB, not declared (many are deliberate: self-references and
+ *     circular imports the schema files leave out): warning
+ * @param {Map<string, {refTable: string, refColumn: string, onDelete: string, onDeleteExplicit?: boolean, file?: string, line?: number}>} declared
+ * @param {Map<string, {refTable: string, refColumn: string, onDelete: string}>} live
+ * @param {Map<string, unknown>} declaredTables  tables Drizzle knows (a DB FK on an unknown table is reported as an unknown table already)
+ */
+export function diffForeignKeys(declared, live, declaredTables) {
+  const errors = [];
+  const warnings = [];
+  for (const [key, d] of declared) {
+    const where = d.file ? `  declared at: ${d.file}:${d.line}\n` : '';
+    const l = live.get(key);
+    if (!l) {
+      errors.push(
+        `MISSING FOREIGN KEY in DB: ${key} -> ${d.refTable}.${d.refColumn} (on delete ${d.onDelete})\n` +
+          where +
+          `  fix: add the constraint in a migration, or (if the database cannot enforce it, e.g. it references a partitioned table) drop the .references() and say what enforces it instead.`,
+      );
+      continue;
+    }
+    if (l.refTable !== d.refTable || l.refColumn !== d.refColumn) {
+      errors.push(
+        `FOREIGN KEY TARGET MISMATCH: ${key}: Drizzle -> ${d.refTable}.${d.refColumn}, DB -> ${l.refTable}.${l.refColumn}\n` + where,
+      );
+    } else if (l.onDelete !== d.onDelete) {
+      const msg = `FOREIGN KEY ON DELETE MISMATCH: ${key} -> ${d.refTable}: Drizzle "${d.onDelete}"${
+        d.onDeleteExplicit === false ? ' (onDelete not declared)' : ''
+      }, DB "${l.onDelete}"\n${where}`;
+      if (d.onDeleteExplicit === false) warnings.push(msg);
+      else errors.push(msg);
+    }
+  }
+  for (const [key, l] of live) {
+    if (declared.has(key)) continue;
+    const table = key.slice(0, key.indexOf('.'));
+    if (!declaredTables.has(table)) continue;
+    warnings.push(
+      `UNDECLARED FOREIGN KEY in DB: ${key} -> ${l.refTable}.${l.refColumn} (on delete ${l.onDelete}): no Drizzle .references() declares it.\n` +
+        `  fix: add .references(() => ..., { onDelete: '${l.onDelete}' }) to the column.`,
+    );
+  }
+  return { errors, warnings };
 }
 
 // ---------------------------------------------------------------------------
@@ -237,7 +401,10 @@ if (!isMain) {
   // Importer just wants the SCHEMA_ROOTS export. Skip the rest.
 } else {
   for (const root of SCHEMA_ROOTS) {
-    for (const f of walkTsFiles(root)) parseSchemaFile(f);
+    for (const f of walkTsFiles(root)) collectTableVars(root, f);
+  }
+  for (const root of SCHEMA_ROOTS) {
+    for (const f of walkTsFiles(root)) parseSchemaFile(f, root);
   }
   await runDriftCheck();
 }
@@ -309,6 +476,8 @@ const sql = postgres(databaseUrl, { max: 1, idle_timeout: 5, connect_timeout: 10
 
 /** @type {Map<string, Map<string, {name:string, dataType:string, udtName:string}>>} */
 const dbTables = new Map();
+/** @type {Map<string, {refTable: string, refColumn: string, onDelete: string}>} keyed "table.column" */
+const dbForeignKeys = new Map();
 
 try {
   // Join to pg_class so we can filter out:
@@ -343,6 +512,35 @@ try {
       name: r.column_name,
       dataType: r.data_type,
       udtName: r.udt_name,
+    });
+  }
+  // Single-column foreign keys (issue #160). conparentid = 0 keeps the FK
+  // declared on a partitioned parent and drops the copies Postgres clones
+  // onto each partition.
+  const fkRows = await sql`
+    SELECT src.relname AS table_name, a.attname AS column_name,
+           dst.relname AS ref_table, af.attname AS ref_column,
+           CASE con.confdeltype
+             WHEN 'a' THEN 'no action' WHEN 'r' THEN 'restrict' WHEN 'c' THEN 'cascade'
+             WHEN 'n' THEN 'set null' WHEN 'd' THEN 'set default' END AS on_delete
+    FROM pg_constraint con
+    JOIN pg_class src ON src.oid = con.conrelid
+    JOIN pg_namespace ns ON ns.oid = src.relnamespace
+    JOIN pg_class dst ON dst.oid = con.confrelid
+    JOIN pg_attribute a ON a.attrelid = con.conrelid AND a.attnum = con.conkey[1]
+    JOIN pg_attribute af ON af.attrelid = con.confrelid AND af.attnum = con.confkey[1]
+    WHERE con.contype = 'f'
+      AND ns.nspname = 'public'
+      AND cardinality(con.conkey) = 1
+      AND con.conparentid = 0
+      AND NOT src.relispartition
+  `;
+  for (const r of fkRows) {
+    if (DB_IGNORE_TABLES.has(r.table_name)) continue;
+    dbForeignKeys.set(`${r.table_name}.${r.column_name}`, {
+      refTable: r.ref_table,
+      refColumn: r.ref_column,
+      onDelete: r.on_delete,
     });
   }
 } catch (err) {
@@ -457,6 +655,13 @@ for (const [tableName, dbCols] of dbTables) {
     }
   }
 }
+
+// Foreign keys (issue #160). A Drizzle `.references()` the database does not
+// enforce is drift: code relying on its ON DELETE (e.g. a cascade) silently
+// leaves orphans. Both directions are reported.
+const fkDiff = diffForeignKeys(resolveDrizzleForeignKeys(), dbForeignKeys, drizzleTables);
+errors.push(...fkDiff.errors);
+warnings.push(...fkDiff.warnings);
 
 // ---------------------------------------------------------------------------
 // 4. Report
