@@ -322,6 +322,10 @@ export const ENV_HINTS = {
   BASTION_LLM_TIMEOUT_MS: { kind: 'literal', value: '60000' },
   // The compile call's output budget (#237); reasoning models need room to think before answering.
   BASTION_LLM_MAX_TOKENS: { kind: 'literal', value: '8192' },
+  // Output budgets for questionnaire answers and fix rewording (#263, #264). Each corpus was
+  // recorded at this value; apps/bastion-api/src/library/llm-call-settings.ts holds the defaults.
+  BASTION_QUESTIONNAIRE_MAX_TOKENS: { kind: 'literal', value: '2048' },
+  BASTION_REWORD_MAX_TOKENS: { kind: 'literal', value: '2048' },
   BASTION_ENGINE_TIMEOUT_MS: { kind: 'literal', value: '30000' },
   BASTION_PROBE_TIMEOUT_MS: { kind: 'literal', value: '8000' },
   BASTION_PUT_TIMEOUT_MS: { kind: 'literal', value: '5000' },

@@ -60,6 +60,7 @@ export function decisionDeps(log: FastifyBaseLogger, redis: Redis): DecisionDeps
       permits: createLlmPermits(redis, { log, holdMs: llmHoldWindowMs(env.BASTION_LLM_TIMEOUT_MS) }),
       llm: llmChat,
       log,
+      maxTokens: env.BASTION_REWORD_MAX_TOKENS,
     }),
   };
 }

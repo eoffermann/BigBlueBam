@@ -70,8 +70,34 @@ const BIN_READ_TIMEOUT_MS = 15_000;
 
 function storedMap(raw: unknown): StoredColumnMap | null {
   const m = raw as Partial<StoredColumnMap> | null;
-  if (!m || !Array.isArray(m.sheets) || !m.source || !Array.isArray(m.source.sheets)) return null;
-  return m as StoredColumnMap;
+  if (!m || !Array.isArray(m.sheets)) return null;
+  return { sheets: m.sheets, guessed: m.guessed === true };
+}
+
+/**
+ * The parsed source grid (bastion_questionnaires.source_grid, #265/#273). Read only where the grid
+ * is needed (a mapping change, export, a one-time preview backfill); list and get never load it.
+ */
+async function loadSource(tx: Tx, orgId: string, id: string): Promise<ParsedQuestionnaire | null> {
+  const raw = (await tx`SELECT source_grid FROM bastion_questionnaires WHERE organization_id = ${orgId} AND id = ${id}`)[0]?.source_grid as
+    | Partial<ParsedQuestionnaire>
+    | null
+    | undefined;
+  if (!raw || !Array.isArray(raw.sheets)) return null;
+  return { format: raw.format === 'xlsx' ? 'xlsx' : 'csv', sheets: raw.sheets, truncated: raw.truncated === true };
+}
+
+/** The mapping screen's preview, stored beside the grid; a row from before 0290 computes and stores it once. */
+async function loadPreview(tx: Tx, orgId: string, id: string): Promise<ReturnType<typeof previewSheets> | null> {
+  const r = (await tx`SELECT source_preview, source_grid IS NOT NULL AS has_grid FROM bastion_questionnaires WHERE organization_id = ${orgId} AND id = ${id}`)[0];
+  if (!r) return null;
+  if (r.source_preview) return r.source_preview as ReturnType<typeof previewSheets>;
+  if (!r.has_grid) return null;
+  const src = await loadSource(tx, orgId, id);
+  if (!src) return null;
+  const preview = previewSheets(src);
+  await tx`UPDATE bastion_questionnaires SET source_preview = ${tx.json(preview as never)} WHERE organization_id = ${orgId} AND id = ${id}`;
+  return preview;
 }
 
 async function maxRows(tx: Tx, orgId: string): Promise<number> {
@@ -126,14 +152,14 @@ async function insertItems(tx: Tx, orgId: string, questionnaireId: string, parse
   return items.length;
 }
 
-function shapeQuestionnaire(r: Record<string, unknown>, opts: { preview?: boolean } = {}) {
+function shapeQuestionnaire(r: Record<string, unknown>, opts: { preview?: ReturnType<typeof previewSheets> | null } = {}) {
   const map = storedMap(r.column_map);
   const { column_map: _omit, ...rest } = r;
   return {
     ...rest,
     column_map: map ? { sheets: map.sheets, guessed: map.guessed } : null,
-    source_truncated: map?.source.truncated ?? false,
-    sheet_preview: opts.preview && map ? previewSheets(map.source) : undefined,
+    source_truncated: r.source_truncated === true,
+    sheet_preview: opts.preview ?? undefined,
     counts_label:
       Number(r.row_count ?? 0) > 0
         ? `${r.rows_done}/${r.row_count} drafted: ${r.high_count} ${BASTION_CONFIDENCE_WORDS.high}, ${r.medium_count} ${BASTION_CONFIDENCE_WORDS.medium}, ${r.low_count} ${BASTION_CONFIDENCE_WORDS.low}`
@@ -142,8 +168,8 @@ function shapeQuestionnaire(r: Record<string, unknown>, opts: { preview?: boolea
 }
 
 const Q_SELECT = `q.id, q.title, q.requester_label, q.bond_deal_id, q.bond_company_id, q.source_bin_asset_id, q.source_bin_asset_version_id,
-  q.source_sha256, q.format, q.column_map, q.status, q.injection_suspected, q.row_count, q.rows_done, q.low_count, q.medium_count,
-  q.high_count, q.resume_count, q.due_date::text AS due_date, q.owner_user_id, ou.display_name AS owner_name, q.claimed_by IS NOT NULL AS drafting_now,
+  q.source_sha256, q.format, q.column_map, q.source_truncated, q.status, q.injection_suspected, q.row_count, q.rows_done, q.low_count, q.medium_count,
+  q.high_count, q.resume_count, q.llm_calls_used, q.ai_failure_streak, q.autofill_use_ai, q.due_date::text AS due_date, q.owner_user_id, ou.display_name AS owner_name, q.claimed_by IS NOT NULL AS drafting_now,
   q.approved_by, au.display_name AS approved_by_name, q.approved_at, q.created_by, cu.display_name AS created_by_name, q.created_at, q.updated_at`;
 const Q_FROM = `FROM bastion_questionnaires q
   LEFT JOIN users ou ON ou.id = q.owner_user_id
@@ -182,8 +208,11 @@ export async function listQuestionnaires(d: QuestionnaireDeps, viewer: Viewer, q
 }
 
 export async function getQuestionnaire(d: QuestionnaireDeps, viewer: Viewer, id: string) {
-  const row = await orgTx(d.engine.sql, viewer.org_id, (tx) => loadQ(tx, viewer.org_id, id));
-  return { data: shapeQuestionnaire(row, { preview: true }) };
+  const { row, preview } = await orgTx(d.engine.sql, viewer.org_id, async (tx) => {
+    const r = await loadQ(tx, viewer.org_id, id);
+    return { row: r, preview: await loadPreview(tx, viewer.org_id, id) };
+  });
+  return { data: shapeQuestionnaire(row, { preview }) };
 }
 
 /* ------------------------------ create, update ------------------------------ */
@@ -212,17 +241,18 @@ export async function createQuestionnaire(d: QuestionnaireDeps, viewer: Viewer, 
     parsed = parsePastedQuestionnaire(body.source.text, body.source.format, cap);
   }
   const map = body.column_map ?? guessColumnMap(parsed);
-  const stored: StoredColumnMap = { sheets: map.sheets, guessed: !body.column_map, source: parsed };
+  const stored: StoredColumnMap = { sheets: map.sheets, guessed: !body.column_map };
 
   const id = await orgTx(d.engine.sql, viewer.org_id, async (tx) => {
     if (body.bond_deal_id) await assertDeal(d, tx, viewer, body.bond_deal_id);
     if (body.owner_user_id) await assertMember(tx, viewer.org_id, body.owner_user_id, 'owner_user_id');
     const ins = await tx`
       INSERT INTO bastion_questionnaires (organization_id, title, requester_label, bond_deal_id, source_bin_asset_id, source_bin_asset_version_id,
-                                          source_sha256, format, column_map, status, due_date, owner_user_id, created_by)
+                                          source_sha256, format, column_map, source_grid, source_truncated, source_preview, status, due_date,
+                                          owner_user_id, created_by)
       VALUES (${viewer.org_id}, ${body.title}, ${body.requester_label ?? null}, ${body.bond_deal_id ?? null}, ${pinned?.asset_id ?? null},
-              ${pinned?.version_id ?? null}, ${sha}, ${parsed.format}, ${tx.json(stored as never)}, 'mapping', ${body.due_date ?? null},
-              ${body.owner_user_id ?? viewer.id}, ${viewer.id})
+              ${pinned?.version_id ?? null}, ${sha}, ${parsed.format}, ${tx.json(stored as never)}, ${tx.json(parsed as never)}, ${parsed.truncated},
+              ${tx.json(previewSheets(parsed) as never)}, 'mapping', ${body.due_date ?? null}, ${body.owner_user_id ?? viewer.id}, ${viewer.id})
       RETURNING id`;
     const qid = String(ins[0]?.id ?? '');
     if (!qid) throw new Error('bastion_questionnaires insert returned no row');
@@ -249,14 +279,27 @@ export async function updateQuestionnaire(d: QuestionnaireDeps, viewer: Viewer, 
       if (!['uploaded', 'mapping'].includes(String(row.status))) {
         throw new ConflictError('The columns can only change before answers are drafted. Add the questionnaire again to start over.', 'MAPPING_LOCKED');
       }
-      const raw = (await tx`SELECT column_map FROM bastion_questionnaires WHERE id = ${id}`)[0]?.column_map;
-      const cur = storedMap(raw);
-      if (!cur) throw new ConflictError('This questionnaire has no readable source left; add it again.', 'SOURCE_MISSING');
+      const source = await loadSource(tx, viewer.org_id, id);
+      if (!source) throw new ConflictError('This questionnaire has no readable source left; add it again.', 'SOURCE_MISSING');
       const map = bastionQuestionnaireColumnMapSchema.parse(body.column_map);
-      const n = await insertItems(tx, viewer.org_id, id, cur.source, map, await maxRows(tx, viewer.org_id));
-      const next: StoredColumnMap = { ...cur, sheets: map.sheets, guessed: false };
-      await tx`UPDATE bastion_questionnaires SET column_map = ${tx.json(next as never)}, row_count = ${n}, rows_done = 0,
-                 high_count = 0, medium_count = 0, low_count = 0, status = 'mapping' WHERE id = ${id}`;
+      // #266: replacing the mapping must not silently drop the questions on sheets it leaves out.
+      const kept = new Set(map.sheets.map((s) => s.sheet_name));
+      const had = (await tx`SELECT DISTINCT sheet_name FROM bastion_questionnaire_items WHERE organization_id = ${viewer.org_id} AND questionnaire_id = ${id}`).map((r) =>
+        String(r.sheet_name),
+      );
+      const dropped = had.filter((s) => !kept.has(s));
+      if (dropped.length > 0 && body.drop_unmapped_sheets !== true) {
+        const names = dropped.map((s) => `"${s || 'the pasted rows'}"`).join(', ');
+        throw new ConflictError(
+          `This mapping leaves out ${dropped.length === 1 ? 'a sheet that holds' : `${dropped.length} sheets that hold`} questions (${names}). Include ${dropped.length === 1 ? 'it' : 'them'}, or confirm you want to drop ${dropped.length === 1 ? 'its' : 'their'} questions.`,
+          'SHEETS_DROPPED',
+        );
+      }
+      const n = await insertItems(tx, viewer.org_id, id, source, map, await maxRows(tx, viewer.org_id));
+      // Only the mapping keys change; anything else column_map carries (autofill_requested_by) stays.
+      await tx`UPDATE bastion_questionnaires
+                  SET column_map = column_map || ${tx.json({ sheets: map.sheets, guessed: false } as never)}, row_count = ${n}, rows_done = 0,
+                      high_count = 0, medium_count = 0, low_count = 0, status = 'mapping' WHERE id = ${id}`;
     }
     const sets: string[] = [];
     const vals: unknown[] = [viewer.org_id, id];
@@ -302,13 +345,17 @@ export async function startAutofill(d: QuestionnaireDeps, viewer: Viewer, id: st
     const left = await tx`
       SELECT count(*)::int AS n FROM bastion_questionnaire_items WHERE organization_id = ${viewer.org_id} AND questionnaire_id = ${id} AND confidence_band IS NULL`;
     if (Number(left[0]?.n ?? 0) === 0) throw new ConflictError('Every question already has a draft. Ask for new drafts to replace the ones nobody reviewed.', 'NOTHING_TO_DRAFT');
-    // The person who asked is the asker for can_access on every citation the worker writes.
+    // The person who asked is the asker for can_access on every citation the worker writes. A new
+    // run starts with no failed AI calls behind it (#260); llm_calls_used is NOT reset: the
+    // per-questionnaire allowance covers every run, redrafts included (#261).
     await tx`
       UPDATE bastion_questionnaires
          SET status = 'answering', claimed_by = NULL, heartbeat_at = NULL, slice_token = NULL, resume_count = 0,
+             ai_failure_streak = 0, last_ai_failure = NULL, autofill_generation = autofill_generation + 1,
+             autofill_use_ai = ${body.use_ai !== false},
              column_map = jsonb_set(column_map, '{autofill_requested_by}', to_jsonb(${viewer.id}::text))
        WHERE organization_id = ${viewer.org_id} AND id = ${id}`;
-    await auditRaw(tx, viewer, 'questionnaire.autofill_start', { type: 'questionnaire', id }, { redraft: body.redraft, kind: await viewerKind(tx, viewer) });
+    await auditRaw(tx, viewer, 'questionnaire.autofill_start', { type: 'questionnaire', id }, { redraft: body.redraft, use_ai: body.use_ai !== false, kind: await viewerKind(tx, viewer) });
     return 0;
   });
   const queued = await d.enqueueAutofill({ organization_id: viewer.org_id, questionnaire_id: id, resume_count: resume });
@@ -511,7 +558,8 @@ export async function approveQuestionnaire(d: QuestionnaireDeps, viewer: Viewer,
     await tx`UPDATE bastion_questionnaires SET status = 'approved', approved_by = ${viewer.id}, approved_at = ${now} WHERE id = ${id}`;
     await enqueueBastionEvent(
       'questionnaire.approved',
-      { questionnaire_id: id, title: row.title, approved_by: viewer.id, rows: Number(row.row_count), learned },
+      // #262: declared in the catalog; refs and counts only (spec 8.1), no customer-supplied title.
+      { questionnaire_id: id, approved_by: viewer.id, row_count: Number(row.row_count), learned },
       tx,
       { orgId: viewer.org_id, idempotencyKey: `questionnaire.approved:${id}`, actorId: viewer.id, actorType: 'user' },
     );
@@ -528,14 +576,14 @@ export async function exportQuestionnaire(d: QuestionnaireDeps, viewer: Viewer, 
     if (!['approved', 'exported'].includes(String(row.status))) {
       throw new ConflictError('Approve the answers before downloading them.', 'NOT_APPROVED');
     }
-    const raw = (await tx`SELECT column_map FROM bastion_questionnaires WHERE id = ${id}`)[0]?.column_map;
-    const map = storedMap(raw);
-    if (!map) throw new ConflictError('This questionnaire has no readable source left; add it again.', 'SOURCE_MISSING');
+    const map = storedMap(row.column_map);
+    const source = await loadSource(tx, viewer.org_id, id);
+    if (!map || !source) throw new ConflictError('This questionnaire has no readable source left; add it again.', 'SOURCE_MISSING');
     const items = await tx`
       SELECT sheet_name, row_index, final_answer, final_yes_no FROM bastion_questionnaire_items
        WHERE organization_id = ${viewer.org_id} AND questionnaire_id = ${id}`;
     const grid = answeredGrid(
-      map.source,
+      source,
       map,
       items.map((i) => ({ sheet_name: String(i.sheet_name), row_index: Number(i.row_index), answer: (i.final_answer as string | null) ?? null, yes_no: (i.final_yes_no as boolean | null) ?? null })),
     );

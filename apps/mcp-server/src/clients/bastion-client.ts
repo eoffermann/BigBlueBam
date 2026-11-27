@@ -269,8 +269,8 @@ export function createBastionClient(bastionApiUrl: string, api: ApiClient, fetch
     // ── M8: questionnaires and the answer library (spec 5.1 rows 72-83) ─────────────────
     // Row 79 (approve) has no client method: session required (spec 2.8, #136). Row 80 (export)
     // is a byte response: no method.
-    listQuestionnaires: (q: Partial<BastionQuestionnaireListQuery> = {}) =>
-      request('GET', `/questionnaires${qs({ status: q.status, limit: q.limit === undefined ? undefined : String(q.limit) })}`),
+    listQuestionnaires: (q: Partial<BastionQuestionnaireListQuery> & Partial<Asker> = {}) =>
+      request('GET', `/questionnaires${qs({ status: q.status, limit: q.limit === undefined ? undefined : String(q.limit), asker_user_id: q.asker_user_id })}`),
     createQuestionnaire: (body: BastionQuestionnaireCreate) => request('POST', '/questionnaires', body),
     getQuestionnaire: (id: string, a: Partial<Asker> = {}) => request('GET', `/questionnaires/${id}${qs({ asker_user_id: a.asker_user_id })}`),
     updateQuestionnaire: (id: string, body: BastionQuestionnaireUpdate) => request('PATCH', `/questionnaires/${id}`, body),
@@ -286,7 +286,7 @@ export function createBastionClient(bastionApiUrl: string, api: ApiClient, fetch
         })}`,
       ),
     reviewQuestionnaireItem: (itemId: string, body: BastionQuestionnaireItemReview) => request('PATCH', `/questionnaire-items/${itemId}`, body),
-    draftAnswer: (body: BastionDraftAnswer) => request('POST', '/answers/draft', body),
+    draftAnswer: (body: BastionDraftAnswer, a: Partial<Asker> = {}) => request('POST', `/answers/draft${qs({ asker_user_id: a.asker_user_id })}`, body),
     searchAnswerLibrary: (q: Partial<BastionAnswerLibraryQuery> & Partial<Asker> = {}) =>
       request(
         'GET',

@@ -6,8 +6,10 @@
 import type { LlmChat } from '../lib/llm-errors.js';
 import type { LlmPermits } from '../lib/llm-permits.js';
 import { buildRewordMessages, parseReword, type Reworded, type RewordInput } from '../library/fix-reword.js';
+import { BASTION_LLM_CALLS } from '../library/llm-call-settings.js';
 
-export const REWORD_TIMEOUT_MS = 25_000;
+/** The fix_reword deadline (library/llm-call-settings.ts); a person is waiting on the request. */
+export const REWORD_TIMEOUT_MS = BASTION_LLM_CALLS.fix_reword.deadlineMs;
 
 export interface ReworderParts {
   resolveProvider: (orgId: string) => Promise<string | null>;
@@ -15,6 +17,8 @@ export interface ReworderParts {
   llm: LlmChat;
   log: { info(obj: object, msg?: string): void };
   timeoutMs?: number;
+  /** max_tokens per rewording (env BASTION_REWORD_MAX_TOKENS; llm-call-settings.ts fix_reword). */
+  maxTokens?: number;
 }
 
 export function createReworder(p: ReworderParts) {
@@ -29,7 +33,7 @@ export function createReworder(p: ReworderParts) {
     let timer: NodeJS.Timeout | undefined;
     try {
       const res = await Promise.race([
-        p.llm({ providerId, messages: buildRewordMessages(input), maxTokens: 2048 }),
+        p.llm({ providerId, messages: buildRewordMessages(input), maxTokens: p.maxTokens ?? BASTION_LLM_CALLS.fix_reword.maxTokensDefault }),
         new Promise<never>((_, reject) => {
           timer = setTimeout(() => reject(new Error('timed out')), p.timeoutMs ?? REWORD_TIMEOUT_MS);
         }),

@@ -16,7 +16,7 @@ import { LlmError, LlmThrottledError, LlmTimeoutError, type LlmChat, type LlmCha
  *   504 UPSTREAM_TIMEOUT, or this client's abort -> LlmTimeoutError (counted apart)
  *   any other failure -> LlmError (the compiler falls back to the library for that control)
  */
-export const llmChat: LlmChat = async (opts: { providerId: string; messages: LlmMessage[]; maxTokens?: number }): Promise<LlmChatResult> => {
+export const llmChat: LlmChat = async (opts: { providerId: string; messages: LlmMessage[]; maxTokens: number }): Promise<LlmChatResult> => {
   const secret = env.INTERNAL_SERVICE_SECRET;
   if (!secret) throw new LlmError('INTERNAL_SERVICE_SECRET is empty; cannot call the internal LLM proxy', null);
   const timeoutMs = env.BASTION_LLM_TIMEOUT_MS;
@@ -34,7 +34,7 @@ export const llmChat: LlmChat = async (opts: { providerId: string; messages: Llm
       body: JSON.stringify({
         provider_id: opts.providerId,
         messages: opts.messages,
-        max_tokens: opts.maxTokens ?? 2048,
+        max_tokens: opts.maxTokens,
         temperature: 0,
         timeout_ms: timeoutMs,
       }),

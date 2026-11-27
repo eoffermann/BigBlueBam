@@ -44,5 +44,9 @@ export interface LlmChatResult {
   finish_reason: string | null;
 }
 
-/** One chat call through the platform's internal LLM proxy (injected so tests can record or fake it). */
-export type LlmChat = (opts: { providerId: string; messages: LlmMessage[]; maxTokens?: number }) => Promise<LlmChatResult>;
+/**
+ * One chat call through the platform's internal LLM proxy (injected so tests can record or fake it).
+ * maxTokens is required: every caller passes its kind's budget from library/llm-call-settings.ts,
+ * so a new caller cannot silently fall back to some other number (#263, #264).
+ */
+export type LlmChat = (opts: { providerId: string; messages: LlmMessage[]; maxTokens: number }) => Promise<LlmChatResult>;

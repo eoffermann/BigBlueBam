@@ -669,15 +669,28 @@ describe('Bastion M8 tools (questionnaires and the answer library)', () => {
 
   it('reads call the right routes and pass asker_user_id through', async () => {
     const tool = await load();
-    await tool('bastion_list_questionnaires').handler({ status: 'in_review' } as never);
+    await tool('bastion_list_questionnaires').handler({ status: 'in_review', asker_user_id: ASKER } as never);
     await tool('bastion_get_questionnaire').handler({ questionnaire_id: Q, needs_review: true, asker_user_id: ASKER } as never);
-    await tool('bastion_search_answer_library').handler({ q: 'mfa', include_stale: false } as never);
+    await tool('bastion_search_answer_library').handler({ q: 'mfa', include_stale: false, asker_user_id: ASKER } as never);
+    await tool('bastion_draft_answer').handler({ question: 'Do you use MFA?', asker_user_id: ASKER } as never);
     expect(calls.map((c) => `${c.method} ${c.url}`)).toEqual([
-      'GET http://bastion-api:4024/v1/questionnaires?status=in_review',
+      `GET http://bastion-api:4024/v1/questionnaires?status=in_review&asker_user_id=${ASKER}`,
       `GET http://bastion-api:4024/v1/questionnaires/${Q}?asker_user_id=${ASKER}`,
       `GET http://bastion-api:4024/v1/questionnaires/${Q}/items?needs_review=true&asker_user_id=${ASKER}`,
-      'GET http://bastion-api:4024/v1/answer-library?q=mfa&include_stale=false',
+      `GET http://bastion-api:4024/v1/answer-library?q=mfa&include_stale=false&asker_user_id=${ASKER}`,
+      `POST http://bastion-api:4024/v1/answers/draft?asker_user_id=${ASKER}`,
     ]);
+  });
+
+  it('the questionnaire and answer-library reads require asker_user_id, like the evidence reads (#274, #217)', async () => {
+    const tool = await load();
+    for (const name of ['bastion_list_questionnaires', 'bastion_get_questionnaire', 'bastion_search_answer_library', 'bastion_draft_answer']) {
+      const asker = tool(name).input.asker_user_id as { safeParse: (v: unknown) => { success: boolean } } | undefined;
+      expect(asker, name).toBeDefined();
+      expect(asker!.safeParse(undefined).success, name).toBe(false);
+      expect(asker!.safeParse('not-a-user').success, name).toBe(false);
+      expect(asker!.safeParse(ASKER).success, name).toBe(true);
+    }
   });
 
   it('writes are typed off the shared Zod', async () => {
@@ -686,7 +699,7 @@ describe('Bastion M8 tools (questionnaires and the answer library)', () => {
     await tool('bastion_create_questionnaire').handler({ title: 'Pasted', pasted_text: 'Question\nDo you use MFA?' } as never);
     await tool('bastion_questionnaire_autofill').handler({ questionnaire_id: Q } as never);
     await tool('bastion_answer_questionnaire_item').handler({ item_id: ITEM, review_status: 'edited', final_answer: 'Yes.' } as never);
-    await tool('bastion_draft_answer').handler({ question: 'Do you use MFA?' } as never);
+    await tool('bastion_draft_answer').handler({ question: 'Do you use MFA?', asker_user_id: ASKER } as never);
     await tool('bastion_update_answer_library').handler({ answer_id: ITEM, stale: false } as never);
     await tool('bastion_update_questionnaire').handler({ questionnaire_id: Q, title: 'Howell v2' } as never);
     expect(calls.map((c) => `${c.method} ${c.url}`)).toEqual([
@@ -694,13 +707,13 @@ describe('Bastion M8 tools (questionnaires and the answer library)', () => {
       'POST http://bastion-api:4024/v1/questionnaires',
       `POST http://bastion-api:4024/v1/questionnaires/${Q}/autofill`,
       `PATCH http://bastion-api:4024/v1/questionnaire-items/${ITEM}`,
-      'POST http://bastion-api:4024/v1/answers/draft',
+      `POST http://bastion-api:4024/v1/answers/draft?asker_user_id=${ASKER}`,
       `PATCH http://bastion-api:4024/v1/answer-library/${ITEM}`,
       `PATCH http://bastion-api:4024/v1/questionnaires/${Q}`,
     ]);
     expect(calls[0]!.body).toEqual({ title: 'Howell', source: { kind: 'bin_asset', bin_asset_id: ASSET } });
     expect(calls[1]!.body).toEqual({ title: 'Pasted', source: { kind: 'pasted', text: 'Question\nDo you use MFA?', format: 'tsv' } });
-    expect(calls[2]!.body).toEqual({ redraft: false });
+    expect(calls[2]!.body).toEqual({ redraft: false, use_ai: true });
     expect(calls[4]!.body).toEqual({ question: 'Do you use MFA?', answer_kind: 'yes_no_text' });
   });
 
