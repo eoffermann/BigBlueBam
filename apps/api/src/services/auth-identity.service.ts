@@ -23,9 +23,11 @@ import { sql } from 'drizzle-orm';
 import argon2 from 'argon2';
 import {
   sqlApiKeyStore,
+  sqlOrgContextStore,
   verifyApiKeyToken as verifyWithStore,
   type ApiKeyCandidate,
   type ApiKeyOwner,
+  type LiveMembershipRow,
   type WarnLogger,
 } from '@bigbluebam/auth-core';
 import { db } from '../db/index.js';
@@ -34,22 +36,12 @@ export { isApiKeyUsable } from '@bigbluebam/auth-core';
 export type { ApiKeyOwner };
 export type VerifiedApiKey = ApiKeyCandidate;
 
-function rowsOf<T>(raw: unknown): T[] {
-  return (Array.isArray(raw) ? raw : ((raw as { rows?: unknown[] })?.rows ?? [])) as T[];
-}
-
-function toDate(v: unknown): Date | null {
-  if (v === null || v === undefined) return null;
-  return v instanceof Date ? v : new Date(v as string);
-}
-
 /** The api's binding of the shared key store: its own db.execute and argon2. */
 export const apiKeyStore = sqlApiKeyStore({
   sql,
   execute: (query) => db.execute(query),
   verifyHash: (hash, token) => argon2.verify(hash, token),
 });
-
 /** Bump api_keys.last_used_at for a key that just authenticated. */
 export async function touchApiKey(keyId: string): Promise<void> {
   await apiKeyStore.touch(keyId);
@@ -66,32 +58,21 @@ export async function verifyApiKeyToken(token: string, log?: WarnLogger): Promis
   return verifyWithStore(token, apiKeyStore, log);
 }
 
-export interface LiveMembershipRow {
-  org_id: string;
-  is_default: boolean;
-  joined_at: Date;
-}
+export type { LiveMembershipRow };
+
+/**
+ * The api's binding of the shared org-context store (#350). The membership, role and
+ * org-liveness reads (and the soft-deleted-org rule they carry) are @bigbluebam/auth-core's,
+ * the same ones every satellite service uses.
+ */
+export const orgContextStore = sqlOrgContextStore({ sql, execute: (query) => db.execute(query) });
 
 /** The user's memberships in live (not soft-deleted) orgs. */
-export async function loadLiveMemberships(userId: string): Promise<LiveMembershipRow[]> {
-  const raw = await db.execute(sql`SELECT org_id, is_default, joined_at FROM auth_user_live_memberships(${userId}::uuid)`);
-  return rowsOf<Record<string, unknown>>(raw).map((r) => ({
-    org_id: String(r.org_id),
-    is_default: r.is_default === true,
-    joined_at: toDate(r.joined_at) as Date,
-  }));
-}
-
-/** org_id -> legacy role for every org the user is grouped into. */
-export async function loadOrgRoles(userId: string): Promise<Map<string, string>> {
-  const raw = await db.execute(sql`SELECT org_id, legacy_role FROM auth_user_org_roles(${userId}::uuid)`);
-  const out = new Map<string, string>();
-  for (const r of rowsOf<{ org_id: string; legacy_role: string }>(raw)) out.set(String(r.org_id), r.legacy_role);
-  return out;
+export function loadLiveMemberships(userId: string): Promise<LiveMembershipRow[]> {
+  return orgContextStore.loadLiveMemberships(userId);
 }
 
 /** True when the org exists and is not soft-deleted. */
-export async function isLiveOrg(orgId: string): Promise<boolean> {
-  const raw = await db.execute(sql`SELECT auth_org_is_live(${orgId}::uuid) AS live`);
-  return rowsOf<{ live: boolean }>(raw)[0]?.live === true;
+export function isLiveOrg(orgId: string): Promise<boolean> {
+  return orgContextStore.isLiveOrg(orgId);
 }

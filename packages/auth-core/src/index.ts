@@ -15,6 +15,8 @@
 //   - how a token is matched to a key row and its owner (verifyApiKeyToken)
 //   - which org a key confines its caller to (resolveKeyOrgPin)
 //   - what requireScope(min) admits (requireScope)
+//   - which orgs a user belongs to, with which role, and which one a request acts in
+//     (resolveOrgContext over sqlOrgContextStore, #350; see org-context.ts)
 //
 // DB-driver agnostic, like @bigbluebam/permissions: this package imports no database client.
 // A host hands it a store. sqlApiKeyStore() builds that store from the host's own drizzle
@@ -34,6 +36,23 @@
 
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { API_KEY_SCOPES } from '@bigbluebam/shared';
+import { rowsOf } from './rows.js';
+
+// Org-context resolution (#350): memberships, roles, soft-deleted orgs, X-Org-Id parsing.
+export {
+  DEFAULT_MEMBERSHIP_ROLE,
+  OrgMembershipError,
+  SUPERUSER_VIEWING_ROLE,
+  requestedOrgIdFromHeader,
+  resolveOrgContext,
+  sqlOrgContextStore,
+  type LiveMembershipRow,
+  type OrgContext,
+  type OrgContextStore,
+  type OrgMembership,
+  type ResolveOrgContextOptions,
+  type SqlOrgContextStoreDeps,
+} from './org-context.js';
 
 // ─────────────────────────────────────────────────────────────────────
 // Scopes and roles
@@ -238,12 +257,6 @@ export interface SqlApiKeyStoreDeps {
   execute: (query: never) => Promise<unknown>;
   /** argon2.verify (the host's own argon2 dependency). */
   verifyHash: (hash: string, token: string) => Promise<boolean>;
-}
-
-function rowsOf(raw: unknown): Array<Record<string, unknown>> {
-  return (Array.isArray(raw) ? raw : ((raw as { rows?: unknown[] } | null)?.rows ?? [])) as Array<
-    Record<string, unknown>
-  >;
 }
 
 function toDate(v: unknown): Date | null {

@@ -42,10 +42,24 @@ vi.mock('../src/db/index.js', () => {
       },
     },
   );
+  // Org context now comes from @bigbluebam/auth-core's sqlOrgContextStore (#350), which calls
+  // migration 0311's identity functions through db.execute. Answer them from the same fixture.
+  const execute = async (query: { queryChunks?: unknown[] }) => {
+    const text = JSON.stringify(query?.queryChunks ?? query);
+    if (text.includes('auth_user_live_memberships')) {
+      return state.membershipRows.map((r) => ({ org_id: r.org_id, is_default: r.is_default, joined_at: r.joined_at }));
+    }
+    if (text.includes('auth_user_org_roles')) {
+      return state.membershipRows.filter((r) => r.role).map((r) => ({ org_id: r.org_id, legacy_role: r.role }));
+    }
+    if (text.includes('auth_org_is_live')) return [{ live: true }];
+    throw new Error(`unexpected query: ${text.slice(0, 200)}`);
+  };
   return {
     db: {
       select: () => chain,
       update: () => chain,
+      execute,
     },
   };
 });

@@ -5,30 +5,20 @@ import { db } from '../db/index.js';
 import { sessions } from '../db/schema/sessions.js';
 import { users } from '../db/schema/users.js';
 import { impersonationSessions } from '../db/schema/impersonation-sessions.js';
+import { orgContextStore, touchApiKey, verifyApiKeyToken } from '../services/auth-identity.service.js';
 import {
-  isLiveOrg,
-  loadLiveMemberships,
-  loadOrgRoles,
-  touchApiKey,
-  verifyApiKeyToken,
-} from '../services/auth-identity.service.js';
-import { resolveKeyOrgPin } from '@bigbluebam/auth-core';
+  OrgMembershipError,
+  requestedOrgIdFromHeader,
+  resolveKeyOrgPin,
+  resolveOrgContext,
+  type OrgMembership,
+} from '@bigbluebam/auth-core';
 import { resolveEffectiveOrg } from './org-context.js';
 
-const UUID_REGEX_HEADER = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-export class OrgMembershipError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = 'OrgMembershipError';
-  }
-}
-
-export interface OrgMembership {
-  org_id: string;
-  role: string;
-  is_default: boolean;
-}
+// Org-context errors and membership shape are @bigbluebam/auth-core's (#350); re-exported for
+// existing importers.
+export { OrgMembershipError };
+export type { OrgMembership };
 
 export interface AuthUser {
   id: string;
@@ -92,100 +82,6 @@ interface BaseUserRow {
   kind: 'human' | 'agent' | 'service';
 }
 
-/**
- * Resolves the active organization context for a user.
- *
- * Precedence:
- *   1. X-Org-Id request header (if user is a member of that org)
- *   2. The user's default membership (is_default=true)
- *   3. The user's first membership (by joined_at)
- *   4. Fallback to users.org_id if no memberships exist yet (pre-migration)
- */
-async function resolveOrgContext(
-  userId: string,
-  fallbackOrgId: string,
-  requestedOrgId: string | undefined,
-): Promise<{ memberships: OrgMembership[]; activeOrgId: string; activeRole: string }> {
-  // Wave E.F: role is no longer a column on organization_memberships. It
-  // is resolved per-org from account_group_memberships → permission_groups.
-  // We fetch memberships and roles in parallel (auth-identity.service, the
-  // same join resolveUserOrgRoles performs), then zip each membership row
-  // with its resolved role.
-  // Runs before the org GUC is bound, so it reads through the identity
-  // functions (#105, services/auth-identity.service.ts). Memberships exclude
-  // soft-deleted orgs (migration 0191): a member can never resolve into a
-  // deleted org even if a membership row lingers.
-  const [rows, rolesByOrg] = await Promise.all([loadLiveMemberships(userId), loadOrgRoles(userId)]);
-
-  if (rows.length === 0) {
-    // User hasn't been backfilled yet — fall back to users.org_id.
-    // If users.org_id is also NULL/empty, the user has no valid org context.
-    if (!fallbackOrgId) {
-      throw new OrgMembershipError('User has no organization memberships and no fallback org_id');
-    }
-    // Don't fall back into a soft-deleted org (single-org member of a deleted
-    // org → orgless, not silently re-resolved into the dead org).
-    if (!(await isLiveOrg(fallbackOrgId))) {
-      throw new OrgMembershipError('User has no active organization memberships');
-    }
-    const fallbackRole = rolesByOrg.get(fallbackOrgId) ?? 'member';
-    return {
-      memberships: [
-        { org_id: fallbackOrgId, role: fallbackRole, is_default: true },
-      ],
-      activeOrgId: fallbackOrgId,
-      activeRole: fallbackRole,
-    };
-  }
-
-  // Sort by joined_at ascending so "first membership" is deterministic.
-  rows.sort((a, b) => new Date(a.joined_at).getTime() - new Date(b.joined_at).getTime());
-
-  const memberships: OrgMembership[] = rows.map((r) => ({
-    org_id: r.org_id,
-    // A membership without a group row is treated as 'member' by default.
-    // The Wave A backfill (migration 0148) ensured every existing
-    // membership had a matching group row, so this fallback is only hit
-    // when a row is created outside the supported write paths.
-    role: rolesByOrg.get(r.org_id) ?? 'member',
-    is_default: r.is_default,
-  }));
-
-  let active: OrgMembership | undefined;
-
-  if (requestedOrgId) {
-    active = memberships.find((m) => m.org_id === requestedOrgId);
-    if (!active) {
-      throw new OrgMembershipError(
-        `User is not a member of the requested organization: ${requestedOrgId}`,
-      );
-    }
-  }
-  if (!active) {
-    active = memberships.find((m) => m.is_default);
-  }
-  if (!active) {
-    active = memberships[0];
-  }
-
-  return {
-    memberships,
-    activeOrgId: active!.org_id,
-    activeRole: active!.role,
-  };
-}
-
-function getRequestedOrgId(request: FastifyRequest): string | undefined {
-  const header = request.headers['x-org-id'];
-  let value: string | undefined;
-  if (typeof header === 'string' && header.length > 0) value = header;
-  else if (Array.isArray(header) && header.length > 0) value = header[0];
-  if (!value) return undefined;
-  // Validate UUID shape; silently ignore malformed header values.
-  if (value.length !== 36 || !UUID_REGEX_HEADER.test(value)) return undefined;
-  return value;
-}
-
 export async function buildAuthUser(
   row: BaseUserRow,
   apiKeyScope: string | null,
@@ -198,8 +94,9 @@ export async function buildAuthUser(
   // we still honor X-Org-Id (same rules as session auth) because
   // SuperUsers can legitimately operate across orgs.
   const requestedOrgId =
-    apiKeyOrgId && !row.is_superuser ? undefined : getRequestedOrgId(request);
+    apiKeyOrgId && !row.is_superuser ? undefined : requestedOrgIdFromHeader(request.headers['x-org-id']);
   const { memberships, activeOrgId, activeRole } = await resolveOrgContext(
+    orgContextStore,
     row.id,
     row.org_id,
     requestedOrgId,

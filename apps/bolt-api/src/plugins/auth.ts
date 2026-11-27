@@ -6,16 +6,18 @@ import {
   applyKeyOrgPin,
   bearerToken,
   isApiKeyOrgPinned,
+  type OrgMembership,
+  OrgMembershipError,
+  requestedOrgIdFromHeader,
+  resolveOrgContext,
   sqlApiKeyStore,
+  sqlOrgContextStore,
   verifyApiKeyToken,
 } from '@bigbluebam/auth-core';
 import { db } from '../db/index.js';
 import {
   sessions,
   users,
-  organizationMemberships,
-  accountGroupMemberships,
-  permissionGroups,
   impersonationSessions,
 } from '../db/schema/index.js';
 
@@ -26,20 +28,16 @@ const apiKeyStore = sqlApiKeyStore({
   verifyHash: (hash, token) => argon2.verify(hash, token),
 });
 
-const UUID_REGEX_HEADER = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+/**
+ * This service's binding of the shared org-context store: memberships, roles and org liveness
+ * read through migration 0311's identity functions, so soft-deleted orgs never resolve and the
+ * reads work before any org is bound under BBB_RLS_ENFORCE=1 (#350).
+ */
+const orgContextStore = sqlOrgContextStore({ sql, execute: (query) => db.execute(query) });
 
-export class OrgMembershipError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = 'OrgMembershipError';
-  }
-}
-
-export interface OrgMembership {
-  org_id: string;
-  role: string;
-  is_default: boolean;
-}
+// Org-context errors and membership shape are auth-core's; re-exported for existing importers.
+export { OrgMembershipError };
+export type { OrgMembership };
 
 export interface AuthUser {
   id: string;
@@ -78,82 +76,6 @@ interface BaseUserRow {
   is_superuser: boolean;
 }
 
-async function resolveOrgContext(
-  userId: string,
-  fallbackOrgId: string,
-  requestedOrgId: string | undefined,
-): Promise<{ memberships: OrgMembership[]; activeOrgId: string; activeRole: string }> {
-  const rows = await db
-    .select({
-      org_id: organizationMemberships.org_id,
-      role: permissionGroups.legacy_role,
-      is_default: organizationMemberships.is_default,
-      joined_at: organizationMemberships.joined_at,
-    })
-    .from(organizationMemberships)
-    .leftJoin(
-      accountGroupMemberships,
-      and(
-        eq(accountGroupMemberships.user_id, organizationMemberships.user_id),
-        eq(accountGroupMemberships.scope_type, 'org'),
-        eq(accountGroupMemberships.scope_id, organizationMemberships.org_id),
-      ),
-    )
-    .leftJoin(permissionGroups, eq(permissionGroups.id, accountGroupMemberships.group_id))
-    .where(eq(organizationMemberships.user_id, userId));
-
-  if (rows.length === 0) {
-    if (!fallbackOrgId) {
-      throw new OrgMembershipError('User has no organization memberships and no fallback org_id');
-    }
-    return {
-      memberships: [{ org_id: fallbackOrgId, role: 'member', is_default: true }],
-      activeOrgId: fallbackOrgId,
-      activeRole: 'member',
-    };
-  }
-
-  rows.sort((a, b) => new Date(a.joined_at).getTime() - new Date(b.joined_at).getTime());
-
-  const memberships: OrgMembership[] = rows.map((r) => ({
-    org_id: r.org_id,
-    role: r.role ?? 'member',
-    is_default: r.is_default,
-  }));
-
-  let active: OrgMembership | undefined;
-  if (requestedOrgId) {
-    active = memberships.find((m) => m.org_id === requestedOrgId);
-    if (!active) {
-      throw new OrgMembershipError(
-        `User is not a member of the requested organization: ${requestedOrgId}`,
-      );
-    }
-  }
-  if (!active) {
-    active = memberships.find((m) => m.is_default);
-  }
-  if (!active) {
-    active = memberships[0];
-  }
-
-  return {
-    memberships,
-    activeOrgId: active!.org_id,
-    activeRole: active!.role,
-  };
-}
-
-function getRequestedOrgId(request: FastifyRequest): string | undefined {
-  const header = request.headers['x-org-id'];
-  let value: string | undefined;
-  if (typeof header === 'string' && header.length > 0) value = header;
-  else if (Array.isArray(header) && header.length > 0) value = header[0];
-  if (!value) return undefined;
-  if (value.length !== 36 || !UUID_REGEX_HEADER.test(value)) return undefined;
-  return value;
-}
-
 async function buildAuthUser(
   row: BaseUserRow,
   apiKeyScope: string | null,
@@ -171,8 +93,9 @@ async function buildAuthUser(
   // would still see their default org's data through Bolt's MCP/automation
   // surface — invisible bug that masquerades as "where are my automations".
   const requestedOrgId =
-    getRequestedOrgId(request) ?? sessionActiveOrgId ?? undefined;
+    requestedOrgIdFromHeader(request.headers['x-org-id']) ?? sessionActiveOrgId ?? undefined;
   const { memberships, activeOrgId, activeRole } = await resolveOrgContext(
+    orgContextStore,
     row.id,
     row.org_id,
     requestedOrgId,
