@@ -141,12 +141,19 @@ export async function readinessSummary(
       banners.push({ code: 'stuck_scans', count: Number(facts2.stuck_scans), message: `${facts2.stuck_scans} upload${Number(facts2.stuck_scans) === 1 ? ' has' : 's have'} waited more than a day for a virus scan. You can check again from the Evidence locker.` });
     }
 
+    // One row per control (#387): gaps are stored per check, so a control whose two checks share a
+    // gap (the security policy's "kept current" and "read by everyone", both waiting on a linked
+    // policy) read as the same control listed twice. Its highest-ranked gap stands for it here;
+    // What to fix first still lists every gap.
     const topGaps = await tx`
-      SELECT g.id, g.control_id, c.title AS control_title, g.gap_kind, g.risk_score, g.fix_template, g.fix_cost
-        FROM bastion_gaps g JOIN bastion_controls c ON c.id = g.control_id AND c.organization_id = g.organization_id
-       WHERE g.organization_id = ${viewer.org_id} AND g.status = 'open'
-         ${frameworkId ? tx`AND g.control_id = ANY(${states.controls.map((c) => c.control_id)}::uuid[])` : tx``}
-       ORDER BY g.risk_score DESC, g.fix_cost ASC LIMIT 5`;
+      SELECT * FROM (
+        SELECT DISTINCT ON (g.control_id) g.id, g.control_id, c.title AS control_title, g.gap_kind, g.risk_score, g.fix_template, g.fix_cost
+          FROM bastion_gaps g JOIN bastion_controls c ON c.id = g.control_id AND c.organization_id = g.organization_id
+         WHERE g.organization_id = ${viewer.org_id} AND g.status = 'open'
+           ${frameworkId ? tx`AND g.control_id = ANY(${states.controls.map((c) => c.control_id)}::uuid[])` : tx``}
+         ORDER BY g.control_id, g.risk_score DESC, g.fix_cost ASC NULLS LAST, g.id
+      ) per_control
+       ORDER BY risk_score DESC, fix_cost ASC, id LIMIT 5`;
 
     const warnDays = Number(settings?.manual_expiry_warn_days ?? 30);
     const expiring = await tx`

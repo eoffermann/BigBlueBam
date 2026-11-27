@@ -59,7 +59,7 @@ What you see:
 - Four tiles: **Proven by the suite**, **Proven by evidence you provided**, **Not met** (with a risk-accepted sub-count, for example "Not met: 6 (1 risk accepted)"), and **Can't prove yet**.
 - A fifth, dashed tile: **Not set up yet**, the controls with no confirmed way to check them.
 - The number of days to the audit, when an audit date is set for a framework.
-- The top items from What to fix first, and an **Expiring soon** list of uploaded evidence about to run out.
+- The top items from What to fix first, one per control (its biggest gap), and an **Expiring soon** list of uploaded evidence about to run out.
 - Warning banners when something needs attention: no Compliance project chosen, checks that have not run recently, uploads that were not virus-scanned, evidence storage not working, no off-site backup for evidence files, evidence recording paused after a database restore, updates to other apps that could not be delivered, and uploads stuck waiting for a virus scan.
 
 To use it:
@@ -210,6 +210,7 @@ To link a policy (owners and admins):
 2. Click **Link a Beacon article**.
 3. Paste the article's link, and set **Everyone reads it again every (days)**.
 4. Click **Link this policy**.
+5. If the control "A security policy exists and people have read it" is not linked to a policy yet, Bastion links its two checks (kept current; read by everyone) to this policy and puts them in the **Review queue**. Confirm them there. From the next check on, the control shows how many people have read the current version: **Proven** when everyone has, **Not met** while anyone has not.
 
 **Ask people to read it** sends a reminder to everyone who has not read the current version. **Retire** stops tracking a policy; tick **Show retired policies** to see retired ones.
 

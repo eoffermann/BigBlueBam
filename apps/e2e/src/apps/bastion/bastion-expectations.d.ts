@@ -22,6 +22,11 @@ interface BastionPolicyExpectation {
   required: number;
   attested: number;
   label: string;
+  /** #387: the control the policy proves, its two pinned checks, and how it then reads. */
+  controlKey: string;
+  probes: string[];
+  stateWords: string;
+  gapKind: string;
 }
 
 interface BastionSeedExpectations {

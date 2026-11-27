@@ -536,8 +536,14 @@ async function evaluateNow() {
     await new Promise((res) => setTimeout(res, 5_000));
   }
   // Control-scope runs queued by the reviews: let the same path finish them.
+  await driveControlRuns(orgId);
+}
+
+/** Finish queued or running control-scope runs through the engine route, as the worker would. */
+async function driveControlRuns(orgId) {
+  const secret = process.env.INTERNAL_SERVICE_SECRET;
+  if (!secret) return;
   for (const q of must(await bastion('GET', '/evaluations?limit=25'), 'GET /evaluations').data.filter((x) => x.scope === 'control' && (x.status === 'queued' || x.status === 'running'))) {
-    if (!secret) break;
     for (let i = 0; i < 10; i++) {
       const er = await fetch(`${BASTION_INTERNAL}/engines/evaluate-run`, {
         method: 'POST',
@@ -847,13 +853,14 @@ async function seedPolicy() {
     if (!id) throw new Error(`${email} is not a user; run the platform seed first`);
     audience.push(id);
   }
+  const control = await controlByKey(m.controlKey);
   let policy = must(await bastion('GET', '/policies?status=all'), 'GET /policies').data.find((p) => p.beacon_entry_id === entryId);
   if (!policy) {
     policy = must(
-      await bastion('POST', '/policies', { beacon_entry_id: entryId, audience: { kind: 'users', user_ids: audience }, cadence_days: m.cadenceDays }),
+      await bastion('POST', '/policies', { beacon_entry_id: entryId, audience: { kind: 'users', user_ids: audience }, cadence_days: m.cadenceDays, control_id: control.id }),
       'link the policy',
     ).data;
-    log(`  linked as a policy for ${audience.length} castaways`);
+    log(`  linked as a policy for ${audience.length} castaways, proving "${control.title}"`);
   }
   for (const email of m.attestedEmails) {
     const cookie = email === EXP.actorEmail ? sessionCookie : await loginAs(email);
@@ -868,6 +875,56 @@ async function seedPolicy() {
     );
     log(`  ${email} read and acknowledged version ${body.beacon_version}`);
   }
+  await pinPolicyControl(control, policy);
+}
+
+/**
+ * #387: the policy control's two checks must point at the policy, or both say "No policy is
+ * linked to this check yet" and the control reads "Nothing can prove this yet" however many
+ * castaways read it. A check not yet pinned is revised to the policy (an older seed linked the
+ * policy without naming the control); every pinned proposal is confirmed by Skipper (session);
+ * then the control is checked and the gaps re-ranked, so Readiness shows the 5 of 7.
+ */
+async function pinPolicyControl(control, policy) {
+  const m = EXP.m7.policy;
+  let changed = false;
+  for (const probe of m.probes) {
+    const list = must(await bastion('GET', `/controls/${control.id}/assertions`), 'GET assertions').data;
+    const live = list.filter((a) => a.probe_key === probe && (a.review_status === 'confirmed' || a.review_status === 'proposed'));
+    let pinned = live.find((a) => a.params?.policy_id === policy.id);
+    if (!pinned) {
+      const cur = live[0];
+      if (!cur) throw new Error(`"${control.title}" has no ${probe} check; run the M3 part first`);
+      pinned = must(await bastion('POST', `/assertions/${cur.id}/revise`, { params: { ...(cur.params ?? {}), policy_id: policy.id } }), `pin ${probe} to the policy`).data;
+      log(`  ${probe} now checks "${m.title}"`);
+    }
+    if (pinned.review_status === 'proposed') {
+      const r = await bastion('POST', `/assertions/${pinned.id}/confirm`, {}, { session: true });
+      if (!(r.status === 409 && r.code === 'ASSERTION_NOT_PROPOSED')) must(r, `confirm ${probe}`);
+      changed = true;
+    }
+  }
+  if (!changed) return;
+  log(`  checking "${control.title}" against the policy (a few seconds)...`);
+  const orgId = (await withDb((sql) => sql`SELECT id FROM organizations WHERE slug = ${EXP.org.slug}`))[0].id;
+  const r = await bastion('POST', '/evaluations', { control_id: control.id });
+  const runId = r.status === 409 ? null : must(r, `check ${control.control_key}`).data.id;
+  const started = Date.now();
+  for (;;) {
+    await driveControlRuns(orgId);
+    const runs = must(await bastion('GET', '/evaluations?limit=25'), 'GET /evaluations').data;
+    const open = runs.filter((x) => (runId ? x.id === runId : x.scope === 'control') && (x.status === 'queued' || x.status === 'running'));
+    if (open.length === 0) break;
+    if (Date.now() - started > 120_000) {
+      log(`  WARNING: the check of "${control.title}" is still ${open[0].status} after 2 minutes; the gaps are ranked without it`);
+      break;
+    }
+    log(`  waiting for the check of "${control.title}" (${open[0].status}, ${Math.round((Date.now() - started) / 1000)} s)...`);
+    await new Promise((res) => setTimeout(res, 3_000));
+  }
+  await internalEngine('gap-rank', orgId);
+  // The policy control is now Not met (5 of 7): keep laptops the top gap, as M6 calibrated.
+  await calibrateTopGap();
 }
 
 async function verifyM7() {
@@ -878,6 +935,19 @@ async function verifyM7() {
   else {
     if (p.attestation_label !== m.label) problems.push(`the policy reads "${p.attestation_label}", expected "${m.label}"`);
     if (!p.shared_with_everyone) problems.push('the policy article is not shared with everyone');
+    // #387: the control is proven against the policy, not waiting on "a linked policy".
+    const control = await controlByKey(m.controlKey);
+    const checks = must(await bastion('GET', `/controls/${control.id}/assertions`), 'GET assertions').data;
+    for (const probe of m.probes) {
+      const live = checks.find((a) => a.probe_key === probe && a.review_status === 'confirmed');
+      if (live?.params?.policy_id !== p.id) problems.push(`the confirmed ${probe} check on "${control.title}" is not pinned to the policy`);
+    }
+    const row = must(await bastion('GET', '/coverage'), 'GET /coverage').data.find((r) => r.control_id === control.id);
+    if (row?.state_words !== m.stateWords) problems.push(`"${control.title}" reads "${row?.state_words}", expected "${m.stateWords}"`);
+    const kinds = must(await bastion('GET', `/gaps?control_id=${control.id}`), 'GET /gaps').data.map((g) => g.gap_kind);
+    if (kinds.includes('no_source') || !kinds.includes(m.gapKind)) problems.push(`"${control.title}" gaps are ${kinds.join(', ') || 'none'}, expected ${m.gapKind} and no no_source`);
+    const top = must(await bastion('GET', '/summary'), 'GET /summary').data.top_gaps ?? [];
+    if (new Set(top.map((g) => g.control_id)).size !== top.length) problems.push('Readiness lists a control more than once among the top gaps');
   }
   log(`M7: ${p?.title}: ${p?.attestation_label}`);
   if (problems.length) throw new Error(`seeded M7 rows do not match BASTION_SEED_EXPECTATIONS: ${problems.join('; ')}`);

@@ -1589,7 +1589,8 @@ export const bastionPolicyCreateFields = z
     owner_user_id: z.string().uuid().nullable().optional(),
     /**
      * Optional: the control this policy proves. Bastion proposes the two policy checks (read and
-     * acknowledged; kept current) on it, pinned to this policy, for a person to confirm.
+     * acknowledged; kept current) on it, pinned to this policy, for a person to confirm. Left
+     * out, the one control whose policy checks are not pinned to an active policy is used (#387).
      */
     control_id: z.string().uuid().optional(),
   })
