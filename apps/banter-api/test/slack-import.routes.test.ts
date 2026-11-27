@@ -41,14 +41,8 @@ vi.mock('../src/db/index.js', () => ({
   connection: { end: vi.fn() },
 }));
 
-vi.mock('minio', () => ({
-  Client: vi.fn().mockImplementation(() => ({
-    bucketExists: vi.fn().mockResolvedValue(true),
-    makeBucket: vi.fn().mockResolvedValue(undefined),
-    putObject: vi.fn().mockResolvedValue(undefined),
-    getObject: vi.fn().mockResolvedValue(null),
-  })),
-}));
+// Object storage goes through banter-api's @bigbluebam/storage driver (#159);
+// the tests inject an in-memory driver into that same path (#163).
 
 vi.mock('ioredis', () => ({
   default: vi.fn().mockImplementation(() => ({
@@ -64,12 +58,53 @@ vi.mock('bullmq', () => ({
   })),
 }));
 
+import { readFile } from 'node:fs/promises';
+import { existsSync } from 'node:fs';
+import { Readable } from 'node:stream';
+import { createInMemoryStorageDriver, StorageNotConfiguredError } from '@bigbluebam/storage';
 import {
   validateMapping,
   slackImportObjectKey,
+  stashUpload,
+  downloadToTempfile,
   type MappingPayload,
   type SlackPreview,
 } from '../src/services/slack-import.service.js';
+import { __setBanterStorageDriverForTests } from '../src/lib/storage-driver.js';
+
+describe('slack-import zip stash through @bigbluebam/storage (#163)', () => {
+  it('stashUpload writes the zip under the import key with its content type, and downloadToTempfile reads it back', async () => {
+    const driver = createInMemoryStorageDriver();
+    __setBanterStorageDriverForTests(driver);
+    try {
+      const key = slackImportObjectKey('org-1', 'import-7');
+      const zip = Buffer.from('PK\u0003\u0004fake-zip-bytes');
+      await stashUpload(key, Readable.from([zip.subarray(0, 4), zip.subarray(4)]), zip.length);
+
+      expect([...driver.objects.keys()]).toEqual(['slack-imports/org-1/import-7.zip']);
+      const stored = driver.objects.get(key)!;
+      expect(stored.contentType).toBe('application/zip');
+      expect(stored.body.equals(zip)).toBe(true);
+
+      const { path, cleanup } = await downloadToTempfile(key);
+      expect((await readFile(path)).equals(zip)).toBe(true);
+      await cleanup();
+      expect(existsSync(path)).toBe(false);
+    } finally {
+      __setBanterStorageDriverForTests(undefined);
+    }
+  });
+
+  it('fails closed with STORAGE_NOT_CONFIGURED when no storage is configured', async () => {
+    __setBanterStorageDriverForTests(null);
+    try {
+      await expect(stashUpload('k', Buffer.from('x'), 1)).rejects.toBeInstanceOf(StorageNotConfiguredError);
+      await expect(downloadToTempfile('k')).rejects.toBeInstanceOf(StorageNotConfiguredError);
+    } finally {
+      __setBanterStorageDriverForTests(undefined);
+    }
+  });
+});
 
 const SAMPLE_PREVIEW: SlackPreview = {
   workspace_name: 'acme',

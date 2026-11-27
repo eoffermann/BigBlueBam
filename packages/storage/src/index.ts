@@ -9,6 +9,11 @@ export * from './keys.js';
 export * from './errors.js';
 export { S3Driver, type S3DriverOptions } from './s3-driver.js';
 export {
+  createInMemoryStorageDriver,
+  type InMemoryObject,
+  type InMemoryStorageDriver,
+} from './memory-driver.js';
+export {
   createDriver,
   createBootstrapDriver,
   isStorageConfigured,
