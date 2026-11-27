@@ -518,8 +518,17 @@ describe.skipIf(!DATABASE_URL)('M9 sharing, packets, sweep and mirror (live data
     expect((await sql`SELECT mirrored_at FROM bastion_evidence_objects WHERE object_key = ${key}`)[0]!.mirrored_at).not.toBeNull();
     const row = (await sql`SELECT status, bastion_mirror_status, bastion_mirror_cursor FROM platform_backups WHERE id = ${b!.id as string}`)[0]!;
     expect(row.status).toBe('completed');
-    expect(row.bastion_mirror_status).toBe('completed');
     expect(row.bastion_mirror_cursor).not.toBeNull();
+    // The mirror is platform-wide (#318): on a shared database other orgs' objects are not in this
+    // test's fake bucket and stay unmirrored, which is `partial` by design. The verdict must be
+    // `completed` exactly when nothing outside this org is left behind before the horizon.
+    const othersLeft = (await sql`
+      SELECT count(*)::int AS n FROM bastion_evidence_objects o, platform_backups p
+       WHERE p.id = ${b!.id as string} AND o.mirrored_at IS NULL AND o.bytes_redacted_at IS NULL
+         AND o.created_at < p.started_at - interval '1 hour'`)[0]!.n as number;
+    expect(row.bastion_mirror_status).toBe(othersLeft === 0 ? 'completed' : 'partial');
+    // This org's own objects are all mirrored either way.
+    expect((await sql`SELECT count(*)::int AS n FROM bastion_evidence_objects WHERE organization_id = ${s.org} AND mirrored_at IS NULL`)[0]!.n).toBe(0);
 
     // Not configured: recorded as such, never `completed`.
     const none = await mirrorObjects(engine, null, { backup_id: b!.id as string });
@@ -534,6 +543,90 @@ describe.skipIf(!DATABASE_URL)('M9 sharing, packets, sweep and mirror (live data
     expect(source.objects.get(key)?.body.toString()).toBe(body.toString());
     const again = await restoreObjectsFromBackup(dest, source, () => undefined);
     expect(again.copied).toBe(0);
-    expect(lines.some((l) => /^objects \d+\/\d+/.test(l))).toBe(true);
+    expect(lines.some((l) => /^objects \d+/.test(l))).toBe(true);
+  });
+
+  it('mirror records step: budgeted and resumable, re-checks only new records on the next backup, and never overwrites a recorded failure (#309)', async () => {
+    await setUp('records');
+    const source = fakeBucket();
+    source.pageSize = 4;
+    const engine = makeDeps(sql, { bucket: source });
+    const old = new Date(Date.now() - 3 * HOUR);
+    // Keys are written under a distinct org segment so other tests' seals do not mix in.
+    const tag = randomUUID();
+    for (let i = 0; i < 12; i++) {
+      source.objects.set(`seals/${tag}/2026-10-${String(i + 1).padStart(2, '0')}.json`, { body: Buffer.from(`{"seal":${i}}`), contentType: 'application/json', modifiedAt: old });
+    }
+    const dest = fakeBucket();
+    let stats = 0;
+    const realStat = dest.stat.bind(dest);
+    dest.stat = async (k) => {
+      stats += 1;
+      await new Promise((r) => setTimeout(r, 15));
+      return realStat(k);
+    };
+    const [b1] = await sql`INSERT INTO platform_backups (kind, status, started_at, completed_at) VALUES ('manual', 'completed', now(), now()) RETURNING id`;
+    backups.push(b1!.id as string);
+    const sealCount = () => [...source.objects.keys()].filter((k) => k.startsWith('seals/') || k.startsWith('restores/')).length;
+    const total = sealCount();
+
+    // A tiny time budget: the first call stops part-way through the records and says so.
+    const first = await mirrorObjects(engine, dest, { backup_id: b1!.id as string, timeBudgetMs: 60 });
+    expect(first.complete).toBe(false);
+    expect(first.status).toBe('running');
+    expect(stats).toBeLessThan(total);
+    let res = first;
+    for (let i = 0; !res.complete && i < 200; i++) res = await mirrorObjects(engine, dest, { backup_id: b1!.id as string, timeBudgetMs: 60 });
+    expect(res.complete).toBe(true);
+    for (let i = 0; i < 12; i++) expect(dest.objects.has(`seals/${tag}/2026-10-${String(i + 1).padStart(2, '0')}.json`)).toBe(true);
+    // Resumed, not restarted: each record was checked about once (a call may stop just after a stat).
+    expect(stats).toBeLessThanOrEqual(total + 200);
+    const statsAfterFirstBackup = stats;
+
+    // The next backup: one new seal. Only it is checked against the mirror.
+    source.objects.set(`seals/${tag}/2026-11-26.json`, { body: Buffer.from('{"seal":"new"}'), contentType: 'application/json', modifiedAt: new Date() });
+    const [b2] = await sql`INSERT INTO platform_backups (kind, status, started_at, completed_at) VALUES ('manual', 'completed', now(), now()) RETURNING id`;
+    backups.push(b2!.id as string);
+    res = await mirrorObjects(engine, dest, { backup_id: b2!.id as string });
+    for (let i = 0; !res.complete && i < 20; i++) res = await mirrorObjects(engine, dest, { backup_id: b2!.id as string });
+    expect(dest.objects.has(`seals/${tag}/2026-11-26.json`)).toBe(true);
+    expect(stats - statsAfterFirstBackup).toBe(1);
+
+    // A call that finishes after the worker recorded `failed` leaves that word standing.
+    const [b3] = await sql`INSERT INTO platform_backups (kind, status, started_at, completed_at) VALUES ('manual', 'completed', now(), now()) RETURNING id`;
+    backups.push(b3!.id as string);
+    dest.stat = async (k) => {
+      await sql`UPDATE platform_backups SET bastion_mirror_status = 'failed' WHERE id = ${b3!.id as string}`;
+      return realStat(k);
+    };
+    source.objects.set(`seals/${tag}/2026-11-27.json`, { body: Buffer.from('{"seal":"late"}'), contentType: 'application/json', modifiedAt: new Date() });
+    await mirrorObjects(engine, dest, { backup_id: b3!.id as string });
+    expect((await sql`SELECT bastion_mirror_status FROM platform_backups WHERE id = ${b3!.id as string}`)[0]!.bastion_mirror_status).toBe('failed');
+  });
+
+  it('mirror: bytes redacted while their copy was in flight are removed from the mirror (#310)', async () => {
+    const s = await setUp('mredact');
+    const source = fakeBucket();
+    const engine = makeDeps(sql, { bucket: source });
+    const body = Buffer.from(`{"redact-me":"${randomUUID()}"}`);
+    const sha = sha256Hex(body);
+    const key = `manual/${s.org}/${randomUUID()}`;
+    source.objects.set(key, { body, contentType: 'application/json', modifiedAt: new Date() });
+    await sql`INSERT INTO bastion_evidence_objects (organization_id, content_sha256, object_key, size_bytes, holder_count, created_at)
+              VALUES (${s.org}, ${sha}, ${key}, ${body.length}, 1, now() - interval '3 hours')`;
+    const dest = fakeBucket();
+    const realPut = dest.put.bind(dest);
+    dest.put = async (k, b, o) => {
+      const r = await realPut(k, b, o);
+      // The owner redacts while the copy is landing.
+      if (k === key) await sql`UPDATE bastion_evidence_objects SET bytes_redacted_at = now() WHERE organization_id = ${s.org} AND content_sha256 = ${sha}`;
+      return r;
+    };
+    let res = await mirrorObjects(engine, dest, {});
+    for (let i = 0; !res.complete && i < 20; i++) res = await mirrorObjects(engine, dest, {});
+    expect(dest.objects.has(key)).toBe(false);
+    // And if that immediate delete fails, mirrored_at stays set so step 1 finds the copy next pass.
+    const row = (await sql`SELECT mirrored_at FROM bastion_evidence_objects WHERE organization_id = ${s.org} AND content_sha256 = ${sha}`)[0]!;
+    expect(row.mirrored_at).toBeNull();
   });
 });

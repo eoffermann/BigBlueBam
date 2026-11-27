@@ -144,27 +144,43 @@ export class S3Driver implements StorageDriver {
     return this.client.presignedPutObject(this.bucket, this.k(key), ttlSeconds);
   }
 
+  /**
+   * One page of at most LIST_PAGE keys after `cursor` (the last key of the previous page, without
+   * the base path). The minio stream lists the whole remainder of the prefix, so it is destroyed
+   * as soon as the page is full: each page costs O(page), not O(rest of the bucket) (#309, #313).
+   */
   list(prefix: string, cursor?: string): Promise<{ objects: ObjectStat[]; cursor?: string }> {
     return new Promise((resolve, reject) => {
       const objects: ObjectStat[] = [];
       const fullPrefix = this.k(prefix);
       const stripLen = this.basePath ? this.basePath.length + 1 : 0;
-      const stream = this.client.listObjectsV2(this.bucket, fullPrefix, true, cursor);
+      let settled = false;
+      // startAfter is a full object name, so the base path goes back on.
+      const stream = this.client.listObjectsV2(this.bucket, fullPrefix, true, cursor ? this.k(cursor) : undefined);
+      const finish = (more: boolean) => {
+        if (settled) return;
+        settled = true;
+        resolve({ objects, cursor: more ? objects[objects.length - 1]!.key : undefined });
+      };
       stream.on('data', (obj) => {
-        if (objects.length >= LIST_PAGE) return;
-        if (!obj.name) return;
+        if (settled || !obj.name) return;
         objects.push({
           key: stripLen ? obj.name.slice(stripLen) : obj.name,
           size: obj.size ?? 0,
           integrity: obj.etag ?? '',
           modifiedAt: obj.lastModified ?? new Date(0),
         });
+        if (objects.length >= LIST_PAGE) {
+          finish(true);
+          stream.destroy();
+        }
       });
-      stream.on('error', reject);
-      stream.on('end', () => {
-        const more = objects.length >= LIST_PAGE;
-        resolve({ objects, cursor: more ? objects[objects.length - 1]!.key : undefined });
+      stream.on('error', (err) => {
+        if (settled) return;
+        settled = true;
+        reject(err);
       });
+      stream.on('end', () => finish(false));
     });
   }
 

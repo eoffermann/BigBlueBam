@@ -16,6 +16,9 @@ export const DATABASE_URL = process.env.DATABASE_URL;
 export interface FakeBucket extends StorageDriver {
   objects: Map<string, { body: Buffer; contentType: string; modifiedAt: Date }>;
   failPuts: boolean;
+  /** Keys per list page (S3 uses 1000). */
+  pageSize: number;
+  listCalls: number;
 }
 
 export function fakeBucket(): FakeBucket {
@@ -52,13 +55,21 @@ export function fakeBucket(): FakeBucket {
     async delete(key) {
       objects.delete(key);
     },
-    async list(prefix) {
+    // Pages like S3: sorted keys after the cursor, at most pageSize per call.
+    async list(prefix, cursor) {
+      bucket.listCalls += 1;
+      const keys = [...objects.keys()].filter((k) => k.startsWith(prefix) && (!cursor || k > cursor)).sort();
+      const page = keys.slice(0, bucket.pageSize);
       return {
-        objects: [...objects.entries()]
-          .filter(([k]) => k.startsWith(prefix))
-          .map(([key, o]) => ({ key, size: o.body.length, integrity: sha256Hex(o.body), modifiedAt: o.modifiedAt })),
+        objects: page.map((key) => {
+          const o = objects.get(key)!;
+          return { key, size: o.body.length, integrity: sha256Hex(o.body), modifiedAt: o.modifiedAt };
+        }),
+        cursor: keys.length > bucket.pageSize ? page[page.length - 1] : undefined,
       };
     },
+    pageSize: 1000,
+    listCalls: 0,
   };
   return bucket;
 }

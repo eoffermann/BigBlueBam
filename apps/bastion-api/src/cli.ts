@@ -8,9 +8,15 @@
 //
 // Copies every evidence file, uploaded file, seal and restore record from the off-site evidence
 // backup (BASTION_BACKUP_S3_*) back into the Bastion bucket (BASTION_S3_BUCKET). Objects already
-// there with the same size are left alone, so running it twice is safe. Progress is printed as
-// `objects n/N` with the elapsed time. It reads only the bucket and environment, never the
-// database, so it works before the database is restored.
+// there with the same size are left alone, so running it twice is safe. It works page by page,
+// printing `objects n` with the elapsed time from the first page; a listing that fails stops it
+// with a non-zero exit, never a quiet partial restore (#313).
+//
+// Redaction (#310): when the database answers, files that were redacted are never copied back
+// (and a copy already in the bucket is deleted). The copy itself works before the database is
+// restored, but then the redaction check cannot run: the command copies, says so, and exits 1 so
+// the operator runs it again once the database is back (the second run copies nothing new and
+// removes any redacted files).
 
 const started = Date.now();
 const log = (line: string) => process.stdout.write(`[bastion-cli +${((Date.now() - started) / 1000).toFixed(1)}s] ${line}\n`);
@@ -44,13 +50,38 @@ async function main(argv: string[]): Promise<number> {
     log(`Evidence storage is not set up (S3_ENDPOINT, S3_ACCESS_KEY, S3_SECRET_KEY for bucket "${env.BASTION_S3_BUCKET}"). Nothing to restore into.`);
     return 1;
   }
+  log('connecting to the database to check which files were redacted (up to 10 s)...');
+  const { default: postgres } = await import('postgres');
+  const { orgTx } = await import('./engine/context.js');
+  const sql = postgres(env.DATABASE_URL, { max: 1, connect_timeout: 10, idle_timeout: 5, onnotice: () => {} });
+  let redactedKeys: ((orgId: string) => Promise<Set<string>>) | null = null;
+  try {
+    await sql`SELECT 1 FROM bastion_evidence_objects LIMIT 1`;
+    redactedKeys = async (orgId) =>
+      new Set(
+        (
+          await orgTx(sql, orgId, (tx) => tx`SELECT object_key FROM bastion_evidence_objects
+                                             WHERE organization_id = ${orgId} AND bytes_redacted_at IS NOT NULL`)
+        ).map((r) => String(r.object_key)),
+      );
+    log('database reachable: redacted files will not be copied back');
+  } catch (err) {
+    log(`WARNING: the database is not reachable (${(err as Error).message}); redacted files cannot be told apart yet`);
+  }
   log(`${dryRun ? 'DRY RUN: ' : ''}copying from the off-site backup bucket "${env.BASTION_BACKUP_S3_BUCKET}" into "${env.BASTION_S3_BUCKET}"`);
-  const res = await restoreObjectsFromBackup(mirror, bucket, log, { timeoutMs: 60_000, dryRun });
-  log(
-    `${dryRun ? 'would copy' : 'copied'} ${res.copied}, already present ${res.already_present}, failed ${res.failed}, of ${res.listed} objects in the off-site backup`,
-  );
-  if (res.failed > 0) log('Some objects could not be copied. Run the command again; objects already copied are skipped.');
-  return res.failed > 0 ? 1 : 0;
+  try {
+    const res = await restoreObjectsFromBackup(mirror, bucket, log, { timeoutMs: 60_000, dryRun, redactedKeys });
+    log(
+      `${dryRun ? 'would copy' : 'copied'} ${res.copied}, already present ${res.already_present}, redacted and left out ${res.redacted_skipped}, failed ${res.failed}, of ${res.listed} objects in the off-site backup`,
+    );
+    if (res.failed > 0) log('Some objects could not be copied. Run the command again; objects already copied are skipped.');
+    if (!res.redaction_checked) {
+      log('NOT FINISHED: the redaction check did not run. Run this command again once the database is restored; it copies nothing new and removes any redacted files it copied back.');
+    }
+    return res.failed > 0 || !res.redaction_checked ? 1 : 0;
+  } finally {
+    await sql.end({ timeout: 5 }).catch(() => undefined);
+  }
 }
 
 main(process.argv.slice(2)).then(

@@ -380,7 +380,7 @@ A few things happen without anyone clicking:
 
 #### For administrators
 
-If evidence files are lost from storage (for example after rebuilding a host), copy them back from the off-site backup by running `node dist/cli.js restore-objects --from-backup` inside the bastion-api container. It prints its progress as it goes. The off-site backup location is set by whoever runs the installation, separately from the main storage and ideally with a different provider. The keys that sign seals and protect recorded names must be kept safe alongside the database backup; without them a rebuilt installation cannot keep signing under the same key.
+If evidence files are lost from storage (for example after rebuilding a host), copy them back from the off-site backup by running `node dist/cli.js restore-objects --from-backup` inside the bastion-api container. It prints its progress as it goes. When the database is reachable it leaves out any file that was redacted (and removes one already copied back); if the database is not back yet it copies everything, prints "NOT FINISHED", and you run the same command again once the database is restored. The off-site backup location is set by whoever runs the installation, separately from the main storage and ideally with a different provider. The keys that sign seals and protect recorded names must be kept safe alongside the database backup; without them a rebuilt installation cannot keep signing under the same key.
 
 ### Working with AI agents
 
