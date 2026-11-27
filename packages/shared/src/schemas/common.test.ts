@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
-import { boolQueryParam, envBool, parseEnvBool } from './common.js';
+import { boolQueryParam, envBool, envFlag, parseEnvBool } from './common.js';
 import { listBondDealsQuerySchema } from './bond.js';
 import * as shared from '../index.js';
 
@@ -42,6 +42,24 @@ describe('envBool', () => {
   it('BIN_ALLOW_UNSCANNED_ACCESS=false (the .env.example value) is false', () => {
     const schema = z.object({ BIN_ALLOW_UNSCANNED_ACCESS: envBool(false) });
     expect(schema.parse({ BIN_ALLOW_UNSCANNED_ACCESS: 'false' }).BIN_ALLOW_UNSCANNED_ACCESS).toBe(false);
+  });
+});
+
+describe('envFlag (#302)', () => {
+  it('BBB_RLS_ENFORCE=true enforces, the same as 1 (it used to pick BYPASSRLS)', () => {
+    for (const v of ['1', 'true', 'TRUE', 'yes', 'on', ' 1 ']) {
+      expect(envFlag('BBB_RLS_ENFORCE', { BBB_RLS_ENFORCE: v })).toBe(true);
+    }
+  });
+
+  it('unset, empty and the false spellings are off', () => {
+    expect(envFlag('BBB_RLS_ENFORCE', {})).toBe(false);
+    expect(envFlag('BBB_RLS_ENFORCE', { BBB_RLS_ENFORCE: '' })).toBe(false);
+    expect(envFlag('BBB_RLS_ENFORCE', { BBB_RLS_ENFORCE: 'off' })).toBe(false);
+  });
+
+  it('an unrecognised spelling throws instead of choosing advisory mode', () => {
+    expect(() => envFlag('BBB_RLS_ENFORCE', { BBB_RLS_ENFORCE: 'enabled' })).toThrow(/BBB_RLS_ENFORCE/);
   });
 });
 

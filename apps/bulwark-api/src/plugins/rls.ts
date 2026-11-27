@@ -9,6 +9,7 @@ import {
   schema,
   type RlsStore,
 } from '../db/index.js';
+import { env } from '../env.js';
 
 /**
  * Row-level security plugin for bulwark-api (binding fix issue #87).
@@ -35,7 +36,7 @@ import {
  * bleed a prior org.)
  */
 const rlsPlugin = fp(async (fastify: FastifyInstance) => {
-  const enforce = process.env.BBB_RLS_ENFORCE === '1';
+  const enforce = env.BBB_RLS_ENFORCE === true;
 
   if (!enforce) {
     fastify.log.info(

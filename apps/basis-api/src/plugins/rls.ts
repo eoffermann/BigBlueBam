@@ -9,6 +9,7 @@ import {
   schema,
   type RlsStore,
 } from '../db/index.js';
+import { env } from '../env.js';
 
 /**
  * Row-level security plugin for basis-api (mirrors apps/api/src/plugins/rls.ts; binding fix #87).
@@ -29,7 +30,7 @@ import {
  *     peak concurrency when enabling it.
  */
 const rlsPlugin = fp(async (fastify: FastifyInstance) => {
-  const enforce = process.env.BBB_RLS_ENFORCE === '1';
+  const enforce = env.BBB_RLS_ENFORCE === true;
 
   if (!enforce) {
     fastify.log.info(

@@ -2,6 +2,7 @@ import fp from 'fastify-plugin';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { drizzle } from 'drizzle-orm/postgres-js';
 import { queryClient, rlsStorage, schema, type RlsStore } from '../db/index.js';
+import { env } from '../env.js';
 
 /**
  * Row-level security plugin (Wave 1.A, Platform G1; binding fix issue #87).
@@ -27,7 +28,7 @@ import { queryClient, rlsStorage, schema, type RlsStore } from '../db/index.js';
  *     peak concurrency when enabling it.
  */
 const rlsPlugin = fp(async (fastify: FastifyInstance) => {
-  const enforce = process.env.BBB_RLS_ENFORCE === '1';
+  const enforce = env.BBB_RLS_ENFORCE === true;
 
   if (!enforce) {
     fastify.log.info(

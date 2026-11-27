@@ -69,6 +69,11 @@ const envSchema = z.object({
   // '' / undefined falls through to the NODE_ENV-based default below.
   COOKIE_SECURE: envBool(),
 
+  // Platform RLS posture (#302). envBool, so BBB_RLS_ENFORCE=true enforces like 1 and an
+  // unknown spelling refuses to boot instead of flipping the role to BYPASSRLS.
+  BBB_RLS_ENFORCE: envBool(false),
+  BBB_SCHEMA_WAIT_DISABLED: envBool(false),
+
   // SMTP / email (P1-30). Optional — if SMTP_HOST is unset, outbound emails
   // are logged by the worker instead of delivered. The API enqueues jobs to
   // the shared `email` BullMQ queue; the worker owns actual delivery.

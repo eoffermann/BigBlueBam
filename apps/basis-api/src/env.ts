@@ -31,6 +31,8 @@ const envSchema = z.object({
 
   COOKIE_DOMAIN: z.string().optional(),
   COOKIE_SECURE: envBool(false),
+  // Platform RLS posture (#302): envBool, so 'true' enforces and an unknown value fails boot.
+  BBB_RLS_ENFORCE: envBool(false),
 
   // Query + explanation execution settings.
   QUERY_TIMEOUT_MS: z.coerce.number().int().positive().default(10000),
