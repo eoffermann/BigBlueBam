@@ -310,7 +310,7 @@ The auditor room (`/bastion/room`) is the page your auditor opens from the link.
 
 ![The auditor room, as the auditor sees it](screenshots/light/14-auditor-room.png)
 
-If you set a passcode, the auditor first sees "Enter the 6-digit passcode" and clicks **Open the room**. A wrong passcode shows "That passcode is not right." with how many tries are left before the room locks.
+If you set a passcode, the auditor first sees "Enter the 6-digit passcode" and clicks **Open the room**. A wrong passcode shows "That passcode is not right." with how many tries are left before the room locks. Tries sent at the same moment all count, so if several are already being checked the room answers "Too many passcode tries are being checked at once. Wait a moment and try again."
 
 The auditor then sees:
 

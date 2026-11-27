@@ -1121,6 +1121,13 @@ In addition:
   at once.
 - A passcode lockout (5 misses) notifies the creator, and the creator can **Unlock** from the
   access-log view (row 87).
+- The 5 tries are reserved atomically before argon2 runs (one guarded `UPDATE ... SET
+  passcode_failures = passcode_failures + 1 ... AND passcode_failures < 5`); a right answer gives
+  its try back only while the room is still open, a wrong one keeps it, and the miss that leaves
+  the counter at 5 locks the room. A burst of concurrent guesses therefore verifies at most 5
+  codes per lockout, and a request that finds every remaining try in flight gets 429
+  `ROOM_PASSCODE_BUSY`. A verified passcode is remembered for 15 minutes under an HMAC of (room,
+  passcode hash, passcode) so later page loads skip argon2 (#308, #314).
 - The token lookup uses `bastion_resolve_room` (works under RLS enforcement).
 - The room shows the Statement of Applicability for ISO frameworks, accepted risks, "Not assessed"
   controls, the signed seal history with every public key, and any "History lost by restore" or

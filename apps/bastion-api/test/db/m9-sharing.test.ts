@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { randomUUID } from 'node:crypto';
 import postgres from 'postgres';
+import argon2 from 'argon2';
 import { BASTION_ROOM_PASSCODE_MAX_FAILURES, BASTION_ROOM_REQUESTS_PER_HOUR, BASTION_ROOM_TOKEN_MISSES } from '@bigbluebam/shared';
 import type { EngineDeps } from '../../src/engine/context.js';
 import { verifyCommitments } from '../../src/engine/commitments.js';
@@ -220,6 +221,50 @@ describe.skipIf(!DATABASE_URL)('M9 sharing, packets, sweep and mirror (live data
     const unlocked = await sharing.unlockRoom(d.sharing, viewerOf(s), created.data.id as string);
     expect(unlocked.data.state).toBe('active');
     await expect(room.publicRoomOverview(d.room, ctx(token, { passcode: '482913' }))).resolves.toBeDefined();
+  });
+
+  it('passcode: a concurrent burst of guesses verifies at most 5, and a right answer never beats the lock (#308, #314)', async () => {
+    const s = await setUp('burst');
+    const d = deps(makeDeps(sql));
+    const created = await sharing.createRoom(d.sharing, viewerOf(s), {
+      label: 'Burst',
+      framework_id: s.framework,
+      period_start: '2026-01-01',
+      period_end: '2026-12-31',
+      expires_in_days: 10,
+      passcode: '271828',
+      restricted_evidence_ids: [],
+      confirm: true,
+    }, false);
+    const token = created.data.token;
+    const verify = vi.spyOn(argon2, 'verify');
+    try {
+      // Ten wrong guesses and the right one, all at once, the right one last.
+      const guesses = [...Array.from({ length: 10 }, (_, i) => String(100000 + i)), '271828'];
+      const results = await Promise.allSettled(guesses.map((p) => room.publicRoomOverview(d.room, ctx(token, { passcode: p }))));
+      const verified = verify.mock.calls.length;
+      expect(verified).toBeLessThanOrEqual(BASTION_ROOM_PASSCODE_MAX_FAILURES);
+      const wrongVerdicts = results.slice(0, 10).filter((r) => r.status === 'rejected' && (r.reason as { wrong?: boolean }).wrong === true).length;
+      const right = results[10]!;
+      const row = (await sql`SELECT passcode_failures, locked_at FROM bastion_auditor_rooms WHERE id = ${created.data.id as string}`)[0]!;
+      if (right.status === 'fulfilled') {
+        // Only possible when the right answer held one of the 5 tries: then the room is open.
+        expect(row.locked_at).toBeNull();
+        expect(wrongVerdicts).toBeLessThan(BASTION_ROOM_PASSCODE_MAX_FAILURES);
+      }
+      expect(Number(row.passcode_failures)).toBeLessThanOrEqual(BASTION_ROOM_PASSCODE_MAX_FAILURES);
+
+      // Sequentially from a fresh state: a right answer gives its try back, and the next request
+      // with the same passcode is remembered (no second argon2).
+      await sql`UPDATE bastion_auditor_rooms SET passcode_failures = 0, locked_at = NULL WHERE id = ${created.data.id as string}`;
+      verify.mockClear();
+      await room.publicRoomOverview(d.room, ctx(token, { passcode: '271828' }));
+      await room.publicRoomOverview(d.room, ctx(token, { passcode: '271828' }));
+      expect(verify.mock.calls.length).toBe(1);
+      expect((await sql`SELECT passcode_failures FROM bastion_auditor_rooms WHERE id = ${created.data.id as string}`)[0]!.passcode_failures).toBe(0);
+    } finally {
+      verify.mockRestore();
+    }
   });
 
   it('room reads stay inside the restricted allowlist; questions are capped at 20 an hour', async () => {

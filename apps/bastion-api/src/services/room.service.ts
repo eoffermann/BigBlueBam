@@ -121,38 +121,110 @@ export async function resolveRoom(deps: RoomDeps, ctx: RoomRequestContext): Prom
   }
   if (room.passcode_hash) {
     if (!ctx.passcode) throw new RoomPasscodeRequired(false, BASTION_ROOM_PASSCODE_MAX_FAILURES - Number(room.passcode_failures ?? 0));
-    let ok = false;
-    try {
-      ok = /^\d{6}$/.test(ctx.passcode) && (await argon2.verify(String(room.passcode_hash), ctx.passcode));
-    } catch {
-      ok = false;
-    }
-    if (!ok) {
-      const left = await recordPasscodeMiss(deps.engine, orgId, roomId, String(room.label));
-      if (left <= 0) throw new NotFoundError(ROOM_GONE);
-      throw new RoomPasscodeRequired(true, left);
-    }
+    await checkPasscode(deps, orgId, roomId, room, ctx.passcode);
   }
   return { orgId, room };
 }
 
-/** One wrong passcode: the 5th locks the room and tells its creator (spec 5.2). Returns tries left. */
-export async function recordPasscodeMiss(engine: EngineDeps, orgId: string, roomId: string, label: string): Promise<number> {
+/** Redis key proving this exact passcode was verified for this room (keyed, so it reveals nothing). */
+function verifiedKey(deps: RoomDeps, roomId: string, passcodeHash: string, passcode: string): string {
+  const mac = createHmac('sha256', deps.ipSalt).update(`${roomId}\n${passcodeHash}\n${passcode}`, 'utf8').digest('hex');
+  return `bastion:room:passcode-ok:${mac}`;
+}
+/** How long a verified passcode skips argon2 (the room's own lock, expiry and revocation still apply). */
+const PASSCODE_VERIFIED_TTL_S = 15 * 60;
+
+/**
+ * The passcode gate (spec 5.2: 5 misses lock the room; #308, #314). Every attempt RESERVES one of
+ * the room's 5 tries in a single guarded UPDATE before argon2 runs, so however many requests
+ * arrive at once, at most 5 guesses can ever be in flight or spent per lockout: a burst cannot
+ * test more codes than the counter allows, and a right answer that finishes after the room locked
+ * is refused. A right answer gives its try back; a wrong one keeps it, and the attempt that leaves
+ * the counter at 5 locks the room and tells its creator.
+ *
+ * A passcode verified once is remembered for 15 minutes under a keyed hash of (room, passcode),
+ * so the auditor's later page loads skip argon2 and never compete for tries. A hit proves the
+ * guess was right, so it cannot help a guesser.
+ */
+async function checkPasscode(deps: RoomDeps, orgId: string, roomId: string, room: Record<string, unknown>, passcode: string): Promise<void> {
+  const hash = String(room.passcode_hash);
+  const okKey = verifiedKey(deps, roomId, hash, passcode);
+  if ((await safeCount(() => deps.counters.get(okKey))) > 0) return;
+  const reserved = await reservePasscodeTry(deps.engine, orgId, roomId);
+  if (reserved === 'gone') throw new NotFoundError(ROOM_GONE);
+  if (reserved === 'busy') {
+    throw new RateLimitedError('Too many passcode tries are being checked at once. Wait a moment and try again.', 'ROOM_PASSCODE_BUSY', 5);
+  }
+  let ok = false;
+  try {
+    ok = /^\d{6}$/.test(passcode) && (await argon2.verify(hash, passcode));
+  } catch {
+    ok = false;
+  }
+  if (ok) {
+    // Give the try back, but only while the room is still open: a lock that landed during the
+    // verify (other guesses used up the tries) wins.
+    if (!(await releasePasscodeTry(deps.engine, orgId, roomId))) throw new NotFoundError(ROOM_GONE);
+    await deps.counters.set(okKey, PASSCODE_VERIFIED_TTL_S).catch(() => undefined);
+    return;
+  }
+  const left = await recordPasscodeMiss(deps.engine, orgId, roomId, String(room.label));
+  if (left <= 0) throw new NotFoundError(ROOM_GONE);
+  throw new RoomPasscodeRequired(true, left);
+}
+
+/**
+ * Take one of the room's tries before verifying. `gone` = locked, revoked or missing (the usual
+ * 404); `busy` = open, but every remaining try is already being checked by another request.
+ */
+export async function reservePasscodeTry(engine: EngineDeps, orgId: string, roomId: string): Promise<'reserved' | 'gone' | 'busy'> {
   return orgTx(engine.sql, orgId, async (tx) => {
     const [r] = await tx`
       UPDATE bastion_auditor_rooms SET passcode_failures = passcode_failures + 1
-       WHERE organization_id = ${orgId} AND id = ${roomId} AND locked_at IS NULL
+       WHERE organization_id = ${orgId} AND id = ${roomId} AND locked_at IS NULL AND revoked_at IS NULL
+         AND passcode_failures < ${BASTION_ROOM_PASSCODE_MAX_FAILURES}
       RETURNING passcode_failures`;
-    const failures = Number(r?.passcode_failures ?? BASTION_ROOM_PASSCODE_MAX_FAILURES);
-    if (r && failures >= BASTION_ROOM_PASSCODE_MAX_FAILURES) {
-      const now = engine.now();
-      await tx`UPDATE bastion_auditor_rooms SET locked_at = ${now} WHERE organization_id = ${orgId} AND id = ${roomId}`;
+    if (r) return 'reserved' as const;
+    const [cur] = await tx`SELECT locked_at, revoked_at FROM bastion_auditor_rooms WHERE organization_id = ${orgId} AND id = ${roomId}`;
+    if (!cur || cur.locked_at || cur.revoked_at) return 'gone' as const;
+    // Every try is reserved but none has locked the room yet: the in-flight guesses decide.
+    return 'busy' as const;
+  });
+}
+
+/** A right answer returns its reserved try. False when the room locked in the meantime. */
+async function releasePasscodeTry(engine: EngineDeps, orgId: string, roomId: string): Promise<boolean> {
+  return orgTx(engine.sql, orgId, async (tx) => {
+    const rows = await tx`
+      UPDATE bastion_auditor_rooms SET passcode_failures = greatest(passcode_failures - 1, 0)
+       WHERE organization_id = ${orgId} AND id = ${roomId} AND locked_at IS NULL AND revoked_at IS NULL
+      RETURNING id`;
+    return rows.length > 0;
+  });
+}
+
+/**
+ * One wrong passcode, whose try was already reserved (and so already counted): when the counter
+ * stands at 5 the room locks and its creator is told (spec 5.2). Returns tries left.
+ */
+export async function recordPasscodeMiss(engine: EngineDeps, orgId: string, roomId: string, label: string): Promise<number> {
+  return orgTx(engine.sql, orgId, async (tx) => {
+    const now = engine.now();
+    const [locked] = await tx`
+      UPDATE bastion_auditor_rooms SET locked_at = ${now}
+       WHERE organization_id = ${orgId} AND id = ${roomId} AND locked_at IS NULL
+         AND passcode_failures >= ${BASTION_ROOM_PASSCODE_MAX_FAILURES}
+      RETURNING passcode_failures`;
+    if (locked) {
       await enqueueBastionEvent('auditor_room.revoked', { room_id: roomId, label, reason: 'locked' }, tx, {
         orgId,
         idempotencyKey: `auditor_room.locked:${roomId}:${now.toISOString()}`,
       });
+      return 0;
     }
-    return BASTION_ROOM_PASSCODE_MAX_FAILURES - failures;
+    const [cur] = await tx`SELECT passcode_failures, locked_at FROM bastion_auditor_rooms WHERE organization_id = ${orgId} AND id = ${roomId}`;
+    if (!cur || cur.locked_at) return 0;
+    return Math.max(0, BASTION_ROOM_PASSCODE_MAX_FAILURES - Number(cur.passcode_failures ?? 0));
   });
 }
 
