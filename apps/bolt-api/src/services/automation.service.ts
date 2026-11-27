@@ -9,7 +9,7 @@ import {
 } from '../db/schema/index.js';
 import { evaluateConditions } from './condition-engine.js';
 import { getAvailableActions } from './event-catalog.js';
-import { validateExternalUrl } from '../lib/url-validator.js';
+import { checkUrl } from '@bigbluebam/egress-guard';
 import { projectRowsToGraph } from './bolt-graph-compiler.js';
 
 // ---------------------------------------------------------------------------
@@ -94,7 +94,9 @@ export async function validateActionParameters(
     if (action.mcp_tool === 'send_webhook' && action.parameters) {
       const url = action.parameters.url;
       if (typeof url === 'string') {
-        const urlCheck = validateExternalUrl(url);
+        // Shared guard (#328): resolves DNS, so a name pointing at
+        // 169.254.169.254 or 10.x is refused, not just literal IPs.
+        const urlCheck = await checkUrl(url);
         if (!urlCheck.safe) {
           const msg = `Action "send_webhook" URL is not allowed: ${urlCheck.reason}`;
           if (mode === 'strict') {

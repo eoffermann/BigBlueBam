@@ -92,6 +92,7 @@ packages/
   docs-capture/     Recipe-driven (YAML) populated-screenshot capture engine for docs/marketing; defaults to the gilligan cast/workspace. Driven by the root docs:generate pipeline (@bigbluebam/docs-capture).
   bureau-client/    Suite-wide React LiveKit "docked box" client: ActiveCallManager, chat panel, knock/ring/summon handlers, cross-app navigation, presence widgets (@bigbluebam/bureau-client).
   smtp-resolver/    Pure shared SMTP-config precedence resolver used by api + worker to agree on whether SMTP is configured (@bigbluebam/smtp-resolver).
+  egress-guard/     The one SSRF guard for every server-side fetch of a URL or host a user, org admin or external system controls: protocol + hostname denylist, v4/v6 range tables, DNS resolution, connect-time pinning (safeDispatcher), per-hop redirect revalidation (safeFetch), and the EGRESS_ALLOW_PRIVATE_HOSTS operator allowlist. Use checkUrlSync/checkUrl for save-time 400s and safeFetch at the call site. Never write a private-IP table anywhere else; scripts/lib/egress-range-tables.test.mjs fails on a copy (@bigbluebam/egress-guard).
 infra/
   postgres/         migrations/ (numbered, idempotent SQL migrations). 221 files as of tip 0259_bursar_builtin_group_defaults.sql.
   nginx/            nginx.conf, certs.

@@ -14,7 +14,8 @@
       "packages/logging/**",
       "packages/service-health/**",
       "packages/db-stubs/**",
-      "packages/permissions/**"
+      "packages/permissions/**",
+      "packages/egress-guard/**"
     ]
   },
   "deploy": {

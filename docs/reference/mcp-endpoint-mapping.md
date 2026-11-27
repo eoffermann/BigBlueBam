@@ -596,7 +596,7 @@ Covers `permissions-admin.routes.ts` and `permissions-divergences.routes.ts`.
 | --- | --- | --- | --- |
 | `GET /projects/:id/slack-integration` | — _(skip: Slack integration config — UI-only)_ | Get project Slack integration config | `apps/frontend/src/pages/settings.tsx` |
 | `PUT /projects/:id/slack-integration` | — _(skip: Slack integration config — UI-only)_ | Upsert Slack integration (SSRF-guarded) | `apps/frontend/src/pages/settings.tsx` |
-| `POST /projects/:id/slack-integration/test` | — _(skip: Slack integration config — UI-only)_ | Send a Slack test message | `apps/frontend/src/pages/settings.tsx` |
+| `POST /projects/:id/slack-integration/test` | — _(skip: Slack integration config — UI-only)_ | Send a Slack test message (egress-guard safeFetch; a stored URL that now resolves private returns 400) | `apps/frontend/src/pages/settings.tsx` |
 | `DELETE /projects/:id/slack-integration` | — _(skip: Slack integration config — UI-only)_ | Disconnect Slack integration | `apps/frontend/src/pages/settings.tsx` |
 | `POST /webhooks/slack/command` | — _(skip: inbound webhook — public-inbound)_ | Public Slack slash-command handler | external (Slack) |
 
@@ -637,7 +637,7 @@ Covers `permissions-admin.routes.ts` and `permissions-divergences.routes.ts`.
 | REST endpoint | MCP tool | Description | UI call site |
 | --- | --- | --- | --- |
 | `GET /llm-providers` | — _(skip: LLM provider credentials admin — UI/CLI-only)_ | List LLM providers visible to caller | `apps/frontend/src/hooks/use-llm-providers.ts` |
-| `POST /llm-providers` | — _(skip: LLM provider credentials admin — UI/CLI-only)_ | Create scoped LLM provider (SSRF-guarded) | `apps/frontend/src/pages/settings-llm-providers.tsx` |
+| `POST /llm-providers` | — _(skip: LLM provider credentials admin — UI/CLI-only)_ | Create scoped LLM provider (SSRF-guarded by egress-guard incl. DNS; a self-hosted model on a private network needs EGRESS_ALLOW_PRIVATE_HOSTS) | `apps/frontend/src/pages/settings-llm-providers.tsx` |
 | `GET /llm-providers/resolve` | — _(skip: LLM provider credentials admin — UI/CLI-only)_ | Resolve effective provider for context | `apps/frontend/src/hooks/use-llm-providers.ts` |
 | `GET /llm-providers/:id` | — _(skip: LLM provider credentials admin — UI/CLI-only)_ | Get LLM provider detail | `apps/frontend/src/pages/settings-llm-providers.tsx` |
 | `PATCH /llm-providers/:id` | — _(skip: LLM provider credentials admin — UI/CLI-only)_ | Update LLM provider | `apps/frontend/src/pages/settings-llm-providers.tsx` |

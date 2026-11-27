@@ -2801,6 +2801,9 @@ importers:
       '@bigbluebam/db-stubs':
         specifier: workspace:*
         version: link:../../packages/db-stubs
+      '@bigbluebam/egress-guard':
+        specifier: workspace:*
+        version: link:../../packages/egress-guard
       '@bigbluebam/logging':
         specifier: workspace:*
         version: link:../../packages/logging
