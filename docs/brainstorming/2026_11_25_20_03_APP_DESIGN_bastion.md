@@ -1743,7 +1743,12 @@ replica lag is under 30 seconds.
   FINISHED" when no database was reachable to check (#310). Packets: bounded evidence reads (open
   and idle timeouts; only not-found is "Evidence file missing"), a bounded upload with heartbeats
   (#311); one claimant and one object key per attempt (`packets/<org>/<packet>/<uuid>.zip`, with
-  an intent row cleared by an idempotent, key-fenced `finish`) (#312).
+  an intent row cleared by an idempotent, key-fenced `finish`) (#312). A claim held by another
+  attempt with a fresh heartbeat returns `retry_after_ms` (the rest of the 10-minute lease plus
+  30 s); the job moves itself to delayed for that long and claims again (at most 6 waits), so a
+  stalled re-run after a worker restart takes over its dead attempt's packet. The run reaper fails a
+  running packet only after the lease plus 10 minutes, longer than its 5-minute cadence, so it
+  cannot beat that takeover (#326).
 - **Key escrow.** `BASTION_SEAL_SIGNING_KEY`, `BASTION_PD_HMAC_KEY`, and `BASTION_FEED_KEY_PEPPER`
   must be exported and escrowed with the database backup; a rebuilt host without them cannot sign
   new seals under the old key id, verify commitments, or accept existing feed keys. Each row
