@@ -29,6 +29,7 @@ import { sql } from 'drizzle-orm';
 import StreamZip from 'node-stream-zip';
 import { Client as MinioClient } from 'minio';
 import crypto from 'node:crypto';
+import { safeFetch } from '@bigbluebam/egress-guard';
 import { getDb } from '../utils/db.js';
 
 // ---------------------------------------------------------------------------
@@ -208,7 +209,7 @@ export async function processSlackImportJob(
     options: row.mapping?.options ?? {},
     dryRun: Boolean(row.mapping?.options?.dry_run),
     cancelChecker: deps.cancelChecker,
-    fetchImpl: deps.fetchImpl ?? globalThis.fetch,
+    fetchImpl: deps.fetchImpl,
   };
 
   try {
@@ -339,7 +340,8 @@ interface ImportContext {
   options: ImportOptions;
   dryRun: boolean;
   cancelChecker?: (importId: string) => Promise<boolean>;
-  fetchImpl: typeof fetch;
+  /** Test override; production downloads use egress-guard's own fetch. */
+  fetchImpl?: typeof fetch;
 }
 
 // ---------------------------------------------------------------------------
@@ -1392,14 +1394,57 @@ function findLocalFileEntry(
   return null;
 }
 
-async function downloadSlackUrl(
-  ctx: ImportContext,
+/** Hosts the Slack bearer token may be sent to. url_private is Slack-hosted by definition. */
+const SLACK_HOST_SUFFIXES = ['slack.com', 'slack-edge.com', 'slack-files.com'];
+
+function isSlackHost(hostname: string): boolean {
+  const h = hostname.toLowerCase();
+  return SLACK_HOST_SUFFIXES.some((s) => h === s || h.endsWith(`.${s}`));
+}
+
+/**
+ * Download a file named by url_private / url_private_download in the export's
+ * files.json. That file is part of a user-uploaded zip, so the URL is
+ * attacker-controlled. Two things used to go wrong: the worker fetched any URL
+ * from inside the cluster (SSRF), and it attached the workspace's Slack bearer
+ * token to whatever host the URL named, handing the token to that host. The
+ * token now only goes to a Slack host, the request goes through the egress
+ * guard (per-hop revalidation, pinned connection), and Authorization is
+ * dropped if a redirect leaves the origin. Anything refused returns null and
+ * the caller stubs the attachment.
+ */
+export async function downloadSlackUrl(
+  ctx: Pick<ImportContext, 'slackToken' | 'logger' | 'fetchImpl'>,
   url: string,
 ): Promise<Buffer | null> {
   if (!ctx.slackToken) return null;
-  const resp = await ctx.fetchImpl(url, {
-    headers: { Authorization: `Bearer ${ctx.slackToken}` },
-  });
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return null;
+  }
+  if (parsed.protocol !== 'https:' || !isSlackHost(parsed.hostname)) {
+    ctx.logger.warn(
+      { host: parsed.hostname, protocol: parsed.protocol },
+      'slack-import: not sending the Slack token to a non-Slack URL; stubbing the file',
+    );
+    return null;
+  }
+  let resp: Response;
+  try {
+    resp = await safeFetch(
+      url,
+      { headers: { Authorization: `Bearer ${ctx.slackToken}` } },
+      { fetchImpl: ctx.fetchImpl, stripHeadersOnCrossOrigin: ['Authorization'] },
+    );
+  } catch (err) {
+    ctx.logger.warn(
+      { err: err instanceof Error ? err.message : String(err), host: parsed.hostname },
+      'slack-import: file download blocked or failed',
+    );
+    return null;
+  }
   if (!resp.ok) return null;
   const arr = await resp.arrayBuffer();
   return Buffer.from(arr);

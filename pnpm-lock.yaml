@@ -4724,6 +4724,9 @@ importers:
 
   apps/worker:
     dependencies:
+      '@bigbluebam/egress-guard':
+        specifier: workspace:*
+        version: link:../../packages/egress-guard
       '@bigbluebam/shared':
         specifier: workspace:*
         version: link:../../packages/shared
