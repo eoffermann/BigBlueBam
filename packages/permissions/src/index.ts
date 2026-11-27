@@ -5,6 +5,12 @@
 
 import fp from 'fastify-plugin';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
+import {
+  KEY_PROJECT_RESTRICTED,
+  checkKeyProjectAccess,
+  isKeyProjectRestricted,
+  keyProjectAllowsRequest,
+} from '@bigbluebam/auth-core';
 
 import { resolve, can } from './resolver.js';
 import { PermissionsCache, CACHE_KEYS, DEFAULT_TTL_SECONDS, INVALIDATION_CHANNELS } from './cache.js';
@@ -111,18 +117,52 @@ declare module 'fastify' {
   }
 }
 
+// ─────────────────────────────────────────────────────────────────────
+// API key project restriction (#352)
+// ─────────────────────────────────────────────────────────────────────
+//
+// An API key minted with project_ids may act only inside those projects. The rule is
+// @bigbluebam/auth-core's; requireCan and canResolve apply it in EVERY enforcement mode,
+// including 'off' and 'warn', because it is a property of the credential, not of the role
+// matrix being rolled out. A check whose project is unknown (org-wide or non-project
+// permission) refuses a restricted key: the restriction fails closed.
+
+/** 403 when a project-restricted key is outside its projects; undefined when admitted. */
+function enforceKeyProject(
+  request: FastifyRequest,
+  reply: FastifyReply,
+  permissionId: string,
+  projectId: string | null | undefined,
+) {
+  if (!isKeyProjectRestricted(request) || checkKeyProjectAccess(request, projectId)) return undefined;
+  return reply.code(403).send({
+    error: {
+      code: KEY_PROJECT_RESTRICTED,
+      message: `This API key is restricted to specific projects and cannot use ${permissionId} here`,
+      details: [{ permission_id: permissionId, project_id: projectId ?? null }],
+    },
+  });
+}
+
 export const permissionsPlugin = fp<PermissionsPluginOptions>(
   async (fastify: FastifyInstance, opts) => {
+    const projectOf = (request: FastifyRequest, scope?: PermissionScope) =>
+      (scope ?? (opts.scopeLoader ? opts.scopeLoader(request) : { org_id: null })).project_id ?? null;
+
     if (opts.mode === 'off') {
-      // Wave A default. requireCan still mounts but every check resolves
+      // Wave A default. requireCan still mounts but every role check resolves
       // to ALLOW so the plugin acts as a measurement-only no-op until
-      // mode flips to 'warn' or 'on'.
-      fastify.decorate('requireCan', (_permissionId: string) => {
-        return async (_request: FastifyRequest, _reply: FastifyReply) => {
-          // no-op
-        };
+      // mode flips to 'warn' or 'on'. The API key project restriction (#352)
+      // still applies.
+      fastify.decorate('requireCan', (permissionId: string) => {
+        return async (request: FastifyRequest, reply: FastifyReply) =>
+          enforceKeyProject(request, reply, permissionId, projectOf(request));
       });
-      fastify.decorate('canResolve', async () => true);
+      fastify.decorate(
+        'canResolve',
+        async (request: FastifyRequest, _permissionId: string, scope?: PermissionScope) =>
+          keyProjectAllowsRequest(request, projectOf(request, scope)),
+      );
       return;
     }
 
@@ -130,6 +170,8 @@ export const permissionsPlugin = fp<PermissionsPluginOptions>(
       'requireCan',
       (permissionId: string) =>
         async (request: FastifyRequest, reply: FastifyReply): Promise<void> => {
+          const refused = enforceKeyProject(request, reply, permissionId, projectOf(request));
+          if (refused) return refused;
           const ctx = await opts.contextLoader(request);
 
           // Warn mode is 100% non-blocking: if context can't load (e.g.
@@ -186,9 +228,10 @@ export const permissionsPlugin = fp<PermissionsPluginOptions>(
         permissionId: string,
         scope?: PermissionScope,
       ): Promise<boolean> => {
+        const finalScope = scope ?? (opts.scopeLoader ? opts.scopeLoader(request) : { org_id: null });
+        if (!keyProjectAllowsRequest(request, finalScope.project_id)) return false;
         const ctx = await opts.contextLoader(request);
         if (!ctx) return false;
-        const finalScope = scope ?? (opts.scopeLoader ? opts.scopeLoader(request) : { org_id: null });
         return can(ctx, permissionId, finalScope);
       },
     );
@@ -431,13 +474,19 @@ export function createHttpPermissionChecker(opts: HttpPermissionCheckerOptions) 
 
 export const httpPermissionsPlugin = fp<HttpPermissionsPluginOptions>(
   async (fastify: FastifyInstance, opts) => {
+    const projectOf = (request: FastifyRequest) => (opts.getProjectId ? opts.getProjectId(request) : null);
+
     if (opts.mode === 'off') {
-      fastify.decorate('requireCan', (_permissionId: string) => {
-        return async (_request: FastifyRequest, _reply: FastifyReply) => {
-          // no-op
-        };
+      // Role checks are off; the API key project restriction (#352) still applies.
+      fastify.decorate('requireCan', (permissionId: string) => {
+        return async (request: FastifyRequest, reply: FastifyReply) =>
+          enforceKeyProject(request, reply, permissionId, projectOf(request));
       });
-      fastify.decorate('canResolve', async () => true);
+      fastify.decorate(
+        'canResolve',
+        async (request: FastifyRequest, _permissionId: string, scope?: PermissionScope) =>
+          keyProjectAllowsRequest(request, scope ? scope.project_id : projectOf(request)),
+      );
       return;
     }
 
@@ -466,6 +515,8 @@ export const httpPermissionsPlugin = fp<HttpPermissionsPluginOptions>(
       'requireCan',
       (permissionId: string) =>
         async (request: FastifyRequest, reply: FastifyReply): Promise<void> => {
+          const refused = enforceKeyProject(request, reply, permissionId, projectOf(request));
+          if (refused) return refused;
           const caller = opts.getCaller(request);
           // Unauthenticated → can't resolve. In 'on' mode the legacy
           // requireAuth gate should have already rejected; if it didn't,
@@ -504,14 +555,15 @@ export const httpPermissionsPlugin = fp<HttpPermissionsPluginOptions>(
     fastify.decorate(
       'canResolve',
       async (
-        _request: FastifyRequest,
+        request: FastifyRequest,
         _permissionId: string,
-        _scope?: PermissionScope,
+        scope?: PermissionScope,
       ): Promise<boolean> => {
         // The HTTP plugin doesn't expose a synchronous probe today. Callers
         // that need this can either issue a full requireCan check or query
         // the api directly. For Wave D satellites this isn't on a hot path.
-        return true;
+        // The API key project restriction (#352) is still answered here.
+        return keyProjectAllowsRequest(request, scope ? scope.project_id : projectOf(request));
       },
     );
   },

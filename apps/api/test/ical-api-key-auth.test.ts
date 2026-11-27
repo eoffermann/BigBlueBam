@@ -96,8 +96,8 @@ function candidateRow(key: Record<string, unknown>, ownerOver: Record<string, un
 }
 
 async function feed(key: Record<string, unknown>, ownerOver: Record<string, unknown> = {}) {
-  // First execute: the @bigbluebam/auth-core candidate query (auth_api_key_candidates joined to
-  // users). Later ones (auth_touch_api_key) return nothing.
+  // First execute: the @bigbluebam/auth-core lookup-id query (auth_api_key_by_lookup joined to
+  // users, #353), which finds the key. Later ones (auth_touch_api_key) return nothing.
   mockDb.execute.mockResolvedValue([]);
   mockDb.execute.mockResolvedValueOnce([candidateRow(key, ownerOver)]);
   mockDb.select

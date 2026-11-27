@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeAll } from 'vitest';
 import argon2 from 'argon2';
 import { PgDialect } from 'drizzle-orm/pg-core';
 import type { SQL } from 'drizzle-orm';
+import { apiKeyLookup } from '@bigbluebam/auth-core';
 
 // #325: helpdesk-api verifies a Bam API key sent as Bearer with the same rules
 // as apps/api (prefix lookup, Argon2id, expiry with rotation grace, active user).
@@ -17,10 +18,17 @@ vi.mock('../src/db/index.js', () => ({
     execute: async (query: SQL) => {
       const { sql, params } = dialect.sqlToQuery(query);
       executed.push(sql);
-      // The shared @bigbluebam/auth-core candidate query: auth_api_key_candidates joined to users.
-      if (sql.includes('FROM auth_api_key_candidates(')) {
+      // The shared @bigbluebam/auth-core key queries (migration 0345, #353): the lookup-id match
+      // and the legacy prefix bucket, each joined to users; plus adopting a lookup id.
+      if (sql.includes('auth_adopt_api_key_lookup(')) {
+        const row = rows.find((r) => r.id === params[0] && !r.key_lookup);
+        if (row) row.key_lookup = params[1];
+        return [];
+      }
+      const byLookup = sql.includes('FROM auth_api_key_by_lookup(');
+      if (byLookup || sql.includes('FROM auth_api_key_legacy_candidates(')) {
         return rows
-          .filter((r) => r.key_prefix === params[0])
+          .filter((r) => (byLookup ? r.key_lookup === params[0] : r.key_prefix === params[0] && !r.key_lookup))
           .map((r) => ({
             ...r,
             owner_org_id: r.org_id,
@@ -108,5 +116,23 @@ describe('verifyBamApiKey', () => {
   it("rejects an inactive user's key", async () => {
     rows.splice(0, rows.length, key({ is_active: false }));
     expect(await verifyBamApiKey(req, TOKEN)).toBeNull();
+  });
+
+  // #353: a legacy key gains its lookup id on first use, then is found by it.
+  it('records a lookup id on a legacy key and then finds the key by it', async () => {
+    rows.splice(0, rows.length, key());
+    expect(await verifyBamApiKey(req, TOKEN)).not.toBeNull();
+    expect(rows[0]?.key_lookup).toBe(apiKeyLookup(TOKEN));
+    executed.length = 0;
+    expect(await verifyBamApiKey(req, TOKEN)).not.toBeNull();
+    expect(executed.some((q) => q.includes('auth_api_key_legacy_candidates('))).toBe(false);
+  });
+
+  // #352: helpdesk has no Bam project context, so a project-restricted key does not authenticate.
+  it('refuses a project-restricted key and accepts an empty restriction', async () => {
+    rows.splice(0, rows.length, key({ project_ids: ['11111111-1111-4111-8111-111111111111'] }));
+    expect(await verifyBamApiKey(req, TOKEN)).toBeNull();
+    rows.splice(0, rows.length, key({ project_ids: [] }));
+    expect(await verifyBamApiKey(req, TOKEN)).not.toBeNull();
   });
 });

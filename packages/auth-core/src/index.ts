@@ -15,6 +15,10 @@
 //   - how a token is matched to a key row and its owner (verifyApiKeyToken)
 //   - which org a key confines its caller to (resolveKeyOrgPin)
 //   - what requireScope(min) admits (requireScope)
+//   - which orgs a user belongs to, with which role, and which one a request acts in
+//     (resolveOrgContext over sqlOrgContextStore, #350; see org-context.ts)
+//   - how a key row is located with one candidate (apiKeyLookup / key_lookup, #353)
+//   - which projects a key may touch (keyProjectRestriction and friends, #352; key-project.ts)
 //
 // DB-driver agnostic, like @bigbluebam/permissions: this package imports no database client.
 // A host hands it a store. sqlApiKeyStore() builds that store from the host's own drizzle
@@ -41,8 +45,40 @@
 //   - helpdesk-api's per-agent X-Agent-Key (helpdesk_agent_api_keys) is a different credential
 //     type with its own table and is not a bbam_ key; it is out of scope here.
 
+import { createHash } from 'node:crypto';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { API_KEY_SCOPES } from '@bigbluebam/shared';
+import { rowsOf } from './rows.js';
+
+// Org-context resolution (#350): memberships, roles, soft-deleted orgs, X-Org-Id parsing.
+export {
+  DEFAULT_MEMBERSHIP_ROLE,
+  OrgMembershipError,
+  SUPERUSER_VIEWING_ROLE,
+  requestedOrgIdFromHeader,
+  resolveOrgContext,
+  sqlOrgContextStore,
+  type LiveMembershipRow,
+  type OrgContext,
+  type OrgContextStore,
+  type OrgMembership,
+  type ResolveOrgContextOptions,
+  type SqlOrgContextStoreDeps,
+} from './org-context.js';
+
+// API key project restriction (#352): api_keys.project_ids, enforced fail-closed.
+export {
+  KEY_PROJECT_RESTRICTED,
+  checkKeyProjectAccess,
+  isKeyProjectRestricted,
+  keyProjectAccessChecked,
+  keyProjectAllows,
+  keyProjectAllowsRequest,
+  keyProjectRestriction,
+  refuseProjectRestrictedKey,
+  requireKeyProjectChecked,
+  type ProjectRestrictedUser,
+} from './key-project.js';
 
 // ─────────────────────────────────────────────────────────────────────
 // Scopes and roles
@@ -144,8 +180,21 @@ export interface ApiKeyCandidate {
 
 /** Data access a host supplies. sqlApiKeyStore() builds one from drizzle's sql + db.execute. */
 export interface ApiKeyStore {
-  /** Keys whose 8-char key_prefix matches, joined to their owner, at most `limit` (<= 64). */
+  /**
+   * LEGACY keys (minted before api_keys.key_lookup existed, so with no lookup id) whose 8-char
+   * key_prefix matches, joined to their owner, most recently used first, at most `limit` (<= 64).
+   */
   findCandidates(prefix: string, limit: number): Promise<ApiKeyCandidate[]>;
+  /**
+   * The key whose key_lookup equals `lookup` (apiKeyLookup(token)), joined to its owner: zero or
+   * one row (key_lookup is unique). Optional so a store without it keeps the legacy path only.
+   */
+  findByLookup?(lookup: string): Promise<ApiKeyCandidate[]>;
+  /**
+   * Record the lookup id on a legacy key that just authenticated (only while it has none), so
+   * its next request takes the one-candidate path. Optional; best effort.
+   */
+  adoptLookup?(keyId: string, lookup: string): Promise<void>;
   /** Argon2id verify. May throw on a malformed hash; the caller treats a throw as a mismatch. */
   verifyHash(hash: string, token: string): Promise<boolean>;
   /** Bump api_keys.last_used_at for a key that just authenticated. */
@@ -158,19 +207,39 @@ export interface WarnLogger {
 
 /** Service-account tokens are `bbam_svc_<random>`, so their 8-char prefix is always this. */
 export const SVC_KEY_PREFIX = 'bbam_svc';
-/** Fetch/verify ceiling for that shared bucket (#40). */
+/** Clamp on any prefix fetch (the SQL function enforces the same ceiling). */
 export const SVC_BUCKET_MAX = 64;
 /** Fetch ceiling for any other prefix; more than MAX_VERIFY_CANDIDATES of them is suspicious. */
 const PREFIX_FETCH_LIMIT = 10;
-const MAX_VERIFY_CANDIDATES = 3;
+/**
+ * Most Argon2 verifies one request may cost on the legacy path, for any prefix (#353). The
+ * 'bbam_svc' bucket used to verify up to 64 per request, which let an unauthenticated caller
+ * buy 64 Argon2id runs with one header.
+ */
+export const MAX_VERIFY_CANDIDATES = 3;
+
+/**
+ * The high-entropy lookup id stored in api_keys.key_lookup (#353): hex SHA-256 of the full
+ * token. The token carries 32+ random bytes, so this is not guessable and not reversible; it
+ * only locates the row. The secret check is still Argon2 (key_hash). Every mint path stores it.
+ */
+export function apiKeyLookup(token: string): string {
+  return createHash('sha256').update(token, 'utf8').digest('hex');
+}
 
 /**
  * The suite's single rule for "does this bbam_ token authenticate, and as whom".
  *
- *  - Candidates are indexed by the 8-char key_prefix and Argon2id-verified.
- *  - #40: the 'bbam_svc' prefix is shared by every service-account key, so that bucket fetches
- *    and verifies up to SVC_BUCKET_MAX rows. For any other prefix, more than 3 candidates
- *    signals a forced-Argon2 attempt (P2-11) and the lookup collapses to the first candidate.
+ *  - #353: a key minted with a lookup id is found by apiKeyLookup(token) (one row) and costs one
+ *    Argon2 verify. A token whose lookup matches nothing falls to the legacy path below.
+ *  - Legacy keys (no lookup id) are found by the 8-char key_prefix and Argon2id-verified, at most
+ *    MAX_VERIFY_CANDIDATES per request for ANY prefix. For a non-service prefix, more than 3
+ *    candidates signals a forced-Argon2 attempt (P2-11) and the lookup collapses to the first.
+ *    The 'bbam_svc' prefix is shared by every legacy service-account key (#40); that bucket is
+ *    read most recently used first and only its first 3 are verified, and overflow is logged as
+ *    a deprecation: rotate legacy service-account keys so they gain a lookup id.
+ *  - A legacy key that authenticates is given its lookup id on the spot (store.adoptLookup), so
+ *    active legacy keys leave the prefix bucket on first use, with no rotation needed.
  *  - P2-10: the hash verify always runs before the expiry check, so expired and wrong keys cost
  *    the same wall time. A malformed stored hash counts as a failed verify instead of throwing.
  *  - isApiKeyUsable decides expiry and the rotation grace window.
@@ -181,42 +250,66 @@ const MAX_VERIFY_CANDIDATES = 3;
  */
 export async function verifyApiKeyToken(
   token: string | null | undefined,
-  store: Pick<ApiKeyStore, 'findCandidates' | 'verifyHash'>,
+  store: Pick<ApiKeyStore, 'findCandidates' | 'verifyHash' | 'findByLookup' | 'adoptLookup'>,
   log?: WarnLogger,
   now: () => Date = () => new Date(),
 ): Promise<ApiKeyCandidate | null> {
   if (!token) return null;
   const prefix = token.slice(0, 8);
   const isSvcBucket = prefix === SVC_KEY_PREFIX;
+  const lookup = store.findByLookup || store.adoptLookup ? apiKeyLookup(token) : '';
 
-  const candidates = await store.findCandidates(prefix, isSvcBucket ? SVC_BUCKET_MAX : PREFIX_FETCH_LIMIT);
-  if (candidates.length === 0) return null;
-
-  const tooMany = !isSvcBucket && candidates.length > MAX_VERIFY_CANDIDATES;
-  const verifyCandidates = tooMany ? candidates.slice(0, 1) : candidates;
-  if (tooMany) {
-    log?.warn(
-      { prefix, candidate_count: candidates.length },
-      'Suspicious number of API key candidates for prefix; limiting to first candidate',
-    );
-  } else if (isSvcBucket && candidates.length >= SVC_BUCKET_MAX) {
-    // At the ceiling a valid key could fall outside the fetched window; the degenerate bucket
-    // needs the prefix-lengthening follow-up (#40).
-    log?.warn(
-      { prefix, candidate_count: candidates.length },
-      'Service-account prefix bucket hit SVC_BUCKET_MAX; some keys may not authenticate until prefixes are lengthened (#40 follow-up)',
-    );
-  }
-
-  for (const candidate of verifyCandidates) {
+  const check = async (candidate: ApiKeyCandidate): Promise<boolean> => {
     let valid = false;
     try {
       valid = await store.verifyHash(candidate.apiKey.key_hash, token);
     } catch (err) {
       log?.warn({ err, api_key_id: candidate.apiKey.id }, 'argon2.verify threw on api key candidate; treating as invalid');
     }
-    if (!isApiKeyUsable(candidate.apiKey, now())) continue;
-    if (valid && candidate.user.is_active) return candidate;
+    if (!isApiKeyUsable(candidate.apiKey, now())) return false;
+    return valid && candidate.user.is_active;
+  };
+
+  if (store.findByLookup) {
+    const [hit] = await store.findByLookup(lookup);
+    if (hit) return (await check(hit)) ? hit : null;
+  }
+
+  const candidates = await store.findCandidates(
+    prefix,
+    isSvcBucket ? MAX_VERIFY_CANDIDATES + 1 : PREFIX_FETCH_LIMIT,
+  );
+  if (candidates.length === 0) return null;
+
+  let verifyCandidates = candidates;
+  if (isSvcBucket) {
+    verifyCandidates = candidates.slice(0, MAX_VERIFY_CANDIDATES);
+    if (candidates.length > MAX_VERIFY_CANDIDATES) {
+      log?.warn(
+        { prefix, verified: MAX_VERIFY_CANDIDATES },
+        'DEPRECATED: more than 3 legacy service-account keys share the bbam_svc prefix bucket; only the 3 most recently used are tried per request. Rotate legacy service-account keys so they gain a lookup id (#353).',
+      );
+    }
+  } else if (candidates.length > MAX_VERIFY_CANDIDATES) {
+    verifyCandidates = candidates.slice(0, 1);
+    log?.warn(
+      { prefix, candidate_count: candidates.length },
+      'Suspicious number of API key candidates for prefix; limiting to first candidate',
+    );
+  }
+
+  for (const candidate of verifyCandidates) {
+    if (!(await check(candidate))) continue;
+    if (store.adoptLookup) {
+      // Awaited (once per legacy key, on its first use) so it finishes inside the request
+      // instead of racing the request's own queries for pooled connections; never fatal.
+      try {
+        await store.adoptLookup(candidate.apiKey.id, lookup);
+      } catch (err) {
+        log?.warn({ err, api_key_id: candidate.apiKey.id }, 'Failed to record the lookup id on a legacy api key');
+      }
+    }
+    return candidate;
   }
   return null;
 }
@@ -247,12 +340,6 @@ export interface SqlApiKeyStoreDeps {
   execute: (query: never) => Promise<unknown>;
   /** argon2.verify (the host's own argon2 dependency). */
   verifyHash: (hash: string, token: string) => Promise<boolean>;
-}
-
-function rowsOf(raw: unknown): Array<Record<string, unknown>> {
-  return (Array.isArray(raw) ? raw : ((raw as { rows?: unknown[] } | null)?.rows ?? [])) as Array<
-    Record<string, unknown>
-  >;
 }
 
 function toDate(v: unknown): Date | null {
@@ -296,14 +383,31 @@ export function candidateFromRow(r: Record<string, unknown>): ApiKeyCandidate {
 /**
  * Build the ApiKeyStore every service uses, from the host's drizzle `sql` tag and `db.execute`.
  *
- * Candidates come through auth_api_key_candidates() (migration 0311, SECURITY DEFINER): a key
- * is matched before any org is known, so under BBB_RLS_ENFORCE=1 a plain read of the org-gated
- * api_keys table would see nothing (#105). users is not org-gated and is joined directly.
+ * Keys come through SECURITY DEFINER functions (migrations 0311 and 0345): a key is matched
+ * before any org is known, so under BBB_RLS_ENFORCE=1 a plain read of the org-gated api_keys
+ * table would see nothing (#105). users is not org-gated and is joined directly.
+ *
+ *  - findByLookup: auth_api_key_by_lookup(), the unique key_lookup match (#353).
+ *  - findCandidates: auth_api_key_legacy_candidates(), prefix matches that have no lookup id
+ *    yet, most recently used first.
+ *  - adoptLookup: auth_adopt_api_key_lookup(), sets key_lookup on a legacy key only while unset.
  */
 export function sqlApiKeyStore(deps: SqlApiKeyStoreDeps): ApiKeyStore {
   const tag = deps.sql;
   const execute = deps.execute as (query: unknown) => Promise<unknown>;
   return {
+    async findByLookup(lookup) {
+      const raw = await execute(tag`
+        SELECT k.id, k.user_id, k.org_id, k.scope, k.key_hash, k.project_ids,
+               k.expires_at, k.rotated_at, k.rotation_grace_expires_at,
+               u.org_id AS owner_org_id, u.email AS owner_email,
+               u.display_name AS owner_display_name, u.avatar_url AS owner_avatar_url,
+               u.timezone AS owner_timezone, u.is_active AS owner_is_active,
+               u.is_superuser AS owner_is_superuser, u.kind::text AS owner_kind
+          FROM auth_api_key_by_lookup(${lookup}) k
+          JOIN users u ON u.id = k.user_id`);
+      return rowsOf(raw).map(candidateFromRow);
+    },
     async findCandidates(prefix, limit) {
       const raw = await execute(tag`
         SELECT k.id, k.user_id, k.org_id, k.scope, k.key_hash, k.project_ids,
@@ -312,9 +416,13 @@ export function sqlApiKeyStore(deps: SqlApiKeyStoreDeps): ApiKeyStore {
                u.display_name AS owner_display_name, u.avatar_url AS owner_avatar_url,
                u.timezone AS owner_timezone, u.is_active AS owner_is_active,
                u.is_superuser AS owner_is_superuser, u.kind::text AS owner_kind
-          FROM auth_api_key_candidates(${prefix}, ${Math.min(Math.max(limit, 1), SVC_BUCKET_MAX)}) k
-          JOIN users u ON u.id = k.user_id`);
+          FROM auth_api_key_legacy_candidates(${prefix}, ${Math.min(Math.max(limit, 1), SVC_BUCKET_MAX)}) k
+          JOIN users u ON u.id = k.user_id
+         ORDER BY k.last_used_at DESC NULLS LAST, k.created_at DESC`);
       return rowsOf(raw).map(candidateFromRow);
+    },
+    async adoptLookup(keyId, lookup) {
+      await execute(tag`SELECT auth_adopt_api_key_lookup(${keyId}::uuid, ${lookup})`);
     },
     verifyHash: deps.verifyHash,
     async touch(keyId) {
