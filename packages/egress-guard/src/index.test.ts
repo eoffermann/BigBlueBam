@@ -2,7 +2,10 @@ import { describe, it, expect, vi } from 'vitest';
 import {
   assertSafeHost,
   assertSafeSmtpTarget,
+  BodyTooLargeError,
   checkUrl,
+  readBodyCapped,
+  readTextCapped,
   checkUrlSync,
   EgressBlockedError,
   isBlockedIPv4,
@@ -113,6 +116,41 @@ describe('assertSafeSmtpTarget (#321)', () => {
   it('honors the allowlist for an org host', async () => {
     const env = { EGRESS_ALLOW_PRIVATE_HOSTS: 'relay.corp:25' } as NodeJS.ProcessEnv;
     await expect(assertSafeSmtpTarget({ host: 'relay.corp', port: 25, layer: 'org' }, env)).resolves.toBeUndefined();
+  });
+});
+
+describe('readBodyCapped (#322)', () => {
+  /** A stream that never ends; counts how many chunks were pulled. */
+  function endless(): { res: Response; pulled: () => number } {
+    let n = 0;
+    const stream = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        n += 1;
+        controller.enqueue(new Uint8Array(1024));
+      },
+    });
+    return { res: new Response(stream), pulled: () => n };
+  }
+
+  it('rejects an endless body once it crosses the cap, without draining it', async () => {
+    const { res, pulled } = endless();
+    await expect(readBodyCapped(res, 10 * 1024)).rejects.toBeInstanceOf(BodyTooLargeError);
+    expect(pulled()).toBeLessThan(20);
+  });
+
+  it('truncates at exactly the cap in truncate mode', async () => {
+    const { res } = endless();
+    const buf = await readBodyCapped(res, 2500, { onOverflow: 'truncate' });
+    expect(buf.byteLength).toBe(2500);
+  });
+
+  it('rejects up front on a Content-Length over the cap', async () => {
+    const res = new Response('x', { headers: { 'content-length': '999999' } });
+    await expect(readBodyCapped(res, 10)).rejects.toBeInstanceOf(BodyTooLargeError);
+  });
+
+  it('returns a body under the cap intact', async () => {
+    expect(await readTextCapped(new Response('hello'), 10)).toBe('hello');
   });
 });
 

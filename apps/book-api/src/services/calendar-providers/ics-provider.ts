@@ -1,4 +1,4 @@
-import { safeFetch } from '@bigbluebam/egress-guard';
+import { BodyTooLargeError, readTextCapped, safeFetch } from '@bigbluebam/egress-guard';
 import type { CalendarProvider, NormalizedEvent, ProviderContext } from './types.js';
 import { parseIcs } from './ics-parser.js';
 
@@ -27,27 +27,36 @@ export class IcsCalendarProvider implements CalendarProvider {
 
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
-    let res: Response;
+    let text: string;
     try {
       // The stored feed URL is user-supplied and the sync worker re-fetches it
       // unattended forever, so it is vetted here on every fetch (and every
       // redirect hop), not only when the connection is created: DNS can be
       // repointed at any time. A blocked target surfaces as a sync error.
-      res = await safeFetch(url, {
+      const res = await safeFetch(url, {
         signal: controller.signal,
         headers: { Accept: 'text/calendar, text/plain, */*' },
       });
+
+      if (!res.ok) {
+        await res.body?.cancel().catch(() => {});
+        throw new Error(`Feed fetch failed: HTTP ${res.status}`);
+      }
+
+      // Stream the body and stop at the cap (#322): res.text() would buffer a
+      // huge or endless feed in full before any size check could run. The
+      // timeout stays armed through the body read so a slow-drip feed is
+      // bounded in time as well as bytes.
+      try {
+        text = await readTextCapped(res, MAX_FEED_BYTES);
+      } catch (err) {
+        if (err instanceof BodyTooLargeError) {
+          throw new Error(`Feed too large (> ${MAX_FEED_BYTES} bytes)`);
+        }
+        throw err;
+      }
     } finally {
       clearTimeout(timer);
-    }
-
-    if (!res.ok) {
-      throw new Error(`Feed fetch failed: HTTP ${res.status}`);
-    }
-
-    const text = await res.text();
-    if (text.length > MAX_FEED_BYTES) {
-      throw new Error(`Feed too large (> ${MAX_FEED_BYTES} bytes)`);
     }
     if (!/BEGIN:VCALENDAR/i.test(text)) {
       throw new Error('Response is not a valid iCalendar (.ics) document');
