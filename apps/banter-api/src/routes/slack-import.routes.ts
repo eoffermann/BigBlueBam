@@ -26,6 +26,7 @@ import { db } from '../db/index.js';
 import { banterSlackImports } from '../db/schema/index.js';
 import { requireAuth } from '../plugins/auth.js';
 import { logAudit } from '../services/audit.js';
+import { deleteImportedContent } from '../services/slack-import-abort.js';
 import { env } from '../env.js';
 import {
   buildPreview,
@@ -669,31 +670,9 @@ export default async function slackImportRoutes(fastify: FastifyInstance) {
           .set({ status: 'aborted', updated_at: new Date() })
           .where(eq(banterSlackImports.id, id));
 
-        // Delete messages, attachments, reactions tagged with this import.
-        const delMessages = await tx.execute<{ count: number }>(sql`
-          WITH d AS (
-            DELETE FROM banter_messages
-            WHERE metadata #>> '{slack_source,import_id}' = ${id}
-            RETURNING 1
-          )
-          SELECT count(*)::int AS count FROM d
-        `);
-        const delAttachments = await tx.execute<{ count: number }>(sql`
-          WITH d AS (
-            DELETE FROM banter_message_attachments
-            WHERE metadata #>> '{slack_source,import_id}' = ${id}
-            RETURNING 1
-          )
-          SELECT count(*)::int AS count FROM d
-        `);
-        const delReactions = await tx.execute<{ count: number }>(sql`
-          WITH d AS (
-            DELETE FROM banter_message_reactions
-            WHERE metadata #>> '{slack_source,import_id}' = ${id}
-            RETURNING 1
-          )
-          SELECT count(*)::int AS count FROM d
-        `);
+        // Delete messages, attachments, reactions tagged with this import:
+        // set-based, children counted before the messages (#370).
+        Object.assign(counts, await deleteImportedContent(tx, id));
 
         function firstCount(result: unknown): number {
           const rows = Array.isArray(result)
@@ -701,9 +680,6 @@ export default async function slackImportRoutes(fastify: FastifyInstance) {
             : ((result as { rows?: { count?: number }[] })?.rows ?? []);
           return rows[0]?.count ?? 0;
         }
-        counts.messages = firstCount(delMessages);
-        counts.attachments = firstCount(delAttachments);
-        counts.reactions = firstCount(delReactions);
 
         // Delete channels created by this import (scoped to its group +
         // started_at floor). If channel_group_id is null the worker never
