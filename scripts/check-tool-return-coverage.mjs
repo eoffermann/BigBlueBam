@@ -153,6 +153,9 @@ const PUBLISHED = [
   'docs/apps/introduction/_narrative.md',
   'docs/apps/introduction/_marketing_hook.md',
   'docs/apps/introduction/meta.json',
+  // Issue #406: the overview states the suite total; mcp-server.md must not drift back to one.
+  'docs/BIGBLUEBAM_COMPREHENSIVE_OVERVIEW.md',
+  'docs/reference/mcp-server.md',
 ];
 const COUNT_PATTERNS = [
   /\b(\d{3,4})(?:-tool\b| (?:MCP |AI |structured )?tools?\b)/gi,

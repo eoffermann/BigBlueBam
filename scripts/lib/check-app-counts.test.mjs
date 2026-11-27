@@ -54,6 +54,15 @@ test('the suite introduction files are checked, including the meta.json app_coun
   assert.equal(findStaleAppCounts(old, 24, 'x').length, 3);
 });
 
+test('the MCP server reference and the Comprehensive Overview are checked (issue #406)', () => {
+  for (const rel of ['docs/reference/mcp-server.md', 'docs/BIGBLUEBAM_COMPREHENSIVE_OVERVIEW.md']) {
+    assert.ok(PUBLISHED.includes(rel), rel);
+    assert.ok(readFileSync(join(REPO_ROOT, 'scripts/check-tool-return-coverage.mjs'), 'utf8').includes(`'${rel}'`), rel);
+  }
+  const old = '**340 tools across 43 modules.** The suite is **sixteen apps under one auth**.';
+  assert.equal(findStaleAppCounts(old, 25, 'x').length, 1);
+});
+
 test('missingFaqNames finds catalog apps the FAQ prose forgot', () => {
   const tsx = "  {\n    question: 'How many apps are included?',\n    answer: `Bam (x), Banter (y)`,\n  },\n";
   assert.deepEqual(missingFaqNames(faqAnswer(tsx), ['Bam', 'Banter', 'Bursar']), ['Bursar']);

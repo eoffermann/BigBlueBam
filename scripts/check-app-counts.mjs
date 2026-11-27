@@ -42,6 +42,9 @@ export const PUBLISHED = [
   'docs/apps/introduction/_narrative.md',
   'docs/apps/introduction/_marketing_hook.md',
   'docs/apps/introduction/meta.json',
+  // Issue #406: the two docs an agent or new contributor reads to learn the tool surface.
+  'docs/reference/mcp-server.md',
+  'docs/BIGBLUEBAM_COMPREHENSIVE_OVERVIEW.md',
 ];
 
 const ONES = ['', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine',
