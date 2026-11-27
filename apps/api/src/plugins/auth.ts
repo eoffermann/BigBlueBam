@@ -8,7 +8,9 @@ import { impersonationSessions } from '../db/schema/impersonation-sessions.js';
 import { orgContextStore, touchApiKey, verifyApiKeyToken } from '../services/auth-identity.service.js';
 import {
   OrgMembershipError,
+  keyProjectRestriction,
   requestedOrgIdFromHeader,
+  requireKeyProjectChecked,
   resolveKeyOrgPin,
   resolveOrgContext,
   type OrgMembership,
@@ -37,6 +39,12 @@ export interface AuthUser {
    */
   kind: 'human' | 'agent' | 'service';
   api_key_scope: string | null;
+  /**
+   * The projects an API key is confined to (api_keys.project_ids, #352); null or absent for
+   * session auth and unrestricted keys. Enforced by the project guards, requireCan, and the
+   * fail-closed final gate (requireKeyProjectChecked) this plugin appends to every route.
+   */
+  api_key_project_ids?: string[] | null;
   org_memberships: OrgMembership[];
   active_org_id: string;
   /**
@@ -181,6 +189,17 @@ async function authPlugin(fastify: FastifyInstance) {
   fastify.decorateRequest('isImpersonating', false);
   fastify.decorateRequest('viaSuperuserContext', false);
 
+  // #352: fail closed for project-restricted API keys. Every route registered after this plugin
+  // gets requireKeyProjectChecked as its LAST preHandler, so a restricted key is refused unless a
+  // project guard (requireProjectAccess, requireProjectAccessForEntity, or requireCan with a
+  // project scope) admitted it to one of its projects earlier in the same request. Sessions and
+  // unrestricted keys pass straight through.
+  fastify.addHook('onRoute', (route) => {
+    const existing = route.preHandler;
+    const list = existing === undefined ? [] : Array.isArray(existing) ? existing : [existing];
+    route.preHandler = [...list, requireKeyProjectChecked];
+  });
+
   // P1-19: is_active is checked at this auth preHandler on every request
   // (the JOIN fetches users.is_active fresh each time). Long-running handlers
   // may continue with stale is_active=true if a user is deactivated after
@@ -268,6 +287,8 @@ async function authPlugin(fastify: FastifyInstance) {
         // request's org context to the key's org regardless of what X-Org-Id
         // says or which orgs the user now belongs to.
         request.user = await buildAuthUser(verified.user, verified.apiKey.scope, request, null, verified.apiKey.org_id);
+        // #352: the key's project restriction rides on the principal (null when unrestricted).
+        request.user.api_key_project_ids = keyProjectRestriction(verified.apiKey.project_ids);
         // Update last_used_at: fire-and-forget, log errors but don't block the response.
         touchApiKey(verified.apiKey.id).catch((err) => {
           console.warn('Failed to update api_keys.last_used_at:', err);

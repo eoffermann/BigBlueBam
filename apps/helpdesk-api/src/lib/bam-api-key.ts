@@ -18,6 +18,7 @@ import { sql } from 'drizzle-orm';
 import argon2 from 'argon2';
 import { bearerToken, sqlApiKeyStore, verifyApiKeyToken, type UserKind } from '@bigbluebam/auth-core';
 import { db } from '../db/index.js';
+import { keyProjectRestriction } from '@bigbluebam/auth-core';
 
 export interface BamApiKeyCaller {
   userId: string;
@@ -45,6 +46,12 @@ export function bamBearerToken(request: FastifyRequest): string | null {
 export async function verifyBamApiKey(request: FastifyRequest, token: string): Promise<BamApiKeyCaller | null> {
   const verified = await verifyApiKeyToken(token, apiKeyStore, request.log);
   if (!verified) return null;
+  // #352: helpdesk has no Bam project context to confine a project-restricted key to, so such
+  // a key does not authenticate here (fail closed) rather than acting across the holder's org.
+  if (keyProjectRestriction(verified.apiKey.project_ids)) {
+    request.log.warn({ api_key_id: verified.apiKey.id }, 'Refused a project-restricted API key on helpdesk-api (#352)');
+    return null;
+  }
   apiKeyStore.touch(verified.apiKey.id).catch((err: unknown) => {
     request.log.warn({ err }, 'Failed to update api_keys.last_used_at');
   });

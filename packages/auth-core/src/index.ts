@@ -18,6 +18,7 @@
 //   - which orgs a user belongs to, with which role, and which one a request acts in
 //     (resolveOrgContext over sqlOrgContextStore, #350; see org-context.ts)
 //   - how a key row is located with one candidate (apiKeyLookup / key_lookup, #353)
+//   - which projects a key may touch (keyProjectRestriction and friends, #352; key-project.ts)
 //
 // DB-driver agnostic, like @bigbluebam/permissions: this package imports no database client.
 // A host hands it a store. sqlApiKeyStore() builds that store from the host's own drizzle
@@ -55,6 +56,20 @@ export {
   type ResolveOrgContextOptions,
   type SqlOrgContextStoreDeps,
 } from './org-context.js';
+
+// API key project restriction (#352): api_keys.project_ids, enforced fail-closed.
+export {
+  KEY_PROJECT_RESTRICTED,
+  checkKeyProjectAccess,
+  isKeyProjectRestricted,
+  keyProjectAccessChecked,
+  keyProjectAllows,
+  keyProjectAllowsRequest,
+  keyProjectRestriction,
+  refuseProjectRestrictedKey,
+  requireKeyProjectChecked,
+  type ProjectRestrictedUser,
+} from './key-project.js';
 
 // ─────────────────────────────────────────────────────────────────────
 // Scopes and roles

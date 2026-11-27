@@ -30,6 +30,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@bigbluebam/auth-core": "workspace:*",
     "fastify-plugin": "^5.0.0"
   },
   "peerDependencies": {

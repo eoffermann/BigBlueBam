@@ -31,7 +31,11 @@ function loadScopeFromRequest(request: FastifyRequest): PermissionScope {
   const overrideRaw = (request as unknown as { permissionScopeOverride?: PermissionScope }).permissionScopeOverride;
   if (overrideRaw) return overrideRaw;
 
+  // requireProjectAccessForEntity caches the entity's project on the request; prefer it so a
+  // project-restricted API key (#352) is checked against the project the entity really lives in.
+  const resolved = (request as unknown as { resolvedProjectId?: string }).resolvedProjectId;
   const projectId =
+    resolved ??
     params['projectId'] ??
     params['project_id'] ??
     params['projId'] ??

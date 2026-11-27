@@ -5046,6 +5046,9 @@ importers:
 
   packages/permissions:
     dependencies:
+      '@bigbluebam/auth-core':
+        specifier: workspace:*
+        version: link:../auth-core
       fastify-plugin:
         specifier: ^5.0.0
         version: 5.1.0

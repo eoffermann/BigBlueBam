@@ -127,4 +127,12 @@ describe('verifyBamApiKey', () => {
     expect(await verifyBamApiKey(req, TOKEN)).not.toBeNull();
     expect(executed.some((q) => q.includes('auth_api_key_legacy_candidates('))).toBe(false);
   });
+
+  // #352: helpdesk has no Bam project context, so a project-restricted key does not authenticate.
+  it('refuses a project-restricted key and accepts an empty restriction', async () => {
+    rows.splice(0, rows.length, key({ project_ids: ['11111111-1111-4111-8111-111111111111'] }));
+    expect(await verifyBamApiKey(req, TOKEN)).toBeNull();
+    rows.splice(0, rows.length, key({ project_ids: [] }));
+    expect(await verifyBamApiKey(req, TOKEN)).not.toBeNull();
+  });
 });

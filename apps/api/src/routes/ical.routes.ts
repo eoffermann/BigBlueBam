@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { randomBytes } from 'node:crypto';
-import { eq, and, isNotNull, isNull, desc } from 'drizzle-orm';
+import { eq, and, inArray, isNotNull, isNull, desc } from 'drizzle-orm';
+import { keyProjectRestriction } from '@bigbluebam/auth-core';
 import { z } from 'zod';
 import { db, runInOrgScope } from '../db/index.js';
 import { tasks } from '../db/schema/tasks.js';
@@ -171,6 +172,8 @@ export default async function icalRoutes(fastify: FastifyInstance) {
       // The org the task read runs in when there is no request.user for the
       // rls plugin to bind (#338): the key's pinned org (P2-8).
       let keyOrgId: string | null = null;
+      // #352: a project-restricted key's feed covers only its projects.
+      let keyProjects: string[] | null = null;
 
       if (request.user) {
         userId = request.user.id;
@@ -182,6 +185,7 @@ export default async function icalRoutes(fastify: FastifyInstance) {
         if (verified) {
           userId = verified.user.id;
           keyOrgId = verified.apiKey.org_id ?? verified.user.org_id;
+          keyProjects = keyProjectRestriction(verified.apiKey.project_ids);
           await touchApiKey(verified.apiKey.id);
         }
       }
@@ -215,7 +219,14 @@ export default async function icalRoutes(fastify: FastifyInstance) {
                 priority: tasks.priority,
               })
               .from(tasks)
-              .where(and(eq(tasks.org_id, feedOrgId), eq(tasks.assignee_id, assignee), isNotNull(tasks.due_date)))
+              .where(
+                and(
+                  eq(tasks.org_id, feedOrgId),
+                  eq(tasks.assignee_id, assignee),
+                  isNotNull(tasks.due_date),
+                  keyProjects ? inArray(tasks.project_id, keyProjects) : undefined,
+                ),
+              )
           : Promise.resolve([]);
       const taskList = keyOrgId ? await runInOrgScope(keyOrgId, readTasks) : await readTasks();
 

@@ -332,7 +332,12 @@ API keys are issued per-user and carry a scope that restricts what operations th
 | **read_write** | Yes | Yes | Yes | No |
 | **admin** | Yes | Yes | Yes | Yes |
 
-API keys can also be restricted to specific projects via the `project_ids` array. When set, the key can only access resources within those projects.
+API keys can also be restricted to specific projects via the `project_ids` array. When set (non-empty), the key can only access resources within those projects. The rule lives in `@bigbluebam/auth-core` and fails closed:
+
+- In the Bam API, a restricted key passes a project guard (`requireProjectAccess`, `requireProjectAccessForEntity`, or `requireCan` with a project scope) only for a listed project, and is answered 404 for any other project. Every route also ends with a final gate that refuses a restricted key with `403 API_KEY_PROJECT_RESTRICTED` unless a project guard admitted it, so org-wide routes (project lists, search, `/auth/me`, and so on) refuse it. The iCal `?token=` feed lists only the key's projects.
+- `requireCan` and `canResolve` apply the restriction in every enforcement mode, including `off`.
+- The satellite services (Bond, Bill, Brief, Banter and the rest) have no Bam project context, so they refuse a project-restricted key at authentication with `403 API_KEY_PROJECT_RESTRICTED`.
+- An empty `project_ids` array means no restriction.
 
 Keys are prefixed with `bbam_`, stored as Argon2id hashes, and looked up via a short random prefix column (`key_prefix`) to bound the number of Argon2 verifications per request. Timing-attack mitigation: `argon2.verify` always runs before the `expires_at` check so that expired-but-valid-hash keys and invalid-hash keys take the same wall-clock time. If more than 3 candidates share a prefix, only the first is verified and a warning is logged (DoS mitigation, P2-11).
 

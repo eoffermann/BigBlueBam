@@ -1,5 +1,6 @@
 import type { FastifyRequest, FastifyReply } from 'fastify';
 import { eq, and } from 'drizzle-orm';
+import { checkKeyProjectAccess, isKeyProjectRestricted } from '@bigbluebam/auth-core';
 import { db } from '../db/index.js';
 import { projectMemberships } from '../db/schema/project-memberships.js';
 import { projects } from '../db/schema/projects.js';
@@ -140,7 +141,10 @@ export function requireProjectAccessForEntity(
       });
     }
 
-    if (request.user.is_superuser) return;
+    // #352: a project-restricted API key is held to its projects even when its holder is a
+    // SuperUser, so the SuperUser bypass applies only to unrestricted credentials.
+    const restricted = isKeyProjectRestricted(request);
+    if (request.user.is_superuser && !restricted) return;
 
     const params = request.params as Record<string, string>;
     const entityId = params?.[paramName];
@@ -158,8 +162,9 @@ export function requireProjectAccessForEntity(
 
     const projectId = await resolveProjectId(entityType, entityId);
 
-    if (!projectId) {
-      // Entity does not exist — return 404
+    // Same 404 for a missing entity and one outside a restricted key's projects (#352), so the
+    // key cannot probe which entities exist elsewhere.
+    if (!projectId || !checkKeyProjectAccess(request, projectId)) {
       return reply.status(404).send({
         error: {
           code: 'NOT_FOUND',
@@ -168,6 +173,11 @@ export function requireProjectAccessForEntity(
           request_id: request.id,
         },
       });
+    }
+
+    if (request.user.is_superuser) {
+      (request as any).resolvedProjectId = projectId;
+      return;
     }
 
     // Verify project belongs to user's org
@@ -239,10 +249,23 @@ export function requireProjectAccess(paramName = 'id') {
       });
     }
 
-    if (request.user.is_superuser) return;
-
     const params = request.params as Record<string, string>;
     const projectId = params?.[paramName];
+
+    // #352: a project-restricted API key reaches only its listed projects, SuperUser or not.
+    // Refused with the same 404 as a non-member, so the key cannot probe other projects.
+    if (projectId && !checkKeyProjectAccess(request, projectId)) {
+      return reply.status(404).send({
+        error: {
+          code: 'NOT_FOUND',
+          message: 'Project not found',
+          details: [],
+          request_id: request.id,
+        },
+      });
+    }
+
+    if (request.user.is_superuser) return;
 
     if (!projectId) {
       return reply.status(400).send({

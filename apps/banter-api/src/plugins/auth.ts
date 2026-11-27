@@ -8,6 +8,7 @@ import {
   isApiKeyOrgPinned,
   type OrgMembership,
   OrgMembershipError,
+  refuseProjectRestrictedKey,
   requestedOrgIdFromHeader,
   resolveOrgContext,
   sqlApiKeyStore,
@@ -166,6 +167,10 @@ async function authPlugin(fastify: FastifyInstance) {
     const token = bearerToken(request.headers.authorization);
     const verified = token ? await verifyApiKeyToken(token, apiKeyStore, request.log) : null;
     if (verified) {
+      // #352: this service has no Bam project context to confine a project-restricted key to,
+      // so such a key is refused here rather than handed the holder's whole org.
+      const restricted = refuseProjectRestrictedKey(request, reply, verified.apiKey.project_ids);
+      if (restricted) return restricted;
       // P2-8: a non-SuperUser key acts only in its own org, whatever X-Org-Id says, so the
       // header is dropped rather than resolved (or probed) against the user's memberships.
       if (isApiKeyOrgPinned(verified.apiKey.org_id, verified.user.is_superuser)) {

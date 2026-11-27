@@ -148,6 +148,29 @@ test('every api_keys mint path stores key_lookup', () => {
   assert.deepEqual(missing, [], `Store key_lookup: apiKeyLookup(token) on every api_keys insert:\n${missing.join('\n')}`);
 });
 
+// #352: an API key's project restriction is enforced once, from auth-core. Every satellite that
+// accepts bbam_ keys refuses a project-restricted one (it has no Bam project to confine it to),
+// and apps/api appends the fail-closed final gate to every route.
+test('every service that accepts bbam_ keys enforces the key project restriction', () => {
+  const missing = [];
+  for (const app of readdirSync(join(ROOT, 'apps'))) {
+    const auth = join(ROOT, 'apps', app, 'src', 'plugins', 'auth.ts');
+    let text = '';
+    try {
+      text = readFileSync(auth, 'utf8');
+    } catch {
+      continue;
+    }
+    if (!/\bBearer\b/.test(text) || !/verifyApiKeyToken\(/.test(text)) continue;
+    const ok =
+      app === 'api'
+        ? /requireKeyProjectChecked/.test(text) && /api_key_project_ids\s*=\s*keyProjectRestriction\(/.test(text)
+        : /refuseProjectRestrictedKey\(\s*request\s*,\s*reply\s*,\s*verified\.apiKey\.project_ids\s*\)/.test(text);
+    if (!ok) missing.push(app);
+  }
+  assert.deepEqual(missing, [], `Enforce api_keys.project_ids via @bigbluebam/auth-core in:\n${missing.join('\n')}`);
+});
+
 test('every service that verifies bbam_ keys depends on @bigbluebam/auth-core', () => {
   const missing = [];
   for (const app of readdirSync(join(ROOT, 'apps'))) {
