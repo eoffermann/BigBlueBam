@@ -59,9 +59,21 @@ const heartbeat = setInterval(() => {
 const withTests = new Set(discoverTestPackages(ROOT).map((p) => `${p.group}/${p.name}`));
 
 async function typecheck(pkg) {
-  const own = await runStep(pkg.dir, 'pnpm', ['run', '--silent', 'typecheck'], join(ROOT, pkg.dir), process.platform === 'win32');
+  const own = await runStep(
+    pkg.dir,
+    'pnpm',
+    ['run', '--silent', 'typecheck'],
+    join(ROOT, pkg.dir),
+    process.platform === 'win32',
+  );
   if (!own.ok || !withTests.has(pkg.dir)) return own;
-  return runStep(`${pkg.dir} (test code)`, process.execPath, [join(ROOT, 'scripts', 'typecheck-tests.mjs'), pkg.dir.split('/')[1]], ROOT, false);
+  return runStep(
+    `${pkg.dir} (test code)`,
+    process.execPath,
+    [join(ROOT, 'scripts', 'typecheck-tests.mjs'), pkg.dir.split('/')[1]],
+    ROOT,
+    false,
+  );
 }
 
 function runStep(label, command, args, cwd, shell) {
@@ -88,7 +100,9 @@ function runStep(label, command, args, cwd, shell) {
       clearTimeout(timer);
       running.delete(pkg.dir);
       const ok = code === 0 && !timedOut;
-      log(`${ok ? 'OK    ' : 'FAIL  '} ${pkg.dir} in ${formatSeconds(Date.now() - t0)}${ok ? '' : ` (exit ${code}${timedOut ? ', timed out' : ''})`}`);
+      log(
+        `${ok ? 'OK    ' : 'FAIL  '} ${pkg.dir} in ${formatSeconds(Date.now() - t0)}${ok ? '' : ` (exit ${code}${timedOut ? ', timed out' : ''})`}`,
+      );
       if (!ok && output.trim()) process.stdout.write(`${output.trimEnd()}\n`);
       resolve({ ok, dir: pkg.dir, timedOut });
     });
