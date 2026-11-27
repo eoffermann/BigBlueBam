@@ -67,8 +67,19 @@ function setupDb(recipients: Recipient[]) {
     if (text.includes('bureau_settings')) return [];
     if (text.includes('UPDATE bureau_summons')) {
       const json = (query.queryChunks ?? []).find((c) => typeof c === 'string' && c.startsWith('[')) as string;
-      persisted = JSON.parse(json);
-      row.recipients = persisted!;
+      const parsed = JSON.parse(json) as Array<Recipient & { from?: string }>;
+      if (parsed.every((t) => 'from' in t)) {
+        // Per-recipient guarded transitions (#349): mirrors the SQL, which is
+        // exercised against a real Postgres in bureau-summon-fanout.db.test.ts.
+        row.recipients = row.recipients.map((r) => {
+          const t = parsed.find((x) => x.userId === r.userId);
+          return t && r.outcome === t.from ? { ...r, outcome: t.outcome, reason: t.reason } : r;
+        });
+      } else {
+        // A whole-array overwrite.
+        row.recipients = parsed;
+      }
+      persisted = row.recipients;
       return [];
     }
     return [];
@@ -176,6 +187,38 @@ describe('bureau summon fan-out (#330)', () => {
     await processBureauSummonFanoutJob(makeJob(4) as never, redis as never, env, logger);
     expect(row.recipients.every((r) => r.outcome === 'no_access' && r.reason === 'access_check_unavailable')).toBe(true);
     expect(publishBoltEvent).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps an answer a recipient gave during the pass (#349)', async () => {
+    setupDb([
+      { userId: 'u0', outcome: 'pending' },
+      { userId: 'u1', outcome: 'pending' },
+      { userId: 'u2', outcome: 'no_access', reason: 'degraded_timeout' },
+      { userId: 'u3', outcome: 'pending' },
+    ]);
+    const redis = { publish: vi.fn(async () => 1) };
+    resolveCrossAppAccess.mockImplementation(async ({ userId }: { userId: string }) => {
+      if (userId === 'u0') return ALLOW;
+      if (userId === 'u1') {
+        // u0 was notified; meanwhile u0 clicks Join (summon_respond) and the
+        // summoner grants u2 (grantAccessAndSummon), both atomic per-element writes.
+        row.recipients = row.recipients.map((r) =>
+          r.userId === 'u0' ? { ...r, outcome: 'joined' } : r.userId === 'u2' ? { userId: 'u2', outcome: 'granted' } : r,
+        );
+        return DENY;
+      }
+      return DOWN;
+    });
+    await expect(
+      processBureauSummonFanoutJob(makeJob(0) as never, redis as never, env, logger, { checkConcurrency: 1 }),
+    ).rejects.toBeInstanceOf(SummonFanoutDegradedError);
+    expect(incomingTo(redis)).toEqual(['user:u0']);
+    expect(persisted).not.toBeNull();
+    expect(row.recipients.find((r) => r.userId === 'u0')).toMatchObject({ outcome: 'joined' });
+    expect(row.recipients.find((r) => r.userId === 'u2')).toMatchObject({ outcome: 'granted' });
+    // The pass's own decisions still land.
+    expect(row.recipients.find((r) => r.userId === 'u1')).toMatchObject({ outcome: 'no_access', reason: 'not_a_member' });
+    expect(row.recipients.find((r) => r.userId === 'u3')).toMatchObject({ outcome: 'pending' });
   });
 
   it('runs checks concurrently, bounded by the concurrency limit', async () => {

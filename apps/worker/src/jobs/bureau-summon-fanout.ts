@@ -236,17 +236,57 @@ async function shouldAutoFollow(orgId: string): Promise<boolean> {
   }
 }
 
-/** Write the updated recipients[] back to the audit row. */
-async function updateRecipients(
-  summonId: string,
-  recipients: SummonRecipientRow[],
-): Promise<void> {
-  const db = getDb();
-  await db.execute(sql`
+/**
+ * One outcome change this pass decided for one recipient, guarded on the
+ * outcome the worker READ (`from`) when it loaded the row.
+ */
+export interface RecipientTransition {
+  userId: string;
+  from: SummonRecipientOutcome;
+  outcome: SummonRecipientOutcome;
+  reason: string | null;
+}
+
+/**
+ * The atomic per-recipient update for a fan-out pass (#349). It rewrites ONLY
+ * the entries this pass changed, and each only while that entry still has the
+ * outcome the worker read. A pass runs for up to the 20 s check budget while
+ * recipients are being notified, so summon_respond (pending to joined/declined)
+ * and grantAccessAndSummon (no_access to granted) can land in the meantime;
+ * their answers win. Writing the whole JS snapshot back used to revert them.
+ * Same shape as the sibling per-element updates in bureau-api.
+ */
+export function buildRecipientTransitionUpdate(summonId: string, transitions: RecipientTransition[]) {
+  return sql`
     UPDATE bureau_summons
-    SET recipients = ${JSON.stringify(recipients)}::jsonb
+    SET recipients = (
+      SELECT COALESCE(
+        jsonb_agg(
+          CASE
+            WHEN tr.t IS NOT NULL AND a.elem->>'outcome' = tr.t->>'from'
+            THEN (a.elem - 'reason') || jsonb_build_object('outcome', tr.t->'outcome', 'reason', tr.t->'reason')
+            ELSE a.elem
+          END
+          ORDER BY a.idx
+        ),
+        '[]'::jsonb
+      )
+      FROM jsonb_array_elements(bureau_summons.recipients) WITH ORDINALITY AS a(elem, idx)
+      LEFT JOIN LATERAL (
+        SELECT x.t
+        FROM jsonb_array_elements(${JSON.stringify(transitions)}::jsonb) AS x(t)
+        WHERE x.t->>'userId' = a.elem->>'userId'
+        LIMIT 1
+      ) tr ON true
+    )
     WHERE id = ${summonId}
-  `);
+  `;
+}
+
+/** Apply this pass's recipient transitions to the audit row (#349). */
+async function updateRecipients(summonId: string, transitions: RecipientTransition[]): Promise<void> {
+  if (transitions.length === 0) return;
+  await getDb().execute(buildRecipientTransitionUpdate(summonId, transitions));
 }
 
 // ---------------------------------------------------------------------------
@@ -333,7 +373,10 @@ export async function processBureauSummonFanoutJob(
   const deadline = Date.now() + budgetMs;
   const unavailable: SummonRecipientRow[] = [];
   let stopChecking = false;
-  let recipientsChanged = false;
+  // The outcome each recipient had when this pass read the row: every write is
+  // guarded on it, so a concurrent answer is never reverted (#349).
+  const readOutcome = new Map(summon.recipients.map((r) => [r.userId, r.outcome] as const));
+  const changed = new Set<SummonRecipientRow>();
   let newlyDenied = 0;
   let next = 0;
 
@@ -352,7 +395,7 @@ export async function processBureauSummonFanoutJob(
     if (r.outcome !== outcome || (r.reason ?? null) !== reason) {
       r.outcome = outcome;
       r.reason = reason;
-      recipientsChanged = true;
+      changed.add(r);
     }
   };
 
@@ -436,9 +479,14 @@ export async function processBureauSummonFanoutJob(
     );
   }
 
-  if (recipientsChanged) {
-    // The entries in candidates are references into summon.recipients.
-    await updateRecipients(summonId, summon.recipients).catch((err) => {
+  if (changed.size > 0) {
+    const transitions: RecipientTransition[] = [...changed].map((r) => ({
+      userId: r.userId,
+      from: readOutcome.get(r.userId)!,
+      outcome: r.outcome,
+      reason: r.reason ?? null,
+    }));
+    await updateRecipients(summonId, transitions).catch((err) => {
       logger.warn({ err, summonId }, 'bureau-summon-fanout: failed to persist recipient outcomes');
     });
   }
