@@ -33,6 +33,24 @@ async function loadAssertion(tx: DbTx, orgId: string, id: string) {
   return row;
 }
 
+/**
+ * The same row, locked until the transaction ends (#393). Revising reads the original's
+ * review_status and then writes on the strength of it; without the lock two revisions of one
+ * proposed check both saw it `proposed`, both inserted a successor and both marked it superseded,
+ * which forked the check into two live proposals. Under the lock the second waits, then re-reads
+ * the committed row (`superseded`) and is refused.
+ */
+async function loadAssertionForUpdate(tx: DbTx, orgId: string, id: string) {
+  const [row] = await tx
+    .select()
+    .from(bastionAssertions)
+    .where(and(eq(bastionAssertions.id, id), eq(bastionAssertions.organization_id, orgId)))
+    .limit(1)
+    .for('update');
+  if (!row) throw new NotFoundError('We could not find that check.');
+  return row;
+}
+
 async function loadActiveControl(tx: DbTx, orgId: string, id: string) {
   const [c] = await tx
     .select()
@@ -105,66 +123,69 @@ function withoutConfirmation(params: Record<string, unknown>): Record<string, un
 }
 
 export async function proposeAssertion(viewer: Viewer, controlId: string, body: BastionAssertionPropose): Promise<Served<BastionAssertionResponse>> {
-  return runInOrgScope(viewer.org_id, async (tx) => {
-    await loadActiveControl(tx, viewer.org_id, controlId);
-    const kind = await actorKind(tx, viewer.id);
-    const proposed_by = kind === 'human' ? 'human' : 'agent';
-    let values: Partial<typeof bastionAssertions.$inferInsert>;
-    if (body.kind === 'probe') {
-      const params = withoutConfirmation(body.params ?? {});
-      const entry = probeEntry(body.probe_key);
-      if (entry?.population_kind && Array.isArray(params.expected_population)) {
-        // A proposer-supplied list gets the same org check and human labels as a revision.
-        const resolved = await resolvePopulation(
-          tx,
-          viewer.org_id,
-          entry.population_kind,
-          params.expected_population.map(String),
-          {},
-        );
-        params.expected_population = resolved.values;
-        params.population_labels = resolved.labels;
-      }
-      const v = validateProbeSuggestion(
-        { probe_key: body.probe_key, params, plain_statement: body.plain_statement },
-        await connectedPopulations(tx, viewer.org_id),
+  return runInOrgScope(viewer.org_id, (tx) => proposeAssertionIn(tx, viewer, controlId, body));
+}
+
+/** proposeAssertion inside a caller's org-scoped transaction (policy-pins.ts pins under one lock). */
+export async function proposeAssertionIn(tx: DbTx, viewer: Viewer, controlId: string, body: BastionAssertionPropose): Promise<Served<BastionAssertionResponse>> {
+  await loadActiveControl(tx, viewer.org_id, controlId);
+  const kind = await actorKind(tx, viewer.id);
+  const proposed_by = kind === 'human' ? 'human' : 'agent';
+  let values: Partial<typeof bastionAssertions.$inferInsert>;
+  if (body.kind === 'probe') {
+    const params = withoutConfirmation(body.params ?? {});
+    const entry = probeEntry(body.probe_key);
+    if (entry?.population_kind && Array.isArray(params.expected_population)) {
+      // A proposer-supplied list gets the same org check and human labels as a revision.
+      const resolved = await resolvePopulation(
+        tx,
+        viewer.org_id,
+        entry.population_kind,
+        params.expected_population.map(String),
+        {},
       );
-      if (!v.ok) throw new ValidationFailure(v.reason, 'INVALID_PROBE');
-      values = { ...v.value };
-    } else if (body.kind === 'manual') {
-      const v = validateManualSuggestion({ spec: body.manual_evidence_spec, plain_statement: body.plain_statement });
-      if (!v.ok) throw new ValidationFailure(v.reason, 'INVALID_MANUAL_REQUEST');
-      values = { ...v.value };
-    } else {
-      const [feed] = await tx
-        .select({ id: bastionEvidenceFeeds.id })
-        .from(bastionEvidenceFeeds)
-        .where(and(eq(bastionEvidenceFeeds.id, body.feed_id), eq(bastionEvidenceFeeds.organization_id, viewer.org_id)))
-        .limit(1);
-      if (!feed) throw new NotFoundError('We could not find that evidence feed.');
-      values = { kind: 'feed', feed_id: feed.id, plain_statement: body.plain_statement };
+      params.expected_population = resolved.values;
+      params.population_labels = resolved.labels;
     }
-    const row = one(await tx
-      .insert(bastionAssertions)
-      .values({
-        ...values,
-        kind: (values.kind as string),
-        plain_statement: (values.plain_statement as string),
-        organization_id: viewer.org_id,
-        control_id: controlId,
-        proposed_by,
-        review_status: 'proposed',
-        created_by: viewer.id,
-      })
-      .returning(), 'row');
-    await audit(tx, viewer, 'assertion.propose', { type: 'assertion', id: row.id }, {
+    const v = validateProbeSuggestion(
+      { probe_key: body.probe_key, params, plain_statement: body.plain_statement },
+      await connectedPopulations(tx, viewer.org_id),
+    );
+    if (!v.ok) throw new ValidationFailure(v.reason, 'INVALID_PROBE');
+    values = { ...v.value };
+  } else if (body.kind === 'manual') {
+    const v = validateManualSuggestion({ spec: body.manual_evidence_spec, plain_statement: body.plain_statement });
+    if (!v.ok) throw new ValidationFailure(v.reason, 'INVALID_MANUAL_REQUEST');
+    values = { ...v.value };
+  } else {
+    const [feed] = await tx
+      .select({ id: bastionEvidenceFeeds.id })
+      .from(bastionEvidenceFeeds)
+      .where(and(eq(bastionEvidenceFeeds.id, body.feed_id), eq(bastionEvidenceFeeds.organization_id, viewer.org_id)))
+      .limit(1);
+    if (!feed) throw new NotFoundError('We could not find that evidence feed.');
+    values = { kind: 'feed', feed_id: feed.id, plain_statement: body.plain_statement };
+  }
+  const row = one(await tx
+    .insert(bastionAssertions)
+    .values({
+      ...values,
+      kind: (values.kind as string),
+      plain_statement: (values.plain_statement as string),
+      organization_id: viewer.org_id,
       control_id: controlId,
-      kind: row.kind,
-      probe_key: row.probe_key,
       proposed_by,
-    });
-    return { data: assertionView(row) };
+      review_status: 'proposed',
+      created_by: viewer.id,
+    })
+    .returning(), 'row');
+  await audit(tx, viewer, 'assertion.propose', { type: 'assertion', id: row.id }, {
+    control_id: controlId,
+    kind: row.kind,
+    probe_key: row.probe_key,
+    proposed_by,
   });
+  return { data: assertionView(row) };
 }
 
 /**
@@ -173,77 +194,81 @@ export async function proposeAssertion(viewer: Viewer, controlId: string, body: 
  * original stays in force until the revision is confirmed.
  */
 export async function reviseAssertion(viewer: Viewer, id: string, body: BastionAssertionRevise): Promise<Served<BastionAssertionResponse>> {
-  return runInOrgScope(viewer.org_id, async (tx) => {
-    const old = await loadAssertion(tx, viewer.org_id, id);
-    if (old.review_status === 'superseded') {
-      throw new ConflictError('This check was already replaced; revise the newer version.', 'ASSERTION_SUPERSEDED');
-    }
-    await loadActiveControl(tx, viewer.org_id, old.control_id);
-    const plain_statement = body.plain_statement ?? old.plain_statement;
-    let content: Partial<typeof bastionAssertions.$inferInsert>;
-    if (old.kind === 'probe') {
-      if (body.manual_evidence_spec) throw new ValidationFailure('A probe check has no manual evidence request.', 'WRONG_KIND');
-      const params = withoutConfirmation({ ...((old.params ?? {}) as Record<string, unknown>), ...(body.params ?? {}) });
-      if (body.expected_population) {
-        const entry = probeEntry(old.probe_key ?? '');
-        if (!entry?.population_kind) {
-          throw new ValidationFailure('This check does not take a list of systems.', 'NOT_A_POPULATION_CHECK');
-        }
-        const resolved = await resolvePopulation(
-          tx,
-          viewer.org_id,
-          entry.population_kind,
-          body.expected_population,
-          (params.population_labels ?? {}) as Record<string, string>,
-        );
-        params.expected_population = resolved.values;
-        params.population_labels = resolved.labels;
+  return runInOrgScope(viewer.org_id, (tx) => reviseAssertionIn(tx, viewer, id, body));
+}
+
+/** reviseAssertion inside a caller's org-scoped transaction (policy-pins.ts pins under one lock). */
+export async function reviseAssertionIn(tx: DbTx, viewer: Viewer, id: string, body: BastionAssertionRevise): Promise<Served<BastionAssertionResponse>> {
+  // Locked, so the superseded check below is authoritative (#393).
+  const old = await loadAssertionForUpdate(tx, viewer.org_id, id);
+  if (old.review_status === 'superseded') {
+    throw new ConflictError('This check was already replaced; revise the newer version.', 'ASSERTION_SUPERSEDED');
+  }
+  await loadActiveControl(tx, viewer.org_id, old.control_id);
+  const plain_statement = body.plain_statement ?? old.plain_statement;
+  let content: Partial<typeof bastionAssertions.$inferInsert>;
+  if (old.kind === 'probe') {
+    if (body.manual_evidence_spec) throw new ValidationFailure('A probe check has no manual evidence request.', 'WRONG_KIND');
+    const params = withoutConfirmation({ ...((old.params ?? {}) as Record<string, unknown>), ...(body.params ?? {}) });
+    if (body.expected_population) {
+      const entry = probeEntry(old.probe_key ?? '');
+      if (!entry?.population_kind) {
+        throw new ValidationFailure('This check does not take a list of systems.', 'NOT_A_POPULATION_CHECK');
       }
-      const v = validateProbeSuggestion({
-        probe_key: old.probe_key as never,
-        params,
-        predicate: (old.predicate ?? {}) as Record<string, unknown>,
-        plain_statement,
-      });
-      if (!v.ok) throw new ValidationFailure(v.reason, 'INVALID_PROBE');
-      content = { ...v.value };
-    } else if (old.kind === 'manual') {
-      if (body.params || body.expected_population) {
-        throw new ValidationFailure('A manual check has no probe settings.', 'WRONG_KIND');
-      }
-      const v = validateManualSuggestion({
-        spec: body.manual_evidence_spec ?? (old.manual_evidence_spec as never),
-        plain_statement,
-      });
-      if (!v.ok) throw new ValidationFailure(v.reason, 'INVALID_MANUAL_REQUEST');
-      content = { ...v.value };
-    } else {
-      content = { kind: 'feed', feed_id: old.feed_id, plain_statement };
+      const resolved = await resolvePopulation(
+        tx,
+        viewer.org_id,
+        entry.population_kind,
+        body.expected_population,
+        (params.population_labels ?? {}) as Record<string, string>,
+      );
+      params.expected_population = resolved.values;
+      params.population_labels = resolved.labels;
     }
-    const kind = await actorKind(tx, viewer.id);
-    const row = one(await tx
-      .insert(bastionAssertions)
-      .values({
-        ...content,
-        kind: (content.kind as string),
-        plain_statement: (content.plain_statement as string),
-        organization_id: viewer.org_id,
-        control_id: old.control_id,
-        proposed_by: kind === 'human' ? 'human' : 'agent',
-        review_status: 'proposed',
-        supersedes_id: old.id,
-        created_by: viewer.id,
-      })
-      .returning(), 'row');
-    if (old.review_status === 'proposed' || old.review_status === 'rejected') {
-      await tx
-        .update(bastionAssertions)
-        .set({ review_status: 'superseded' })
-        .where(and(eq(bastionAssertions.id, old.id), eq(bastionAssertions.organization_id, viewer.org_id)));
+    const v = validateProbeSuggestion({
+      probe_key: old.probe_key as never,
+      params,
+      predicate: (old.predicate ?? {}) as Record<string, unknown>,
+      plain_statement,
+    });
+    if (!v.ok) throw new ValidationFailure(v.reason, 'INVALID_PROBE');
+    content = { ...v.value };
+  } else if (old.kind === 'manual') {
+    if (body.params || body.expected_population) {
+      throw new ValidationFailure('A manual check has no probe settings.', 'WRONG_KIND');
     }
-    await audit(tx, viewer, 'assertion.revise', { type: 'assertion', id: row.id }, { supersedes_id: old.id });
-    return { data: assertionView(row) };
-  });
+    const v = validateManualSuggestion({
+      spec: body.manual_evidence_spec ?? (old.manual_evidence_spec as never),
+      plain_statement,
+    });
+    if (!v.ok) throw new ValidationFailure(v.reason, 'INVALID_MANUAL_REQUEST');
+    content = { ...v.value };
+  } else {
+    content = { kind: 'feed', feed_id: old.feed_id, plain_statement };
+  }
+  const kind = await actorKind(tx, viewer.id);
+  const row = one(await tx
+    .insert(bastionAssertions)
+    .values({
+      ...content,
+      kind: (content.kind as string),
+      plain_statement: (content.plain_statement as string),
+      organization_id: viewer.org_id,
+      control_id: old.control_id,
+      proposed_by: kind === 'human' ? 'human' : 'agent',
+      review_status: 'proposed',
+      supersedes_id: old.id,
+      created_by: viewer.id,
+    })
+    .returning(), 'row');
+  if (old.review_status === 'proposed' || old.review_status === 'rejected') {
+    await tx
+      .update(bastionAssertions)
+      .set({ review_status: 'superseded' })
+      .where(and(eq(bastionAssertions.id, old.id), eq(bastionAssertions.organization_id, viewer.org_id)));
+  }
+  await audit(tx, viewer, 'assertion.revise', { type: 'assertion', id: row.id }, { supersedes_id: old.id });
+  return { data: assertionView(row) };
 }
 
 /**

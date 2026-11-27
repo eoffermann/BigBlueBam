@@ -49,6 +49,7 @@ import { queueControlRuns, type QueuedRun } from '../engine/evidence-store.js';
 import type { CanAccess } from './decisions.service.js';
 import { ARTICLE_PAUSED_NEUTRAL_WORDS, ARTICLE_PROBLEM, ARTICLE_READER_WORDS, type ArticleState, articleStateFromSummary, articleStateOf, cannotOpen, entriesOpenTo } from '../lib/policy-access.js';
 import { beginLedgerBatch, mapAppendError } from './ledger-batch.js';
+import type { PinResult } from './policy-pins.js';
 import { isUniqueViolation } from './shared.js';
 import type { Viewer } from './types.js';
 
@@ -56,8 +57,11 @@ export interface PolicyDeps {
   engine: EngineDeps;
   canAccess: CanAccess;
   enqueueRuns: (runs: QueuedRun[]) => Promise<void>;
-  /** Pin a control's two policy checks to a newly linked policy (services/policy-pins.ts). */
-  pinChecks?: (viewer: Viewer, controlId: string, policyId: string) => Promise<string[]>;
+  /**
+   * Pin a control's two policy checks to a newly linked policy (services/policy-pins.ts). With a
+   * null control it picks the one unpinned policy control itself, under the same lock (#393).
+   */
+  pinChecks?: (viewer: Viewer, controlId: string | null, policyId: string) => Promise<PinResult>;
 }
 
 export const NOT_SHARED_MESSAGE = 'This policy is no longer shared with everyone. Ask its owner to share it with the whole organization in Beacon.';
@@ -270,26 +274,6 @@ async function assertMembers(tx: Tx, orgId: string, ids: string[], field: string
   }
 }
 
-/**
- * The control a policy linked without a named control proves (#387): the single active control
- * with live policy checks (policy.attested / policy.current, proposed or confirmed) none of which
- * is pinned to an active policy. Null when there is none, or more than one (then a person names it).
- */
-export async function unpinnedPolicyControl(tx: Tx, orgId: string): Promise<string | null> {
-  const rows = await tx`
-    SELECT a.control_id
-      FROM bastion_assertions a
-      JOIN bastion_controls c ON c.id = a.control_id AND c.organization_id = a.organization_id
-     WHERE a.organization_id = ${orgId} AND c.lifecycle = 'active' AND a.kind = 'probe'
-       AND a.probe_key IN ('policy.attested', 'policy.current') AND a.review_status IN ('proposed', 'confirmed')
-     GROUP BY a.control_id
-    HAVING bool_and(NOT EXISTS (
-             SELECT 1 FROM bastion_policies p
-              WHERE p.organization_id = a.organization_id AND p.status = 'active' AND p.id::text = a.params->>'policy_id'))
-     LIMIT 2`;
-  return rows.length === 1 ? String(rows[0]?.control_id) : null;
-}
-
 /** POST /policies (row 65). */
 export async function createPolicy(d: PolicyDeps, viewer: Viewer, body: BastionPolicyCreate): Promise<Served<BastionPolicyCreateResponse>> {
   const entry = await orgTx(d.engine.sql, viewer.org_id, async (tx) => {
@@ -338,12 +322,43 @@ export async function createPolicy(d: PolicyDeps, viewer: Viewer, body: BastionP
   // control's checks waiting on "a linked policy" forever, so the control read "Nothing can prove
   // this yet" however many people had read it. The one control whose policy checks are not pinned
   // to an active policy is the one this policy proves; its checks are pinned as proposals a person
-  // confirms in the Review queue, exactly as when the control is named.
-  const controlId = body.control_id ?? (d.pinChecks ? await orgTx(d.engine.sql, viewer.org_id, (tx) => unpinnedPolicyControl(tx, viewer.org_id)) : null);
-  const proposed = controlId && d.pinChecks ? await d.pinChecks(viewer, controlId, id) : [];
+  // confirms in the Review queue, exactly as when the control is named. pinChecks chooses that
+  // control and pins it in one locked transaction (#393).
+  const pinned = await pinAfterCreate(d, viewer, body.control_id ?? null, id);
   // Linking needs bastion.policy.write (row 65), so the caller manages it.
   const out = await getPolicy(d, viewer, id, { policyWrite: true });
-  return { data: { ...out.data, proposed_assertion_ids: proposed } };
+  return { data: { ...out.data, proposed_assertion_ids: pinned.proposed, pin_problem: pinned.problem } };
+}
+
+export const PIN_PROBLEM_MESSAGE =
+  'The policy is linked, but Bastion could not point the security policy control at it. Open the control and propose its policy checks for this policy, or link it again later.';
+
+/**
+ * The pin runs after the policy row has committed (the assertion services use a different pool),
+ * so a pin that fails must not fail the link (#393): the client would retry a POST for a policy
+ * that exists. The policy stands, the response says the checks were not pinned (pin_problem) and
+ * the reason is recorded in the audit log as `policy.pin_failed`.
+ */
+async function pinAfterCreate(
+  d: PolicyDeps,
+  viewer: Viewer,
+  controlId: string | null,
+  policyId: string,
+): Promise<{ proposed: string[]; problem: string | null }> {
+  if (!d.pinChecks) return { proposed: [], problem: null };
+  try {
+    return { proposed: (await d.pinChecks(viewer, controlId, policyId)).proposed, problem: null };
+  } catch (err) {
+    const reason = err instanceof Error ? err.message : String(err);
+    const code = (err as { code?: unknown } | null)?.code;
+    d.engine.log.warn({ organization_id: viewer.org_id, policy_id: policyId, control_id: controlId, err: reason }, `bastion policy link: pinning the policy checks failed: ${reason}`);
+    await orgTx(d.engine.sql, viewer.org_id, (tx) =>
+      auditRaw(tx, viewer, 'policy.pin_failed', { type: 'policy', id: policyId }, { control_id: controlId, reason, code: typeof code === 'string' ? code : null }),
+    ).catch((auditErr: unknown) => {
+      d.engine.log.error({ organization_id: viewer.org_id, policy_id: policyId, err: String(auditErr) }, 'bastion policy link: could not record the pin failure');
+    });
+    return { proposed: [], problem: PIN_PROBLEM_MESSAGE };
+  }
 }
 
 export async function getPolicy(d: PolicyDeps, viewer: Viewer, id: string, opts: PolicyAccessOpts = {}): Promise<Served<BastionPolicyResponse>> {
