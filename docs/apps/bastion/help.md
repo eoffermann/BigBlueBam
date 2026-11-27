@@ -239,7 +239,7 @@ Each drafted answer carries a confidence word:
 
 - **Sure** - every control it cites is proven.
 - **Check this** - probably right, but a person should look. An answer that relies on an accepted risk is never better than this, and the answer names the accepted risk.
-- **Needs an expert** - Bastion could not support an answer, or a control it relies on is not met, can't be proven, or is not set up. The answer then says "We cannot currently prove this."
+- **Needs an expert** - Bastion could not support an answer, or a control it relies on is not met, can't be proven, or is not set up. The answer then says "We cannot currently prove this." and names each such control with the status its page shows, for example: We cannot currently prove this. In Bastion, the control "Laptops are encrypted" shows "Can't prove yet".
 
 To answer a questionnaire:
 

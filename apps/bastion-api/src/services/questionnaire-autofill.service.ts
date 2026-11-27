@@ -72,6 +72,8 @@ export interface AutofillDeps {
 export interface OrgDraftContext {
   /** Effective state per control id (null = not set up); controls missing from the map count as not set up. */
   states: Map<string, DraftCandidate['state']>;
+  /** Control titles by id, so a control cited only through a reused library answer is named (#389). */
+  titles?: Map<string, string>;
   exceptions: Map<string, { reason: string; expires_at: string }>;
   floors: { high: number; medium: number };
   maxCalls: number;
@@ -82,7 +84,11 @@ export interface OrgDraftContext {
 export async function loadDraftContext(tx: Tx, orgId: string, now: Date): Promise<OrgDraftContext> {
   const loaded = await loadControlStates(tx, orgId, now);
   const states = new Map<string, DraftCandidate['state']>();
-  for (const c of loaded.controls) states.set(c.control_id, c.verdict.state);
+  const titles = new Map<string, string>();
+  for (const c of loaded.controls) {
+    states.set(c.control_id, c.verdict.state);
+    titles.set(c.control_id, c.title);
+  }
   const ex = await tx`
     SELECT DISTINCT ON (control_id) control_id, reason, expires_at FROM bastion_exceptions
      WHERE organization_id = ${orgId} AND status = 'active' ORDER BY control_id, expires_at DESC`;
@@ -93,6 +99,7 @@ export async function loadDraftContext(tx: Tx, orgId: string, now: Date): Promis
       FROM bastion_org_settings WHERE organization_id = ${orgId}`)[0];
   return {
     states,
+    titles,
     exceptions,
     floors: { high: Number(s?.questionnaire_high_floor ?? DEFAULT_FLOORS.high), medium: Number(s?.questionnaire_medium_floor ?? DEFAULT_FLOORS.medium) },
     maxCalls: Number(s?.max_llm_calls_per_questionnaire ?? DEFAULT_MAX_LLM_CALLS_PER_QUESTIONNAIRE),
@@ -182,8 +189,12 @@ export async function retrieveCandidates(tx: Tx, orgId: string, question: string
   });
 }
 
-/** Controls a reused library answer cites, as candidates (so the hard rules see their states). */
-function libraryControlCandidates(cands: DraftCandidate[], ctx: Pick<OrgDraftContext, 'states' | 'exceptions'>): DraftCandidate[] {
+/**
+ * Controls a reused library answer cites, as candidates (so the hard rules see their states),
+ * titled with the control's real title (#389). A control that is not in the org's live view (no
+ * title known) gets an empty title, and the bander then says only that it cannot prove the answer.
+ */
+export function libraryControlCandidates(cands: DraftCandidate[], ctx: Pick<OrgDraftContext, 'states' | 'exceptions' | 'titles'>): DraftCandidate[] {
   const have = new Set(cands.filter((c) => c.kind === 'control').map((c) => c.refs[0]?.entity_id));
   const extra: DraftCandidate[] = [];
   for (const c of cands.filter((x) => x.kind === 'library')) {
@@ -195,7 +206,7 @@ function libraryControlCandidates(cands: DraftCandidate[], ctx: Pick<OrgDraftCon
         handle: `X${extra.length + 1}`,
         kind: 'control',
         refs: [r],
-        title: 'a control this answer relies on',
+        title: ctx.titles?.get(r.entity_id) ?? '',
         text: '',
         rank: 0,
         state,
@@ -369,7 +380,7 @@ export async function draftOneAnswer(
   let banded = bandWithContext(body.question, body.answer_kind, cands, response, visible, ctx);
   if (aiReason) banded = withAiReason(banded, aiReason);
   const labels = new Map<string, string>();
-  for (const c of cands) for (const r of c.refs) if (c.kind !== 'library') labels.set(`${r.entity_type}:${r.entity_id}`, c.title);
+  for (const c of all) for (const r of c.refs) if (c.kind !== 'library' && c.title) labels.set(`${r.entity_type}:${r.entity_id}`, c.title);
   return {
     data: {
       ...banded,

@@ -181,7 +181,7 @@ describe('BASTION_SEED_EXPECTATIONS matches the library', () => {
       const ref = { entity_type: 'bastion.control', entity_id: control };
       const candidates: DraftCandidate[] = [
         { handle: 'L1', kind: 'library', refs: [ref], title: row.question, text: '', rank: 0.5, library: { answer: row.libraryAnswer, yes_no: true } },
-        { handle: 'X1', kind: 'control', refs: [ref], title: 'a control this answer relies on', text: '', rank: 0, state, exception },
+        { handle: 'X1', kind: 'control', refs: [ref], title: `the ${row.controlKey} control`, text: '', rank: 0, state, exception },
       ];
       const b = bandAnswer({ question: row.question, answer_kind: 'yes_no_text', candidates, response: null, visible: new Set([`bastion.control:${control}`]), floors: { high: 0.8, medium: 0.55 } });
       expect(b.confidence_band, row.question).toBe(row.band);

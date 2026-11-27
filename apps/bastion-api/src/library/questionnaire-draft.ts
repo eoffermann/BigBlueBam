@@ -113,6 +113,19 @@ export const STATE_WORDS: Record<string, string> = {
 
 export const CANNOT_PROVE = 'We cannot currently prove this.';
 
+const upperFirst = (s: string) => (s ? `${s[0]?.toUpperCase()}${s.slice(1)}` : s);
+
+/**
+ * One not-proven control in a drafted answer (#389), in the status words every Bastion page uses:
+ * `the control "Laptops are encrypted" shows "Can't prove yet"`. Empty when the title is unknown
+ * (the caller then leaves the clause out rather than print a stand-in label).
+ */
+export function notProvenClause(title: string, state: BastionEffectiveState | null | undefined): string {
+  const name = title.trim();
+  if (!name) return '';
+  return `the control "${name}" shows "${STATE_WORDS[state ?? 'not_set_up'] ?? STATE_WORDS.not_set_up}"`;
+}
+
 /* ------------------------------ retrieval terms ------------------------------ */
 
 const STOP = new Set(['the', 'and', 'for', 'are', 'you', 'your', 'our', 'with', 'that', 'this', 'have', 'has', 'does', 'any', 'all', 'from', 'how', 'what', 'who', 'when', 'which', 'there', 'their', 'will', 'can', 'its', 'into', 'per', 'not', 'yes']);
@@ -313,13 +326,16 @@ export function bandAnswer(input: BandInput): BandResult {
       exceptions.push(c);
       continue;
     }
-    notProven.push(`"${c?.title ?? 'a control'}" is ${STATE_WORDS[state ?? 'not_set_up']?.toLowerCase()}`);
+    notProven.push(notProvenClause(c?.title ?? '', state));
   }
   if (notProven.length > 0) {
     band = 'low';
     if (yesNo === true) yesNo = null;
-    answer = `${CANNOT_PROVE} In Bastion, ${notProven.join('; ')}.`;
-    add({ code: 'control_not_proven', words: `${CANNOT_PROVE} ${notProven.join('; ')}.` });
+    // #389: only named controls are spelled out; a control whose title is unknown is never
+    // described with a stand-in label, the sentence just says Bastion cannot prove it.
+    const named = notProven.filter((s) => s !== '');
+    answer = named.length > 0 ? `${CANNOT_PROVE} In Bastion, ${named.join('; ')}.` : CANNOT_PROVE;
+    add({ code: 'control_not_proven', words: named.length > 0 ? `${CANNOT_PROVE} ${upperFirst(named.join('; '))}.` : `${CANNOT_PROVE} The control behind this answer is not proven in Bastion.` });
   } else if (exceptions.length > 0) {
     band = minBand(band, 'medium');
     const notes = exceptions.map((c) => {
