@@ -1,25 +1,19 @@
 import type { FastifyRequest, FastifyReply } from 'fastify';
-import { eq, and } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import { db } from '../db/index.js';
-import { beaconEntries, projectMemberships, users, projects } from '../db/schema/index.js';
+import { beaconEntries, users, projects } from '../db/schema/index.js';
 import { beaconRefLookup } from '../lib/beacon-ref.js';
-
-const ROLE_HIERARCHY = ['viewer', 'member', 'admin', 'owner'] as const;
-function roleLevel(role: string): number {
-  const idx = ROLE_HIERARCHY.indexOf(role as (typeof ROLE_HIERARCHY)[number]);
-  return idx >= 0 ? idx : -1;
-}
+import { resolveBeaconAccess } from '../lib/beacon-access.js';
 
 /**
- * Beacon-specific ownership / edit guard.
+ * Beacon read / edit guards for routes that take an `:id` param.
  *
- * For routes that accept :id param, loads the beacon and checks:
- *   - SuperUser: always allowed
- *   - Admin / Owner (org role): allowed on any beacon in their org
- *   - Member: allowed only if they own the beacon (owned_by or created_by)
- *
- * Attaches `request.beacon` for downstream handlers so the route doesn't
- * need to re-query.
+ * The rule itself lives in lib/beacon-access.ts (#299) and is shared with the
+ * Yjs socket and the slug upsert, so every write path applies the same one:
+ *   - cannot read the row (another org, Private and not yours, Project and not
+ *     a member): 404, so the row's existence never leaks;
+ *   - can read but not edit: 403;
+ *   - can edit: continue, with the row attached as `request.beacon`.
  */
 
 declare module 'fastify' {
@@ -36,141 +30,80 @@ declare module 'fastify' {
   }
 }
 
+function notFound(request: FastifyRequest, reply: FastifyReply) {
+  return reply.status(404).send({
+    error: {
+      code: 'NOT_FOUND',
+      message: 'Beacon not found',
+      details: [],
+      request_id: request.id,
+    },
+  });
+}
+
+function unauthenticated(request: FastifyRequest, reply: FastifyReply) {
+  return reply.status(401).send({
+    error: {
+      code: 'UNAUTHORIZED',
+      message: 'Authentication required',
+      details: [],
+      request_id: request.id,
+    },
+  });
+}
+
+function missingId(request: FastifyRequest, reply: FastifyReply) {
+  return reply.status(400).send({
+    error: {
+      code: 'BAD_REQUEST',
+      message: 'Beacon id is required',
+      details: [],
+      request_id: request.id,
+    },
+  });
+}
+
 export function requireBeaconEditAccess() {
   return async function checkBeaconEditAccess(request: FastifyRequest, reply: FastifyReply) {
-    if (!request.user) {
-      return reply.status(401).send({
-        error: {
-          code: 'UNAUTHORIZED',
-          message: 'Authentication required',
-          details: [],
-          request_id: request.id,
-        },
-      });
-    }
+    if (!request.user) return unauthenticated(request, reply);
 
     const { id } = request.params as { id: string };
-    if (!id) {
-      return reply.status(400).send({
-        error: {
-          code: 'BAD_REQUEST',
-          message: 'Beacon id is required',
-          details: [],
-          request_id: request.id,
-        },
-      });
-    }
+    if (!id) return missingId(request, reply);
 
     const [beacon] = await db
       .select()
       .from(beaconEntries)
       .where(eq(beaconEntries.id, id))
       .limit(1);
+    if (!beacon) return notFound(request, reply);
 
-    if (!beacon) {
-      return reply.status(404).send({
+    const level = await resolveBeaconAccess(request.user, beacon);
+    if (level === 'none') return notFound(request, reply);
+    if (level === 'read') {
+      return reply.status(403).send({
         error: {
-          code: 'NOT_FOUND',
-          message: 'Beacon not found',
+          code: 'FORBIDDEN',
+          message: 'You do not have permission to modify this beacon',
           details: [],
           request_id: request.id,
         },
       });
     }
 
-    // Ensure beacon belongs to user's org
-    if (beacon.organization_id !== request.user.org_id && !request.user.is_superuser) {
-      return reply.status(404).send({
-        error: {
-          code: 'NOT_FOUND',
-          message: 'Beacon not found',
-          details: [],
-          request_id: request.id,
-        },
-      });
-    }
-
-    // Attach to request for downstream
     (request as any).beacon = beacon;
-
-    if (request.user.is_superuser) return;
-
-    // Project-scoped beacons require project membership
-    if (beacon.project_id) {
-      const isOwnerOrCreator = beacon.owned_by === request.user.id || beacon.created_by === request.user.id;
-      if (!isOwnerOrCreator) {
-        const [membership] = await db
-          .select({ id: projectMemberships.id })
-          .from(projectMemberships)
-          .where(
-            and(
-              eq(projectMemberships.project_id, beacon.project_id),
-              eq(projectMemberships.user_id, request.user.id),
-            ),
-          )
-          .limit(1);
-
-        if (!membership) {
-          return reply.status(404).send({
-            error: {
-              code: 'NOT_FOUND',
-              message: 'Beacon not found',
-              details: [],
-              request_id: request.id,
-            },
-          });
-        }
-      }
-    }
-
-    // Admin / Owner can edit any beacon in org
-    if (roleLevel(request.user.role) >= roleLevel('admin')) return;
-
-    // Member can only edit own beacons
-    if (beacon.owned_by === request.user.id || beacon.created_by === request.user.id) {
-      return;
-    }
-
-    return reply.status(403).send({
-      error: {
-        code: 'FORBIDDEN',
-        message: 'You do not have permission to modify this beacon',
-        details: [],
-        request_id: request.id,
-      },
-    });
   };
 }
 
 /**
- * Read-access guard: loads beacon and ensures user can see it.
- * Members can read anything in their org (respecting visibility).
- * Attaches beacon to request.
+ * Read-access guard: loads the beacon by UUID or slug and ensures the caller
+ * can see it. Attaches the row (plus owner and project names) to the request.
  */
 export function requireBeaconReadAccess() {
   return async function checkBeaconReadAccess(request: FastifyRequest, reply: FastifyReply) {
-    if (!request.user) {
-      return reply.status(401).send({
-        error: {
-          code: 'UNAUTHORIZED',
-          message: 'Authentication required',
-          details: [],
-          request_id: request.id,
-        },
-      });
-    }
+    if (!request.user) return unauthenticated(request, reply);
 
     const { id } = request.params as { id: string };
-    if (!id) {
-      return reply.status(400).send({
-        error: {
-          code: 'BAD_REQUEST',
-          message: 'Beacon id is required',
-          details: [],
-          request_id: request.id,
-        },
-      });
-    }
+    if (!id) return missingId(request, reply);
 
     // Accept UUID or slug. Slugs are unique per org (#246), so a slug resolves
     // within the caller's org; see lib/beacon-ref.ts.
@@ -190,77 +123,10 @@ export function requireBeaconReadAccess() {
       .limit(1);
     const row = rows[0];
     const beacon = row ? { ...row.beacon, owner_name: row.owner_name, project_name: row.project_name } : undefined;
+    if (!beacon) return notFound(request, reply);
 
-    if (!beacon) {
-      return reply.status(404).send({
-        error: {
-          code: 'NOT_FOUND',
-          message: 'Beacon not found',
-          details: [],
-          request_id: request.id,
-        },
-      });
-    }
-
-    // Org check
-    if (beacon.organization_id !== request.user.org_id && !request.user.is_superuser) {
-      return reply.status(404).send({
-        error: {
-          code: 'NOT_FOUND',
-          message: 'Beacon not found',
-          details: [],
-          request_id: request.id,
-        },
-      });
-    }
-
-    // Private visibility check
-    if (
-      beacon.visibility === 'Private' &&
-      beacon.owned_by !== request.user.id &&
-      beacon.created_by !== request.user.id &&
-      !request.user.is_superuser
-    ) {
-      return reply.status(404).send({
-        error: {
-          code: 'NOT_FOUND',
-          message: 'Beacon not found',
-          details: [],
-          request_id: request.id,
-        },
-      });
-    }
-
-    // Project visibility check: require project membership
-    if (
-      beacon.visibility === 'Project' &&
-      beacon.project_id &&
-      beacon.owned_by !== request.user.id &&
-      beacon.created_by !== request.user.id &&
-      !request.user.is_superuser
-    ) {
-      const [membership] = await db
-        .select({ id: projectMemberships.id })
-        .from(projectMemberships)
-        .where(
-          and(
-            eq(projectMemberships.project_id, beacon.project_id),
-            eq(projectMemberships.user_id, request.user.id),
-          ),
-        )
-        .limit(1);
-
-      if (!membership) {
-        return reply.status(404).send({
-          error: {
-            code: 'NOT_FOUND',
-            message: 'Beacon not found',
-            details: [],
-            request_id: request.id,
-          },
-        });
-      }
-    }
+    const level = await resolveBeaconAccess(request.user, beacon);
+    if (level === 'none') return notFound(request, reply);
 
     (request as any).beacon = beacon;
   };
