@@ -314,7 +314,7 @@ The auditor room (`/bastion/room`) is the page your auditor opens from the link.
 
 ![The auditor room, as the auditor sees it](screenshots/light/14-auditor-room.png)
 
-If you set a passcode, the auditor first sees "Enter the 6-digit passcode" and clicks **Open the room**. A wrong passcode shows "That passcode is not right." with how many tries are left before the room locks.
+If you set a passcode, the auditor first sees "Enter the 6-digit passcode" and clicks **Open the room**. A wrong passcode shows "That passcode is not right." with how many tries are left before the room locks. Tries sent at the same moment all count, so if several are already being checked the room answers "Too many passcode tries are being checked at once. Wait a moment and try again."
 
 The auditor then sees:
 
@@ -322,7 +322,7 @@ The auditor then sees:
 - A reminder that Bastion shows the evidence your organization collected, is not an auditor, and does not certify anything.
 - Plain notices wherever the history is incomplete, for example "History lost by restore" or "Unexplained gap" with the range of entries. Nothing is hidden.
 - Five counts: Met, Not met, Not met, risk accepted, Can't prove yet, and Not assessed (controls you have not set up).
-- **Controls**: every control in the room with its state and requirement codes. Clicking a control opens its **Requirements**, its **Checks in the period**, its **Uploaded evidence**, and any accepted risks. Each check or file opens on its own, with **Download** for files. A file that can no longer be found reads "Evidence file missing". **Back to all controls** returns to the list.
+- **Controls**: every control in the room with its state and requirement codes. Clicking a control opens its **Requirements**, its **Checks in the period**, its **Uploaded evidence**, and any accepted risks. Each check or file opens on its own, with **Download**. Downloading a file gives the file itself; downloading a check gives the same summary the room shows (counts only, no names) plus the record's fingerprint, which matches the one in an audit packet. A file that can no longer be found reads "Evidence file missing". **Back to all controls** returns to the list.
 - **Restricted evidence included**, when you ticked restricted items.
 - **Accepted risks**, each with its reason, what is done in the meantime, its owner and the date it is accepted until.
 - **Statement of Applicability** (ISO 27001), with whether each requirement applies, why, and how it is met.
@@ -384,7 +384,7 @@ A few things happen without anyone clicking:
 
 #### For administrators
 
-If evidence files are lost from storage (for example after rebuilding a host), copy them back from the off-site backup by running `node dist/cli.js restore-objects --from-backup` inside the bastion-api container. It prints its progress as it goes. The off-site backup location is set by whoever runs the installation, separately from the main storage and ideally with a different provider. The keys that sign seals and protect recorded names must be kept safe alongside the database backup; without them a rebuilt installation cannot keep signing under the same key.
+If evidence files are lost from storage (for example after rebuilding a host), copy them back from the off-site backup by running `node dist/cli.js restore-objects --from-backup` inside the bastion-api container. It prints its progress as it goes. When the database is reachable it leaves out any file that was redacted (and removes one already copied back); if the database is not back yet it copies everything, prints "NOT FINISHED", and you run the same command again once the database is restored. The off-site backup location is set by whoever runs the installation, separately from the main storage and ideally with a different provider. The keys that sign seals and protect recorded names must be kept safe alongside the database backup; without them a rebuilt installation cannot keep signing under the same key.
 
 ### Working with AI agents
 

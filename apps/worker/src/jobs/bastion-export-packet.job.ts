@@ -18,13 +18,19 @@
  * Progress lines per stage (spec 7.1): collecting, checking names, writing evidence n/N,
  * rendering summary, zipping, uploading.
  */
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { PassThrough, Readable } from 'node:stream';
 import type { Job } from 'bullmq';
 import type { Logger } from 'pino';
 import JSZip from 'jszip';
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
-import { createBootstrapDriver, type StorageDriver } from '@bigbluebam/storage';
+import {
+  createBootstrapDriver,
+  isStorageNotFoundError,
+  StorageTimeoutError,
+  type StorageDriver,
+  withStorageTimeout,
+} from '@bigbluebam/storage';
 import {
   bastionPacketClaimSchema,
   bastionVerifyCommitmentsResultSchema,
@@ -61,7 +67,20 @@ export interface PacketJobDeps {
   storage: StorageDriver;
   /** Minimum gap between progress calls (tests use 0). */
   progressEveryMs?: number;
+  /** Evidence read bounds (tests shrink them). */
+  readLimits?: PacketReadLimits;
+  /** Upper bound on the whole zip upload; default sized from max_packet_bytes (tests shrink it). */
+  uploadTimeoutMs?: number;
+  /** Heartbeat while the upload runs, so a long build is not reaped (tests shrink it). */
+  heartbeatEveryMs?: number;
 }
+
+/** The upload bound: at least 15 minutes, else the packet limit at 512 KB/s. */
+export function packetUploadTimeoutMs(maxPacketBytes: number): number {
+  return Math.max(15 * 60_000, Math.ceil(maxPacketBytes / (512 * 1024)) * 1000);
+}
+
+const FINISH_ATTEMPTS = 3;
 
 const COMMITMENT_BATCH = 500;
 const COMMITMENT_WORDS: Record<BastionCommitmentResult, string> = {
@@ -94,44 +113,109 @@ interface ObjectOutcome {
   status: 'written' | 'missing' | 'hash_mismatch' | 'redacted' | 'no_file';
 }
 
+/** Bounds on evidence reads (#311): opening an object, and silence in the middle of its body. */
+export interface PacketReadLimits {
+  openTimeoutMs: number;
+  idleTimeoutMs: number;
+}
+export const PACKET_READ_LIMITS: PacketReadLimits = { openTimeoutMs: 30_000, idleTimeoutMs: 60_000 };
+
+/** Evidence storage did not answer: the packet fails ("try again"), it never claims the file is missing. */
+class EvidenceReadError extends Error {
+  constructor(cause: Error) {
+    super(`An evidence file could not be read: ${cause.message}`);
+    this.name = 'EvidenceReadError';
+  }
+}
+
+function destroyQuietly(s: unknown): void {
+  try {
+    (s as { destroy?: () => void } | null)?.destroy?.();
+  } catch {
+    /* already closed */
+  }
+}
+
 /**
  * A stream that opens the bucket object only when the zip reaches its entry, hashes as it goes,
- * and reports how it went. A missing object becomes a short "Evidence file missing" note (spec
- * 3.4: never hidden) and is recorded in the manifest.
+ * and reports how it went. Only an object that does not exist becomes the short "Evidence file
+ * missing" note (spec 3.4: never hidden; recorded in the manifest). Any other read failure, an
+ * open that takes longer than `openTimeoutMs`, or a body that goes quiet for `idleTimeoutMs`
+ * fails the stream, and with it the packet (#311). Destroying the stream destroys the GET under
+ * it, including one that only resolves afterwards, so no socket is left open.
  */
-function lazyObject(storage: StorageDriver, key: string, done: (o: { missing: boolean; sha256: string | null; bytes: number }) => void): Readable {
+function lazyObject(
+  storage: StorageDriver,
+  key: string,
+  limits: PacketReadLimits,
+  done: (o: { missing: boolean; sha256: string | null; bytes: number }) => void,
+): Readable {
   let started = false;
   let source: NodeJS.ReadableStream | null = null;
+  let idle: ReturnType<typeof setTimeout> | null = null;
   const hash = createHash('sha256');
   let bytes = 0;
+  const clearIdle = () => {
+    if (idle) clearTimeout(idle);
+    idle = null;
+  };
+  const armIdle = () => {
+    clearIdle();
+    idle = setTimeout(() => out.destroy(new EvidenceReadError(new StorageTimeoutError('read', limits.idleTimeoutMs))), limits.idleTimeoutMs);
+  };
   const out = new Readable({
     read() {
       if (started) {
+        if (source) armIdle();
         source?.resume();
         return;
       }
       started = true;
-      storage.getStream(key).then(
+      const get = storage.getStream(key);
+      withStorageTimeout('get', get, limits.openTimeoutMs).then(
         ({ stream }) => {
+          if (out.destroyed) {
+            destroyQuietly(stream);
+            return;
+          }
           source = stream;
+          armIdle();
           stream.on('data', (chunk: Buffer | string) => {
+            armIdle();
             const b = typeof chunk === 'string' ? Buffer.from(chunk) : chunk;
             hash.update(b);
             bytes += b.length;
-            if (!out.push(b)) stream.pause();
+            if (!out.push(b)) {
+              // Waiting on the zip is not the storage's silence.
+              clearIdle();
+              stream.pause();
+            }
           });
           stream.on('end', () => {
+            clearIdle();
             done({ missing: false, sha256: hash.digest('hex'), bytes });
             out.push(null);
           });
-          stream.on('error', (err: Error) => out.destroy(err));
+          stream.on('error', (err: Error) => out.destroy(new EvidenceReadError(err)));
         },
-        () => {
+        (err: Error) => {
+          // A GET that resolves after its timeout is closed when it arrives.
+          void get.then((r) => destroyQuietly(r.stream)).catch(() => undefined);
+          if (out.destroyed) return;
+          if (!isStorageNotFoundError(err)) {
+            out.destroy(new EvidenceReadError(err));
+            return;
+          }
           done({ missing: true, sha256: null, bytes: 0 });
           out.push(Buffer.from('Evidence file missing\n'));
           out.push(null);
         },
       );
+    },
+    destroy(err, cb) {
+      clearIdle();
+      destroyQuietly(source);
+      cb(err);
     },
   });
   return out;
@@ -225,7 +309,9 @@ export async function renderSummaryPdf(c: BastionPacketContents): Promise<Buffer
 export async function processBastionExportPacketJob(job: Job<BastionExportPacketJobData>, logger: Logger, deps: PacketJobDeps): Promise<'succeeded' | 'failed' | 'skipped'> {
   const started = Date.now();
   const { organization_id, packet_id } = job.data;
-  const claimant = `worker-packet:${job.id ?? packet_id}`;
+  // Unique per attempt (#312): a stalled re-run of the same BullMQ job (same job id) is a
+  // different claimant, so the claim fence separates it from a builder that is still alive.
+  const claimant = `worker-packet:${job.id ?? packet_id}:${randomUUID()}`;
   const elapsed = () => Date.now() - started;
   const log = (stage: string, extra: Record<string, unknown> = {}) => logger.info({ packet_id, stage, elapsedMs: elapsed(), ...extra }, `bastion-export-packet: ${stage}`);
   const engine = (body: Record<string, unknown>, timeoutMs?: number) =>
@@ -241,6 +327,15 @@ export async function processBastionExportPacketJob(job: Job<BastionExportPacket
   }
   const c = claim.contents;
   const limit = c.packet.max_packet_bytes;
+  const readLimits = deps.readLimits ?? PACKET_READ_LIMITS;
+  // Every evidence stream opened for this attempt, so a failure can close them all (#311).
+  const opened: Readable[] = [];
+  let zipStream: NodeJS.ReadableStream | null = null;
+  let counted: PassThrough | null = null;
+  let heartbeat: ReturnType<typeof setInterval> | null = null;
+  // Once `finish` has been sent, whether it committed is unknown until it answers: from then on
+  // this attempt never deletes its zip (the intent row and the object sweep handle a leftover).
+  let finishSent = false;
   let lastProgress = 0;
   const progress = async (stage: BastionPacketStage, n: number, force = false) => {
     if (!force && Date.now() - lastProgress < (deps.progressEveryMs ?? 5_000)) return;
@@ -291,7 +386,13 @@ export async function processBastionExportPacketJob(job: Job<BastionExportPacket
     if (c.soa_csv !== null) addText('statement_of_applicability.csv', c.soa_csv);
     addText('summary.pdf', summary);
 
-    // Evidence and uploaded files, opened one at a time as the zip reaches them.
+    // Evidence and uploaded files, opened one at a time as the zip reaches them. A read failure
+    // in any of them aborts the upload (jszip does not always surface an input's error).
+    const track = (s: Readable): Readable => {
+      opened.push(s);
+      s.on('error', (err: Error) => counted?.destroy(err));
+      return s;
+    };
     const outcomes: ObjectOutcome[] = [];
     const totalObjects = c.evidence.length + c.files.length;
     let written = 0;
@@ -309,7 +410,7 @@ export async function processBastionExportPacketJob(job: Job<BastionExportPacket
       }
       zip.file(
         e.path,
-        lazyObject(deps.storage, e.object_key, (r) =>
+        track(lazyObject(deps.storage, e.object_key, readLimits, (r) =>
           onObject({
             path: e.path,
             expected_sha256: e.content_sha256,
@@ -317,7 +418,7 @@ export async function processBastionExportPacketJob(job: Job<BastionExportPacket
             bytes: r.bytes,
             status: r.missing ? 'missing' : r.sha256 === e.content_sha256 ? 'written' : 'hash_mismatch',
           }),
-        ),
+        )),
         { binary: true },
       );
     }
@@ -329,7 +430,7 @@ export async function processBastionExportPacketJob(job: Job<BastionExportPacket
       }
       zip.file(
         f.path,
-        lazyObject(deps.storage, f.object_key, (r) =>
+        track(lazyObject(deps.storage, f.object_key, readLimits, (r) =>
           onObject({
             path: f.path,
             expected_sha256: f.content_sha256,
@@ -337,7 +438,7 @@ export async function processBastionExportPacketJob(job: Job<BastionExportPacket
             bytes: r.bytes,
             status: r.missing ? 'missing' : !f.content_sha256 || r.sha256 === f.content_sha256 ? 'written' : 'hash_mismatch',
           }),
-        ),
+        )),
         { binary: true },
       );
     }
@@ -380,25 +481,62 @@ export async function processBastionExportPacketJob(job: Job<BastionExportPacket
     log(`zipping and uploading ${totalObjects} evidence objects plus ${files.length + 1} generated files`);
     const hash = createHash('sha256');
     let size = 0;
-    const counted = new PassThrough();
-    const zipStream = zip.generateNodeStream({ type: 'nodebuffer', streamFiles: true, compression: 'DEFLATE', compressionOptions: { level: 6 } });
+    const upload = new PassThrough();
+    counted = upload;
+    const zs = zip.generateNodeStream({ type: 'nodebuffer', streamFiles: true, compression: 'DEFLATE', compressionOptions: { level: 6 } });
+    zipStream = zs;
     let tooLarge = false;
-    zipStream.on('data', (chunk: Buffer) => {
+    let claimLost = false;
+    zs.on('data', (chunk: Buffer) => {
       size += chunk.length;
       hash.update(chunk);
       if (size > limit && !tooLarge) {
         tooLarge = true;
-        counted.destroy(new PacketTooLargeError(limit));
+        upload.destroy(new PacketTooLargeError(limit));
       }
     });
-    zipStream.on('error', (err: Error) => counted.destroy(err));
-    zipStream.pipe(counted);
-    await deps.storage.put(c.packet.object_key, counted, { contentType: 'application/zip' });
+    zs.on('error', (err: Error) => upload.destroy(err));
+    zs.pipe(upload);
+    // Keep the lease alive through a long upload; a lost claim stops the upload (#311).
+    heartbeat = setInterval(() => {
+      void progress('writing_evidence', written, true).catch((err: Error) => {
+        if (err instanceof ClaimLostError) {
+          claimLost = true;
+          upload.destroy(err);
+        } else logger.warn({ packet_id, err: err.message }, 'bastion-export-packet: heartbeat not recorded');
+      });
+    }, deps.heartbeatEveryMs ?? 60_000);
+    await withStorageTimeout(
+      'put',
+      deps.storage.put(c.packet.object_key, upload, { contentType: 'application/zip' }),
+      deps.uploadTimeoutMs ?? packetUploadTimeoutMs(limit),
+    );
+    clearInterval(heartbeat);
+    heartbeat = null;
+    if (claimLost) throw new ClaimLostError();
     if (tooLarge) throw new PacketTooLargeError(limit);
     await progress('uploading', size, true);
     const digest = hash.digest('hex');
-    const fin = await engine({ action: 'finish', object_key: c.packet.object_key, content_sha256: digest, size_bytes: size });
-    if (!fin.ok || bodyData<{ ok?: boolean }>(fin)?.ok === false) throw new ClaimLostError();
+    const finishBody = { action: 'finish', object_key: c.packet.object_key, content_sha256: digest, size_bytes: size };
+    finishSent = true;
+    // finish is idempotent on (claimant, key, digest): a retry after a lost response finds its
+    // own success. Only a definite "no" is a lost claim.
+    let finishOk: boolean | null = null;
+    for (let attempt = 1; attempt <= FINISH_ATTEMPTS && finishOk === null; attempt++) {
+      try {
+        const fin = await engine(finishBody);
+        if (fin.ok) finishOk = bodyData<{ ok?: boolean }>(fin)?.ok !== false;
+        else if (fin.status >= 400 && fin.status < 500) finishOk = false;
+      } catch (err) {
+        logger.warn({ packet_id, attempt, err: (err as Error).message }, 'bastion-export-packet: finish did not answer; asking again');
+      }
+    }
+    if (finishOk === null) throw new Error('bastion-api did not answer the finish call');
+    if (!finishOk) {
+      // A definite no: this attempt's key is referenced by nothing, so it may go.
+      finishSent = false;
+      throw new ClaimLostError();
+    }
     const missing = outcomes.filter((o) => o.status === 'missing').length;
     logger.info(
       { packet_id, size_bytes: size, objects: totalObjects, missing, elapsedMs: elapsed() },
@@ -406,8 +544,20 @@ export async function processBastionExportPacketJob(job: Job<BastionExportPacket
     );
     return 'succeeded';
   } catch (err) {
+    // Close every open evidence GET and the zip pipeline (#311).
+    if (heartbeat) clearInterval(heartbeat);
+    for (const s of opened) destroyQuietly(s);
+    destroyQuietly(zipStream);
+    destroyQuietly(counted);
+    // Only this attempt's own key is ever deleted (#312), and never once finish may have
+    // committed: then the row may point at it, and the intent row lets the sweep decide.
+    const dropOwnZip = async () => {
+      if (finishSent) return;
+      await withStorageTimeout('delete', deps.storage.delete(c.packet.object_key), readLimits.openTimeoutMs).catch(() => undefined);
+    };
     if (err instanceof ClaimLostError) {
       logger.warn({ packet_id }, 'bastion-export-packet: the claim moved to another worker; stopping');
+      await dropOwnZip();
       return 'skipped';
     }
     const plain =
@@ -415,8 +565,7 @@ export async function processBastionExportPacketJob(job: Job<BastionExportPacket
         ? err.message
         : 'The packet could not be built because evidence storage or bastion-api did not answer. Try building it again.';
     logger.error({ packet_id, err: (err as Error).message, elapsedMs: elapsed() }, 'bastion-export-packet: failed');
-    // Never leave a half-written packet object behind.
-    await deps.storage.delete(c.packet.object_key).catch(() => undefined);
+    await dropOwnZip();
     const r = await engine({ action: 'fail', error: plain }).catch(() => null);
     if (!r?.ok) throw err;
     return 'failed';

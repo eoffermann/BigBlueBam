@@ -1128,12 +1128,23 @@ In addition:
   at once.
 - A passcode lockout (5 misses) notifies the creator, and the creator can **Unlock** from the
   access-log view (row 87).
+- The 5 tries are reserved atomically before argon2 runs (one guarded `UPDATE ... SET
+  passcode_failures = passcode_failures + 1 ... AND passcode_failures < 5`); a right answer gives
+  its try back only while the room is still open, a wrong one keeps it, and the miss that leaves
+  the counter at 5 locks the room. A burst of concurrent guesses therefore verifies at most 5
+  codes per lockout, and a request that finds every remaining try in flight gets 429
+  `ROOM_PASSCODE_BUSY`. A verified passcode is remembered for 15 minutes under an HMAC of (room,
+  passcode hash, passcode) so later page loads skip argon2 (#308, #314).
 - The token lookup uses `bastion_resolve_room` (works under RLS enforcement).
 - The room shows the Statement of Applicability for ISO frameworks, accepted risks, "Not assessed"
   controls, the signed seal history with every public key, and any "History lost by restore" or
   "Evidence file missing" notices.
 - Room-scoped reads expose no evidence outside the room's controls, period, and restricted
   allowlist, whatever ids are supplied.
+- `?download=1` on a check (row 103) serves the same counts-only view the room's JSON shows, plus
+  the stored record's SHA-256 as `fingerprint_sha256`; it never streams the stored evidence
+  document (population names, repository lists, cited entity ids, probe params). Only uploaded
+  files and statements stream their bytes (#307).
 
 ### 5.3 Realtime: none in v1
 
@@ -1715,6 +1726,17 @@ replica lag is under 30 seconds.
   restore detection is section 3.4. Bucket objects can be deleted by anyone holding the shared S3
   credentials, which is inside the stated honest limit; the guide tells auditors to keep their own
   copies of the signed seals and packets they receive.
+- **Amendments after the M9 review (2026-11-26).** Listing is paged with no cap and each page
+  costs O(page); a listing error fails the command (#313). The mirror's records step runs under
+  the same per-call budget as evidence objects, resumes from the last key, and only stats records
+  modified since the last finished records step (a high-water mark kept across backups); end-of-call
+  status writes land only while the row says `running` (#309). The mirror records `mirrored_at`
+  whenever bytes reached it and deletes a copy redacted mid-copy; `restore-objects` never copies a
+  key the database says is redacted (and deletes one already copied back), and exits 1 with "NOT
+  FINISHED" when no database was reachable to check (#310). Packets: bounded evidence reads (open
+  and idle timeouts; only not-found is "Evidence file missing"), a bounded upload with heartbeats
+  (#311); one claimant and one object key per attempt (`packets/<org>/<packet>/<uuid>.zip`, with
+  an intent row cleared by an idempotent, key-fenced `finish`) (#312).
 - **Key escrow.** `BASTION_SEAL_SIGNING_KEY`, `BASTION_PD_HMAC_KEY`, and `BASTION_FEED_KEY_PEPPER`
   must be exported and escrowed with the database backup; a rebuilt host without them cannot sign
   new seals under the old key id, verify commitments, or accept existing feed keys. Each row

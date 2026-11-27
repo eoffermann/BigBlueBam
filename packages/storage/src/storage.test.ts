@@ -1,3 +1,4 @@
+import { Readable } from 'node:stream';
 import { describe, it, expect } from 'vitest';
 import { parseProviderConfig, s3ConfigSchema, rcloneConfigSchema } from './config.js';
 import { encryptSecret, decryptSecret, fingerprint, displayHint } from './secrets.js';
@@ -166,5 +167,72 @@ describe('buildStorageKey', () => {
     expect(buildStorageKey('org1', 'bin', 'asset1', 'uuid', 'my file (1).csv')).toBe(
       'org1/bin/asset1/uuid-my_file__1_.csv',
     );
+  });
+});
+
+describe('S3Driver.list pages (#309, #313)', () => {
+  /** A fake minio listing: an object-mode stream over sorted names after startAfter, counting what it produced. */
+  function fakeClient(names: string[]) {
+    const seen = { produced: 0, startAfter: [] as Array<string | undefined>, destroyed: 0 };
+    const client = {
+      listObjectsV2(_bucket: string, prefix: string, _recursive: boolean, startAfter?: string) {
+        seen.startAfter.push(startAfter);
+        const rest = names.filter((n) => n.startsWith(prefix) && (!startAfter || n > startAfter));
+        let i = 0;
+        const s = new Readable({
+          objectMode: true,
+          read() {
+            if (i >= rest.length) return this.push(null);
+            seen.produced += 1;
+            this.push({ name: rest[i++], size: 1, etag: 'e', lastModified: new Date(0) });
+          },
+          destroy(err, cb) {
+            seen.destroyed += 1;
+            cb(err);
+          },
+        });
+        return s;
+      },
+    };
+    return { client, seen };
+  }
+
+  const driverWith = (client: unknown, basePath?: string) => {
+    const d = new S3Driver({ kind: 's3', endpoint: 'http://minio:9000', region: 'us-east-1', bucket: 'b', accessKey: 'a', secretKey: 's', basePath });
+    (d as unknown as { client: unknown }).client = client;
+    return d;
+  };
+
+  it('stops the minio stream once a page is full, so listing N keys is linear', async () => {
+    const names = Array.from({ length: 2500 }, (_, i) => `seals/${String(i).padStart(5, '0')}.json`);
+    const { client, seen } = fakeClient(names);
+    const d = driverWith(client);
+    const keys: string[] = [];
+    let cursor: string | undefined;
+    let pages = 0;
+    do {
+      const page = await d.list('seals/', cursor);
+      keys.push(...page.objects.map((o) => o.key));
+      cursor = page.cursor;
+      pages += 1;
+    } while (cursor && pages < 10);
+    expect(keys).toEqual(names);
+    expect(pages).toBe(3);
+    // Without the early stop every page streams the whole remainder: 2500 + 1500 + 500.
+    expect(seen.produced).toBeLessThanOrEqual(2500 + 2 * 16);
+    expect(seen.destroyed).toBeGreaterThanOrEqual(2);
+  });
+
+  it('puts the base path back on the startAfter cursor', async () => {
+    const names = Array.from({ length: 1500 }, (_, i) => `mirror/evidence/${String(i).padStart(5, '0')}`);
+    const { client, seen } = fakeClient(names);
+    const d = driverWith(client, 'mirror');
+    const first = await d.list('evidence/');
+    expect(first.objects[0]!.key).toBe('evidence/00000');
+    expect(first.cursor).toBe('evidence/00999');
+    const second = await d.list('evidence/', first.cursor);
+    expect(seen.startAfter[1]).toBe('mirror/evidence/00999');
+    expect(second.objects).toHaveLength(500);
+    expect(second.objects[0]!.key).toBe('evidence/01000');
   });
 });

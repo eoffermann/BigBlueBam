@@ -181,7 +181,7 @@ function contents(over: Partial<BastionPacketContents> = {}): BastionPacketConte
       period_end: '2026-11-26',
       include_restricted: false,
       max_packet_bytes: 50 * 1024 * 1024,
-      object_key: `packets/${ORG}/${PACKET}.zip`,
+      object_key: `packets/${ORG}/${PACKET}/00000000-0000-4000-8000-0000000c00aa.zip`,
     },
     organization_name: 'Gilligan Travel Ltd',
     framework: { id: '00000000-0000-4000-8000-0000000c0010', name: 'ISO 27001', template_key: 'iso27001', is_iso: true },
@@ -275,6 +275,112 @@ describe('bastion-export-packet', () => {
     expect(await processBastionExportPacketJob(job({ organization_id: ORG, packet_id: PACKET }), silent, { post, storage: driver })).toBe('failed');
     expect(objects.size).toBe(0);
     expect(post).toHaveBeenCalledTimes(1);
+  });
+
+  const fastLimits = { readLimits: { openTimeoutMs: 50, idleTimeoutMs: 50 }, progressEveryMs: 0, heartbeatEveryMs: 1_000 };
+
+  it('an evidence GET that never answers fails the packet instead of hanging the worker (#311)', async () => {
+    const c = contents();
+    const { driver, objects } = memoryStorage({ [`manual/${ORG}/m1`]: Buffer.from('%PDF-1.4 report') });
+    const realGet = driver.getStream.bind(driver);
+    (driver as { getStream: StorageDriver['getStream'] }).getStream = (key: string) =>
+      key === c.evidence[0]!.object_key ? new Promise(() => undefined) : realGet(key);
+    const calls: Array<Record<string, unknown>> = [];
+    const r = await processBastionExportPacketJob(job({ organization_id: ORG, packet_id: PACKET }), silent, { post: fakeApi(c, calls) as never, storage: driver, ...fastLimits });
+    expect(r).toBe('failed');
+    expect(calls.some((x) => x.action === 'finish')).toBe(false);
+    expect(String(calls.find((x) => x.action === 'fail')?.error)).toMatch(/did not answer/);
+    expect(objects.has(c.packet.object_key)).toBe(false);
+  }, 10_000);
+
+  it('a storage error that is not "no such object" fails the packet; it is never written up as "Evidence file missing" (#311)', async () => {
+    const c = contents();
+    const { driver } = memoryStorage({ [`evidence/${ORG}/a.json`]: evidenceDoc, [`manual/${ORG}/m1`]: Buffer.from('%PDF-1.4 report') });
+    (driver as { getStream: StorageDriver['getStream'] }).getStream = async () => {
+      throw Object.assign(new Error('SlowDown: please reduce your request rate'), { code: 'SlowDown' });
+    };
+    const calls: Array<Record<string, unknown>> = [];
+    const r = await processBastionExportPacketJob(job({ organization_id: ORG, packet_id: PACKET }), silent, { post: fakeApi(c, calls) as never, storage: driver, ...fastLimits });
+    expect(r).toBe('failed');
+    expect(calls.some((x) => x.action === 'finish')).toBe(false);
+  }, 10_000);
+
+  it('a body that goes quiet is cut off by the idle timeout and its GET stream is destroyed (#311)', async () => {
+    const c = contents();
+    const { driver } = memoryStorage({ [`manual/${ORG}/m1`]: Buffer.from('%PDF-1.4 report') });
+    const realGet = driver.getStream.bind(driver);
+    let stalled: PassThrough | null = null;
+    (driver as { getStream: StorageDriver['getStream'] }).getStream = async (key: string) => {
+      if (key !== c.evidence[0]!.object_key) return realGet(key);
+      stalled = new PassThrough();
+      stalled.write(Buffer.from('{"outc'));
+      return { stream: stalled, contentType: 'application/json', size: 100 };
+    };
+    const calls: Array<Record<string, unknown>> = [];
+    const r = await processBastionExportPacketJob(job({ organization_id: ORG, packet_id: PACKET }), silent, { post: fakeApi(c, calls) as never, storage: driver, ...fastLimits });
+    expect(r).toBe('failed');
+    expect(stalled).not.toBeNull();
+    expect(stalled!.destroyed).toBe(true);
+  }, 10_000);
+
+  it('every attempt is its own claimant, even for the same BullMQ job id (#312)', async () => {
+    const seen: string[] = [];
+    const post = vi.fn(async (_p: string, body: Record<string, unknown>) => {
+      seen.push(String(body.claimant));
+      return ok({ claimed: false, status: 'running', error: null, contents: null });
+    });
+    const { driver } = memoryStorage({});
+    await processBastionExportPacketJob(job({ organization_id: ORG, packet_id: PACKET }, 'same-job'), silent, { post: post as never, storage: driver });
+    await processBastionExportPacketJob(job({ organization_id: ORG, packet_id: PACKET }, 'same-job'), silent, { post: post as never, storage: driver });
+    expect(seen[0]).toMatch(/^worker-packet:same-job:/);
+    expect(seen[0]).not.toBe(seen[1]);
+    expect(seen[0]!.length).toBeLessThanOrEqual(128);
+  });
+
+  it('a lost finish response is asked again, and the uploaded zip is never deleted once finish was sent (#312)', async () => {
+    const c = contents();
+    const seed = { [`evidence/${ORG}/a.json`]: evidenceDoc, [`manual/${ORG}/m1`]: Buffer.from('%PDF-1.4 report') };
+    // 1. The first finish times out on the wire but committed; the retry finds its own success.
+    {
+      const { driver, objects } = memoryStorage(seed);
+      const calls: Array<Record<string, unknown>> = [];
+      const api = fakeApi(c, calls);
+      let finishes = 0;
+      const post = vi.fn(async (path: string, body: Record<string, unknown>) => {
+        if (body.action === 'finish' && ++finishes === 1) {
+          calls.push({ path, ...body });
+          throw Object.assign(new Error('The operation was aborted due to timeout'), { name: 'TimeoutError' });
+        }
+        return api(path, body);
+      });
+      expect(await processBastionExportPacketJob(job({ organization_id: ORG, packet_id: PACKET }), silent, { post: post as never, storage: driver, progressEveryMs: 0 })).toBe('succeeded');
+      expect(objects.has(c.packet.object_key)).toBe(true);
+      expect(finishes).toBe(2);
+    }
+    // 2. bastion-api never answers finish: the zip stays (the row may already point at it).
+    {
+      const { driver, objects } = memoryStorage(seed);
+      const calls: Array<Record<string, unknown>> = [];
+      const api = fakeApi(c, calls);
+      const post = vi.fn(async (path: string, body: Record<string, unknown>) => {
+        if (body.action === 'finish') throw new Error('socket hang up');
+        return api(path, body);
+      });
+      expect(await processBastionExportPacketJob(job({ organization_id: ORG, packet_id: PACKET }), silent, { post: post as never, storage: driver, progressEveryMs: 0 })).toBe('failed');
+      expect(objects.has(c.packet.object_key)).toBe(true);
+    }
+    // 3. A definite "not yours" from finish: only this attempt's own zip is removed.
+    {
+      const { driver, objects } = memoryStorage(seed);
+      const calls: Array<Record<string, unknown>> = [];
+      const api = fakeApi(c, calls);
+      const post = vi.fn(async (path: string, body: Record<string, unknown>) => {
+        if (body.action === 'finish') return ok({ ok: false });
+        return api(path, body);
+      });
+      expect(await processBastionExportPacketJob(job({ organization_id: ORG, packet_id: PACKET }), silent, { post: post as never, storage: driver, progressEveryMs: 0 })).toBe('skipped');
+      expect(objects.has(c.packet.object_key)).toBe(false);
+    }
   });
 
   it('summary.pdf renders text outside WinAnsi (em dash in a title) without throwing', async () => {

@@ -15,7 +15,8 @@
 //   - reads never reach outside the room's controls, period and restricted allowlist, whatever
 //     ids are supplied; evidence explanations are counts-only (no cited item ever leaves).
 
-import { createHash } from 'node:crypto';
+import { createHash, createHmac } from 'node:crypto';
+import { Readable } from 'node:stream';
 import argon2 from 'argon2';
 import { withStorageTimeout } from '@bigbluebam/storage';
 import {
@@ -120,38 +121,110 @@ export async function resolveRoom(deps: RoomDeps, ctx: RoomRequestContext): Prom
   }
   if (room.passcode_hash) {
     if (!ctx.passcode) throw new RoomPasscodeRequired(false, BASTION_ROOM_PASSCODE_MAX_FAILURES - Number(room.passcode_failures ?? 0));
-    let ok = false;
-    try {
-      ok = /^\d{6}$/.test(ctx.passcode) && (await argon2.verify(String(room.passcode_hash), ctx.passcode));
-    } catch {
-      ok = false;
-    }
-    if (!ok) {
-      const left = await recordPasscodeMiss(deps.engine, orgId, roomId);
-      if (left <= 0) throw new NotFoundError(ROOM_GONE);
-      throw new RoomPasscodeRequired(true, left);
-    }
+    await checkPasscode(deps, orgId, roomId, room, ctx.passcode);
   }
   return { orgId, room };
 }
 
-/** One wrong passcode: the 5th locks the room and tells its creator (spec 5.2). Returns tries left. */
-export async function recordPasscodeMiss(engine: EngineDeps, orgId: string, roomId: string): Promise<number> {
+/** Redis key proving this exact passcode was verified for this room (keyed, so it reveals nothing). */
+function verifiedKey(deps: RoomDeps, roomId: string, passcodeHash: string, passcode: string): string {
+  const mac = createHmac('sha256', deps.ipSalt).update(`${roomId}\n${passcodeHash}\n${passcode}`, 'utf8').digest('hex');
+  return `bastion:room:passcode-ok:${mac}`;
+}
+/** How long a verified passcode skips argon2 (the room's own lock, expiry and revocation still apply). */
+const PASSCODE_VERIFIED_TTL_S = 15 * 60;
+
+/**
+ * The passcode gate (spec 5.2: 5 misses lock the room; #308, #314). Every attempt RESERVES one of
+ * the room's 5 tries in a single guarded UPDATE before argon2 runs, so however many requests
+ * arrive at once, at most 5 guesses can ever be in flight or spent per lockout: a burst cannot
+ * test more codes than the counter allows, and a right answer that finishes after the room locked
+ * is refused. A right answer gives its try back; a wrong one keeps it, and the attempt that leaves
+ * the counter at 5 locks the room and tells its creator.
+ *
+ * A passcode verified once is remembered for 15 minutes under a keyed hash of (room, passcode),
+ * so the auditor's later page loads skip argon2 and never compete for tries. A hit proves the
+ * guess was right, so it cannot help a guesser.
+ */
+async function checkPasscode(deps: RoomDeps, orgId: string, roomId: string, room: Record<string, unknown>, passcode: string): Promise<void> {
+  const hash = String(room.passcode_hash);
+  const okKey = verifiedKey(deps, roomId, hash, passcode);
+  if ((await safeCount(() => deps.counters.get(okKey))) > 0) return;
+  const reserved = await reservePasscodeTry(deps.engine, orgId, roomId);
+  if (reserved === 'gone') throw new NotFoundError(ROOM_GONE);
+  if (reserved === 'busy') {
+    throw new RateLimitedError('Too many passcode tries are being checked at once. Wait a moment and try again.', 'ROOM_PASSCODE_BUSY', 5);
+  }
+  let ok = false;
+  try {
+    ok = /^\d{6}$/.test(passcode) && (await argon2.verify(hash, passcode));
+  } catch {
+    ok = false;
+  }
+  if (ok) {
+    // Give the try back, but only while the room is still open: a lock that landed during the
+    // verify (other guesses used up the tries) wins.
+    if (!(await releasePasscodeTry(deps.engine, orgId, roomId))) throw new NotFoundError(ROOM_GONE);
+    await deps.counters.set(okKey, PASSCODE_VERIFIED_TTL_S).catch(() => undefined);
+    return;
+  }
+  const left = await recordPasscodeMiss(deps.engine, orgId, roomId);
+  if (left <= 0) throw new NotFoundError(ROOM_GONE);
+  throw new RoomPasscodeRequired(true, left);
+}
+
+/**
+ * Take one of the room's tries before verifying. `gone` = locked, revoked or missing (the usual
+ * 404); `busy` = open, but every remaining try is already being checked by another request.
+ */
+export async function reservePasscodeTry(engine: EngineDeps, orgId: string, roomId: string): Promise<'reserved' | 'gone' | 'busy'> {
   return orgTx(engine.sql, orgId, async (tx) => {
     const [r] = await tx`
       UPDATE bastion_auditor_rooms SET passcode_failures = passcode_failures + 1
-       WHERE organization_id = ${orgId} AND id = ${roomId} AND locked_at IS NULL
+       WHERE organization_id = ${orgId} AND id = ${roomId} AND locked_at IS NULL AND revoked_at IS NULL
+         AND passcode_failures < ${BASTION_ROOM_PASSCODE_MAX_FAILURES}
       RETURNING passcode_failures`;
-    const failures = Number(r?.passcode_failures ?? BASTION_ROOM_PASSCODE_MAX_FAILURES);
-    if (r && failures >= BASTION_ROOM_PASSCODE_MAX_FAILURES) {
-      const now = engine.now();
-      await tx`UPDATE bastion_auditor_rooms SET locked_at = ${now} WHERE organization_id = ${orgId} AND id = ${roomId}`;
+    if (r) return 'reserved' as const;
+    const [cur] = await tx`SELECT locked_at, revoked_at FROM bastion_auditor_rooms WHERE organization_id = ${orgId} AND id = ${roomId}`;
+    if (!cur || cur.locked_at || cur.revoked_at) return 'gone' as const;
+    // Every try is reserved but none has locked the room yet: the in-flight guesses decide.
+    return 'busy' as const;
+  });
+}
+
+/** A right answer returns its reserved try. False when the room locked in the meantime. */
+async function releasePasscodeTry(engine: EngineDeps, orgId: string, roomId: string): Promise<boolean> {
+  return orgTx(engine.sql, orgId, async (tx) => {
+    const rows = await tx`
+      UPDATE bastion_auditor_rooms SET passcode_failures = greatest(passcode_failures - 1, 0)
+       WHERE organization_id = ${orgId} AND id = ${roomId} AND locked_at IS NULL AND revoked_at IS NULL
+      RETURNING id`;
+    return rows.length > 0;
+  });
+}
+
+/**
+ * One wrong passcode, whose try was already reserved (and so already counted): when the counter
+ * stands at 5 the room locks and its creator is told (spec 5.2). Returns tries left.
+ */
+export async function recordPasscodeMiss(engine: EngineDeps, orgId: string, roomId: string): Promise<number> {
+  return orgTx(engine.sql, orgId, async (tx) => {
+    const now = engine.now();
+    const [locked] = await tx`
+      UPDATE bastion_auditor_rooms SET locked_at = ${now}
+       WHERE organization_id = ${orgId} AND id = ${roomId} AND locked_at IS NULL
+         AND passcode_failures >= ${BASTION_ROOM_PASSCODE_MAX_FAILURES}
+      RETURNING passcode_failures`;
+    if (locked) {
       await enqueueBastionEvent('auditor_room.revoked', { room_id: roomId, reason: 'locked' }, tx, {
         orgId,
         idempotencyKey: `auditor_room.locked:${roomId}:${now.toISOString()}`,
       });
+      return 0;
     }
-    return BASTION_ROOM_PASSCODE_MAX_FAILURES - failures;
+    const [cur] = await tx`SELECT passcode_failures, locked_at FROM bastion_auditor_rooms WHERE organization_id = ${orgId} AND id = ${roomId}`;
+    if (!cur || cur.locked_at) return 0;
+    return Math.max(0, BASTION_ROOM_PASSCODE_MAX_FAILURES - Number(cur.passcode_failures ?? 0));
   });
 }
 
@@ -273,6 +346,8 @@ interface EvidenceHit {
   redacted: boolean;
   content_type: string | null;
   size: number | null;
+  /** SHA-256 of the stored record (checks): the auditor can match it against a packet or seal. */
+  fingerprint: string | null;
   body: Record<string, unknown>;
 }
 
@@ -298,6 +373,7 @@ async function findRoomEvidence(deps: RoomDeps, r: ResolvedRoom, id: string): Pr
         redacted: !!snap.bytes_redacted_at,
         content_type: 'application/json',
         size: snap.size_bytes == null ? null : Number(snap.size_bytes),
+        fingerprint: (snap.content_sha256 as string | null) ?? null,
         body: {
           id: snap.id,
           kind: 'check',
@@ -324,6 +400,7 @@ async function findRoomEvidence(deps: RoomDeps, r: ResolvedRoom, id: string): Pr
       redacted: !!obj?.bytes_redacted_at,
       content_type: (file.content_type as string | null) ?? null,
       size: obj?.size_bytes == null ? null : Number(obj.size_bytes),
+      fingerprint: null,
       body: out,
     };
   });
@@ -352,10 +429,34 @@ export async function publicRoomEvidence(deps: RoomDeps, ctx: RoomRequestContext
   };
 }
 
+/**
+ * What a room download of a check carries (#307): the same counts-only view the room's JSON shows,
+ * plus the stored record's fingerprint. The stored evidence document itself (population names,
+ * repository lists, cited entity ids, probe params) never leaves through the room; it goes only
+ * into an audit packet the organization builds and sends on purpose.
+ */
+export function roomCheckDocument(hit: Pick<EvidenceHit, 'body' | 'fingerprint'>): Buffer {
+  const doc = {
+    ...hit.body,
+    fingerprint_sha256: hit.fingerprint,
+    note: 'Counts only. This is the summary an auditor room shows; the full evidence record stays with the organization and is identified by fingerprint_sha256.',
+  };
+  return Buffer.from(`${JSON.stringify(doc, null, 2)}\n`, 'utf8');
+}
+
 export async function publicRoomDownload(deps: RoomDeps, ctx: RoomRequestContext, id: string) {
   const r = await resolveRoom(deps, ctx);
   const hit = await findRoomEvidence(deps, r, id);
   if (hit.redacted) throw new NotFoundError('This file was redacted.');
+  if (hit.kind === 'check') {
+    // Never the stored object: it is the detail view, and the room is counts-only (spec 3.1, 5.2).
+    const body = roomCheckDocument(hit);
+    await logRoomAccess(deps, r, ctx, 'download', id);
+    return {
+      stream: Readable.from([body]),
+      headers: downloadHeaders({ contentType: 'application/json', filename: `${hit.title}.json`, size: body.length }),
+    };
+  }
   if (!hit.object_key || !deps.engine.storage) throw new NotFoundError('There is no file to download for this evidence.');
   let obj: Awaited<ReturnType<NonNullable<EngineDeps['storage']>['getStream']>>;
   try {
@@ -364,7 +465,7 @@ export async function publicRoomDownload(deps: RoomDeps, ctx: RoomRequestContext
     throw new NotFoundError('Evidence file missing.');
   }
   await logRoomAccess(deps, r, ctx, 'download', id);
-  const ext = hit.kind === 'check' ? '.json' : hit.kind === 'statement' ? '.txt' : '';
+  const ext = hit.kind === 'statement' ? '.txt' : '';
   return { stream: obj.stream, headers: downloadHeaders({ contentType: hit.content_type, filename: `${hit.title}${ext}`, size: hit.size ?? obj.size }) };
 }
 

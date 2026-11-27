@@ -391,8 +391,13 @@ export async function updateRequest(deps: SharingDeps, viewer: Viewer, id: strin
 
 // ── Audit packets ────────────────────────────────────────────────────────────────────────
 
-export function packetObjectKey(orgId: string, packetId: string): string {
-  return `packets/${orgId}/${packetId}.zip`;
+/**
+ * One build attempt's zip (#312). Every claim gets its own key, so a failing or stalled attempt
+ * can only ever delete its own bytes, never the zip a later attempt finished; the packet row
+ * records the key of the attempt that succeeded.
+ */
+export function packetObjectKey(orgId: string, packetId: string, attempt: string): string {
+  return `packets/${orgId}/${packetId}/${attempt}.zip`;
 }
 
 const STAGE_WORDS: Record<string, string> = {
