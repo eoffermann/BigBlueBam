@@ -4,6 +4,7 @@
 // so the gates exercise exactly the production prompt, parser, verifier and bander.
 
 import type { DraftCandidate } from '../../src/library/questionnaire-draft.js';
+import type { RecordedResponse, RecordingDeadlineMeta } from './llm-recording.js';
 
 export interface CorpusQuestion {
   id: string;
@@ -18,8 +19,8 @@ export interface CorpusQuestion {
 
 export interface RecordedQuestionnaireCorpus {
   /** max_tokens: the budget the recording was made at (llm-call-settings.ts; the gate pins it to production's). */
-  meta: { prompt_version: number; recorded_at: string; source: string; model: string | null; max_tokens?: number; note?: string };
-  responses: Record<string, { content: string; finish_reason: string | null } | { error: string }>;
+  meta: { prompt_version: number; recorded_at: string; source: string; model: string | null; max_tokens?: number; note?: string } & RecordingDeadlineMeta;
+  responses: Record<string, RecordedResponse>;
 }
 
 const id = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
@@ -59,7 +60,6 @@ export const CORPUS_LIBRARY = {
 /** The candidates for one question, with handles assigned like retrieveCandidates does. */
 export function corpusCandidates(q: CorpusQuestion): DraftCandidate[] {
   const counters = { control: 0, policy: 0, library: 0 };
-  const prefix = { control: 'C', policy: 'P', library: 'L' } as const;
   return q.retrieved.map((key, i) => {
     const rank = 1 - i * 0.1;
     if (key === 'policy') {
