@@ -24,6 +24,7 @@ import { requireAuth } from '../plugins/auth.js';
 import { HELPDESK_SYSTEM_USER_ID } from '../lib/constants.js';
 import { logActivity } from '../services/activity.service.js';
 import { env } from '../env.js';
+import { orgOfProjectIn, orgOfTaskIn } from '../lib/rls-org-scope.js';
 
 const createTaskSchema = z.object({
   project_id: z.string().uuid(),
@@ -55,7 +56,7 @@ export default async function internalHelpdeskRoutes(fastify: FastifyInstance) {
   // activity_log row attributed to HELPDESK_SYSTEM_USER_ID.
   fastify.post(
     '/tasks',
-    { preHandler: [requireServiceAuth] },
+    { preHandler: [requireServiceAuth], config: { rlsOrgScope: orgOfProjectIn('body', 'project_id') } },
     async (request, reply) => {
       const data = createTaskSchema.parse(request.body);
 
@@ -224,7 +225,7 @@ export default async function internalHelpdeskRoutes(fastify: FastifyInstance) {
   // users can see "John Customer (via helpdesk ticket): ...".
   fastify.post(
     '/comments',
-    { preHandler: [requireServiceAuth] },
+    { preHandler: [requireServiceAuth], config: { rlsOrgScope: orgOfTaskIn('body', 'task_id') } },
     async (request, reply) => {
       const data = createCommentSchema.parse(request.body);
 
@@ -295,7 +296,7 @@ export default async function internalHelpdeskRoutes(fastify: FastifyInstance) {
   // Moves the task to the project's terminal phase (ticket closed).
   fastify.post(
     '/tasks/:id/move-to-terminal-phase',
-    { preHandler: [requireServiceAuth] },
+    { preHandler: [requireServiceAuth], config: { rlsOrgScope: orgOfTaskIn('params', 'id') } },
     async (request, reply) => {
       const { id } = request.params as { id: string };
 
@@ -364,7 +365,7 @@ export default async function internalHelpdeskRoutes(fastify: FastifyInstance) {
   // Moves the task back to the project's first non-terminal phase.
   fastify.post(
     '/tasks/:id/reopen',
-    { preHandler: [requireServiceAuth] },
+    { preHandler: [requireServiceAuth], config: { rlsOrgScope: orgOfTaskIn('params', 'id') } },
     async (request, reply) => {
       const { id } = request.params as { id: string };
 

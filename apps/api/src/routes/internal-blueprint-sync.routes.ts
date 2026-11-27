@@ -17,6 +17,7 @@ import { and, eq } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import { tasks } from '../db/schema/tasks.js';
 import { requireInternalSecretOrToken } from '../lib/internal-secret.js';
+import { orgIdIn } from '../lib/rls-org-scope.js';
 import { broadcastToProject } from '../services/realtime.service.js';
 
 const syncSchema = z.object({
@@ -31,7 +32,8 @@ const syncSchema = z.object({
 });
 
 export default async function internalBlueprintSyncRoutes(fastify: FastifyInstance) {
-  fastify.post('/internal/sync-from-blueprint', { preHandler: [requireInternalSecretOrToken] }, async (request, reply) => {
+  // The body's org_id is bound for the request under RLS enforce mode (#338).
+  fastify.post('/internal/sync-from-blueprint', { preHandler: [requireInternalSecretOrToken], config: { rlsOrgScope: orgIdIn('body') } }, async (request, reply) => {
     const parsed = syncSchema.safeParse(request.body);
     if (!parsed.success) {
       return reply.status(400).send({

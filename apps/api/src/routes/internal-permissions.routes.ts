@@ -29,6 +29,7 @@ import {
 } from '../db/schema/index.js';
 import { recordDivergence } from '../services/permissions-telemetry.service.js';
 import { requireInternalSecretOrHelpdeskToken } from '../lib/internal-secret.js';
+import { firstOrg, orgIdIn, orgOfProjectIn } from '../lib/rls-org-scope.js';
 
 // Internal auth: the shared guard (lib/internal-secret.ts), x-internal-secret or x-internal-token
 // against INTERNAL_SERVICE_SECRET or INTERNAL_HELPDESK_SECRET, direct private-network peers only.
@@ -166,7 +167,11 @@ export default async function internalPermissionsRoutes(fastify: FastifyInstance
     '/internal/permissions/dual-read',
     {
       preHandler: requireInternalAuth,
-      config: { rateLimit: { max: 10000, timeWindow: '1 minute' } },
+      config: {
+        rateLimit: { max: 10000, timeWindow: '1 minute' },
+        // The scope's org (or its project's org) is bound under RLS enforce mode (#338).
+        rlsOrgScope: firstOrg(orgIdIn('body', 'scope.org_id'), orgOfProjectIn('body', 'scope.project_id')),
+      },
     },
     async (request, reply) => {
       const parsed = dualReadBodySchema.safeParse(request.body);

@@ -3,7 +3,7 @@ import { eq, and } from 'drizzle-orm';
 import { z } from 'zod';
 import { randomBytes, randomUUID } from 'node:crypto';
 import argon2 from 'argon2';
-import { db } from '../db/index.js';
+import { db, runInOrgScope } from '../db/index.js';
 import { oauthProviders } from '../db/schema/oauth-providers.js';
 import { oauthUserLinks } from '../db/schema/oauth-user-links.js';
 import { users } from '../db/schema/users.js';
@@ -307,10 +307,13 @@ export default async function oauthRoutes(fastify: FastifyInstance) {
     const lockedPassword = randomBytes(32).toString('base64url');
     const passwordHash = await argon2.hash(lockedPassword);
 
-    const newUser = await db.transaction(async (tx) => {
+    // No user is signed in, so bind the new org's id before creating it; the
+    // org, membership and role rows then pass their RLS org policies (#338).
+    const newOrgId = randomUUID();
+    const newUser = await runInOrgScope(newOrgId, async (tx) => {
       const [org] = await tx
         .insert(organizations)
-        .values({ name: orgName, slug: orgSlug })
+        .values({ id: newOrgId, name: orgName, slug: orgSlug })
         .returning();
 
       const [user] = await tx

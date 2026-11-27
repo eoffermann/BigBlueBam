@@ -2,7 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { eq, and, isNull, gt } from 'drizzle-orm';
 import { z } from 'zod';
 import { randomBytes } from 'crypto';
-import { db } from '../db/index.js';
+import { db, runInOrgScope } from '../db/index.js';
 import { guestInvitations } from '../db/schema/guest-invitations.js';
 import { users } from '../db/schema/users.js';
 import { projectMemberships } from '../db/schema/project-memberships.js';
@@ -391,7 +391,11 @@ export default async function guestRoutes(fastify: FastifyInstance) {
       // the race. If anything inside the transaction throws, the claim
       // rolls back automatically.
       try {
-        const result = await db.transaction(async (tx) => {
+        // The guest is not signed in, so nothing has bound the org GUC. Bind
+        // the invitation's org so the membership and role rows pass their
+        // org policies under RLS enforce mode (#338). The claim below
+        // re-reads the same token, so it is the same org.
+        const result = await runInOrgScope(peek.org_id, async (tx) => {
           const claimedResult = await tx
             .update(guestInvitations)
             .set({ accepted_at: new Date() })

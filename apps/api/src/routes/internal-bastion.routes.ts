@@ -13,6 +13,7 @@ import { z } from 'zod';
 import { bastionBamTaskCommentSchema, bastionBamTaskUpsertSchema, bastionProposalCloseSchema } from '@bigbluebam/shared';
 import { requireInternalSecret } from '../lib/internal-secret.js';
 import { publishBoltEvent } from '../lib/bolt-events.js';
+import { orgIdIn } from '../lib/rls-org-scope.js';
 import {
   BastionInternalError,
   closeBastionProposal,
@@ -45,7 +46,11 @@ async function guarded<T>(request: FastifyRequest, reply: FastifyReply, fn: () =
 }
 
 export default async function internalBastionRoutes(fastify: FastifyInstance) {
-  fastify.post('/tasks/upsert', { preHandler: [requireInternalSecret] }, async (request, reply) => {
+  // Every body names the org it acts in; under RLS enforce mode that org is bound for the
+  // request, since there is no signed-in user to bind it (#338).
+  const scoped = { preHandler: [requireInternalSecret], config: { rlsOrgScope: orgIdIn('body') } };
+
+  fastify.post('/tasks/upsert', scoped, async (request, reply) => {
     const parsed = bastionBamTaskUpsertSchema.safeParse(request.body ?? {});
     if (!parsed.success) return invalid(request, reply, parsed.error);
     return guarded(request, reply, async () => {
@@ -55,7 +60,7 @@ export default async function internalBastionRoutes(fastify: FastifyInstance) {
     });
   });
 
-  fastify.post('/tasks/comment', { preHandler: [requireInternalSecret] }, async (request, reply) => {
+  fastify.post('/tasks/comment', scoped, async (request, reply) => {
     const parsed = bastionBamTaskCommentSchema.safeParse(request.body ?? {});
     if (!parsed.success) return invalid(request, reply, parsed.error);
     return guarded(request, reply, async () => {
@@ -64,7 +69,7 @@ export default async function internalBastionRoutes(fastify: FastifyInstance) {
     });
   });
 
-  fastify.post('/proposals/:id/close', { preHandler: [requireInternalSecret] }, async (request, reply) => {
+  fastify.post('/proposals/:id/close', scoped, async (request, reply) => {
     const id = z.string().uuid().safeParse((request.params as { id?: string }).id);
     if (!id.success) return send(request, reply, 404, 'NOT_FOUND', 'Proposal not found');
     const parsed = bastionProposalCloseSchema.safeParse(request.body ?? {});

@@ -2,6 +2,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import type { ApiClient } from '../middleware/api-client.js';
 import { registerTool } from '../lib/register-tool.js';
+import { helpdeskAgentPath } from '../lib/helpdesk-agent-path.js';
 
 /**
  * Cross-app unified search MCP tool (AGENTIC_TODO §2, Wave 3).
@@ -269,7 +270,7 @@ async function searchHelpdeskTickets(
   const headers = authHeaders(api);
   const qs = new URLSearchParams({ q: query });
   const r = await fetchWithTimeout(
-    `${base}/helpdesk/tickets/search?${qs.toString()}`,
+    `${base}${helpdeskAgentPath(`/tickets/search?${qs.toString()}`)}`,
     { method: 'GET', headers },
     timeoutMs,
   );

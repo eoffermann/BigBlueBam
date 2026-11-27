@@ -1,17 +1,16 @@
 import fp from 'fastify-plugin';
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
-import { eq, and, isNull, gt, inArray } from 'drizzle-orm';
-import argon2 from 'argon2';
+import { eq, and, isNull, gt } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import { sessions } from '../db/schema/sessions.js';
 import { users } from '../db/schema/users.js';
 import { impersonationSessions } from '../db/schema/impersonation-sessions.js';
 import {
-  findApiKeyCandidates,
   isLiveOrg,
   loadLiveMemberships,
   loadOrgRoles,
   touchApiKey,
+  verifyApiKeyToken,
 } from '../services/auth-identity.service.js';
 import { ORG_ADMIN_ROLES, keyRoleCapApplies } from '../services/role-resolver.js';
 import { resolveEffectiveOrg } from './org-context.js';
@@ -367,126 +366,21 @@ async function authPlugin(fastify: FastifyInstance) {
     // Try Bearer token (API key)
     const authHeader = request.headers.authorization;
     if (authHeader?.startsWith('Bearer ')) {
-      const token = authHeader.slice(7);
-      const prefix = token.slice(0, 8);
-
-      // #40: Service-account tokens are `bbam_svc_<random>` — a 9-char literal
-      // lead — so token.slice(0, 8) is the constant 'bbam_svc' for EVERY
-      // service-account key. The prefix index is degenerate for this one key
-      // kind (user keys slice to a ~48-bit base64 or ~18-bit `bbam_`+random
-      // prefix and stay selective). An org with several service accounts thus
-      // has many rows sharing this single prefix bucket, and the DoS cap below
-      // — designed for random-prefix forgery — would wrongly collapse the
-      // lookup to one arbitrary row, breaking auth for every other svc-acct
-      // key once the org has 4+ of them. Treat the known literal bucket as
-      // expected: raise the fetch limit and verify all candidates (bounded by
-      // SVC_BUCKET_MAX), while keeping the strict cap for random user-key
-      // prefixes where >3 collisions really do signal a forced-Argon2 attempt.
-      const SVC_KEY_PREFIX = 'bbam_svc';
-      const SVC_BUCKET_MAX = 64;
-      const isSvcBucket = prefix === SVC_KEY_PREFIX;
-
-      // api_keys is org-gated under RLS enforce mode and the org is not known
-      // yet, so candidates come through the identity function (#105). users
-      // is not org-gated; the owners are joined in here.
-      const keyRows = await findApiKeyCandidates(prefix, isSvcBucket ? SVC_BUCKET_MAX : 10);
-      const ownerRows = keyRows.length
-        ? await db
-            .select({
-              id: users.id,
-              org_id: users.org_id,
-              email: users.email,
-              display_name: users.display_name,
-              avatar_url: users.avatar_url,
-              timezone: users.timezone,
-              is_active: users.is_active,
-              is_superuser: users.is_superuser,
-              kind: users.kind,
-            })
-            .from(users)
-            .where(inArray(users.id, [...new Set(keyRows.map((k) => k.user_id))]))
-        : [];
-      const ownerById = new Map(ownerRows.map((u) => [u.id, u]));
-      const candidates = keyRows.flatMap((apiKey) => {
-        const user = ownerById.get(apiKey.user_id);
-        return user ? [{ apiKey, user }] : [];
-      });
-
-      // P2-11: A random prefix has a huge key space, so natural collisions are
-      // vanishingly rare. DoS mitigation: >3 candidates for a *random* prefix
-      // is a strong signal of an attacker forcing multiple Argon2 verifications
-      // per request, so collapse to the first candidate. The service-account
-      // bucket legitimately shares the 'bbam_svc' literal, so it is exempt — we
-      // verify every fetched candidate (already bounded by SVC_BUCKET_MAX, ~a
-      // few seconds of Argon2 worst-case and itself bounded by the org's real
-      // svc-key count; the auth route is rate-limited). The selective-prefix
-      // lengthening for new svc keys is the longer-term fix tracked in #40.
-      const verifyCandidates =
-        !isSvcBucket && candidates.length > 3 ? candidates.slice(0, 1) : candidates;
-      if (!isSvcBucket && candidates.length > 3) {
-        request.log.warn(
-          { prefix, candidate_count: candidates.length },
-          'Suspicious number of API key candidates for prefix; limiting to first candidate',
-        );
-      } else if (isSvcBucket && candidates.length >= SVC_BUCKET_MAX) {
-        // At the ceiling a valid key could fall outside the fetched window;
-        // this is the signal that the degenerate bucket needs the prefix-
-        // lengthening follow-up rather than a higher limit.
-        request.log.warn(
-          { prefix, candidate_count: candidates.length },
-          'Service-account prefix bucket hit SVC_BUCKET_MAX; some keys may not authenticate until prefixes are lengthened (#40 follow-up)',
-        );
-      }
-
-      for (const candidate of verifyCandidates) {
-        // P2-10: Always run argon2.verify BEFORE checking expiry so that
-        // expired-but-valid-hash keys and invalid-hash keys take the same
-        // amount of wall time. Short-circuiting on expiry first would leak
-        // (via timing) whether a given prefix corresponds to a real key.
-        // A malformed stored hash throws — treat that as a verification
-        // failure so one corrupt row can't 500 every request sharing
-        // its prefix.
-        let valid = false;
-        try {
-          valid = await argon2.verify(candidate.apiKey.key_hash, token);
-        } catch (err) {
-          request.log.warn({ err, api_key_id: candidate.apiKey.id }, 'argon2.verify threw on api key candidate; treating as invalid');
-        }
-        // Expiry check with rotation grace-period honoring.
-        // If the key has been rotated (rotated_at IS NOT NULL) and its
-        // rotation_grace_expires_at is still in the future, the predecessor
-        // key remains valid during the grace window so callers can roll over
-        // without downtime. Once the grace window closes, reject normally.
-        const now = new Date();
-        if (candidate.apiKey.expires_at && new Date(candidate.apiKey.expires_at) < now) {
-          // Key is past its normal expiry. Check grace window.
-          if (
-            candidate.apiKey.rotated_at &&
-            candidate.apiKey.rotation_grace_expires_at &&
-            new Date(candidate.apiKey.rotation_grace_expires_at) > now
-          ) {
-            // Inside grace window -- allow through.
-          } else {
-            continue;
-          }
-        }
-        if (valid && candidate.user.is_active) {
-          // P2-8: pass the key's org_id — for non-SuperUser keys this
-          // pins the request's org context to the key's org regardless
-          // of what X-Org-Id says or which orgs the user now belongs to.
-          request.user = await buildAuthUser(
-            candidate.user,
-            candidate.apiKey.scope,
-            request,
-            null,
-            candidate.apiKey.org_id,
-          );
-          // Update last_used_at — fire-and-forget, log errors but don't block the response.
-          touchApiKey(candidate.apiKey.id).catch((err) => {
-            console.warn('Failed to update api_keys.last_used_at:', err);
-          });
-          return;
-        }
+      // One verification rule for every bbam_ token the api accepts (Bearer
+      // here, ?token= on the iCal feed): expiry, rotation grace, the #40
+      // service-account bucket, the P2-11 DoS cap and owner state all live in
+      // verifyApiKeyToken.
+      const verified = await verifyApiKeyToken(authHeader.slice(7), request.log);
+      if (verified) {
+        // P2-8: pass the key's org_id. For non-SuperUser keys this pins the
+        // request's org context to the key's org regardless of what X-Org-Id
+        // says or which orgs the user now belongs to.
+        request.user = await buildAuthUser(verified.user, verified.apiKey.scope, request, null, verified.apiKey.org_id);
+        // Update last_used_at: fire-and-forget, log errors but don't block the response.
+        touchApiKey(verified.apiKey.id).catch((err) => {
+          console.warn('Failed to update api_keys.last_used_at:', err);
+        });
+        return;
       }
     }
     } catch (err) {

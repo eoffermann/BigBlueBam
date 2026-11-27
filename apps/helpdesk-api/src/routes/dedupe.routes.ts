@@ -1,9 +1,6 @@
-import type { FastifyInstance, FastifyRequest } from 'fastify';
-import { eq, sql } from 'drizzle-orm';
+import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { db } from '../db/index.js';
-import { users } from '../db/schema/bbb-refs.js';
-import { verifyAgentApiKey, requireAgentAuth } from '../lib/agent-auth.js';
+import { requireAgentAuth, resolveAgentRequestOrgId } from '../lib/agent-auth.js';
 import * as similarTicketsService from '../services/similar-tickets.service.js';
 
 /**
@@ -30,53 +27,10 @@ const querySchema = z.object({
 });
 
 /**
- * Session-cookie org resolution. Mirrors resolveSessionIdentity in
- * agent.routes.ts but returns only the org_id. Returns null if the
- * session is missing, invalid, or expired.
+ * The org to scope by: the same rule as every other agent route (the
+ * credential's org, then the Bam session's, then the X-Agent-Key owner's).
  */
-async function resolveSessionOrgId(sessionCookie: string | undefined): Promise<string | null> {
-  if (!sessionCookie) return null;
-  try {
-    const result = await db.execute(
-      sql`SELECT u.org_id AS org_id
-          FROM sessions s
-          JOIN users u ON u.id = s.user_id
-          WHERE s.id = ${sessionCookie} AND s.expires_at > now()
-          LIMIT 1`,
-    );
-    const row = Array.isArray(result) ? result[0] : (result as any).rows?.[0];
-    return (row as any)?.org_id ?? null;
-  } catch {
-    return null;
-  }
-}
-
-/**
- * Derive the org from the agent's Bam user row. The agent key's
- * bbb_user_id is re-verified here (agent-auth.requireAgentAuth only
- * rejects invalid keys; it doesn't populate the user id).
- */
-async function resolveAgentOrgId(request: FastifyRequest): Promise<string | null> {
-  const token = request.headers['x-agent-key'] as string | undefined;
-  const userId = await verifyAgentApiKey(request, token);
-  if (!userId) return null;
-  try {
-    const [row] = await db
-      .select({ org_id: users.org_id })
-      .from(users)
-      .where(eq(users.id, userId))
-      .limit(1);
-    return (row?.org_id as string | null) ?? null;
-  } catch {
-    return null;
-  }
-}
-
-async function resolveRequestOrgId(request: FastifyRequest): Promise<string | null> {
-  const sessionOrg = await resolveSessionOrgId(request.cookies?.session);
-  if (sessionOrg) return sessionOrg;
-  return resolveAgentOrgId(request);
-}
+const resolveRequestOrgId = resolveAgentRequestOrgId;
 
 export default async function dedupeRoutes(fastify: FastifyInstance) {
   fastify.get<{ Params: { id: string } }>(

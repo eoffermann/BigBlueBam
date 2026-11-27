@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { eq, and } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import { slackIntegrations } from '../db/schema/slack-integrations.js';
+import { orgOfProject, type RlsOrgResolver } from '../lib/rls-org-scope.js';
 import { tasks } from '../db/schema/tasks.js';
 import { phases } from '../db/schema/phases.js';
 import { taskStates } from '../db/schema/task-states.js';
@@ -58,7 +59,21 @@ export default async function slackWebhookRoutes(fastify: FastifyInstance) {
     },
   );
 
-  fastify.post('/webhooks/slack/command', async (request, reply) => {
+  // No signed-in user: under RLS enforce mode the org of the integration whose
+  // slash-command token the request carries is bound for the request (#338). A
+  // request without a token binds nothing, so it finds no task (fail closed).
+  const slackOrg: RlsOrgResolver = async (request) => {
+    const token = (request.body as SlackSlashBody | undefined)?.token;
+    if (typeof token !== 'string' || !token) return null;
+    const [match] = await db
+      .select({ project_id: slackIntegrations.project_id })
+      .from(slackIntegrations)
+      .where(eq(slackIntegrations.slash_command_token, token))
+      .limit(1);
+    return match ? orgOfProject(match.project_id) : null;
+  };
+
+  fastify.post('/webhooks/slack/command', { config: { rlsOrgScope: slackOrg } }, async (request, reply) => {
     const body = (request.body ?? {}) as SlackSlashBody;
     const text = (body.text ?? '').trim();
 

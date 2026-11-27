@@ -2,10 +2,10 @@ import type { FastifyInstance } from 'fastify';
 import { randomBytes } from 'node:crypto';
 import { eq, and, isNotNull, isNull, desc } from 'drizzle-orm';
 import { z } from 'zod';
-import { db } from '../db/index.js';
+import { db, runInOrgScope } from '../db/index.js';
 import { tasks } from '../db/schema/tasks.js';
 import { projects } from '../db/schema/projects.js';
-import { findApiKeyCandidates, touchApiKey } from '../services/auth-identity.service.js';
+import { touchApiKey, verifyApiKeyToken } from '../services/auth-identity.service.js';
 import { projectCalendarTokens } from '../db/schema/project-calendar-tokens.js';
 import { requireAuth, requireScope } from '../plugins/auth.js';
 import { requireProjectAccess } from '../middleware/authorize.js';
@@ -168,39 +168,21 @@ export default async function icalRoutes(fastify: FastifyInstance) {
     async (request, reply) => {
       // Authenticate via token query parameter or standard auth
       let userId: string | null = null;
+      // The org the task read runs in when there is no request.user for the
+      // rls plugin to bind (#338): the key's pinned org (P2-8).
+      let keyOrgId: string | null = null;
 
       if (request.user) {
         userId = request.user.id;
       } else if (request.query.token) {
-        const token = request.query.token;
-        const prefix = token.slice(0, 8);
-
-        // #40 sibling: service-account tokens are `bbam_svc_<random>`, so
-        // token.slice(0,8) is the literal 'bbam_svc' for every svc key — a
-        // degenerate bucket. This path has no DoS cap (it verifies every
-        // fetched candidate), so the only risk is the fetch window truncating
-        // the bucket and excluding a valid svc key past the 10th row; raise the
-        // limit for that known bucket to match the auth-plugin fix. (Mirrors
-        // SVC_BUCKET_MAX in plugins/auth.ts; svc tokens as iCal feed tokens are
-        // rare, but the root cause is shared.)
-        const SVC_KEY_PREFIX = 'bbam_svc';
-        // Pre-auth read of org-gated api_keys: through the identity function (#105).
-        const candidates = await findApiKeyCandidates(prefix, prefix === SVC_KEY_PREFIX ? 64 : 10);
-
-        for (const apiKey of candidates) {
-          if (apiKey.expires_at && new Date(apiKey.expires_at) < new Date()) {
-            continue;
-          }
-          try {
-            const valid = await argon2.verify(apiKey.key_hash, token);
-            if (valid) {
-              userId = apiKey.user_id;
-              await touchApiKey(apiKey.id);
-              break;
-            }
-          } catch {
-            continue;
-          }
+        // The same verification the auth plugin applies to a Bearer key
+        // (expiry, rotation grace window, #40 svc bucket, DoS cap, owner
+        // active), so a key that authenticates there works here and vice versa.
+        const verified = await verifyApiKeyToken(request.query.token, request.log);
+        if (verified) {
+          userId = verified.user.id;
+          keyOrgId = verified.apiKey.org_id ?? verified.user.org_id;
+          await touchApiKey(verified.apiKey.id);
         }
       }
 
@@ -215,22 +197,20 @@ export default async function icalRoutes(fastify: FastifyInstance) {
         });
       }
 
-      const taskList = await db
-        .select({
-          id: tasks.id,
-          human_id: tasks.human_id,
-          title: tasks.title,
-          description: tasks.description,
-          due_date: tasks.due_date,
-          priority: tasks.priority,
-        })
-        .from(tasks)
-        .where(
-          and(
-            eq(tasks.assignee_id, userId),
-            isNotNull(tasks.due_date),
-          ),
-        );
+      const assignee = userId;
+      const readTasks = () =>
+        db
+          .select({
+            id: tasks.id,
+            human_id: tasks.human_id,
+            title: tasks.title,
+            description: tasks.description,
+            due_date: tasks.due_date,
+            priority: tasks.priority,
+          })
+          .from(tasks)
+          .where(and(eq(tasks.assignee_id, assignee), isNotNull(tasks.due_date)));
+      const taskList = keyOrgId ? await runInOrgScope(keyOrgId, readTasks) : await readTasks();
 
       const ical = generateIcal(
         'My Tasks - BigBlueBam',
@@ -418,7 +398,9 @@ export default async function icalRoutes(fastify: FastifyInstance) {
         .set({ last_used_at: new Date() })
         .where(eq(projectCalendarTokens.id, matched.id));
 
-      const { projectName, body } = await fetchProjectTasksIcal(projectId);
+      // A public feed has no request.user, so bind the token's org for the
+      // projects/tasks read (#338); the token row carries its project's org.
+      const { projectName, body } = await runInOrgScope(matched.org_id, () => fetchProjectTasksIcal(projectId));
       if (!body || !projectName) {
         return reply.status(404).send({
           error: {

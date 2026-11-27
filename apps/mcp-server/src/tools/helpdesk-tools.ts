@@ -4,6 +4,7 @@ import { z } from 'zod';
 import type { ApiClient } from '../middleware/api-client.js';
 import { isUuid } from '../middleware/resolve-helpers.js';
 import { handleScopeError } from '../middleware/scope-check.js';
+import { helpdeskAgentPath } from '../lib/helpdesk-agent-path.js';
 
 const ticketShape = z.object({
   id: z.string().uuid(),
@@ -70,7 +71,7 @@ export function registerHelpdeskTools(server: McpServer, api: ApiClient, helpdes
     // Strip leading '#' and validate it's a positive integer
     const stripped = idOrNumber.trim().replace(/^#/, '');
     if (!/^\d+$/.test(stripped)) return null;
-    const result = await helpdeskRequest('GET', `/helpdesk/agents/tickets/by-number/${encodeURIComponent(stripped)}`);
+    const result = await helpdeskRequest('GET', helpdeskAgentPath(`/tickets/by-number/${encodeURIComponent(stripped)}`));
     if (!result.ok) return null;
     const envelope = result.data as { data?: { id?: string } | null } | null;
     return envelope?.data?.id ?? null;
@@ -78,13 +79,11 @@ export function registerHelpdeskTools(server: McpServer, api: ApiClient, helpdes
 
   registerTool(server, {
     name: 'list_tickets',
-    description: 'List helpdesk tickets with optional filters',
+    description:
+      "List helpdesk tickets in the API key's organization, most recently updated first, with optional status and project filters",
     input: {
       status: z.enum(['open', 'in_progress', 'waiting_on_customer', 'resolved', 'closed']).optional().describe('Filter by ticket status'),
-      assignee_id: z.string().uuid().optional().describe('Filter by assigned agent'),
-      client_id: z.string().uuid().optional().describe('Filter by client'),
-      cursor: z.string().optional().describe('Pagination cursor'),
-      limit: z.number().int().positive().max(100).optional().describe('Number of results'),
+      project_id: z.string().uuid().optional().describe('Filter to tickets routed into this Bam project'),
     },
     returns: z.object({ data: z.array(ticketShape), next_cursor: z.string().nullable().optional() }),
     handler: async (params) => {
@@ -93,7 +92,7 @@ export function registerHelpdeskTools(server: McpServer, api: ApiClient, helpdes
         if (value !== undefined) searchParams.set(key, String(value));
       }
       const qs = searchParams.toString();
-      const result = await helpdeskRequest('GET', `/helpdesk/tickets${qs ? `?${qs}` : ''}`);
+      const result = await helpdeskRequest('GET', helpdeskAgentPath(`/tickets${qs ? `?${qs}` : ''}`));
 
       if (!result.ok) {
         return {
@@ -116,7 +115,7 @@ export function registerHelpdeskTools(server: McpServer, api: ApiClient, helpdes
     },
     returns: ticketShape.extend({ messages: z.array(z.object({ id: z.string().uuid(), body: z.string(), is_internal: z.boolean().optional() }).passthrough()).optional() }),
     handler: async ({ ticket_id }) => {
-      const result = await helpdeskRequest('GET', `/helpdesk/tickets/${ticket_id}`);
+      const result = await helpdeskRequest('GET', helpdeskAgentPath(`/tickets/${ticket_id}`));
 
       if (!result.ok) {
         return {
@@ -141,7 +140,7 @@ export function registerHelpdeskTools(server: McpServer, api: ApiClient, helpdes
     handler: async ({ number }) => {
       const stripped = String(number).trim().replace(/^#/, '');
       const encoded = encodeURIComponent(stripped);
-      const result = await helpdeskRequest('GET', `/helpdesk/agents/tickets/by-number/${encoded}`);
+      const result = await helpdeskRequest('GET', helpdeskAgentPath(`/tickets/by-number/${encoded}`));
 
       if (!result.ok) {
         return {
@@ -181,7 +180,7 @@ export function registerHelpdeskTools(server: McpServer, api: ApiClient, helpdes
       if (status) sp.set('status', status);
       if (assignee_id) sp.set('assignee_id', assignee_id);
 
-      const result = await helpdeskRequest('GET', `/helpdesk/tickets/search?${sp.toString()}`);
+      const result = await helpdeskRequest('GET', helpdeskAgentPath(`/tickets/search?${sp.toString()}`));
 
       if (!result.ok) {
         return {
@@ -214,7 +213,7 @@ export function registerHelpdeskTools(server: McpServer, api: ApiClient, helpdes
         };
       }
 
-      const result = await helpdeskRequest('POST', `/helpdesk/tickets/${resolvedId}/messages`, {
+      const result = await helpdeskRequest('POST', helpdeskAgentPath(`/tickets/${resolvedId}/messages`), {
         body,
         is_internal,
       });
@@ -251,7 +250,7 @@ export function registerHelpdeskTools(server: McpServer, api: ApiClient, helpdes
         };
       }
 
-      const result = await helpdeskRequest('PATCH', `/helpdesk/tickets/${resolvedId}`, { status });
+      const result = await helpdeskRequest('PATCH', helpdeskAgentPath(`/tickets/${resolvedId}`), { status });
 
       if (!result.ok) {
         const scopeErr = handleScopeError('update_ticket_status', 'read_write', result);
