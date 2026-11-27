@@ -29,7 +29,7 @@ import {
   type OrgSmtpOverride,
 } from '@bigbluebam/smtp-resolver';
 import nodemailer from 'nodemailer';
-import { assertSafeHost } from '@bigbluebam/egress-guard';
+import { assertSafeSmtpTarget } from '@bigbluebam/egress-guard';
 import { systemSettings } from '../db/schema/system-settings.js';
 import { env } from '../env.js';
 import {
@@ -306,31 +306,28 @@ export default async function orgRoutes(fastify: FastifyInstance) {
       // An org admin sets settings.smtp.host, and this route connects to it and
       // reports how the connection went, which made it a port scanner for the
       // platform's internal network. Refuse private or internal hosts when the
-      // org's own override supplied the host. The platform relay and env
-      // relay are operator-configured and may legitimately be internal
-      // (mailhog, a corporate relay), so those layers are not checked.
-      if (cfg.layer === 'org') {
-        try {
-          await assertSafeHost(cfg.host, cfg.port);
-        } catch (err) {
-          request.log.warn(
-            {
-              host: cfg.host,
-              org_id: request.user?.org_id,
-              user_id: request.user?.id,
-              reason: err instanceof Error ? err.message : String(err),
-            },
-            'org smtp test: blocked by egress guard',
-          );
-          return reply.status(400).send({
-            data: {
-              ok: false,
-              stage: 'config',
-              error:
-                'The configured SMTP host is not an allowed destination (private or internal addresses are blocked).',
-            },
-          });
-        }
+      // org's own override supplied the host. The layer policy lives in
+      // assertSafeSmtpTarget, shared with the worker's real send path (#321).
+      try {
+        await assertSafeSmtpTarget(cfg);
+      } catch (err) {
+        request.log.warn(
+          {
+            host: cfg.host,
+            org_id: request.user?.org_id,
+            user_id: request.user?.id,
+            reason: err instanceof Error ? err.message : String(err),
+          },
+          'org smtp test: blocked by egress guard',
+        );
+        return reply.status(400).send({
+          data: {
+            ok: false,
+            stage: 'config',
+            error:
+              'The configured SMTP host is not an allowed destination (private or internal addresses are blocked).',
+          },
+        });
       }
 
       const transport = nodemailer.createTransport({

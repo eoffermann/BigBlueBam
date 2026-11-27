@@ -297,6 +297,27 @@ export async function assertSafeHost(hostname: string, port?: number, env?: Node
   if (!dns.safe) throw new EgressBlockedError(dns.reason ?? 'Blocked by egress policy');
 }
 
+/** Shape of a resolved SMTP config (structural, matches @bigbluebam/smtp-resolver). */
+export interface SmtpEgressTarget {
+  host: string;
+  port?: number;
+  /** Which layer supplied the host: 'org' | 'platform' | 'env'. */
+  layer?: string;
+}
+
+/**
+ * The single SMTP egress policy, used by every path that connects to an SMTP
+ * relay (the api org SMTP test route and the worker's org-scoped send paths).
+ * Only a host supplied by an org's own override is checked: the platform
+ * relay and the env relay are operator-configured and may legitimately be
+ * internal (mailhog, a corporate relay). An org admin pointing smtp_host at an
+ * internal address is the SSRF this closes. EGRESS_ALLOW_PRIVATE_HOSTS applies.
+ */
+export async function assertSafeSmtpTarget(cfg: SmtpEgressTarget, env?: NodeJS.ProcessEnv): Promise<void> {
+  if (cfg.layer !== 'org') return;
+  await assertSafeHost(cfg.host, cfg.port, env);
+}
+
 // ── Pinned dispatcher (closes DNS rebind) ─────────────────────────────────
 
 /**

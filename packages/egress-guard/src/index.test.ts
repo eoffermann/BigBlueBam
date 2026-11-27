@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import {
   assertSafeHost,
+  assertSafeSmtpTarget,
   checkUrl,
   checkUrlSync,
   EgressBlockedError,
@@ -96,6 +97,22 @@ describe('EGRESS_ALLOW_PRIVATE_HOSTS', () => {
   it('does not extend to other private hosts', () => {
     expect(checkUrlSync('http://169.254.169.254/', { env }).safe).toBe(false);
     expect(checkUrlSync('http://localhost:9000/', { env }).safe).toBe(false);
+  });
+});
+
+describe('assertSafeSmtpTarget (#321)', () => {
+  it('checks only org-supplied hosts', async () => {
+    const env = {} as NodeJS.ProcessEnv;
+    await expect(assertSafeSmtpTarget({ host: '10.0.0.5', port: 25, layer: 'org' }, env)).rejects.toBeInstanceOf(
+      EgressBlockedError,
+    );
+    await expect(assertSafeSmtpTarget({ host: '10.0.0.5', port: 25, layer: 'platform' }, env)).resolves.toBeUndefined();
+    await expect(assertSafeSmtpTarget({ host: 'mailhog', port: 1025, layer: 'env' }, env)).resolves.toBeUndefined();
+  });
+
+  it('honors the allowlist for an org host', async () => {
+    const env = { EGRESS_ALLOW_PRIVATE_HOSTS: 'relay.corp:25' } as NodeJS.ProcessEnv;
+    await expect(assertSafeSmtpTarget({ host: 'relay.corp', port: 25, layer: 'org' }, env)).resolves.toBeUndefined();
   });
 });
 
