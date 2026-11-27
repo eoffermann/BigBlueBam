@@ -73,7 +73,7 @@ export function policyDeps(log: FastifyBaseLogger, redis: Redis): PolicyDeps {
     enqueueRuns: async (runs) => {
       for (const r of runs) await enqueueEvaluationRun(r);
     },
-    pinChecks: (viewer, controlId, policyId) => pinPolicyChecks(engineDeps(log, redis).sql, viewer, controlId, policyId),
+    pinChecks: pinPolicyChecks,
   };
 }
 

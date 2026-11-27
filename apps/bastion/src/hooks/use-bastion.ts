@@ -13,6 +13,7 @@ import type {
   BastionExceptionPropose,
   BastionManualEvidenceCreate,
   BastionNotApplicableSuggestions,
+  BastionPolicyCreateResponse,
   BastionQuestionnaireAutofill,
   BastionQuestionnaireItemReview,
   BastionTemplateKey,
@@ -373,7 +374,8 @@ export function useCreatePolicy() {
   return useMutation({
     // The article by id, or by the slug in the link Beacon shows (#239); the server resolves it.
     mutationFn: (body: ({ beacon_entry_id: string } | { beacon_slug: string }) & { audience?: PolicyAudience; cadence_days?: number; control_id?: string }) =>
-      api.post<{ data: PolicyRow }>('/policies', body),
+      // pin_problem (#393): linked, but the policy control's checks were not pointed at it.
+      api.post<BastionPolicyCreateResponse>('/policies', body),
     onSuccess: invalidate,
   });
 }

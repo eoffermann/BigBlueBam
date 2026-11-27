@@ -147,12 +147,24 @@ function LinkPolicyForm() {
   const [open, setOpen] = useState(false);
   const [article, setArticle] = useState('');
   const [days, setDays] = useState(365);
+  // Set when the policy linked but its control's checks could not be pointed at it (#393).
+  const [pinProblem, setPinProblem] = useState<string | null>(null);
   const target = beaconArticleFrom(article);
   if (!open) {
     return (
-      <button type="button" className={primary} onClick={() => setOpen(true)}>
-        Link a Beacon article
-      </button>
+      <div className="space-y-2">
+        <button
+          type="button"
+          className={primary}
+          onClick={() => {
+            setPinProblem(null);
+            setOpen(true);
+          }}
+        >
+          Link a Beacon article
+        </button>
+        {pinProblem && <p className="text-xs text-amber-700">{pinProblem}</p>}
+      </div>
     );
   }
   return (
@@ -164,7 +176,8 @@ function LinkPolicyForm() {
         create.mutate(
           { ...target, audience: { kind: 'all' }, cadence_days: days },
           {
-            onSuccess: () => {
+            onSuccess: (res) => {
+              setPinProblem(res.data.pin_problem ?? null);
               setOpen(false);
               setArticle('');
             },

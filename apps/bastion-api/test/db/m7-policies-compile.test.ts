@@ -140,7 +140,7 @@ describe.skipIf(!DATABASE_URL)('M7 policies and version-pinned attestation (live
 
     // The control proves this policy: its two policy checks are proposed, pinned to it.
     const created = await createPolicy(
-      { ...d, pinChecks: async () => [PINNED] },
+      { ...d, pinChecks: async (_v, controlId) => ({ control_id: controlId, proposed: [PINNED] }) },
       owner,
       { beacon_entry_id: s.entry, audience: { kind: 'all' }, cadence_days: 365, control_id: s.controls[0] },
     );

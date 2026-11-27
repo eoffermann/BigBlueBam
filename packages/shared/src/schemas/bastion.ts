@@ -3338,8 +3338,14 @@ export type BastionPolicyListResponse = z.infer<typeof bastionPolicyListResponse
 export const bastionPolicyResponseSchema = z.object({ data: bastionPolicyRowSchema });
 export type BastionPolicyResponse = z.infer<typeof bastionPolicyResponseSchema>;
 
-/** POST /policies: the policy and the checks it proposed for the control it was linked to. */
-export const bastionPolicyCreateResponseSchema = z.object({ data: bastionPolicyRowSchema.extend({ proposed_assertion_ids: z.array(uuid) }) });
+/**
+ * POST /policies: the policy and the checks it proposed for the control it was linked to.
+ * pin_problem is set when the policy was linked but its checks could not be pinned (#393): the
+ * link still succeeded, so the caller must not retry it.
+ */
+export const bastionPolicyCreateResponseSchema = z.object({
+  data: bastionPolicyRowSchema.extend({ proposed_assertion_ids: z.array(uuid), pin_problem: z.string().nullable() }),
+});
 export type BastionPolicyCreateResponse = z.infer<typeof bastionPolicyCreateResponseSchema>;
 
 /** GET /policies/:id/attestations. */

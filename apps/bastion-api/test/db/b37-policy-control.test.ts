@@ -5,7 +5,7 @@ import { runEvaluationSlice } from '../../src/engine/evaluator.js';
 import { queueControlRuns } from '../../src/engine/evidence-store.js';
 import { rankOrgGaps } from '../../src/engine/gaps.js';
 import { readinessSummary } from '../../src/services/coverage.service.js';
-import { attest, createPolicy, getPolicyBody, type PolicyDeps, unpinnedPolicyControl } from '../../src/services/policies.service.js';
+import { attest, createPolicy, getPolicyBody, type PolicyDeps } from '../../src/services/policies.service.js';
 import type { Viewer } from '../../src/services/types.js';
 import { clock, DATABASE_URL, makeDeps, seedOrg, wipeOrg } from './engine-harness.js';
 
@@ -39,6 +39,9 @@ describe.skipIf(!DATABASE_URL)('batch 37: the policy control is proven against t
   const entries: string[] = [];
   let pins: typeof import('../../src/services/policy-pins.js');
   let assertions: typeof import('../../src/services/assertions.service.js');
+  let rls: typeof import('../../src/plugins/rls.js');
+  // The unpinned policy control as policy-pins.ts chooses it (#393: one implementation, drizzle pool).
+  const unpinned = (org: string) => rls.runInOrgScope(org, (tx) => pins.unpinnedPolicyControl(tx, org));
 
   beforeAll(async () => {
     // env.ts validates at import (the assertion services use the drizzle pool); never used here.
@@ -54,6 +57,7 @@ describe.skipIf(!DATABASE_URL)('batch 37: the policy control is proven against t
     sql = postgres(DATABASE_URL!, { max: 6, onnotice: () => {} });
     pins = await import('../../src/services/policy-pins.js');
     assertions = await import('../../src/services/assertions.service.js');
+    rls = await import('../../src/plugins/rls.js');
   });
 
   afterAll(async () => {
@@ -122,7 +126,7 @@ describe.skipIf(!DATABASE_URL)('batch 37: the policy control is proven against t
     await checkAndRank();
     expect((await openGaps()).sort()).toEqual(['no_source', 'no_source']);
     expect(await topRows()).toHaveLength(1);
-    expect(await orgTx(sql, s.org, (tx) => unpinnedPolicyControl(tx, s.org))).toBe(control);
+    expect(await unpinned(s.org)).toBe(control);
 
     // The policy article, shared with everyone, current in Beacon.
     const [e] = await sql`
@@ -140,7 +144,7 @@ describe.skipIf(!DATABASE_URL)('batch 37: the policy control is proven against t
       engine,
       canAccess: async () => true,
       enqueueRuns: async () => {},
-      pinChecks: (v, controlId, policyId) => pins.pinPolicyChecks(sql, v, controlId, policyId),
+      pinChecks: pins.pinPolicyChecks,
     };
     const created = await createPolicy(d, owner, { beacon_entry_id: entry, audience: { kind: 'users', user_ids: people }, cadence_days: 365 });
     const policyId = created.data.id;
@@ -154,7 +158,7 @@ describe.skipIf(!DATABASE_URL)('batch 37: the policy control is proven against t
     // A person confirms them; the pinned checks replace the unpinned ones.
     for (const a of proposed) await assertions.confirmAssertion(owner, String(a.id), {});
     // Once pinned, a second policy linked without a control proves nothing by default.
-    expect(await orgTx(sql, s.org, (tx) => unpinnedPolicyControl(tx, s.org))).toBeNull();
+    expect(await unpinned(s.org)).toBeNull();
 
     // Two of three read and acknowledge it.
     for (const person of people.slice(0, 2)) {
