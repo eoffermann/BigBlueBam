@@ -385,6 +385,14 @@ not as an acceptable gap.
   hand-written app-count and MCP-tool-count figures in the README prose to the real totals.
   `pnpm docs:readme:check` must exit 0 (it is CI-enforced). A withheld/incomplete app must
   NOT be added to the README catalog (same rule as the Launchpad).
+- **Docs pipeline stages:** run `pnpm docs:extract` (writes `docs/apps/<app>/mcp-tools.md`;
+  it refuses to run until the app has an `APP_REGISTRY` entry), `pnpm docs:catalog`, and the
+  full `pnpm docs:publish` (README regions plus the `site/public/screenshots/` sync; it no
+  longer copies anything into `site/src/content/`, so nothing there needs protecting), then
+  commit what they write. `pnpm check:app-completeness` fails while `mcp-tools.md` is missing
+  or its row count differs from the docs catalog. Do not run `pnpm docs:compose` (or the
+  one-shot `pnpm docs:generate`) for an app whose `guide.md` is hand-written and has no
+  `_narrative.md`: compose replaces that guide with a stub.
 - **MCP Tooling:** The Docs for the new app (and the Marketing site described below) should
   include the tool count for MCP tools on this app. The total MCP tool count should be
   updated wherever this is referenced.

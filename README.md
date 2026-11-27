@@ -566,7 +566,7 @@ Bin is BigBlueBam's file store and object-storage backbone. It holds your files 
 
 <img src="docs/apps/bin/screenshots/light/asset-library.png" width="400" alt="Bin - Digital asset manager and structured-data editor">
 
-[Help](docs/apps/bin/help.md) | [MCP Tools](docs/apps/bin/mcp-tools.md)
+[Help](docs/apps/bin/help.md) | [Overview](docs/apps/bin/marketing.md) | [MCP Tools](docs/apps/bin/mcp-tools.md)
 
 ### Blank - Forms and surveys
 

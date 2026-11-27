@@ -1,9 +1,9 @@
 ---
-title: "Bay (Media Review)"
+title: "Bay (Media Review & Approval)"
 app: bay
 ---
 
-# Bay (Media Review)
+# Bay (Media Review & Approval)
 
 Review stills, video, audio, and 3D models in one place, with notes pinned exactly where they belong and one verdict per reviewer.
 

@@ -13,7 +13,7 @@ A knowledge base that keeps itself honest: hybrid search, a knowledge graph, and
 - Find knowledge by meaning with hybrid search (semantic, tags, links, and keyword fallback)
 - Explore how knowledge connects through a typed knowledge graph of links and shared-tag affinity
 - Stay current with per-article expiry, verify and challenge lifecycle, and a Fridge Cleanout governance dashboard
-- Let AI agents create, search, verify, and traverse knowledge through 30 MCP tools, gated by visibility preflight and agent policies
+- Let AI agents create, search, verify, and traverse knowledge through 38 MCP tools, gated by visibility preflight and agent policies
 - See who else is on an article and pull them into a live huddle from the page
 
 ## See It in Action

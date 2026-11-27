@@ -3,7 +3,7 @@
 /**
  * Stage 5: Publish
  *
- * Rewrites README.md marker regions, syncs marketing content to site/,
+ * Rewrites README.md marker regions, syncs screenshots to site/public/,
  * and writes the global manifest and regen log.
  *
  * Usage:
@@ -536,25 +536,14 @@ function checkReadme(appMetas) {
 // Marketing site sync
 // ---------------------------------------------------------------------------
 
-function syncMarketingSite(appMetas) {
-  const contentDir = path.join(ROOT, 'site', 'src', 'content', 'apps');
-
-  // Screenshots: one path, identical names, every app with a screenshots dir
-  // (whether or not it has a marketing.md) (#380).
+// Screenshots only: one path, identical names, every app with a screenshots
+// dir (#380). docs/apps/<app>/marketing.md is NOT copied into site/: nothing in
+// site/ read those copies, they drifted from their sources, and builders skipped
+// this stage to protect them (#396). scripts/lib/site-content-read.test.mjs
+// fails if an unread file appears under site/src/content again.
+function syncMarketingSite() {
   if (!dryRun) syncSiteScreenshots(ROOT);
-
-  for (const appName of Object.keys(appMetas)) {
-    const srcMarketing = path.join(ROOT, 'docs', 'apps', appName, 'marketing.md');
-    if (!fs.existsSync(srcMarketing)) continue;
-
-    // Copy marketing.md
-    const destMarketing = path.join(contentDir, `${appName}.md`);
-    if (!dryRun) {
-      ensureDir(contentDir);
-      fs.copyFileSync(srcMarketing, destMarketing);
-    }
-  }
-  console.log(`  Synced marketing content to site/`);
+  console.log('  Synced screenshots to site/public/screenshots/');
 }
 
 // ---------------------------------------------------------------------------
@@ -693,7 +682,7 @@ function main() {
 
   // 2. Marketing site sync
   console.log('[Marketing site sync]');
-  syncMarketingSite(appMetas);
+  syncMarketingSite();
   console.log('');
 
   // 3. Screenshot manifest
