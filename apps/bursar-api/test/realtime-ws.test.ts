@@ -44,7 +44,7 @@ describe('bursar ws room authorization (#121)', () => {
 });
 
 describe('bursar ws fan-out (#121)', () => {
-  const frame = { type: 'leveling.progress' as const, room: `request:${REQ}`, payload: { offer: 1, offer_count: 3 } };
+  const frame = { type: 'leveling.progress' as const, room: `request:${REQ}`, payload: { run_id: 'r1', status: 'running', done: false, offer: 1, offer_count: 3 } };
 
   it('delivers only to sockets of the same org that joined the room', () => {
     const a = { orgId: ORG, rooms: new Set([`request:${REQ}`]), send: vi.fn() };
