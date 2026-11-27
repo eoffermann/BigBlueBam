@@ -81,9 +81,14 @@ export default async function slackWebhookRoutes(fastify: FastifyInstance) {
     // accept. Otherwise, if any integration with a non-null token exists
     // but none matches, reject. Integrations without tokens are ignored
     // for the purposes of this check.
+    // #345: the org whose tasks this command may read is the org of the
+    // integration the token belongs to. A request without a token names no
+    // org and finds nothing, in both RLS postures (enforce mode binds no org
+    // for it; the advisory default used to search every org by human_id).
+    let integrationOrgId: string | null = null;
     if (body.token) {
       const [match] = await db
-        .select({ id: slackIntegrations.id })
+        .select({ id: slackIntegrations.id, project_id: slackIntegrations.project_id })
         .from(slackIntegrations)
         .where(eq(slackIntegrations.slash_command_token, body.token))
         .limit(1);
@@ -94,6 +99,7 @@ export default async function slackWebhookRoutes(fastify: FastifyInstance) {
         // only the invoker sees it.
         return reply.send(ephemeral('Slack verification token did not match any configured integration.'));
       }
+      integrationOrgId = await orgOfProject(match.project_id);
     }
 
     if (!text) {
@@ -102,6 +108,10 @@ export default async function slackWebhookRoutes(fastify: FastifyInstance) {
 
     // Normalize: Slack sometimes wraps bare words in <...> link syntax.
     const ref = text.replace(/^<|>$/g, '').toUpperCase();
+
+    if (!integrationOrgId) {
+      return reply.send(ephemeral(`Task ${ref} not found.`));
+    }
 
     const [task] = await db
       .select({
@@ -114,7 +124,7 @@ export default async function slackWebhookRoutes(fastify: FastifyInstance) {
         project_id: tasks.project_id,
       })
       .from(tasks)
-      .where(eq(tasks.human_id, ref))
+      .where(and(eq(tasks.org_id, integrationOrgId), eq(tasks.human_id, ref)))
       .limit(1);
 
     if (!task) {

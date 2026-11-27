@@ -198,18 +198,25 @@ export default async function icalRoutes(fastify: FastifyInstance) {
       }
 
       const assignee = userId;
+      // #345: the feed covers ONE org, the session's active org or the key's
+      // pinned org, in both RLS postures. Without this filter the advisory
+      // (BYPASSRLS) default returned the owner's tasks from every org while
+      // enforce mode returned only the bound org's.
+      const feedOrgId = request.user?.active_org_id ?? keyOrgId;
       const readTasks = () =>
-        db
-          .select({
-            id: tasks.id,
-            human_id: tasks.human_id,
-            title: tasks.title,
-            description: tasks.description,
-            due_date: tasks.due_date,
-            priority: tasks.priority,
-          })
-          .from(tasks)
-          .where(and(eq(tasks.assignee_id, assignee), isNotNull(tasks.due_date)));
+        feedOrgId
+          ? db
+              .select({
+                id: tasks.id,
+                human_id: tasks.human_id,
+                title: tasks.title,
+                description: tasks.description,
+                due_date: tasks.due_date,
+                priority: tasks.priority,
+              })
+              .from(tasks)
+              .where(and(eq(tasks.org_id, feedOrgId), eq(tasks.assignee_id, assignee), isNotNull(tasks.due_date)))
+          : Promise.resolve([]);
       const taskList = keyOrgId ? await runInOrgScope(keyOrgId, readTasks) : await readTasks();
 
       const ical = generateIcal(

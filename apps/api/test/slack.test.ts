@@ -7,6 +7,8 @@ const { mockDb } = vi.hoisted(() => {
     insert: vi.fn(),
     update: vi.fn(),
     delete: vi.fn(),
+    // orgOfProject (lib/rls-org-scope.ts): the slash-command token's integration org.
+    execute: vi.fn(async () => [{ org_id: 'org-gilligan' }]),
   };
   return { mockDb };
 });
@@ -187,32 +189,43 @@ describe('slack slash command', () => {
     const app = Fastify();
     await app.register(slackWebhookRoutes);
 
-    // First select: task lookup → hit
-    // Second select: state lookup → hit
-    // Third select: user (assignee) lookup → hit
+    // 1: integration by token, 2: task lookup, 3: integration-for-project check,
+    // 4: state lookup, 5: user (assignee) lookup.
     let call = 0;
+    let taskWhere: unknown = null;
     mockDb.select.mockImplementation(() => {
       call++;
-      if (call === 1) {
+      if (call === 1 || call === 3) {
         return {
           from: () => ({
-            where: () => ({
-              limit: () =>
-                Promise.resolve([
-                  {
-                    id: 'task-uuid',
-                    human_id: 'MAGE-38',
-                    title: 'Implement canvas zoom',
-                    assignee_id: 'user-uuid',
-                    phase_id: 'phase-uuid',
-                    state_id: 'state-uuid',
-                  },
-                ]),
-            }),
+            where: () => ({ limit: () => Promise.resolve([{ id: 'int-uuid', project_id: 'proj-uuid' }]) }),
           }),
         };
       }
       if (call === 2) {
+        return {
+          from: () => ({
+            where: (cond: unknown) => {
+              taskWhere = cond;
+              return {
+                limit: () =>
+                  Promise.resolve([
+                    {
+                      id: 'task-uuid',
+                      human_id: 'MAGE-38',
+                      title: 'Implement canvas zoom',
+                      assignee_id: 'user-uuid',
+                      phase_id: 'phase-uuid',
+                      state_id: 'state-uuid',
+                      project_id: 'proj-uuid',
+                    },
+                  ]),
+              };
+            },
+          }),
+        };
+      }
+      if (call === 4) {
         return {
           from: () => ({
             where: () => ({
@@ -235,7 +248,7 @@ describe('slack slash command', () => {
       method: 'POST',
       url: '/webhooks/slack/command',
       headers: { 'content-type': 'application/x-www-form-urlencoded' },
-      payload: 'text=MAGE-38&command=/bbb',
+      payload: 'token=slack-tok&text=MAGE-38&command=/bbb',
     });
 
     const body = JSON.parse(res.body);
@@ -244,6 +257,34 @@ describe('slack slash command', () => {
     expect(body.text).toContain('Implement canvas zoom');
     expect(body.attachments[0].text).toContain('In Progress');
     expect(body.attachments[0].text).toContain('Alex Rodriguez');
+    // #345: the human_id lookup is confined to the token's integration org.
+    const { PgDialect } = await import('drizzle-orm/pg-core');
+    const q = new PgDialect().sqlToQuery(taskWhere as never);
+    expect(q.sql).toContain('"org_id" = $');
+    expect(q.params).toContain('org-gilligan');
+    await app.close();
+  });
+
+  // #345: without a token there is no org, so nothing is read (the advisory posture used to
+  // search every org's tasks by human_id).
+  it('finds nothing without a slash-command token, and reads no task', async () => {
+    const Fastify = (await import('fastify')).default;
+    const { default: slackWebhookRoutes } = await import('../src/routes/slack-webhook.routes.js');
+    const app = Fastify();
+    await app.register(slackWebhookRoutes);
+    mockDb.select.mockImplementation(() => {
+      throw new Error('no query expected');
+    });
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/webhooks/slack/command',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      payload: 'text=MAGE-38&command=/bbb',
+    });
+
+    expect(JSON.parse(res.body).text).toMatch(/not found/i);
+    expect(mockDb.select).not.toHaveBeenCalled();
     await app.close();
   });
 });
