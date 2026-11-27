@@ -92,7 +92,7 @@ async function reconcileOneOrg(logger: Logger, orgId: string): Promise<number> {
       void publishBoltEvent(
         'mismatch.resolved',
         'bursar',
-        { 'mismatch.id': c.id, detector: c.detector, status: 'resolved', 'org.id': orgId },
+        { mismatch: { id: c.id }, detector: c.detector, status: 'resolved', org: { id: orgId } },
         orgId,
       ).catch(() => {});
     }
@@ -254,7 +254,7 @@ async function draftReconcileOneOrg(logger: Logger, orgId: string): Promise<numb
       void publishBoltEvent(
         'draft.decided',
         'bursar',
-        { 'draft.id': r.id, decision: newStatus, 'org.id': orgId },
+        { draft: { id: r.id }, decision: newStatus, org: { id: orgId } },
         orgId,
       ).catch(() => {});
       reflected += 1;

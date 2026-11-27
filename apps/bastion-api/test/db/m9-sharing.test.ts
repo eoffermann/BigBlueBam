@@ -36,8 +36,6 @@ if (!DATABASE_URL) {
   console.warn('[bastion-api/m9-sharing] SKIPPING: DATABASE_URL is not set. Point it at a migrated database.');
 }
 
-vi.setConfig({ testTimeout: 120_000, hookTimeout: 60_000 });
-
 const HOUR = 3_600_000;
 
 type Sharing = typeof import('../../src/services/sharing.service.js');

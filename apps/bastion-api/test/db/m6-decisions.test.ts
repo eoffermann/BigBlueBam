@@ -27,8 +27,6 @@ import { clock, DATABASE_URL, makeDeps, seedOrg, wipeOrg } from './engine-harnes
 
 if (!DATABASE_URL) console.warn('[bastion-api/m6-decisions] SKIPPING: DATABASE_URL is not set. Point it at a migrated database.');
 
-vi.setConfig({ testTimeout: 180_000, hookTimeout: 60_000 });
-
 const DAY = 86_400_000;
 const SHA = 'a'.repeat(64);
 

@@ -71,7 +71,7 @@ export async function evaluateScopeGap(
     void publishBoltEvent(
       'gate.advisory',
       'bursar',
-      { 'check.id': inserted!.id, verdict, 'request.id': body.request_id ?? null, 'org.id': viewer.org_id },
+      { check: { id: inserted!.id }, verdict, request: { id: body.request_id ?? null }, org: { id: viewer.org_id } },
       viewer.org_id,
     ).catch(() => {});
 

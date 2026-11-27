@@ -86,7 +86,7 @@ async function decide(viewer: Viewer, id: string, status: 'resolved' | 'dismisse
       `),
     )[0];
     if (!row) throw new NotFoundError('Mismatch not found');
-    void publishBoltEvent('mismatch.resolved', 'bursar', { 'mismatch.id': row.id, detector: row.detector, status, 'org.id': viewer.org_id }, viewer.org_id).catch(() => {});
+    void publishBoltEvent('mismatch.resolved', 'bursar', { mismatch: { id: row.id }, detector: row.detector, status, org: { id: viewer.org_id } }, viewer.org_id).catch(() => {});
     return { data: { id: row.id, status } };
   });
 }
@@ -117,7 +117,7 @@ export async function markWrong(viewer: Viewer, id: string, body: BursarMarkWron
       UPDATE bursar_mismatches SET status = 'dismissed', dismissed_by = ${viewer.id}, dismissed_at = now(), updated_at = now()
        WHERE organization_id = ${viewer.org_id} AND id = ${id}
     `);
-    void publishBoltEvent('mismatch.resolved', 'bursar', { 'mismatch.id': id, detector: m.detector, status: 'dismissed', 'org.id': viewer.org_id }, viewer.org_id).catch(() => {});
+    void publishBoltEvent('mismatch.resolved', 'bursar', { mismatch: { id: id }, detector: m.detector, status: 'dismissed', org: { id: viewer.org_id } }, viewer.org_id).catch(() => {});
     return { data: { id, status: 'dismissed', feedback: 'wrong' } };
   });
 }

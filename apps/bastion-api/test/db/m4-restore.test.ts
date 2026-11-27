@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import postgres from 'postgres';
 import type { EngineDeps } from '../../src/engine/context.js';
 import { runEvaluationSlice } from '../../src/engine/evaluator.js';
@@ -35,8 +35,6 @@ const DAY = 86_400_000;
 
 // Each scenario drives several real evaluation slices and seals; through a local forwarder that
 // is tens of seconds, far above vitest's 5 s default.
-vi.setConfig({ testTimeout: 180_000, hookTimeout: 60_000 });
-
 type Evidence = typeof import('../../src/services/evidence.service.js');
 
 describe.skipIf(!DATABASE_URL)('M4 restore detection (live database)', () => {

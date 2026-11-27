@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import postgres from 'postgres';
 import { BASTION_PROBE_KEYS } from '@bigbluebam/shared';
 import { makeRunInOrgScopeRead, type RunInOrgScopeRead } from '../../src/engine/read-scope.js';
@@ -26,8 +26,6 @@ import { DATABASE_URL, wipeOrg } from './engine-harness.js';
 if (!DATABASE_URL) {
   console.warn('[bastion-api/m4-probe-goldens] SKIPPING: DATABASE_URL is not set. Point it at a migrated database.');
 }
-
-vi.setConfig({ testTimeout: 180_000, hookTimeout: 120_000 });
 
 const ROLE = 'bastion_rls_golden_test';
 const REPO = 'castaway/lagoon-booking-site';

@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import postgres from 'postgres';
 import { orgTx } from '../../src/engine/context.js';
 import { appendLedger } from '../../src/engine/ledger.js';
@@ -14,8 +14,6 @@ import { clock, DATABASE_URL, makeDeps, seedOrg, wipeOrg } from './engine-harnes
  */
 
 if (!DATABASE_URL) console.warn('[bastion-api/b17-ledger-verify] SKIPPING: DATABASE_URL is not set. Point it at a migrated database.');
-
-vi.setConfig({ testTimeout: 120_000, hookTimeout: 60_000 });
 
 describe.skipIf(!DATABASE_URL)('batch 17: ledger-verify chain-break alerts (live database)', () => {
   let sql: postgres.Sql;

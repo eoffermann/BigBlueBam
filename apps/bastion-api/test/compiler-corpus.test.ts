@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { bastionManualEvidenceSpecSchema } from '@bigbluebam/shared';
 import { scanLabel } from '../src/lib/injection-prescan.js';
 import { planTailoredControl, type TailoredControlPlan } from '../src/library/compile-plan.js';
-import { llmDeadlineMs, llmMaxTokens } from '../src/library/llm-call-settings.js';
+import { llmDeadlineMs } from '../src/library/llm-call-settings.js';
 import { probeEntry } from '../src/library/probe-catalog.js';
 import {
   buildTailoringMessages,
@@ -15,6 +15,7 @@ import {
   tailoredSuggestions,
 } from '../src/library/tailoring.js';
 import { CORPUS_CONNECTED, CORPUS_PROFILE, corpusControls, type CorpusControl, type RecordedCorpus } from './corpus/compiler-fixtures.js';
+import { callLlmProxy, deadlineGate, type ProxyTarget, proxyTargetFromEnv, recordingDeadlineMeta } from './corpus/llm-recording.js';
 
 // The compiler corpus gates (spec 11.3), deterministic in CI: every SOC 2 and ISO 27001 control's
 // RECORDED live answer (test/corpus/compiler-recorded.json, recorded through the internal LLM
@@ -93,6 +94,12 @@ describe('compiler corpus: the recording', () => {
     expect(fellBack.length, `library fallback: ${fellBack.join(', ')}`).toBeLessThanOrEqual(limit);
     // Recorded with the budget production uses.
     expect(RECORDED.meta.max_tokens).toBe(COMPILE_MAX_TOKENS_DEFAULT);
+  });
+
+  it('every recorded call fits inside 80% of the production deadline, with its tokens per second (#317)', () => {
+    const gate = deadlineGate(RECORDED, 'compile', llmDeadlineMs('compile', process.env));
+    for (const line of gate.report) console.log(`[deadline gate] ${line}`);
+    expect(gate.violations).toEqual([]);
   });
 
   it('keeps the raw model text: dashes are escaped in the file, never rewritten (#237)', () => {
@@ -183,26 +190,21 @@ describe('compiler corpus: what the hostile answers did', () => {
 
 describe.runIf(process.env.BASTION_COMPILER_LIVE === '1')('compiler corpus gates (live provider)', () => {
   it('a fresh live answer for a sample of controls passes every gate', { timeout: 600_000 }, async () => {
-    const api = (process.env.BASTION_RECORD_API_URL ?? '').replace(/\/+$/, '');
+    const target = proxyTargetFromEnv();
+    expect(target, 'set BASTION_RECORD_API_URL, BASTION_RECORD_PROVIDER_ID and INTERNAL_SERVICE_SECRET').not.toBeNull();
     const sample = CONTROLS.filter((_, i) => i % 6 === 0);
+    const fresh: RecordedCorpus['responses'] = {};
     for (const c of sample) {
       const { messages } = buildTailoringMessages({ control: c.control, requirements: c.requirements, profile: CORPUS_PROFILE, connected: CORPUS_CONNECTED });
-      const res = await fetch(`${api}/internal/llm/chat`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Internal-Secret': process.env.INTERNAL_SERVICE_SECRET ?? '', 'X-Internal-Service': 'bastion' },
-        body: JSON.stringify({
-          provider_id: process.env.BASTION_RECORD_PROVIDER_ID,
-          messages,
-          max_tokens: llmMaxTokens('compile', process.env),
-          temperature: 0,
-          timeout_ms: llmDeadlineMs('compile', process.env),
-          ...(process.env.BASTION_RECORD_MODEL_OVERRIDE ? { model: process.env.BASTION_RECORD_MODEL_OVERRIDE } : {}),
-        }),
-      });
-      const body = (await res.json()) as { data?: { content?: string; finish_reason?: string | null } };
-      const plan = replay(c, res.ok ? { content: body.data?.content ?? '', finish_reason: body.data?.finish_reason ?? null } : { error: String(res.status) });
+      const r = await callLlmProxy(target as ProxyTarget, 'compile', messages);
+      fresh[c.control.control_key] = r;
+      const plan = replay(c, r);
       expect(invalidities(plan), c.control.control_key).toEqual([]);
       expect(plan.planned.length, c.control.control_key).toBeGreaterThan(0);
     }
+    // #317: the live answers fit the production deadline too.
+    const gate = deadlineGate({ meta: { recorded_at: new Date().toISOString(), ...recordingDeadlineMeta('compile') }, responses: fresh }, 'compile', llmDeadlineMs('compile', process.env));
+    for (const line of gate.report) console.log(`[deadline gate] ${line}`);
+    expect(gate.violations).toEqual([]);
   });
 });

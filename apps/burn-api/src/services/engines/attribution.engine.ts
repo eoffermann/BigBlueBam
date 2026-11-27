@@ -332,12 +332,12 @@ async function processOneEvent(
   // Emit work.unscoped for an above-floor unscoped item (refs + band only, no amounts).
   if (outcome === 'unscoped' && (valuation.billable_amount ?? 0) >= opts.floor) {
     await publishBoltEvent('work.unscoped', 'burn', {
-      'work_item.id': workItemId,
+      work_item: { id: workItemId },
       bucket: 'sold_by_nobody',
       reason: 'no_matching_deliverable',
       source_type: sourceType,
       band: bandFor(valuation.billable_amount ?? 0),
-      'org.id': orgId,
+      org: { id: orgId },
     }, orgId).catch(() => {});
     await publishBurnFrame(orgId, projectId ? [projectId] : [], { type: 'unscoped.detected', work_item_id: workItemId, engagement_id: null, bucket: 'sold_by_nobody', band: bandFor(valuation.billable_amount ?? 0) }).catch(() => {});
   }

@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import postgres from 'postgres';
 import { createHash } from 'node:crypto';
 import { runEvaluationSlice } from '../../src/engine/evaluator.js';
@@ -48,8 +48,6 @@ import { DATABASE_URL, type FakeBucket, fakeBucket, makeDeps, wipeOrg } from './
 if (!DATABASE_URL) {
   console.warn('[bastion-api/m5-evidence] SKIPPING: DATABASE_URL is not set. Point it at a migrated database.');
 }
-
-vi.setConfig({ testTimeout: 180_000, hookTimeout: 60_000 });
 
 const DAY = 86_400_000;
 const PEPPER = 'ef'.repeat(32);

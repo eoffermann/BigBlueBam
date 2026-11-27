@@ -82,7 +82,7 @@ export default async function crossProductRoutes(fastify: FastifyInstance) {
           'diagram.promoted_to_tasks',
           'blueprint',
           {
-            'diagram.id': request.params.id,
+            diagram: { id: request.params.id },
             project_id: body.project_id,
             task_count: plan.tasks_to_create.length,
             link_count: plan.parent_links_to_create.length,
@@ -124,7 +124,7 @@ export default async function crossProductRoutes(fastify: FastifyInstance) {
           'diagram.generated',
           'blueprint',
           {
-            'diagram.id': result.diagram_id,
+            diagram: { id: result.diagram_id },
             source: 'bam',
             project_id: body.project_id,
             node_count: result.node_count,
