@@ -16,6 +16,8 @@ import {
   permissionGroups,
 } from '../db/schema/index.js';
 import { env } from '../env.js';
+import { classifyYjsFrame } from '@bigbluebam/permissions';
+import { wsFrameGate } from '../lib/ws-frames.js';
 import {
   loadYjsState,
   debounceYjsUpdate,
@@ -397,6 +399,17 @@ export default async function websocketHandler(fastify: FastifyInstance) {
     socket.on('message', async (raw: Buffer | string) => {
       try {
         const data = raw instanceof Buffer ? new Uint8Array(raw) : new Uint8Array(Buffer.from(raw));
+        // Per-frame catalog gate, the REST twin's (issue #177). The y-websocket
+        // client cannot parse a custom error, so a refused frame is dropped.
+        const denial = await wsFrameGate.check(
+          classifyYjsFrame(data),
+          { user_id: client.userId, org_id: client.orgId },
+          request.log,
+        );
+        if (denial) {
+          if (denial.code === 'PERMISSION_DENIED') request.log.warn({ ...denial, beaconId }, 'beacon ws: frame refused');
+          return;
+        }
         const decoder = decoding.createDecoder(data);
         const messageType = decoding.readVarUint(decoder);
 

@@ -24,6 +24,7 @@ import { env } from '../env.js';
 import { requireAuth } from '../plugins/auth.js';
 import { getAsset } from '../services/asset.service.js';
 import { assetChannel, presenceKey, presenceColor } from '../lib/broadcast.js';
+import { wsFrameGate } from '../lib/ws-frames.js';
 
 const subscribeSchema = z.object({
   type: z.literal('subscribe'),
@@ -94,8 +95,19 @@ export default async function wsRoutes(fastify: FastifyInstance) {
           send({ type: 'error', code: 'BAD_FRAME', message: 'Frames must be JSON' });
           return;
         }
+        // Per-frame catalog gate, the REST twin's (issue #177). An undeclared
+        // frame type runs nothing (tolerated silently, e.g. a client pong).
+        const denial = await wsFrameGate.check(
+          (parsed as { type?: unknown } | null)?.type,
+          { user_id: user.id, org_id: user.org_id },
+          request.log,
+        );
+        if (denial) {
+          if (denial.code === 'PERMISSION_DENIED') send({ type: 'error', ...denial });
+          return;
+        }
         const sub = subscribeSchema.safeParse(parsed);
-        if (!sub.success) return; // tolerate unknown frames (e.g. client pong)
+        if (!sub.success) return;
         const nextAsset = sub.data.asset_id;
         try {
           // Same org gate the REST routes use — getAsset throws when the asset

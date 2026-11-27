@@ -71,7 +71,7 @@ function regenerate() {
   } catch (err) {
     const stderr = err.stderr ? err.stderr.toString() : '';
     const stdout = err.stdout ? err.stdout.toString() : '';
-    console.error('✗ codegen failed:\n' + stderr + stdout);
+    console.error(`✗ codegen failed:\n${stderr}${stdout}`);
     process.exit(1);
   }
 
@@ -266,9 +266,7 @@ export function routeCoverageProblems(root = ROOT, manifest = null) {
     if (Object.prototype.hasOwnProperty.call(ROUTE_COVERAGE_EXEMPT, dir)) continue;
     if (coverage[dir] === 0) {
       problems.push(
-        `apps/${dir}: its route files contribute zero catalog actions. Gate its routes with requireCan('<app>.<resource>.<verb>') ` +
-          'ids (hand-authored in scripts/generate-permission-manifest.mjs, plus a delta migration and built-in group defaults), ' +
-          'or add it to ROUTE_COVERAGE_EXEMPT in scripts/check-permission-catalog.mjs with a reason.',
+        `apps/${dir}: its route files contribute zero catalog actions. Gate its routes with requireCan('<app>.<resource>.<verb>') ids (hand-authored in scripts/generate-permission-manifest.mjs, plus a delta migration and built-in group defaults), or add it to ROUTE_COVERAGE_EXEMPT in scripts/check-permission-catalog.mjs with a reason.`,
       );
     }
   }
@@ -299,6 +297,20 @@ function checkRouteCoverage() {
 // here must map EVERY `case '<frame>':` in its handler to a list of catalog ids
 // (an empty list is an explicit "always allowed"), every mapped id must exist in
 // the catalog, no map key may be stale, and the handler must still call the gate.
+//
+// Issue #177 extended this from Bureau to every app socket. Each hub's map lives
+// in one module and is enforced by the shared gate (createWsFrameGate in
+// @bigbluebam/permissions). `frames` says how the handler's frame types are
+// found:
+//   - 'json'  (default): `case '<t>':`, `.type === '<t>'` and `z.literal('<t>')`.
+//   - 'yjs':  the binary y-websocket frames classifyYjsFrame names; the handler
+//             must call classifyYjsFrame( so every frame goes through the gate.
+// Sockets that accept no client frames at all (pure server push) are listed in
+// WS_PUSH_ONLY and fail the check the moment they start reading client frames.
+// helpdesk-api's socket is not here: its callers are helpdesk portal customers,
+// which the Bam permission catalog does not cover; ticket ownership is its gate.
+
+export const YJS_FRAME_TYPES = ['sync_step1', 'sync_update', 'awareness'];
 
 export const WS_FRAME_MAPS = [
   {
@@ -307,23 +319,107 @@ export const WS_FRAME_MAPS = [
     exportName: 'WS_FRAME_PERMISSIONS',
     gateCall: 'deniedPermissionForFrame(',
   },
+  {
+    handler: 'apps/api/src/plugins/websocket.ts',
+    map: 'apps/api/src/lib/ws-frames.ts',
+    exportName: 'WS_FRAME_PERMISSIONS',
+    gateCall: 'frameGate.check(',
+  },
+  {
+    handler: 'apps/banter-api/src/ws/handler.ts',
+    map: 'apps/banter-api/src/lib/ws-frames.ts',
+    exportName: 'WS_FRAME_PERMISSIONS',
+    gateCall: 'wsFrameGate.check(',
+  },
+  {
+    handler: 'apps/bay-api/src/routes/ws.routes.ts',
+    map: 'apps/bay-api/src/routes/ws-frames.ts',
+    exportName: 'WS_FRAME_PERMISSIONS',
+    gateCall: 'wsFrameGate.check(',
+  },
+  {
+    handler: 'apps/beacon-api/src/ws/handler.ts',
+    map: 'apps/beacon-api/src/lib/ws-frames.ts',
+    exportName: 'WS_FRAME_PERMISSIONS',
+    gateCall: 'wsFrameGate.check(',
+    frames: 'yjs',
+  },
+  {
+    handler: 'apps/bin-api/src/routes/ws.routes.ts',
+    map: 'apps/bin-api/src/lib/ws-frames.ts',
+    exportName: 'WS_FRAME_PERMISSIONS',
+    gateCall: 'wsFrameGate.check(',
+  },
+  {
+    handler: 'apps/blip-api/src/routes/ws.routes.ts',
+    map: 'apps/blip-api/src/lib/ws-frames.ts',
+    exportName: 'WS_FRAME_PERMISSIONS',
+    gateCall: 'wsFrameGate.check(',
+  },
+  {
+    handler: 'apps/blueprint-api/src/routes/ws.routes.ts',
+    map: 'apps/blueprint-api/src/lib/ws-frames.ts',
+    exportName: 'WS_FRAME_PERMISSIONS',
+    gateCall: 'wsFrameGate.check(',
+  },
+  {
+    handler: 'apps/board-api/src/ws/handler.ts',
+    map: 'apps/board-api/src/lib/ws-frames.ts',
+    exportName: 'WS_FRAME_PERMISSIONS',
+    gateCall: 'wsFrameGate.check(',
+  },
+  {
+    handler: 'apps/bond-api/src/routes/ws.routes.ts',
+    map: 'apps/bond-api/src/lib/ws-frames.ts',
+    exportName: 'WS_FRAME_PERMISSIONS',
+    gateCall: 'wsFrameGate.check(',
+  },
+  {
+    handler: 'apps/brief-api/src/ws/handler.ts',
+    map: 'apps/brief-api/src/lib/ws-frames.ts',
+    exportName: 'WS_FRAME_PERMISSIONS',
+    gateCall: 'wsFrameGate.check(',
+    frames: 'yjs',
+  },
 ];
+
+/** Sockets that only push to the client; they must never read a client frame. */
+export const WS_PUSH_ONLY = [
+  'apps/braid-api/src/ws/handler.ts',
+  'apps/bulwark-api/src/ws/handler.ts',
+  'apps/burn-api/src/ws/burn-ws.ts',
+];
+
+const SHADOW_PREFIX = 'shadow:';
 
 export function parseFrameMap(text, exportName) {
   const at = text.indexOf(`${exportName}`);
   if (at < 0) return null;
   const open = text.indexOf('= {', at);
-  const close = text.indexOf('\n};', open);
+  const close = open < 0 ? -1 : text.indexOf('\n}', open);
   if (open < 0 || close < 0) return null;
   const body = text.slice(open + 3, close);
   const map = new Map();
-  for (const m of body.matchAll(/^\s*([a-z_]+)\s*:\s*\[([^\]]*)\]/gm)) {
-    map.set(m[1], [...m[2].matchAll(/['"]([a-z0-9_.]+)['"]/g)].map((x) => x[1]));
+  for (const m of body.matchAll(/^\s*(?:([a-z_][a-z0-9_]*)|'([a-z0-9_.]+)')\s*:\s*\[([^\]]*)\]/gm)) {
+    map.set(m[1] ?? m[2], [...m[3].matchAll(/['"]((?:shadow:)?[a-z0-9_.]+)['"]/g)].map((x) => x[1]));
   }
   return map;
 }
 
-export function wsFrameCoverageProblems(root = ROOT, manifest = null, hubs = WS_FRAME_MAPS) {
+/** The frame types a JSON hub's handler dispatches on. */
+export function jsonFrameTypes(handler) {
+  const found = new Set();
+  for (const re of [
+    /case\s+'([a-z0-9_.]+)'\s*:/g,
+    /\.type\s*===\s*'([a-z0-9_.]+)'/g,
+    /type:\s*z\.literal\(\s*'([a-z0-9_.]+)'\s*\)/g,
+  ]) {
+    for (const x of handler.matchAll(re)) found.add(x[1]);
+  }
+  return found;
+}
+
+export function wsFrameCoverageProblems(root = ROOT, manifest = null, hubs = WS_FRAME_MAPS, pushOnly = WS_PUSH_ONLY) {
   const m = manifest ?? JSON.parse(readFile(join(root, 'docs/permissions-action-manifest.json')));
   const catalog = new Set(m.permissions.map((p) => p.id));
   const problems = [];
@@ -332,22 +428,32 @@ export function wsFrameCoverageProblems(root = ROOT, manifest = null, hubs = WS_
     const handler = readFile(join(root, hub.handler));
     const map = parseFrameMap(readFile(join(root, hub.map)), hub.exportName);
     if (!map) {
-      problems.push(`${hub.map}: could not find ${hub.exportName} = { ... };`);
+      problems.push(`${hub.map}: could not find ${hub.exportName} = { ... }`);
       continue;
     }
-    const cases = new Set([...handler.matchAll(/case\s+'([a-z_]+)'\s*:/g)].map((x) => x[1]));
+    const cases = hub.frames === 'yjs' ? new Set(YJS_FRAME_TYPES) : jsonFrameTypes(handler);
     frames += cases.size;
     for (const c of cases) {
       if (!map.has(c)) problems.push(`${hub.handler}: frame '${c}' has no entry in ${hub.exportName} (${hub.map})`);
     }
     for (const [k, ids] of map) {
       if (!cases.has(k)) problems.push(`${hub.map}: ${hub.exportName} maps '${k}', which ${hub.handler} no longer handles`);
-      for (const id of ids) {
+      for (const raw of ids) {
+        const id = raw.startsWith(SHADOW_PREFIX) ? raw.slice(SHADOW_PREFIX.length) : raw;
         if (!catalog.has(id)) problems.push(`${hub.map}: frame '${k}' maps to '${id}', which is not in the catalog`);
       }
     }
     if (!handler.includes(hub.gateCall)) {
       problems.push(`${hub.handler}: no longer calls ${hub.gateCall}...), so its frame map is not enforced`);
+    }
+    if (hub.frames === 'yjs' && !handler.includes('classifyYjsFrame(')) {
+      problems.push(`${hub.handler}: no longer classifies frames with classifyYjsFrame(), so the gate does not see them`);
+    }
+  }
+  for (const file of pushOnly) {
+    const text = readFile(join(root, file));
+    if (/\b(?:socket|ws|connection\.socket)\.on\(\s*'message'/.test(text)) {
+      problems.push(`${file}: now reads client frames; give it a WS_FRAME_PERMISSIONS map and the shared gate (issue #177)`);
     }
   }
   return { problems, frames };
@@ -360,7 +466,9 @@ function checkWsFrameCoverage() {
     for (const p of problems) console.error(`    ${p}`);
     process.exit(1);
   }
-  console.log(`✓ every WebSocket frame is mapped to catalog actions (${WS_FRAME_MAPS.length} hubs, ${frames} frame types)`);
+  console.log(
+    `✓ every WebSocket frame is mapped to catalog actions (${WS_FRAME_MAPS.length} hubs, ${frames} frame types, ${WS_PUSH_ONLY.length} push-only sockets)`,
+  );
 }
 
 const isMain = process.argv[1] && resolve(process.argv[1]) === resolve(new URL(import.meta.url).pathname.replace(/^\/([A-Za-z]):\//, '$1:/'));
