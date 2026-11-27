@@ -2253,3 +2253,30 @@ export const bastionPacketClaimSchema = z.object({
   contents: bastionPacketContentsSchema.nullable(),
 });
 export type BastionPacketClaim = z.infer<typeof bastionPacketClaimSchema>;
+
+/* ------------------------------------------------------------------ */
+/*  M10: search (spec 5.1 row 95, 8.5)                                 */
+/* ------------------------------------------------------------------ */
+
+/** GET /search?q= (row 95): controls and linked policies, read by the platform search_everything. */
+export const bastionSearchQuerySchema = z
+  .object({
+    q: z.string().trim().min(2).max(200),
+    limit: z.coerce.number().int().min(1).max(50).default(20),
+  })
+  .strict();
+export type BastionSearchQuery = z.infer<typeof bastionSearchQuerySchema>;
+
+export const BastionSearchEntityType = z.enum(['bastion.control', 'bastion.policy']);
+export type BastionSearchEntityType = z.infer<typeof BastionSearchEntityType>;
+
+/** One hit of GET /search: the entity_type is the can_access type, so search_everything can gate it. */
+export const bastionSearchHitSchema = z.object({
+  entity_type: BastionSearchEntityType,
+  id: z.string().uuid(),
+  title: z.string(),
+  snippet: z.string(),
+  score: z.number().min(0).max(1),
+  url: z.string(),
+});
+export type BastionSearchHit = z.infer<typeof bastionSearchHitSchema>;

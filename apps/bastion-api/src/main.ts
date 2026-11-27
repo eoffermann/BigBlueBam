@@ -41,6 +41,7 @@ import { drainAutofillSlices, markAutofillShuttingDown } from './services/questi
 import sharingRoutes from './routes/sharing.routes.js';
 import settingsRoutes from './routes/settings.routes.js';
 import publicRoomRoutes from './routes/public-room.routes.js';
+import searchRoutes from './routes/search.routes.js';
 import { offsiteBackupConfigured } from './services/evidence-runtime.js';
 import { engineDeps } from './engine/runtime.js';
 import { checkLedgerIdentity } from './engine/restore.js';
@@ -146,6 +147,8 @@ await fastify.register(
     await v1.register(sharingRoutes);
     await v1.register(settingsRoutes);
     await v1.register(publicRoomRoutes);
+    // M10: search, read by the platform search_everything (spec 8.5).
+    await v1.register(searchRoutes);
     await v1.register(internalRoutes);
   },
   { prefix: '/v1' },
