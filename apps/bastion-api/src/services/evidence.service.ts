@@ -21,7 +21,7 @@ import { enqueueEvaluationRun } from '../lib/queue.js';
 import { type EngineDeps, orgTx, sqlstateOf, type Tx } from '../engine/context.js';
 import { appendLedger, lockLedger } from '../engine/ledger.js';
 import { enqueueBastionEvent } from '../engine/outbox.js';
-import { bucketRestoreRecords, refreshSeals, highestSeal, writeRestoreObject } from '../engine/restore.js';
+import { bucketRestoreRecords, refreshSeals, highestSeal, type RestoreRecord, writeRestoreObject } from '../engine/restore.js';
 import { probeDefinition } from '../probes/definitions.js';
 import type { BastionProbeResult } from '@bigbluebam/shared';
 import { auditRaw } from '../lib/audit-raw.js';
@@ -418,11 +418,12 @@ export async function listRestores(deps: EngineDeps, viewer: Viewer, q: BastionR
     allIds: after ? [] : await tx`SELECT id FROM bastion_ledger_restores WHERE organization_id = ${viewer.org_id}`,
   }));
   const page = pageOf(rows, q.limit, (r) => encodeIdCursor(r.id as string));
-  let bucket: Array<Record<string, unknown>> = [];
+  let bucket: RestoreRecord[] = [];
+  let bucketRejected = 0;
   let bucketAvailable = true;
   if (!after) {
     try {
-      bucket = await bucketRestoreRecords(deps, viewer.org_id);
+      ({ records: bucket, rejected: bucketRejected } = await bucketRestoreRecords(deps, viewer.org_id));
     } catch {
       bucketAvailable = false;
     }
@@ -440,9 +441,11 @@ export async function listRestores(deps: EngineDeps, viewer: Viewer, q: BastionR
       summary: `${label(r.status, r.resolution)}, epoch ${r.bucket_epoch} seq ${r.lost_from_seq}-${r.lost_to_seq}`,
     })),
     bucket_only: bucket
-      .filter((b) => typeof b.id === 'string' && !known.has(b.id as string))
+      .filter((b) => !known.has(b.id))
       .map((b) => ({ ...b, label: label(b.status, b.resolution), summary: `${label(b.status, b.resolution)}, epoch ${b.bucket_epoch} seq ${b.lost_from_seq}-${b.lost_to_seq}` })),
     bucket_available: bucketAvailable,
+    // #208: restore record objects that did not verify against a published seal key (ignored).
+    bucket_rejected: bucketRejected,
   };
 }
 

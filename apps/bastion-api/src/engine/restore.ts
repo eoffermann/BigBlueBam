@@ -15,7 +15,13 @@
 
 import { randomUUID } from 'node:crypto';
 import { type ObjectStat, type StorageDriver, withStorageTimeout } from '@bigbluebam/storage';
-import { compareEpochSeq, verifySeal } from '../lib/ledger-canonical.js';
+import {
+  compareEpochSeq,
+  type RestoreRecordPayload,
+  signRestoreRecord,
+  verifyRestoreRecord,
+  verifySeal,
+} from '../lib/ledger-canonical.js';
 import { type EngineDeps, orgTx, type Tx } from './context.js';
 import { enqueueBastionEvent } from './outbox.js';
 import { lockLedger } from './ledger.js';
@@ -305,7 +311,88 @@ async function openRestore(deps: EngineDeps, orgId: string, highest: SealIdentit
   return id;
 }
 
-/** Write (or rewrite) restores/<org>/<id>.json from the row. Best effort; retried by the seal run. */
+const intOrNull = (v: unknown): number | null => (v === null || v === undefined ? null : Number(v));
+const isoOrNull = (v: unknown): string | null =>
+  v === null || v === undefined ? null : (v instanceof Date ? v : new Date(String(v))).toISOString();
+
+/** The signed body of a restore record object, from its database row (#208). */
+export function restoreRecordPayload(row: Record<string, unknown>, signingKeyId: string): RestoreRecordPayload {
+  return {
+    record: 'ledger_restore',
+    id: String(row.id),
+    organization_id: String(row.organization_id),
+    detected_at: isoOrNull(row.detected_at) ?? '',
+    db_head_seq: intOrNull(row.db_head_seq),
+    bucket_seal_date: (row.bucket_seal_date as string | null) ?? null,
+    bucket_epoch: intOrNull(row.bucket_epoch),
+    bucket_head_seq: intOrNull(row.bucket_head_seq),
+    bucket_head_hash: (row.bucket_head_hash as string | null) ?? null,
+    lost_from_seq: intOrNull(row.lost_from_seq),
+    lost_to_seq: intOrNull(row.lost_to_seq),
+    provisional_epoch: Number(row.provisional_epoch),
+    platform_restore_id: (row.platform_restore_id as string | null) ?? null,
+    status: String(row.status),
+    resolution: (row.resolution as string | null) ?? null,
+    resolved_at: isoOrNull(row.resolved_at),
+    signing_key_id: signingKeyId,
+  };
+}
+
+/** A restore record read back from the bucket whose signature verified. */
+export type RestoreRecord = RestoreRecordPayload & { object_key: string };
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const isNullableInt = (v: unknown) => v === null || (typeof v === 'number' && Number.isSafeInteger(v));
+const isNullableString = (v: unknown) => v === null || typeof v === 'string';
+
+/**
+ * Shape check of a restore record object plus its signature. Trust comes from
+ * restoreRecordIsAuthentic; this only refuses what cannot even be checked.
+ */
+export function parseRestoreRecord(raw: unknown, key: string): { payload: RestoreRecordPayload; signature: string } | null {
+  const o = raw as Record<string, unknown> | null;
+  if (!o || typeof o !== 'object' || Array.isArray(o)) return null;
+  if (o.record !== 'ledger_restore') return null;
+  if (typeof o.id !== 'string' || !UUID_RE.test(o.id) || typeof o.organization_id !== 'string') return null;
+  if (typeof o.detected_at !== 'string' || typeof o.status !== 'string' || typeof o.signing_key_id !== 'string') return null;
+  if (typeof o.signature !== 'string') return null;
+  if (typeof o.provisional_epoch !== 'number' || !Number.isSafeInteger(o.provisional_epoch)) return null;
+  for (const f of ['db_head_seq', 'bucket_epoch', 'bucket_head_seq', 'lost_from_seq', 'lost_to_seq'] as const) {
+    if (!isNullableInt(o[f])) return null;
+  }
+  for (const f of ['bucket_seal_date', 'bucket_head_hash', 'platform_restore_id', 'resolution', 'resolved_at'] as const) {
+    if (!isNullableString(o[f])) return null;
+  }
+  const payload: RestoreRecordPayload = {
+    record: 'ledger_restore',
+    id: o.id,
+    organization_id: o.organization_id,
+    detected_at: o.detected_at,
+    db_head_seq: o.db_head_seq as number | null,
+    bucket_seal_date: o.bucket_seal_date as string | null,
+    bucket_epoch: o.bucket_epoch as number | null,
+    bucket_head_seq: o.bucket_head_seq as number | null,
+    bucket_head_hash: o.bucket_head_hash as string | null,
+    lost_from_seq: o.lost_from_seq as number | null,
+    lost_to_seq: o.lost_to_seq as number | null,
+    provisional_epoch: o.provisional_epoch,
+    platform_restore_id: o.platform_restore_id as string | null,
+    status: o.status,
+    resolution: o.resolution as string | null,
+    resolved_at: o.resolved_at as string | null,
+    signing_key_id: o.signing_key_id,
+  };
+  // The record must sit at its own key: a genuine record copied under another id is refused.
+  if (key !== restoreObjectKey(payload.organization_id, payload.id)) return null;
+  return { payload, signature: o.signature };
+}
+
+/** True only when the record's Ed25519 signature verifies against a published seal key. */
+export function restoreRecordIsAuthentic(rec: { payload: RestoreRecordPayload; signature: string }, keys: Map<string, string>): boolean {
+  return verifyRestoreRecord(rec.payload, rec.signature, keys);
+}
+
+/** Write (or rewrite) restores/<org>/<id>.json from the row, signed (#208). Best effort; retried by the seal run. */
 export async function writeRestoreObject(deps: EngineDeps, orgId: string, restoreId: string): Promise<boolean> {
   if (!deps.storage) return false;
   const rows = await orgTx(deps.sql, orgId, (tx) => tx`
@@ -316,7 +403,9 @@ export async function writeRestoreObject(deps: EngineDeps, orgId: string, restor
   const row = rows[0];
   if (!row) return false;
   const key = restoreObjectKey(orgId, restoreId);
-  const body = Buffer.from(JSON.stringify(row));
+  const payload = restoreRecordPayload(row as Record<string, unknown>, deps.signer.keyId);
+  const signature = signRestoreRecord(payload, deps.signer);
+  const body = Buffer.from(JSON.stringify({ ...payload, signature, public_key_hex: deps.signer.publicKeyHex }));
   try {
     await withStorageTimeout('put', deps.storage.put(key, body, { contentType: 'application/json', size: body.length }), deps.putTimeoutMs);
   } catch (err) {
@@ -328,18 +417,50 @@ export async function writeRestoreObject(deps: EngineDeps, orgId: string, restor
   return true;
 }
 
-/** Every lost range recorded in the bucket (survives a database rewrite). */
-export async function bucketRestoreRecords(deps: EngineDeps, orgId: string): Promise<Array<Record<string, unknown>>> {
-  if (!deps.storage) return [];
+export interface BucketRestoreRecords {
+  records: RestoreRecord[];
+  /** Objects under restores/<org>/ ignored because they are unreadable, malformed or do not verify. */
+  rejected: number;
+}
+
+/**
+ * Every lost range recorded in the bucket (survives a database rewrite). The bucket is writable by
+ * every service holding the shared storage key, so a record counts only when its signature
+ * verifies against a published seal key (#208, as #199 does for seals); anything else is
+ * ignored, counted and logged.
+ */
+export async function bucketRestoreRecords(deps: EngineDeps, orgId: string): Promise<BucketRestoreRecords> {
+  if (!deps.storage) return { records: [], rejected: 0 };
   const keys = await listAll(deps, `restores/${orgId}/`);
-  const out: Array<Record<string, unknown>> = [];
+  const out: BucketRestoreRecords = { records: [], rejected: 0 };
   for (const key of keys) {
+    let raw: unknown = null;
+    let readable = true;
     try {
-      out.push(await readJson(deps, key) as Record<string, unknown>);
-    } catch {
-      // An unreadable record is reported by its key alone.
-      out.push({ object_key: key, unreadable: true });
+      raw = await readJson(deps, key);
+    } catch (err) {
+      if (err instanceof StorageUnavailableError) throw err;
+      readable = false;
     }
+    const rec = readable ? parseRestoreRecord(raw, key) : null;
+    const reason = !readable
+      ? 'unreadable'
+      : !rec
+        ? 'malformed, unsigned or not at its own key'
+        : rec.payload.organization_id !== orgId
+          ? 'names a different organization'
+          : !restoreRecordIsAuthentic(rec, deps.sealKeys)
+            ? 'signature does not verify against any published key'
+            : null;
+    if (reason || !rec) {
+      out.rejected += 1;
+      deps.log.error(
+        { organization_id: orgId, object_key: key, reason, rejected_total: out.rejected },
+        'bastion-ledger: unverifiable restore record object ignored',
+      );
+      continue;
+    }
+    out.records.push({ ...rec.payload, object_key: key });
   }
   return out;
 }
