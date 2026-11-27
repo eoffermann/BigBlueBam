@@ -1886,7 +1886,7 @@ External prefix for the Bam api is `/b3/api/`, so a route shown as `POST /v1/pro
 | `POST /internal/helpdesk/tasks` | — _(skip: internal service-to-service route)_ | Internal: create a Bam task from a helpdesk ticket | — |
 | `POST /internal/helpdesk/tasks/:id/move-to-terminal-phase` | — _(skip: internal service-to-service route)_ | Internal: close ticket's task into terminal phase | — |
 | `POST /internal/helpdesk/tasks/:id/reopen` | — _(skip: internal service-to-service route)_ | Internal: reopen ticket's task to first non-terminal phase | — |
-| `POST /internal/llm/chat` | — _(skip: internal service-to-service route)_ | Internal: proxy chat completion through stored provider keys | — |
+| `POST /internal/llm/chat` | — _(skip: internal service-to-service route)_ | Internal: proxy chat completion through stored provider keys; optional `timeout_ms` (1 s to 180 s, default 60 s) is the upstream deadline, answered 504 `UPSTREAM_TIMEOUT` when it fires (#257) | — |
 | `POST /internal/permissions/dual-read` | — _(skip: internal service-to-service route)_ | Internal: MCP permission dual-read + divergence telemetry | — |
 | `GET /public/config` | `get_public_config` | Public runtime flags (signup/bootstrap) | `apps/frontend/src` (usePublicConfig) |
 | `POST /public/beta-signup` | `submit_beta_signup` | Public beta "notify me" form submission | — |

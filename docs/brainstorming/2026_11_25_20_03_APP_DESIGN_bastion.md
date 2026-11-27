@@ -1433,7 +1433,8 @@ aborts every org's claim. M4 must therefore:
 **LLM fairness (leased permits).** Copied from `admitLlmCall` in
 `apps/api/src/routes/internal-llm.routes.ts`: Redis sorted sets (`bastion:llm:svc`, and
 `bastion:llm:org:<org>`) of random tokens scored by admit time; on every admit, tokens older than
-the hold window (90 s, above `BASTION_LLM_TIMEOUT_MS`) are purged; `ZREM` in `finally`. Limits:
+the hold window (`BASTION_LLM_TIMEOUT_MS` plus a 30 s margin, `llmHoldWindowMs`; the deadline is
+capped at 180 s; build decision, fix batch 11, #257: this was a fixed 90 s) are purged; `ZREM` in `finally`. Limits:
 3 service-wide, 1 per org. **Fails open when Redis is down**, as the proxy does (its own cap still
 applies). **Throughput, restated:** at roughly 10-20 s per call, the service does at most about
 9-18 calls per minute and one org about 3-6, so a 96-row questionnaire takes roughly 16-32 minutes
