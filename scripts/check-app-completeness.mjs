@@ -20,6 +20,8 @@
  *   - MCP tools      : APP_TOOL_MODULES mapping whose module file(s) exist on
  *                      disk (the AI-first parity contract - agents must be able
  *                      to drive every app).
+ *   - MCP tool ref   : docs/apps/<app>/mcp-tools.md (pnpm docs:extract) listing as
+ *                      many tools as the docs catalog gives the product.
  *   - Help doc       : docs/apps/<app>/help.md (the in-app Help Center source).
  *   - Help index     : docs/apps/<app>/help-index.json (derived TOC/search).
  *   - Marketing      : site/src/components/sections/<app>-section.tsx registered
@@ -78,6 +80,46 @@ function hasMcpTools(appId) {
   const modules = APP_TOOL_MODULES[appId];
   if (!modules || modules.length === 0) return false;
   return modules.every((m) => fs.existsSync(path.join(TOOLS_DIR, `${m}.ts`)));
+}
+
+/**
+ * Tool count per Launchpad id from the committed docs catalog
+ * (site/src/content/docs-catalog.generated.json), read once. The catalog is
+ * itself kept equal to the tool source by `pnpm docs:catalog:check`, so it is
+ * the published per-product count every other surface agrees on.
+ */
+let _catalogCounts = null;
+function catalogToolCount(appId) {
+  if (_catalogCounts === null) {
+    _catalogCounts = new Map();
+    try {
+      const catalog = JSON.parse(
+        fs.readFileSync(path.join(ROOT, 'site', 'src', 'content', 'docs-catalog.generated.json'), 'utf-8'),
+      );
+      for (const entry of catalog) _catalogCounts.set(entry.id, entry.toolCount);
+    } catch {
+      /* a missing or unreadable catalog leaves every count undefined: the check fails */
+    }
+  }
+  return _catalogCounts.get(appId);
+}
+
+/**
+ * MCP tool reference: docs/apps/<dir>/mcp-tools.md (written by
+ * `pnpm docs:extract`) exists and lists exactly as many tools as the docs
+ * catalog gives the product. The README card, the guide index and the manual
+ * link this file; checking only the APP_TOOL_MODULES mapping let an app ship
+ * with no generated reference at all (#395).
+ */
+function hasMcpToolReference(appId) {
+  const file = path.join(ROOT, 'docs', 'apps', docDirForAppId(appId), 'mcp-tools.md');
+  if (!fs.existsSync(file)) return false;
+  const rows = fs
+    .readFileSync(file, 'utf-8')
+    .split(/\r?\n/)
+    .filter((line) => line.startsWith('| `')).length;
+  const expected = catalogToolCount(appId);
+  return typeof expected === 'number' && rows === expected;
 }
 
 // Bam is the CORE product (id "b3"). It is marketed by the entire marketing
@@ -202,6 +244,13 @@ const DIMENSIONS = [
     check: (id) => hasMcpTools(id),
     hint: (id) =>
       `map "${id}" in APP_TOOL_MODULES (scripts/docs/lib/tool-source.mjs) to an existing apps/mcp-server/src/tools/${id}-tools.ts`,
+  },
+  {
+    key: 'mcp_tool_reference',
+    label: 'MCP tool reference',
+    check: (id) => hasMcpToolReference(id),
+    hint: (id) =>
+      `generate docs/apps/${docDirForAppId(id)}/mcp-tools.md with one row per tool in the docs catalog (pnpm docs:extract, then pnpm docs:readme so the README links it)`,
   },
   {
     key: 'help_doc',

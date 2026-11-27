@@ -13,7 +13,7 @@ import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { parseToolsFromFile, APP_TOOL_MODULES, TOOLS_DIR } from './lib/tool-source.mjs';
+import { parseToolsFromFile, APP_TOOL_MODULES, TOOLS_DIR, readLaunchpadCatalog } from './lib/tool-source.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -62,6 +62,8 @@ const APP_REGISTRY = {
   braid:    { nginxPath: '/braid/',    apiPort: 4020, apiDir: 'braid-api',    appId: 'braid' },
   bulwark:  { nginxPath: '/bulwark/',  apiPort: 4021, apiDir: 'bulwark-api',  appId: 'bulwark' },
   burn:     { nginxPath: '/burn/',     apiPort: 4022, apiDir: 'burn-api',     appId: 'burn' },
+  bursar:   { nginxPath: '/bursar/',   apiPort: 4023, apiDir: 'bursar-api',   appId: 'bursar' },
+  bastion:  { nginxPath: '/bastion/',  apiPort: 4024, apiDir: 'bastion-api',  appId: 'bastion' },
   helpdesk: { nginxPath: '/helpdesk/', apiPort: 4001, apiDir: 'helpdesk-api', appId: 'helpdesk' },
 };
 
@@ -234,6 +236,21 @@ function main() {
   console.log(`  Root: ${ROOT}`);
   if (dryRun) console.log('  (dry-run mode)');
   console.log('');
+
+  // The Launchpad roster is the fact; APP_REGISTRY only adds API metadata to
+  // it. A Launchpad app missing here would get no mcp-tools.md or meta.json,
+  // silently (Bastion and Bursar shipped that way, #395), so refuse to run.
+  const registeredIds = new Set(Object.values(APP_REGISTRY).map((r) => r.appId));
+  const unregistered = readLaunchpadCatalog()
+    .map((e) => e.id)
+    .filter((id) => !registeredIds.has(id));
+  if (unregistered.length > 0) {
+    console.error(
+      `ERROR: Launchpad app(s) missing from APP_REGISTRY in scripts/docs/extract.mjs: ${unregistered.join(', ')}.\n` +
+        '  Add an entry (nginx path, API port, API dir) for each so its MCP tool reference is generated.',
+    );
+    process.exit(1);
+  }
 
   const toolsDir = TOOLS_DIR;
   const allMeta = [];

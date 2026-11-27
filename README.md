@@ -498,9 +498,11 @@ Basis gives the whole suite one trusted definition per number, and an AI core th
 
 Bastion checks your SOC 2 or ISO 27001 controls every night against what actually happened in the suite, keeps tamper-evident proof of each result, and tells you first which controls nothing can prove yet, with a fix already drafted. Reach for it when a customer asks for a security review, a questionnaire arrives, or an audit is on the calendar.
 
+16 routes, 38 schemas, 66 MCP tools
+
 <img src="docs/apps/bastion/screenshots/light/01-readiness.png" width="400" alt="Bastion - Continuous compliance readiness for SOC 2 and ISO 27001">
 
-[Help](docs/apps/bastion/help.md) | [Guide](docs/apps/bastion/guide.md)
+[Help](docs/apps/bastion/help.md) | [Guide](docs/apps/bastion/guide.md) | [MCP Tools](docs/apps/bastion/mcp-tools.md)
 
 ### Bay - Media review and approval
 
@@ -696,9 +698,11 @@ Burn reads a signed proposal or SOW into a priced ledger of what was sold, then 
 
 Bursar reads a request into a scope tree, then measures every vendor offer against it and tells you, in plain terms, what each offer leaves out. Reach for Bursar when you take in competing quotes and need to know which one quietly omits the thing you actually require.
 
+15 routes, 29 schemas, 20 MCP tools
+
 <img src="docs/apps/bursar/screenshots/light/01-vendor-portfolio.png" width="400" alt="Bursar - Vendor-side procurement and absence detection">
 
-[Help](docs/apps/bursar/help.md) | [Guide](docs/apps/bursar/guide.md)
+[Help](docs/apps/bursar/help.md) | [Guide](docs/apps/bursar/guide.md) | [MCP Tools](docs/apps/bursar/mcp-tools.md)
 
 ### Helpdesk - Support tickets and customer portal
 
