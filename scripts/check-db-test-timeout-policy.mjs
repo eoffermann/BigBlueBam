@@ -55,9 +55,9 @@ export function checkPackage(pkgDir, label = pkgDir) {
   const problems = [];
   const ws = WORKSPACE_FILES.map((f) => join(pkgDir, f)).find((f) => existsSync(f));
   if (!ws) {
+    const listed = `${suites.slice(0, 3).join(', ')}${suites.length > 3 ? ', ...' : ''}`;
     problems.push(
-      `${label}: has DB-backed suites (${suites.slice(0, 3).join(', ')}${suites.length > 3 ? ', ...' : ''}) ` +
-        'but no vitest.workspace.ts; build its projects with dbTestProjects() from vitest.db-policy.mjs',
+      `${label}: has DB-backed suites (${listed}) but no vitest.workspace.ts; build its projects with dbTestProjects() from vitest.db-policy.mjs`,
     );
     return problems;
   }
