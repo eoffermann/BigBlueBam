@@ -18,7 +18,7 @@ import { users } from './users.js';
  *     by the entity_links_unique index). Re-creating an identical link is a
  *     no-op for callers that pass `idempotent: true`.
  *
- * RLS: org-isolated via `current_setting('app.current_org_id', true)::uuid`.
+ * RLS: org-isolated via `NULLIF(current_setting('app.current_org_id', true), '')::uuid` (0355).
  */
 export const entityLinkKindEnum = pgEnum('entity_link_kind', [
   'related_to',

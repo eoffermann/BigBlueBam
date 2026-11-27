@@ -25,7 +25,7 @@ import { users } from './users.js';
  *
  * decision ∈ { 'duplicate', 'not_duplicate', 'needs_review' }.
  *
- * RLS: org-isolated via `current_setting('app.current_org_id', true)::uuid`.
+ * RLS: org-isolated via `NULLIF(current_setting('app.current_org_id', true), '')::uuid` (0355).
  */
 export const dedupeDecisions = pgTable(
   'dedupe_decisions',

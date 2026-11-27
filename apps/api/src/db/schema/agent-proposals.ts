@@ -14,7 +14,7 @@ import { users, actorTypeEnum } from './users.js';
  * Only pending and revising proposals are decidable. expires_at is required
  * (no nullable TTL) so the expiry sweep worker can always make progress.
  *
- * RLS: org-isolated via `current_setting('app.current_org_id', true)::uuid`.
+ * RLS: org-isolated via `NULLIF(current_setting('app.current_org_id', true), '')::uuid` (0355).
  */
 export const proposalStatusEnum = pgEnum('proposal_status', [
   'pending',
