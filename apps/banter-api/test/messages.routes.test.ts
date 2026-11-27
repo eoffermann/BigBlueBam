@@ -284,13 +284,16 @@ function makeTx(opts: { failAttachmentInsert?: boolean; failChannelUpdate?: bool
     insert: vi.fn(() => {
       const n = insertCall++;
       return {
-        values: (v: unknown) => (state.values.push(v), {
-          returning: async () => {
-            if (n === 0) return [{ ...msgRow(M1).message, attachment_count: 0 }];
-            if (opts.failAttachmentInsert) throw new Error('connection terminated');
-            return [{ id: 'att-1', filename: 'x.pdf', content_type: 'application/pdf', size_bytes: 1 }];
-          },
-        }),
+        values: (v: unknown) => {
+          state.values.push(v);
+          return {
+            returning: async () => {
+              if (n === 0) return [{ ...msgRow(M1).message, attachment_count: 0 }];
+              if (opts.failAttachmentInsert) throw new Error('connection terminated');
+              return [{ id: 'att-1', filename: 'x.pdf', content_type: 'application/pdf', size_bytes: 1 }];
+            },
+          };
+        },
       };
     }),
     update: vi.fn(() => ({
