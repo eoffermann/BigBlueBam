@@ -183,9 +183,6 @@ importers:
       date-fns:
         specifier: ^4.1.0
         version: 4.1.0
-      dompurify:
-        specifier: ^3.3.3
-        version: 3.3.3
       livekit-client:
         specifier: ^2.18.1
         version: 2.18.1(@types/dom-mediacapture-record@1.0.22)
@@ -220,9 +217,6 @@ importers:
       '@testing-library/react':
         specifier: ^16.3.0
         version: 16.3.2(@testing-library/dom@10.4.1)(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
-      '@types/dompurify':
-        specifier: ^3.2.0
-        version: 3.2.0
       '@types/react':
         specifier: ^19.1.2
         version: 19.2.14
@@ -878,9 +872,6 @@ importers:
       date-fns:
         specifier: ^4.1.0
         version: 4.1.0
-      dompurify:
-        specifier: ^3.3.3
-        version: 3.3.3
       lucide-react:
         specifier: ^0.487.0
         version: 0.487.0(react@19.2.4)
@@ -921,9 +912,6 @@ importers:
       '@testing-library/react':
         specifier: ^16.3.0
         version: 16.3.2(@testing-library/dom@10.4.1)(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
-      '@types/dompurify':
-        specifier: ^3.2.0
-        version: 3.2.0
       '@types/react':
         specifier: ^19.1.2
         version: 19.2.14
@@ -2364,9 +2352,6 @@ importers:
       date-fns:
         specifier: ^4.1.0
         version: 4.1.0
-      dompurify:
-        specifier: ^3.3.3
-        version: 3.3.3
       lucide-react:
         specifier: ^0.487.0
         version: 0.487.0(react@19.2.4)
@@ -2401,9 +2386,6 @@ importers:
       '@testing-library/react':
         specifier: ^16.3.0
         version: 16.3.2(@testing-library/dom@10.4.1)(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
-      '@types/dompurify':
-        specifier: ^3.2.0
-        version: 3.2.0
       '@types/react':
         specifier: ^19.1.2
         version: 19.2.14
@@ -3525,9 +3507,6 @@ importers:
       date-fns:
         specifier: ^4.1.0
         version: 4.1.0
-      dompurify:
-        specifier: ^3.3.3
-        version: 3.3.3
       lib0:
         specifier: ^0.2.88
         version: 0.2.117
@@ -3577,9 +3556,6 @@ importers:
       '@testing-library/react':
         specifier: ^16.3.0
         version: 16.3.2(@testing-library/dom@10.4.1)(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
-      '@types/dompurify':
-        specifier: ^3.2.0
-        version: 3.2.0
       '@types/react':
         specifier: ^19.1.2
         version: 19.2.14
@@ -4447,9 +4423,6 @@ importers:
       date-fns:
         specifier: ^4.1.0
         version: 4.1.0
-      dompurify:
-        specifier: ^3.3.3
-        version: 3.3.3
       lucide-react:
         specifier: ^0.487.0
         version: 0.487.0(react@19.2.4)
@@ -4484,9 +4457,6 @@ importers:
       '@testing-library/react':
         specifier: ^16.3.0
         version: 16.3.2(@testing-library/dom@10.4.1)(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
-      '@types/dompurify':
-        specifier: ^3.2.0
-        version: 3.2.0
       '@types/papaparse':
         specifier: ^5.5.2
         version: 5.5.2
@@ -4550,9 +4520,6 @@ importers:
       date-fns:
         specifier: ^4.1.0
         version: 4.1.0
-      dompurify:
-        specifier: ^3.3.3
-        version: 3.3.3
       lucide-react:
         specifier: ^0.487.0
         version: 0.487.0(react@19.2.4)
@@ -4581,9 +4548,6 @@ importers:
       '@testing-library/react':
         specifier: ^16.3.0
         version: 16.3.2(@testing-library/dom@10.4.1)(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
-      '@types/dompurify':
-        specifier: ^3.2.0
-        version: 3.2.0
       '@types/react':
         specifier: ^19.1.2
         version: 19.2.14
@@ -5117,7 +5081,7 @@ importers:
         specifier: ^5.0.0
         version: 5.96.1(react@19.2.4)
       dompurify:
-        specifier: ^3.2.0
+        specifier: ^3.3.3
         version: 3.3.3
       lucide-react:
         specifier: '>=0.400.0'
@@ -8078,10 +8042,6 @@ packages:
 
   '@types/dom-mediacapture-record@1.0.22':
     resolution: {integrity: sha512-mUMZLK3NvwRLcAAT9qmcK+9p7tpU2FHdDsntR3YI4+GY88XrgG4XiE7u1Q2LAN2/FZOz/tdMDC3GQCR4T8nFuw==}
-
-  '@types/dompurify@3.2.0':
-    resolution: {integrity: sha512-Fgg31wv9QbLDA0SpTOXO3MaxySc4DKGLi8sna4/Utjo4r3ZRPdCt4UQee8BWr+Q5z21yifghREPJGYaEOEIACg==}
-    deprecated: This is a stub types definition. dompurify provides its own type definitions, so you do not need this installed.
 
   '@types/estree@1.0.8':
     resolution: {integrity: sha512-dWHzHa2WqEXI/O1E9OjrocMTKJl2mSrEolh1Iomrv6U+JuNwaHXsXx9bLu5gG7BUWFIN0skIQJQ/L1rIex4X6w==}
@@ -14013,10 +13973,6 @@ snapshots:
   '@types/deep-eql@4.0.2': {}
 
   '@types/dom-mediacapture-record@1.0.22': {}
-
-  '@types/dompurify@3.2.0':
-    dependencies:
-      dompurify: 3.3.3
 
   '@types/estree@1.0.8': {}
 
