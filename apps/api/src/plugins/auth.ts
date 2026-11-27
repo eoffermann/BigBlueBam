@@ -1,15 +1,18 @@
 import fp from 'fastify-plugin';
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
-import { eq, and, isNull, gt } from 'drizzle-orm';
+import { eq, and, isNull, gt, inArray } from 'drizzle-orm';
 import argon2 from 'argon2';
 import { db } from '../db/index.js';
 import { sessions } from '../db/schema/sessions.js';
 import { users } from '../db/schema/users.js';
-import { apiKeys } from '../db/schema/api-keys.js';
-import { organizationMemberships } from '../db/schema/organization-memberships.js';
-import { organizations } from '../db/schema/organizations.js';
 import { impersonationSessions } from '../db/schema/impersonation-sessions.js';
-import { resolveUserOrgRoles } from '../services/role-resolver.js';
+import {
+  findApiKeyCandidates,
+  isLiveOrg,
+  loadLiveMemberships,
+  loadOrgRoles,
+  touchApiKey,
+} from '../services/auth-identity.service.js';
 import { resolveEffectiveOrg } from './org-context.js';
 
 const UUID_REGEX_HEADER = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -105,23 +108,14 @@ async function resolveOrgContext(
 ): Promise<{ memberships: OrgMembership[]; activeOrgId: string; activeRole: string }> {
   // Wave E.F: role is no longer a column on organization_memberships. It
   // is resolved per-org from account_group_memberships → permission_groups.
-  // We fetch both in a single round-trip via resolveUserOrgRoles, then
-  // zip the per-membership row with its resolved role.
-  const [rows, rolesByOrg] = await Promise.all([
-    db
-      .select({
-        org_id: organizationMemberships.org_id,
-        is_default: organizationMemberships.is_default,
-        joined_at: organizationMemberships.joined_at,
-      })
-      .from(organizationMemberships)
-      // Exclude memberships to soft-deleted orgs (migration 0191). The delete
-      // route drops these rows, but the join keeps auth correct even if one
-      // lingers — a member can never resolve into a deleted org.
-      .innerJoin(organizations, eq(organizations.id, organizationMemberships.org_id))
-      .where(and(eq(organizationMemberships.user_id, userId), isNull(organizations.deleted_at))),
-    resolveUserOrgRoles(userId),
-  ]);
+  // We fetch memberships and roles in parallel (auth-identity.service, the
+  // same join resolveUserOrgRoles performs), then zip each membership row
+  // with its resolved role.
+  // Runs before the org GUC is bound, so it reads through the identity
+  // functions (#105, services/auth-identity.service.ts). Memberships exclude
+  // soft-deleted orgs (migration 0191): a member can never resolve into a
+  // deleted org even if a membership row lingers.
+  const [rows, rolesByOrg] = await Promise.all([loadLiveMemberships(userId), loadOrgRoles(userId)]);
 
   if (rows.length === 0) {
     // User hasn't been backfilled yet — fall back to users.org_id.
@@ -131,12 +125,7 @@ async function resolveOrgContext(
     }
     // Don't fall back into a soft-deleted org (single-org member of a deleted
     // org → orgless, not silently re-resolved into the dead org).
-    const [fallbackOrg] = await db
-      .select({ id: organizations.id })
-      .from(organizations)
-      .where(and(eq(organizations.id, fallbackOrgId), isNull(organizations.deleted_at)))
-      .limit(1);
-    if (!fallbackOrg) {
+    if (!(await isLiveOrg(fallbackOrgId))) {
       throw new OrgMembershipError('User has no active organization memberships');
     }
     const fallbackRole = rolesByOrg.get(fallbackOrgId) ?? 'member';
@@ -395,25 +384,31 @@ async function authPlugin(fastify: FastifyInstance) {
       const SVC_BUCKET_MAX = 64;
       const isSvcBucket = prefix === SVC_KEY_PREFIX;
 
-      const candidates = await db
-        .select({
-          apiKey: apiKeys,
-          user: {
-            id: users.id,
-            org_id: users.org_id,
-            email: users.email,
-            display_name: users.display_name,
-            avatar_url: users.avatar_url,
-            timezone: users.timezone,
-            is_active: users.is_active,
-            is_superuser: users.is_superuser,
-            kind: users.kind,
-          },
-        })
-        .from(apiKeys)
-        .innerJoin(users, eq(apiKeys.user_id, users.id))
-        .where(eq(apiKeys.key_prefix, prefix))
-        .limit(isSvcBucket ? SVC_BUCKET_MAX : 10);
+      // api_keys is org-gated under RLS enforce mode and the org is not known
+      // yet, so candidates come through the identity function (#105). users
+      // is not org-gated; the owners are joined in here.
+      const keyRows = await findApiKeyCandidates(prefix, isSvcBucket ? SVC_BUCKET_MAX : 10);
+      const ownerRows = keyRows.length
+        ? await db
+            .select({
+              id: users.id,
+              org_id: users.org_id,
+              email: users.email,
+              display_name: users.display_name,
+              avatar_url: users.avatar_url,
+              timezone: users.timezone,
+              is_active: users.is_active,
+              is_superuser: users.is_superuser,
+              kind: users.kind,
+            })
+            .from(users)
+            .where(inArray(users.id, [...new Set(keyRows.map((k) => k.user_id))]))
+        : [];
+      const ownerById = new Map(ownerRows.map((u) => [u.id, u]));
+      const candidates = keyRows.flatMap((apiKey) => {
+        const user = ownerById.get(apiKey.user_id);
+        return user ? [{ apiKey, user }] : [];
+      });
 
       // P2-11: A random prefix has a huge key space, so natural collisions are
       // vanishingly rare. DoS mitigation: >3 candidates for a *random* prefix
@@ -485,12 +480,9 @@ async function authPlugin(fastify: FastifyInstance) {
             candidate.apiKey.org_id,
           );
           // Update last_used_at — fire-and-forget, log errors but don't block the response.
-          db.update(apiKeys)
-            .set({ last_used_at: new Date() })
-            .where(eq(apiKeys.id, candidate.apiKey.id))
-            .catch((err) => {
-              console.warn('Failed to update api_keys.last_used_at:', err);
-            });
+          touchApiKey(candidate.apiKey.id).catch((err) => {
+            console.warn('Failed to update api_keys.last_used_at:', err);
+          });
           return;
         }
       }

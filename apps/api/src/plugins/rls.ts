@@ -71,7 +71,12 @@ const rlsPlugin = fp(async (fastify: FastifyInstance) => {
       throw err;
     }
     store.reserved = reserved;
-    store.db = drizzle(reserved, { schema });
+    // drizzle's postgres-js driver reads and patches `client.options.parsers/serializers`, which
+    // a ReservedSql does not carry, so drizzle(reserved) threw "Cannot read properties of
+    // undefined (reading 'parsers')" and every enforce-mode request 500'd (found by the #105
+    // DB-backed test). A reserved connection runs with its parent pool's options, which drizzle
+    // already patched when the pool instance was created, so hand it those.
+    store.db = drizzle(Object.assign(reserved, { options: queryClient.options }), { schema });
   });
 
   const release = async (): Promise<void> => {
