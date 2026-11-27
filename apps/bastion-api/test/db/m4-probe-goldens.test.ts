@@ -147,7 +147,10 @@ describe.skipIf(!DATABASE_URL)('M4 probe goldens three ways (live database)', ()
     });
   });
 
-  it('under the RLS role the session really is hidden, which is why probes are definer functions', async () => {
+  // Migration 0311 (#105) made sessions a per-user credential table with no org policy and RLS off,
+  // so the RLS role now reads the departed user's session too; this used to assert it was hidden.
+  // The probes stay definer functions for the org-scoped tables they also read.
+  it('sessions are not org-scoped (0311): the RLS role sees the same session as the owner', async () => {
     const counts = await sql.begin(async (raw) => {
       const tx = raw as unknown as postgres.Sql;
       const asOwner = await tx`SELECT count(*)::int AS n FROM sessions WHERE user_id = ${departed}`;
@@ -156,7 +159,7 @@ describe.skipIf(!DATABASE_URL)('M4 probe goldens three ways (live database)', ()
       const asRole = await tx`SELECT count(*)::int AS n FROM sessions WHERE user_id = ${departed}`;
       return { asOwner: asOwner[0]!.n, asRole: asRole[0]!.n };
     });
-    expect(counts).toEqual({ asOwner: 1, asRole: 0 });
+    expect(counts).toEqual({ asOwner: 1, asRole: 1 });
   });
 
   it('the org guard refuses a probe for another organization, whichever pool runs it', async () => {
