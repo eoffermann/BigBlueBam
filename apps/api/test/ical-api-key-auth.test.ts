@@ -145,6 +145,25 @@ describe('iCal ?token= uses the shared API-key verification', () => {
     expect(res.statusCode).toBe(401);
   });
 
+  // #343: a superseded key with no expires_at authenticated forever after rotation.
+  it('refuses a rotated key with no expires_at once its grace window has closed', async () => {
+    const res = await feed({
+      expires_at: null,
+      rotated_at: new Date(Date.now() - 8 * 24 * hour).toISOString(),
+      rotation_grace_expires_at: new Date(Date.now() - hour).toISOString(),
+    });
+    expect(res.statusCode).toBe(401);
+  });
+
+  it('accepts a rotated key with no expires_at inside its grace window', async () => {
+    const res = await feed({
+      expires_at: null,
+      rotated_at: new Date(Date.now() - hour).toISOString(),
+      rotation_grace_expires_at: new Date(Date.now() + hour).toISOString(),
+    });
+    expect(res.statusCode, res.body).toBe(200);
+  });
+
   it("refuses a key whose owner is deactivated", async () => {
     const res = await feed({}, { is_active: false });
     expect(res.statusCode).toBe(401);

@@ -97,6 +97,14 @@ describe('verifyBamApiKey', () => {
     expect(await verifyBamApiKey(req, TOKEN)).not.toBeNull();
   });
 
+  // #343: a rotated predecessor with no expires_at must stop at the end of its grace window.
+  it('rejects a rotated key with no expires_at after its grace window', async () => {
+    const longAgo = new Date(Date.now() - 8 * 24 * 3600_000).toISOString();
+    const past = new Date(Date.now() - 60_000).toISOString();
+    rows.splice(0, rows.length, key({ expires_at: null, rotated_at: longAgo, rotation_grace_expires_at: past }));
+    expect(await verifyBamApiKey(req, TOKEN)).toBeNull();
+  });
+
   it("rejects an inactive user's key", async () => {
     rows.splice(0, rows.length, key({ is_active: false }));
     expect(await verifyBamApiKey(req, TOKEN)).toBeNull();

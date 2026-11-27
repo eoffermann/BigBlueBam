@@ -11,7 +11,7 @@
 //   - which scopes exist and how they order (API_KEY_SCOPES, scopeAtLeast)
 //   - which org roles hold org-admin power (ORG_ADMIN_ROLES) and whose keys that caps
 //     (keyRoleCapApplies)
-//   - when a key row may authenticate at all (isApiKeyUsable: expiry and rotation grace)
+//   - when a key row may authenticate at all (isApiKeyUsable: expiry and rotation grace, #343)
 //   - how a token is matched to a key row and its owner (verifyApiKeyToken)
 //   - which org a key confines its caller to (resolveKeyOrgPin)
 //   - what requireScope(min) admits (requireScope)
@@ -85,13 +85,20 @@ export interface ApiKeyLifetime {
 }
 
 /**
- * Whether a key row may authenticate at `now`, independent of its secret. A key past
- * expires_at is refused unless it was rotated and its rotation grace window is still open:
- * rotation keeps the predecessor working so callers can roll over without downtime.
+ * Whether a key row may authenticate at `now`, independent of its secret.
+ *
+ *  - A key that has been rotated (superseded by a successor) authenticates only while its
+ *    rotation grace window is open, whatever its own expires_at says. Rotation keeps the
+ *    predecessor working so callers can roll over without downtime, and no longer: a
+ *    superseded key with a NULL expires_at used to authenticate forever (#343). A rotated
+ *    key with no grace timestamp is refused (fail closed).
+ *  - Any other key authenticates until its expires_at (NULL means it does not expire).
  */
 export function isApiKeyUsable(key: ApiKeyLifetime, now: Date = new Date()): boolean {
-  if (!key.expires_at || new Date(key.expires_at) >= now) return true;
-  return !!key.rotated_at && !!key.rotation_grace_expires_at && new Date(key.rotation_grace_expires_at) > now;
+  if (key.rotated_at) {
+    return !!key.rotation_grace_expires_at && new Date(key.rotation_grace_expires_at) > now;
+  }
+  return !key.expires_at || new Date(key.expires_at) >= now;
 }
 
 // ─────────────────────────────────────────────────────────────────────

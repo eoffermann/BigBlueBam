@@ -32,6 +32,22 @@ describe('isApiKeyUsable', () => {
     expect(isApiKeyUsable({ expires_at: at(-hour), rotated_at: null, rotation_grace_expires_at: null }, now)).toBe(false);
   });
 
+  // #343: a rotated predecessor whose expires_at is NULL authenticated forever.
+  it('accepts a rotated key with a NULL expires_at inside its grace window', () => {
+    expect(
+      isApiKeyUsable({ expires_at: null, rotated_at: at(-2 * hour), rotation_grace_expires_at: at(hour) }, now),
+    ).toBe(true);
+  });
+
+  it('refuses a rotated key with a NULL expires_at after its grace window closed', () => {
+    expect(
+      isApiKeyUsable({ expires_at: null, rotated_at: at(-8 * 24 * hour), rotation_grace_expires_at: at(-hour) }, now),
+    ).toBe(false);
+  });
+
+  it('refuses a rotated key with no grace timestamp (fail closed)', () => {
+    expect(isApiKeyUsable({ expires_at: null, rotated_at: at(-hour), rotation_grace_expires_at: null }, now)).toBe(false);
+  });
 
   it('keeps an expired rotated key working while its grace window is open', () => {
     expect(
@@ -42,7 +58,7 @@ describe('isApiKeyUsable', () => {
   it('accepts ISO strings as well as Dates', () => {
     expect(
       isApiKeyUsable(
-        { expires_at: at(-hour).toISOString(), rotated_at: at(-hour).toISOString(), rotation_grace_expires_at: at(-1).toISOString() },
+        { expires_at: null, rotated_at: at(-hour).toISOString(), rotation_grace_expires_at: at(-1).toISOString() },
         now,
       ),
     ).toBe(false);
@@ -132,8 +148,14 @@ describe('verifyApiKeyToken', () => {
     expect(store.findCandidates).toHaveBeenCalledWith('bbam_abc', 10);
   });
 
+  it('refuses a rotated predecessor with a NULL expires_at after grace (#343)', async () => {
+    const c = candidate({ rotated_at: at(-8 * 24 * hour), rotation_grace_expires_at: at(-hour) });
+    const store = { findCandidates: async () => [c], verifyHash: async () => true };
+    expect(await verifyApiKeyToken('bbam_abcdef123', store, undefined, () => now)).toBeNull();
+  });
+
   it('accepts a rotated predecessor inside grace', async () => {
-    const c = candidate({ expires_at: at(-hour), rotated_at: at(-hour), rotation_grace_expires_at: at(hour) });
+    const c = candidate({ rotated_at: at(-hour), rotation_grace_expires_at: at(hour) });
     const store = { findCandidates: async () => [c], verifyHash: async () => true };
     expect(await verifyApiKeyToken('bbam_abcdef123', store, undefined, () => now)).toBe(c);
   });
