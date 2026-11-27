@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
+import { checkUrl, safeFetch } from '@bigbluebam/egress-guard';
 import { requireAuth } from '../plugins/auth.js';
 
 const querySchema = z.object({
@@ -23,24 +24,17 @@ export default async function linkPreviewRoutes(fastify: FastifyInstance) {
     async (request, reply) => {
       const { url } = querySchema.parse(request.query);
 
-      // Reject internal URLs (no point in self-previewing)
-      try {
-        const parsed = new URL(url);
-        if (['localhost', '127.0.0.1', '0.0.0.0'].includes(parsed.hostname)) {
-          return reply.status(400).send({
-            error: {
-              code: 'BAD_REQUEST',
-              message: 'Cannot preview internal URLs',
-              details: [],
-              request_id: request.id,
-            },
-          });
-        }
-      } catch {
+      // Refuse internal targets up front. This used to be a three-name denylist
+      // (localhost, 127.0.0.1, 0.0.0.0) that let 127.1, [::1], every RFC1918
+      // address, 169.254.169.254 and any DNS name pointing at them through.
+      // safeFetch below repeats the check on every redirect hop and pins the
+      // connection to the vetted address.
+      const check = await checkUrl(url);
+      if (!check.safe) {
         return reply.status(400).send({
           error: {
             code: 'BAD_REQUEST',
-            message: 'Invalid URL',
+            message: check.reason === 'Invalid URL' ? 'Invalid URL' : 'Cannot preview internal URLs',
             details: [],
             request_id: request.id,
           },
@@ -57,14 +51,13 @@ export default async function linkPreviewRoutes(fastify: FastifyInstance) {
         const controller = new AbortController();
         const timeout = setTimeout(() => controller.abort(), 5000);
 
-        const response = await fetch(url, {
+        const response = await safeFetch(url, {
           method: 'GET',
           headers: {
             'User-Agent': 'BigBlueBam-LinkPreview/1.0 (compatible; +https://bigbluebam.com)',
             'Accept': 'text/html',
           },
           signal: controller.signal,
-          redirect: 'follow',
         });
 
         clearTimeout(timeout);

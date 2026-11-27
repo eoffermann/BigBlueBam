@@ -15,6 +15,7 @@ COPY packages/db-stubs/package.json ./packages/db-stubs/
 COPY packages/livekit-tokens/package.json ./packages/livekit-tokens/
 COPY packages/permissions/package.json ./packages/permissions/
 COPY packages/storage/package.json ./packages/storage/
+COPY packages/egress-guard/package.json ./packages/egress-guard/
 
 RUN pnpm install --no-frozen-lockfile
 
@@ -30,6 +31,7 @@ COPY packages/db-stubs/ ./packages/db-stubs/
 COPY packages/livekit-tokens/ ./packages/livekit-tokens/
 COPY packages/permissions/ ./packages/permissions/
 COPY packages/storage/ ./packages/storage/
+COPY packages/egress-guard/ ./packages/egress-guard/
 COPY apps/banter-api/src ./apps/banter-api/src
 COPY apps/banter-api/tsconfig.json apps/banter-api/tsup.config.ts ./apps/banter-api/
 
@@ -40,6 +42,7 @@ RUN pnpm --filter @bigbluebam/shared build \
  && pnpm --filter @bigbluebam/livekit-tokens build \
  && pnpm --filter @bigbluebam/permissions build \
  && pnpm --filter @bigbluebam/storage build \
+ && pnpm --filter @bigbluebam/egress-guard build \
  && pnpm --filter @bigbluebam/banter-api build
 
 # Create a deploy-ready directory with all prod deps
@@ -57,6 +60,7 @@ COPY packages/db-stubs/ ./packages/db-stubs/
 COPY packages/livekit-tokens/ ./packages/livekit-tokens/
 COPY packages/permissions/ ./packages/permissions/
 COPY packages/storage/ ./packages/storage/
+COPY packages/egress-guard/ ./packages/egress-guard/
 COPY apps/banter-api/ ./apps/banter-api/
 
 WORKDIR /app/apps/banter-api

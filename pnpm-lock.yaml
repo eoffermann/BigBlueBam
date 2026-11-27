@@ -244,6 +244,9 @@ importers:
       '@bigbluebam/db-stubs':
         specifier: workspace:*
         version: link:../../packages/db-stubs
+      '@bigbluebam/egress-guard':
+        specifier: workspace:*
+        version: link:../../packages/egress-guard
       '@bigbluebam/livekit-tokens':
         specifier: workspace:*
         version: link:../../packages/livekit-tokens
