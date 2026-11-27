@@ -7,9 +7,9 @@ generated: "2026-11-26T07:04:55.475Z"
 # Introduction to BigBlueBam
 
 
-Twenty-four apps that behave like one product, built for people and AI agents together.
+Twenty-five apps that behave like one product, built for people and AI agents together.
 
-- One login, one organization, one permission model across project management, CRM, chat, help desk, docs, whiteboard, knowledge, scheduling, invoicing, analytics, forms, automation, goals, diagrams, email, files and media review, telemetry, metric definitions, customer identity, contracts, project margin, and vendor procurement
+- One login, one organization, one permission model across project management, CRM, chat, help desk, docs, whiteboard, knowledge, scheduling, invoicing, analytics, forms, automation, goals, diagrams, email, files and media review, telemetry, metric definitions, customer identity, contracts, project margin, vendor procurement, and compliance readiness
 - Work crosses apps without re-keying: a deal becomes a project, a sticky note becomes a task, a won deal becomes an invoice
 - Pervasive presence: every app is a live, shared space where you can see who's here and pull a teammate into voice or video in one tap, the way you'd bump into them in the hallway instead of booking a meeting
 - Agent-ready by design: 951 MCP tools let an AI assistant work the same boards, with the same permissions and audit trail as a teammate

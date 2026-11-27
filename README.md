@@ -38,7 +38,7 @@
 <p align="center">
   <img src="https://img.shields.io/badge/tests-900%2B%20passing-brightgreen" alt="Tests" />
   <img src="https://img.shields.io/badge/MCP%20tools-951-blue" alt="MCP Tools" />
-  <img src="https://img.shields.io/badge/apps-24-blueviolet" alt="Apps" />
+  <img src="https://img.shields.io/badge/apps-25-blueviolet" alt="Apps" />
   <img src="https://img.shields.io/badge/license-MIT-green" alt="License" />
 </p>
 
@@ -60,7 +60,7 @@ This is made possible by **951 MCP tools** that give AI assistants (Claude, Clau
 
 ## The Suite at a Glance
 
-24 apps, one workspace. If you've used the tools on the right you already know most of how each app works - the twist is that all 24 live under the same auth, the same org and project permissions, and the same 951-tool MCP surface. No integration glue, no per-tool API keys, no glue-code tax: an agent that can move a card can also close a deal, publish an article, and send an invoice.
+25 apps, one workspace. If you've used the tools on the right you already know most of how each app works - the twist is that all 25 live under the same auth, the same org and project permissions, and the same 951-tool MCP surface. No integration glue, no per-tool API keys, no glue-code tax: an agent that can move a card can also close a deal, publish an article, and send an invoice.
 
 | App | What it is | Comparable to |
 |-----|------------|---------------|
@@ -387,7 +387,7 @@ This is the part most work suites bolt on as an afterthought. BigBlueBam exposes
 
 ### MCP Tools Reference
 
-**951 tools** across the 24 apps plus cross-cutting agentic platform surfaces:
+**951 tools** across the 25 apps plus cross-cutting agentic platform surfaces:
 
 | Category | Count | What they cover |
 |----------|------:|-----------------|
@@ -493,6 +493,14 @@ Basis gives the whole suite one trusted definition per number, and an AI core th
 <img src="docs/apps/basis/screenshots/light/01-catalog.png" width="400" alt="Basis - Governed Metric Layer">
 
 [Help](docs/apps/basis/help.md) | [Guide](docs/apps/basis/guide.md) | [MCP Tools](docs/apps/basis/mcp-tools.md)
+
+### Bastion - Continuous compliance readiness for SOC 2 and ISO 27001
+
+Bastion checks your SOC 2 or ISO 27001 controls every night against what actually happened in the suite, keeps tamper-evident proof of each result, and tells you first which controls nothing can prove yet, with a fix already drafted. Reach for it when a customer asks for a security review, a questionnaire arrives, or an audit is on the calendar.
+
+<img src="docs/apps/bastion/screenshots/light/01-readiness.png" width="400" alt="Bastion - Continuous compliance readiness for SOC 2 and ISO 27001">
+
+[Help](docs/apps/bastion/help.md) | [Guide](docs/apps/bastion/guide.md)
 
 ### Bay - Media review and approval
 
@@ -704,7 +712,7 @@ Helpdesk is the public-facing support portal where your customers register, file
 
 ### Introduction to BigBlueBam
 
-An overview of the whole suite: the 24 apps, how they connect, and how AI agents work alongside your team.
+An overview of the whole suite: the 25 apps, how they connect, and how AI agents work alongside your team.
 
 [Help](docs/apps/introduction/help.md) | [Guide](docs/apps/introduction/guide.md) | [Overview](docs/apps/introduction/marketing.md) | [MCP Tools](docs/apps/introduction/mcp-tools.md)
 <!-- AUTODOCS:APP_SECTIONS:END -->
@@ -1064,6 +1072,7 @@ site/               → Marketing site (served at /)
 | [Bam (Project Management) Guide](docs/apps/bam/guide.md) | User guide and MCP tool reference |
 | [Banter (Team Messaging) Guide](docs/apps/banter/guide.md) | User guide and MCP tool reference |
 | [Basis Guide](docs/apps/basis/guide.md) | User guide and MCP tool reference |
+| [Bastion Guide](docs/apps/bastion/guide.md) | User guide and MCP tool reference |
 | [Bay Guide](docs/apps/bay/guide.md) | User guide and MCP tool reference |
 | [Beacon (Knowledge Base) Guide](docs/apps/beacon/guide.md) | User guide and MCP tool reference |
 | [Bearing (Goals & OKRs) Guide](docs/apps/bearing/guide.md) | User guide and MCP tool reference |

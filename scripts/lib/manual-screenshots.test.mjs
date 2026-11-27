@@ -33,13 +33,7 @@ test('site copies of docs screenshots are byte-identical with identical names', 
 });
 
 // Known gaps, each tracked by an open issue. Delete an entry once its image lands.
-const KNOWN_MISSING = new Set([
-  // #382: Bastion screenshots were never captured.
-  'bastion-section.tsx: /screenshots/bastion/light/01-readiness.png',
-  'bastion-section.tsx: /screenshots/bastion/light/06-what-to-fix-first.png',
-  'bastion-section.tsx: /screenshots/bastion/light/04-control-detail.png',
-  'bastion-section.tsx: /screenshots/bastion/dark/01-readiness.png',
-]);
+const KNOWN_MISSING = new Set([]);
 
 test('marketing app sections only reference screenshots that exist', () => {
   const dir = path.join(ROOT, 'site', 'src', 'components', 'sections');

@@ -192,7 +192,10 @@ function LinkPolicyForm() {
           onChange={(e) => setDays(Number(e.target.value) || 365)}
         />
       </label>
-      <p className="text-xs text-zinc-500">Everyone in your organization will be asked to read it. The article must be shared with everyone in Beacon.</p>
+      <p className="text-xs text-zinc-500">
+        Everyone in your organization will be asked to read it. The article must be shared with everyone in Beacon. If your security policy control is
+        not linked to a policy yet, Bastion links its checks to this one for you to confirm in the Review queue.
+      </p>
       <div className="flex gap-2">
         <button type="submit" className={primary} disabled={!target || create.isPending}>
           Link this policy

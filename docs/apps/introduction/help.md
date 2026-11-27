@@ -1,4 +1,4 @@
-# BigBlueBam - One suite, twenty-four apps, built for people and agents together
+# BigBlueBam - One suite, twenty-five apps, built for people and agents together
 
 ## Overview
 
@@ -10,7 +10,7 @@ decision gets made in chat and never reaches the doc. The "AI feature" each vend
 added last year is a chat box in the corner that can summarize a page but cannot
 actually do anything.
 
-BigBlueBam is the answer to that sprawl: twenty-four applications that behave like one
+BigBlueBam is the answer to that sprawl: twenty-five applications that behave like one
 product. They share a single login, a single organization and user model, and a
 single set of permissions. A deal in the CRM can become a project. A sticky note
 on the whiteboard can become a task. A won deal can become an invoice. You do not
@@ -80,7 +80,7 @@ a command palette move you between them.
 - The **"(?)" Help Center** in each app's top bar opens the same documentation you
   are reading now, per app, with search and cross-references.
 
-## The twenty-four apps
+## The twenty-five apps
 
 Here is the whole suite at a glance, grouped by what you are trying to do. Each
 app is deep enough to stand on its own and is genuinely better because it lives
@@ -164,6 +164,10 @@ take in that app.
 - **Bursar (20 tools), vendor procurement.** Lays competing vendor quotes side by
   side against one list of what you need, shows what each quote leaves out, and
   after you choose a vendor, watches the bills against the agreed prices.
+- **Bastion (66 tools), compliance readiness.** Keeps one set of controls for SOC 2
+  and ISO 27001, checks them every night against what really happened in the
+  suite, keeps sealed proof for the auditor, and drafts answers to customer
+  security questionnaires from what it can prove.
 
 ## How the apps work together
 
@@ -184,7 +188,7 @@ and pasting. A few of the connections that ship today:
   they describe.
 - **One notification surface and one activity stream.** Mentions, assignments, and
   cross-app events land in a shared feed and a unified activity view, so you do not
-  watch twenty-four inboxes.
+  watch twenty-five inboxes.
 - **Automation as the connective tissue.** Bolt listens for events from any app
   (a deal goes stale, a form is submitted, a task is assigned) and runs the next
   step, so the integrations above can be extended without writing glue code.
@@ -229,7 +233,7 @@ BigBlueBam treats an AI agent as a teammate that uses the product, not as a
 chatbot pasted onto it.
 
 - **Parity, not a sidebar.** Nearly every action a person can take is also an MCP
-  tool. The suite exposes 951 of them across the twenty-four apps and a
+  tool. The suite exposes 951 of them across the twenty-five apps and a
   shared platform layer (identity, search, activity, approvals, and more). An
   agent can plan a sprint, move a deal, triage a ticket, draft a campaign, or run
   a report.
@@ -256,7 +260,7 @@ The software is open source. You can read it, run it, host it, and export from i
 ## User Stories
 
 These walk through scenarios that cross several apps, which is where the suite is
-different from twenty-four separate tools.
+different from twenty-five separate tools.
 
 ### Story: A lead becomes a project becomes an invoice
 

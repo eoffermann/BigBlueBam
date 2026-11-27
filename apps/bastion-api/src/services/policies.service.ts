@@ -270,6 +270,26 @@ async function assertMembers(tx: Tx, orgId: string, ids: string[], field: string
   }
 }
 
+/**
+ * The control a policy linked without a named control proves (#387): the single active control
+ * with live policy checks (policy.attested / policy.current, proposed or confirmed) none of which
+ * is pinned to an active policy. Null when there is none, or more than one (then a person names it).
+ */
+export async function unpinnedPolicyControl(tx: Tx, orgId: string): Promise<string | null> {
+  const rows = await tx`
+    SELECT a.control_id
+      FROM bastion_assertions a
+      JOIN bastion_controls c ON c.id = a.control_id AND c.organization_id = a.organization_id
+     WHERE a.organization_id = ${orgId} AND c.lifecycle = 'active' AND a.kind = 'probe'
+       AND a.probe_key IN ('policy.attested', 'policy.current') AND a.review_status IN ('proposed', 'confirmed')
+     GROUP BY a.control_id
+    HAVING bool_and(NOT EXISTS (
+             SELECT 1 FROM bastion_policies p
+              WHERE p.organization_id = a.organization_id AND p.status = 'active' AND p.id::text = a.params->>'policy_id'))
+     LIMIT 2`;
+  return rows.length === 1 ? String(rows[0]?.control_id) : null;
+}
+
 /** POST /policies (row 65). */
 export async function createPolicy(d: PolicyDeps, viewer: Viewer, body: BastionPolicyCreate): Promise<Served<BastionPolicyCreateResponse>> {
   const entry = await orgTx(d.engine.sql, viewer.org_id, async (tx) => {
@@ -314,7 +334,13 @@ export async function createPolicy(d: PolicyDeps, viewer: Viewer, body: BastionP
     await auditRaw(tx, viewer, 'policy.create', { type: 'policy', id: pid }, { beacon_entry_id: beaconEntryId, audience: body.audience.kind, cadence_days: body.cadence_days });
     return pid;
   });
-  const proposed = body.control_id && d.pinChecks ? await d.pinChecks(viewer, body.control_id, id) : [];
+  // #387: linking without naming a control (the Policies page never names one) left the policy
+  // control's checks waiting on "a linked policy" forever, so the control read "Nothing can prove
+  // this yet" however many people had read it. The one control whose policy checks are not pinned
+  // to an active policy is the one this policy proves; its checks are pinned as proposals a person
+  // confirms in the Review queue, exactly as when the control is named.
+  const controlId = body.control_id ?? (d.pinChecks ? await orgTx(d.engine.sql, viewer.org_id, (tx) => unpinnedPolicyControl(tx, viewer.org_id)) : null);
+  const proposed = controlId && d.pinChecks ? await d.pinChecks(viewer, controlId, id) : [];
   // Linking needs bastion.policy.write (row 65), so the caller manages it.
   const out = await getPolicy(d, viewer, id, { policyWrite: true });
   return { data: { ...out.data, proposed_assertion_ids: proposed } };

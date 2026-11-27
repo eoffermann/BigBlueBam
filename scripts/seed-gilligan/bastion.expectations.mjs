@@ -187,6 +187,13 @@ export const BASTION_SEED_EXPECTATIONS = {
       required: 7,
       attested: 5,
       label: '5 of 7 have read the current version',
+      // #387: the policy proves this control; both of its checks are pinned to the policy, so the
+      // control reads Not met (two castaways have not read it), its gap is `failing`, never
+      // `no_source`, and Readiness lists it once.
+      controlKey: 'policy.security_policy',
+      probes: ['policy.attested', 'policy.current'],
+      stateWords: 'Not met',
+      gapKind: 'failing',
     },
   },
 
