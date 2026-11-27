@@ -76,7 +76,7 @@ export async function deleteBackup(id: string): Promise<boolean> {
   if (!b) return false;
   if (b.storage_key) {
     try {
-      await deleteFile(env.S3_BUCKET, b.storage_key);
+      await deleteFile(b.storage_key);
     } catch {
       // Best-effort object removal; the row is deleted regardless.
     }
@@ -159,7 +159,7 @@ export async function getBackupStream(
 ): Promise<{ stream: NodeJS.ReadableStream; size: number; filename: string } | null> {
   const b = await getBackup(id);
   if (!b?.storage_key || b.status !== 'completed') return null;
-  const { stream, size } = await getFileStream(env.S3_BUCKET, b.storage_key);
+  const { stream, size } = await getFileStream(b.storage_key);
   return { stream, size, filename: backupDownloadFilename(b) };
 }
 

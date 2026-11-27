@@ -27,6 +27,8 @@ export interface ObjectStat {
   size: number;
   integrity: string;
   modifiedAt: Date;
+  /** The stored Content-Type, when the backend reports one (stat only; list omits it). */
+  contentType?: string;
 }
 
 export interface StorageDriver {

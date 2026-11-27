@@ -7,7 +7,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { Job } from 'bullmq';
 import type { Logger } from 'pino';
-import { Readable } from 'node:stream';
+import { createInMemoryStorageDriver } from '@bigbluebam/storage';
 
 vi.mock('../src/utils/db.js', () => ({
   getDb: vi.fn(),
@@ -196,11 +196,11 @@ function createMockDb(
   };
 }
 
-function createMockMinio(zipBuffer: Buffer) {
-  return {
-    getObject: vi.fn(async () => Readable.from(zipBuffer)),
-    putObject: vi.fn(async () => ({ etag: 'mock', versionId: null })),
-  };
+/** An in-memory @bigbluebam/storage driver holding the archive under the import's key (#176). */
+function createStorage(zipBuffer: Buffer, key: string) {
+  const storage = createInMemoryStorageDriver();
+  storage.objects.set(key, { body: zipBuffer, contentType: 'application/zip', modifiedAt: new Date() });
+  return storage;
 }
 
 function makeJob(importId: string): Job<SlackImportJobData> {
@@ -283,11 +283,10 @@ describe('processSlackImportJob — happy path', () => {
 
     const mockDb = createMockDb(state, importRow);
     vi.mocked(getDb).mockReturnValue(mockDb as any);
-    const minio = createMockMinio(fixture.zip);
+    const storage = createStorage(fixture.zip, importRow.source_minio_key);
 
     await processSlackImportJob(makeJob('import-1'), mockLogger, {
-      minio: minio as any,
-      bucket: 'test-bucket',
+      storage,
       redis: { publish: vi.fn(async () => 1) } as any,
       emailQueue: { add: vi.fn(async () => undefined) } as any,
       cancelChecker: async () => false,
@@ -305,7 +304,10 @@ describe('processSlackImportJob — happy path', () => {
     expect(state.insertedReactions.length).toBeGreaterThan(0);
     // Pins — engineering channel
     expect(state.insertedPins.length).toBeGreaterThanOrEqual(1);
-    // MinIO putObject was called for the local-file attachment (notes.txt).
-    expect(minio.putObject).toHaveBeenCalled();
+    // The local-file attachment (notes.txt) was written through the storage driver
+    // under the import's attachment prefix, with its content type.
+    const written = [...storage.objects.keys()].filter((k) => k.startsWith('attachments/org-1/slack-imports/import-1/'));
+    expect(written.length).toBeGreaterThan(0);
+    expect(storage.objects.get(written[0]!)!.body.length).toBeGreaterThan(0);
   });
 });

@@ -5,8 +5,7 @@ import { db } from '../db/index.js';
 import { tickets } from '../db/schema/tickets.js';
 import { helpdeskTicketAttachments } from '../db/schema/helpdesk-ticket-attachments.js';
 import { requireHelpdeskAuth } from '../plugins/auth.js';
-import { uploadFile, getFileUrl, deleteFile } from '../services/upload.service.js';
-import { env } from '../env.js';
+import { uploadFile, getFileUrl, deleteFile, StorageNotConfiguredError } from '../services/upload.service.js';
 
 /**
  * G6: ticket-scoped file attachments backed by MinIO.
@@ -88,7 +87,7 @@ export default async function attachmentRoutes(fastify: FastifyInstance) {
         rows.map(async (row) => {
           let url: string | null = null;
           try {
-            url = await getFileUrl(env.S3_BUCKET, row.storage_key);
+            url = await getFileUrl(row.storage_key);
           } catch (err) {
             request.log.warn(
               { err, attachment_id: row.id },
@@ -180,8 +179,10 @@ export default async function attachmentRoutes(fastify: FastifyInstance) {
       const storageKey = `helpdesk-attachments/${id}/${uuid}/${safeFilename}`;
 
       try {
-        await uploadFile(env.S3_BUCKET, storageKey, buffer, file.mimetype);
+        await uploadFile(storageKey, buffer, file.mimetype);
       } catch (err) {
+        // Storage not configured answers 503 STORAGE_NOT_CONFIGURED (issue #176).
+        if (err instanceof StorageNotConfiguredError) throw err;
         request.log.error({ err }, 'Failed to upload attachment to object storage');
         return reply.status(500).send({
           error: {
@@ -208,7 +209,7 @@ export default async function attachmentRoutes(fastify: FastifyInstance) {
 
       let presignedUrl: string | null = null;
       try {
-        presignedUrl = await getFileUrl(env.S3_BUCKET, storageKey);
+        presignedUrl = await getFileUrl(storageKey);
       } catch {
         // Non-fatal: caller can re-fetch via GET.
       }
@@ -282,7 +283,7 @@ export default async function attachmentRoutes(fastify: FastifyInstance) {
       // MinIO delete fails we still remove the row so the customer sees it
       // gone and the orphaned object can be swept by a future GC job.
       try {
-        await deleteFile(env.S3_BUCKET, row.storage_key);
+        await deleteFile(row.storage_key);
       } catch (err) {
         request.log.warn(
           { err, attachment_id: row.id },

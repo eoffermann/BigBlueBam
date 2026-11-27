@@ -1,5 +1,20 @@
 import { z } from 'zod';
 
+// Object storage (shared with bin-api), read through @bigbluebam/storage: the
+// backup/restore jobs, Bin, Blip, Blank, Brief export, Slack import and the
+// extract jobs. No default credentials (issue #176): without S3_ACCESS_KEY /
+// S3_SECRET_KEY storage is "not configured". Exported on its own so
+// utils/storage.ts parses the same rule without needing the whole worker env.
+const s3EnvShape = {
+  S3_ENDPOINT: z.preprocess((v) => (v === '' ? undefined : v), z.string().default('http://minio:9000')),
+  S3_ACCESS_KEY: z.preprocess((v) => (v === '' ? undefined : v), z.string().optional()),
+  S3_SECRET_KEY: z.preprocess((v) => (v === '' ? undefined : v), z.string().optional()),
+  S3_BUCKET: z.string().default('bigbluebam-uploads'),
+  S3_REGION: z.string().default('us-east-1'),
+};
+export const s3EnvSchema = z.object(s3EnvShape);
+export type S3Env = z.infer<typeof s3EnvSchema>;
+
 const envSchema = z.object({
   DATABASE_URL: z.string().url(),
   REDIS_URL: z.string().url().default('redis://localhost:6379'),
@@ -49,13 +64,7 @@ const envSchema = z.object({
   CLAMAV_HOST: z.string().optional(),
   CLAMAV_PORT: z.coerce.number().int().positive().default(3310),
 
-  // Object storage (shared with bin-api). Used by the database backup job to
-  // upload pg_dump archives and by the restore job to fetch them.
-  S3_ENDPOINT: z.string().default('http://minio:9000'),
-  S3_ACCESS_KEY: z.string().default('minioadmin'),
-  S3_SECRET_KEY: z.string().default('minioadmin'),
-  S3_BUCKET: z.string().default('bigbluebam-uploads'),
-  S3_REGION: z.string().default('us-east-1'),
+  ...s3EnvShape,
   // Bastion's own bucket (Bastion spec 7, 9.1). Only bastion-export-packet touches it, with the
   // shared S3_* credentials above and THIS bucket name, never S3_BUCKET.
   BASTION_S3_BUCKET: z.string().min(3).default('bigbluebam-bastion'),

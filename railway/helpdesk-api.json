@@ -13,6 +13,7 @@
       "apps/helpdesk-api/Dockerfile",
       "packages/auth-core/**",
       "packages/logging/**",
+      "packages/storage/**",
       "packages/service-health/**",
       "packages/db-stubs/**"
     ]

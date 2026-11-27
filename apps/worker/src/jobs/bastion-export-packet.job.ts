@@ -25,7 +25,7 @@ import type { Logger } from 'pino';
 import JSZip from 'jszip';
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 import {
-  createBootstrapDriver,
+  createEnvBootstrapDriver,
   isStorageNotFoundError,
   StorageTimeoutError,
   type StorageDriver,
@@ -45,16 +45,20 @@ import { sanitizeForWinAnsi } from './bill-pdf-generate.job.js';
 import { bodyData, parseContract, postBastion } from './bastion-shared.js';
 
 export interface PacketStorageEnv {
-  S3_ENDPOINT: string;
-  S3_ACCESS_KEY: string;
-  S3_SECRET_KEY: string;
+  S3_ENDPOINT?: string | null;
+  S3_ACCESS_KEY?: string | null;
+  S3_SECRET_KEY?: string | null;
   S3_REGION: string;
   BASTION_S3_BUCKET: string;
 }
 
-/** The Bastion bucket, with the shared credentials (spec 7): BASTION_S3_BUCKET, never S3_BUCKET. */
-export function createBastionPacketStorage(env: PacketStorageEnv): StorageDriver {
-  return createBootstrapDriver({
+/**
+ * The Bastion bucket, with the shared credentials (spec 7): BASTION_S3_BUCKET, never S3_BUCKET.
+ * Null when storage is not configured (no default credentials, issue #176); the worker then fails
+ * each packet job with StorageNotConfiguredError instead of failing to boot.
+ */
+export function createBastionPacketStorage(env: PacketStorageEnv): StorageDriver | null {
+  return createEnvBootstrapDriver({
     S3_ENDPOINT: env.S3_ENDPOINT,
     S3_REGION: env.S3_REGION,
     S3_BUCKET: env.BASTION_S3_BUCKET,

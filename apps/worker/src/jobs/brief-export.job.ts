@@ -17,6 +17,7 @@ import type { Logger } from 'pino';
 import { sql } from 'drizzle-orm';
 import { getDb } from '../utils/db.js';
 import { publishBoltEvent } from '../utils/bolt-events.js';
+import { isWorkerStorageConfigured, putObjectBuffer, workerStorageEnv } from '../utils/storage.js';
 
 export interface BriefExportJobData {
   document_id: string;
@@ -136,35 +137,17 @@ export async function processBriefExportJob(
       return;
   }
 
-  // If MinIO/S3 credentials are configured, upload the export.
-  // Otherwise, log the export details. The caller can poll the job
-  // result for the download URL.
-  const s3Endpoint = process.env.S3_ENDPOINT;
+  // If object storage is configured, upload the export through the worker's
+  // @bigbluebam/storage driver (issue #176: no private client, no default
+  // credentials). Otherwise, log the export details. The caller can poll the
+  // job result for the download URL.
   let downloadUrl: string | null = null;
 
-  if (s3Endpoint) {
+  if (isWorkerStorageConfigured()) {
     try {
-      const { Client: MinioClient } = await import('minio');
-      const client = new MinioClient({
-        endPoint: new URL(s3Endpoint).hostname,
-        port: Number(new URL(s3Endpoint).port) || 9000,
-        useSSL: new URL(s3Endpoint).protocol === 'https:',
-        accessKey: process.env.S3_ACCESS_KEY ?? 'minioadmin',
-        secretKey: process.env.S3_SECRET_KEY ?? 'minioadmin',
-      });
-
-      const bucket = process.env.S3_BUCKET ?? 'brief-exports';
+      const { S3_BUCKET: bucket } = workerStorageEnv();
       const objectKey = `exports/${org_id}/${document_id}/${Date.now()}.${extension}`;
-
-      // Ensure bucket exists
-      const exists = await client.bucketExists(bucket);
-      if (!exists) {
-        await client.makeBucket(bucket, process.env.S3_REGION ?? 'us-east-1');
-      }
-
-      await client.putObject(bucket, objectKey, content, content.length, {
-        'Content-Type': mimeType,
-      });
+      await putObjectBuffer(objectKey, Buffer.from(content), mimeType);
 
       downloadUrl = `/${bucket}/${objectKey}`;
       logger.info({ document_id, objectKey }, 'brief-export: uploaded to S3');

@@ -9,7 +9,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { Job } from 'bullmq';
 import type { Logger } from 'pino';
-import { Readable } from 'node:stream';
+import { createInMemoryStorageDriver } from '@bigbluebam/storage';
 
 vi.mock('../src/utils/db.js', () => ({
   getDb: vi.fn(),
@@ -206,15 +206,12 @@ describe('processSlackImportJob — idempotency', () => {
     const mockDb = createIdempDb(state, importRow);
     vi.mocked(getDb).mockReturnValue(mockDb as any);
 
-    const minio = {
-      getObject: vi.fn(async () => Readable.from(fixture.zip)),
-      putObject: vi.fn(async () => ({ etag: 'm', versionId: null })),
-    };
+    const storage = createInMemoryStorageDriver();
+    storage.objects.set('k', { body: fixture.zip, contentType: 'application/zip', modifiedAt: new Date() });
 
     // First run
     await processSlackImportJob(makeJob('import-2'), mockLogger, {
-      minio: minio as any,
-      bucket: 'b',
+      storage,
       redis: { publish: vi.fn(async () => 1) } as any,
       emailQueue: { add: vi.fn(async () => undefined) } as any,
       cancelChecker: async () => false,
@@ -231,13 +228,10 @@ describe('processSlackImportJob — idempotency', () => {
     state.attachmentInsertsThisRun = 0;
     state.reactionInsertsThisRun = 0;
 
-    // Re-open the fixture for the second pass (the prior stream consumed it).
-    minio.getObject.mockImplementation(async () => Readable.from(fixture.zip));
-
-    // Second run — must be a no-op for messages + attachments.
+    // Second run — must be a no-op for messages + attachments. The in-memory
+    // driver opens a fresh stream for the archive on every read.
     await processSlackImportJob(makeJob('import-2'), mockLogger, {
-      minio: minio as any,
-      bucket: 'b',
+      storage,
       redis: { publish: vi.fn(async () => 1) } as any,
       emailQueue: { add: vi.fn(async () => undefined) } as any,
       cancelChecker: async () => false,

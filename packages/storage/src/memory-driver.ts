@@ -78,7 +78,7 @@ export function createInMemoryStorageDriver(): InMemoryStorageDriver {
     },
     async stat(key) {
       const o = objects.get(key);
-      return o ? statOf(key, o) : null;
+      return o ? { ...statOf(key, o), contentType: o.contentType } : null;
     },
     async delete(key) {
       objects.delete(key);

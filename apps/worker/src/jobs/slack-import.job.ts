@@ -27,7 +27,8 @@ import { Queue } from 'bullmq';
 import IORedis from 'ioredis';
 import { sql } from 'drizzle-orm';
 import StreamZip from 'node-stream-zip';
-import { Client as MinioClient } from 'minio';
+import { StorageNotConfiguredError, type StorageDriver } from '@bigbluebam/storage';
+import { getWorkerStorageDriver } from '../utils/storage.js';
 import crypto from 'node:crypto';
 import { readBodyCapped, safeFetch } from '@bigbluebam/egress-guard';
 import { getDb } from '../utils/db.js';
@@ -202,8 +203,9 @@ export async function processSlackImportJob(
     row,
     logger: log,
     redis: deps.redis ?? getStatusPublisher(),
-    minio: deps.minio ?? getMinioClient(),
-    bucket: deps.bucket ?? process.env.S3_BUCKET ?? 'bigbluebam-uploads',
+    // Issue #176: the worker's shared @bigbluebam/storage driver (bound to S3_BUCKET),
+    // null when storage is not configured.
+    storage: deps.storage !== undefined ? deps.storage : getWorkerStorageDriver(),
     emailQueue: deps.emailQueue ?? (getEmailQueue() as unknown as EmailQueueLike),
     slackToken: row.mapping?.options?.slack_bearer_token ?? null,
     options: row.mapping?.options ?? {},
@@ -321,8 +323,8 @@ type EmailQueueLike = { add: (name: string, data: unknown, opts?: unknown) => Pr
 
 export interface SlackImportDeps {
   redis?: { publish: (channel: string, payload: string) => Promise<number> | number };
-  minio?: MinioClient | null;
-  bucket?: string;
+  /** Object storage for the archive and attachments; null = not configured. */
+  storage?: StorageDriver | null;
   emailQueue?: EmailQueueLike;
   cancelChecker?: (importId: string) => Promise<boolean>;
   fetchImpl?: typeof fetch;
@@ -333,8 +335,7 @@ interface ImportContext {
   row: ImportRow;
   logger: Logger;
   redis: SlackImportDeps['redis'];
-  minio: MinioClient | null;
-  bucket: string;
+  storage: StorageDriver | null;
   emailQueue: EmailQueueLike;
   slackToken: string | null;
   options: ImportOptions;
@@ -508,8 +509,8 @@ async function openArchive(ctx: ImportContext): Promise<OpenedArchive> {
   // Download the .zip from MinIO into a tmp file. Streaming directly from an
   // in-memory buffer would force the whole archive into memory, which would
   // OOM on multi-gigabyte exports. node-stream-zip needs a real file or fd.
-  if (!ctx.minio) {
-    throw new Error('MinIO client not configured (S3_ENDPOINT / S3_ACCESS_KEY / S3_SECRET_KEY)');
+  if (!ctx.storage) {
+    throw new StorageNotConfiguredError();
   }
 
   const fsPromises = await import('node:fs/promises');
@@ -521,15 +522,10 @@ async function openArchive(ctx: ImportContext): Promise<OpenedArchive> {
   const filePath = path.join(tmpDir, 'archive.zip');
 
   ctx.logger.info({ filePath, key: ctx.row.source_minio_key }, 'slack-import: downloading archive');
-  const stream = await ctx.minio.getObject(ctx.bucket, ctx.row.source_minio_key);
+  const { stream } = await ctx.storage.getStream(ctx.row.source_minio_key);
   const fs = await import('node:fs');
-  await new Promise<void>((resolve, reject) => {
-    const out = fs.createWriteStream(filePath);
-    stream.on('error', reject);
-    out.on('error', reject);
-    out.on('finish', () => resolve());
-    stream.pipe(out);
-  });
+  const { pipeline } = await import('node:stream/promises');
+  await pipeline(stream, fs.createWriteStream(filePath));
 
   const zip = new StreamZip.async({ file: filePath, storeEntries: true });
   const entries = await zip.entries();
@@ -1319,10 +1315,8 @@ async function importFiles(
       if (localKey) {
         const buffer = await archive.zip.entryData(localKey);
         storageKey = `attachments/${ctx.row.org_id}/slack-imports/${ctx.importId}/${file.id}`;
-        if (ctx.minio) {
-          await ctx.minio.putObject(ctx.bucket, storageKey, buffer, buffer.length, {
-            'Content-Type': mime,
-          });
+        if (ctx.storage) {
+          await ctx.storage.put(storageKey, buffer, { contentType: mime, size: buffer.length });
           isStub = false;
         }
       } else if (originalUrl && ctx.slackToken) {
@@ -1330,14 +1324,8 @@ async function importFiles(
           const buf = await downloadSlackUrl(ctx, originalUrl);
           if (buf) {
             storageKey = `attachments/${ctx.row.org_id}/slack-imports/${ctx.importId}/${file.id}`;
-            if (ctx.minio) {
-              await ctx.minio.putObject(
-                ctx.bucket,
-                storageKey,
-                buf,
-                buf.length,
-                { 'Content-Type': mime },
-              );
+            if (ctx.storage) {
+              await ctx.storage.put(storageKey, buf, { contentType: mime, size: buf.length });
               isStub = false;
             }
           }
@@ -1664,27 +1652,6 @@ function getEmailQueue(): Queue {
   return cachedEmailQueue;
 }
 
-let cachedMinio: MinioClient | null = null;
-function getMinioClient(): MinioClient | null {
-  if (cachedMinio) return cachedMinio;
-  const endpoint = process.env.S3_ENDPOINT;
-  const accessKey = process.env.S3_ACCESS_KEY;
-  const secretKey = process.env.S3_SECRET_KEY;
-  if (!endpoint || !accessKey || !secretKey) return null;
-  try {
-    const url = new URL(endpoint);
-    cachedMinio = new MinioClient({
-      endPoint: url.hostname,
-      port: Number(url.port) || (url.protocol === 'https:' ? 443 : 80),
-      useSSL: url.protocol === 'https:',
-      accessKey,
-      secretKey,
-    });
-    return cachedMinio;
-  } catch {
-    return null;
-  }
-}
 
 // ---------------------------------------------------------------------------
 // Drizzle row normalization (postgres-js returns array-like; some adapters

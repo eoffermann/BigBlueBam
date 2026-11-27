@@ -126,7 +126,14 @@ export class S3Driver implements StorageDriver {
   async stat(key: string): Promise<ObjectStat | null> {
     try {
       const s = await this.client.statObject(this.bucket, this.k(key));
-      return { key, size: s.size, integrity: s.etag, modifiedAt: s.lastModified };
+      const contentType = s.metaData?.['content-type'];
+      return {
+        key,
+        size: s.size,
+        integrity: s.etag,
+        modifiedAt: s.lastModified,
+        ...(typeof contentType === 'string' ? { contentType } : {}),
+      };
     } catch {
       return null;
     }

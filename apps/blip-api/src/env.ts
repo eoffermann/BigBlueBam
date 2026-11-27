@@ -31,8 +31,10 @@ const envSchema = z.object({
   // Object store (shared bucket). Blip offloads capture images + thumbnails to
   // the same MinIO/S3 the rest of the suite uses, through @bigbluebam/storage.
   S3_ENDPOINT: z.string().default('http://minio:9000'),
-  S3_ACCESS_KEY: z.string().default('minioadmin'),
-  S3_SECRET_KEY: z.string().default('minioadmin'),
+  // No default credentials (issue #176): without them storage is "not configured"
+  // and storage-backed routes answer 503 STORAGE_NOT_CONFIGURED.
+  S3_ACCESS_KEY: z.preprocess((v) => (v === '' ? undefined : v), z.string().optional()),
+  S3_SECRET_KEY: z.preprocess((v) => (v === '' ? undefined : v), z.string().optional()),
   S3_BUCKET: z.string().default('bigbluebam-uploads'),
   S3_REGION: z.string().default('us-east-1'),
 

@@ -7,7 +7,6 @@ import {
   beaconAttachmentsStub,
 } from '../db/schema/peer-app-stubs/index.js';
 import { preflightAccess } from './visibility.service.js';
-import { env } from '../env.js';
 import { getFileUrl } from './upload.service.js';
 
 /**
@@ -137,7 +136,7 @@ async function signCleanDeepLink(
 ): Promise<string | null> {
   if (scanStatus !== 'clean') return null;
   try {
-    return await getFileUrl(env.S3_BUCKET, storageKey);
+    return await getFileUrl(storageKey);
   } catch {
     // Best-effort: if MinIO is unreachable we return null rather than
     // failing the metadata read. The caller still gets the row.

@@ -2,8 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { eq, asc } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import { beaconAttachments, beaconEntries, users } from '../db/schema/index.js';
-import { uploadFile, deleteFile, getPresignedGetUrl } from '../lib/minio.js';
-import { env } from '../env.js';
+import { uploadFile, deleteFile, getPresignedGetUrl } from '../lib/storage-driver.js';
 
 export class AttachmentError extends Error {
   code: string;
@@ -73,7 +72,7 @@ export async function listAttachments(beaconId: string) {
   const withUrls = await Promise.all(
     rows.map(async (row) => ({
       ...row,
-      download_url: await getPresignedGetUrl(env.S3_BUCKET, row.storage_key).catch(
+      download_url: await getPresignedGetUrl(row.storage_key).catch(
         () => null,
       ),
     })),
@@ -102,7 +101,7 @@ export async function uploadAttachment(input: UploadAttachmentInput) {
 
   const storageKey = buildStorageKey(input.orgId, input.beaconId, input.filename);
 
-  await uploadFile(env.S3_BUCKET, storageKey, input.buffer, input.contentType);
+  await uploadFile(storageKey, input.buffer, input.contentType);
 
   try {
     const rows = await db
@@ -119,7 +118,7 @@ export async function uploadAttachment(input: UploadAttachmentInput) {
       .returning();
     const inserted = rows[0];
     if (!inserted) {
-      await deleteFile(env.S3_BUCKET, storageKey);
+      await deleteFile(storageKey);
       throw new AttachmentError('INTERNAL_ERROR', 'Failed to insert attachment row', 500);
     }
     return inserted;
@@ -127,7 +126,7 @@ export async function uploadAttachment(input: UploadAttachmentInput) {
     // If the DB insert failed (for example because of the
     // UNIQUE(beacon_id, filename) constraint), roll back the MinIO upload
     // so we don't leak orphaned objects.
-    await deleteFile(env.S3_BUCKET, storageKey);
+    await deleteFile(storageKey);
     const message = err instanceof Error ? err.message : 'Insert failed';
     if (message.toLowerCase().includes('unique') || message.includes('23505')) {
       throw new AttachmentError(
@@ -173,7 +172,7 @@ export async function deleteAttachment(
     .returning();
 
   // Best-effort MinIO cleanup. The DB row is gone regardless.
-  await deleteFile(env.S3_BUCKET, existing.storage_key);
+  await deleteFile(existing.storage_key);
 
   return deleted;
 }

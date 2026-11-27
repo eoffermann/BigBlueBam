@@ -4,6 +4,7 @@ import { randomUUID } from 'node:crypto';
 import { fileTypeFromBuffer } from 'file-type';
 import { env } from '../env.js';
 import { uploadFile, getFileStream } from '../services/upload.service.js';
+import { StorageNotConfiguredError } from '../lib/storage-driver.js';
 import { updateProfile } from '../services/auth.service.js';
 import { requireAuth } from '../plugins/auth.js';
 import { shadowOnly } from '../middleware/dual-read.js';
@@ -140,7 +141,7 @@ export default async function uploadRoutes(fastify: FastifyInstance) {
       const safeFilename = file.filename.replace(/[^a-zA-Z0-9._-]/g, '_');
       const key = `uploads/${uuid}-${safeFilename}`;
 
-      await uploadFile(env.S3_BUCKET, key, buffer, contentType);
+      await uploadFile(key, buffer, contentType);
       // #142: bind the key to the uploader's active org; GET /files serves it to that org only.
       const uploader = request.user;
       if (uploader) await recordUploadOwner(key, uploader.active_org_id, 'bam', uploader.id);
@@ -212,7 +213,7 @@ export default async function uploadRoutes(fastify: FastifyInstance) {
 
       const userId = request.user!.id;
       const key = `avatars/${userId}-${randomUUID()}.${ext}`;
-      await uploadFile(env.S3_BUCKET, key, buffer, detected.mime);
+      await uploadFile(key, buffer, detected.mime);
       const avatarUrl = `/files/${key}`;
 
       const updated = await updateProfile(userId, { avatar_url: avatarUrl });
@@ -280,7 +281,7 @@ export default async function uploadRoutes(fastify: FastifyInstance) {
       }
 
       try {
-        const { stream, contentType, size } = await getFileStream(env.S3_BUCKET, key);
+        const { stream, contentType, size } = await getFileStream(key);
         reply.header('Content-Type', contentType);
         reply.header('Content-Length', size);
         reply.header(
@@ -288,7 +289,9 @@ export default async function uploadRoutes(fastify: FastifyInstance) {
           access === 'public' ? 'public, max-age=86400' : 'private, no-store',
         );
         return reply.send(stream);
-      } catch {
+      } catch (err) {
+        // Storage not configured is a 503 (issue #176), not a missing file.
+        if (err instanceof StorageNotConfiguredError) throw err;
         return reply.status(404).send({
           error: {
             code: 'NOT_FOUND',

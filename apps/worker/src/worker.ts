@@ -365,6 +365,7 @@ import { makeBastionEngineJob, processBastionEvaluateTickJob } from './jobs/bast
 import { postBastion } from './jobs/bastion-shared.js';
 import { processBastionObjectBackupJob } from './jobs/bastion-object-backup.job.js';
 import { createBastionPacketStorage, processBastionExportPacketJob } from './jobs/bastion-export-packet.job.js';
+import { StorageNotConfiguredError } from '@bigbluebam/storage';
 import { sql as drizzleSql } from 'drizzle-orm';
 import { SCHEDULED_JOB_RETENTION } from './lib/job-retention.js';
 
@@ -2839,6 +2840,8 @@ const bastionPacketStorage = createBastionPacketStorage(env);
 const bastionExportPacketWorker = new Worker<BastionExportPacketJobData>(
   BASTION_EXPORT_PACKET_QUEUE,
   async (job, token) => {
+    // No S3 credentials (issue #176): fail the packet closed rather than build it nowhere.
+    if (!bastionPacketStorage) throw new StorageNotConfiguredError();
     // A packet held by another live attempt moves this job to delayed (DelayedError), #326.
     await processBastionExportPacketJob(job, logger, { post: postBastion, storage: bastionPacketStorage }, token);
   },

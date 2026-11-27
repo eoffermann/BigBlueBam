@@ -2,7 +2,6 @@ import type { FastifyInstance } from 'fastify';
 import { randomUUID } from 'node:crypto';
 import { sql } from 'drizzle-orm';
 import { db } from '../db/index.js';
-import { env } from '../env.js';
 import { uploadFile } from '../services/upload.service.js';
 import { requireHelpdeskAuth } from '../plugins/auth.js';
 
@@ -106,7 +105,7 @@ export default async function helpdeskUploadRoutes(fastify: FastifyInstance) {
       const safeFilename = file.filename.replace(/[^a-zA-Z0-9._-]/g, '_');
       const key = `helpdesk/${uuid}-${safeFilename}`;
 
-      await uploadFile(env.S3_BUCKET, key, buffer, contentType);
+      await uploadFile(key, buffer, contentType);
 
       await db.execute(sql`
         INSERT INTO file_upload_owners (storage_key, org_id, source, uploaded_by)
