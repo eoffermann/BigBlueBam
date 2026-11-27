@@ -7521,7 +7521,7 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
   },
   {
     "mcp_tool": "bay_review_link_create",
-    "description": "Mint a public, token-gated share link for a Bay review so an unauthenticated guest can view the media + annotations + decisions (and optionally comment) at /bay/r/:token. Optionally set an expiry (days) and whether guest comments are allowed. Returns the link including its shareable url.",
+    "description": "Mint a public, token-gated share link for a Bay review so an unauthenticated guest can view the media + annotations + decisions (and optionally comment) at /bay/r#<token>. Optionally set an expiry (days) and whether guest comments are allowed. Returns the link including its shareable url. Only this call returns the token and url: Bay stores just a hash of the token, so hand the url on now; it cannot be listed again later.",
     "source": "bay",
     "parameters": [
       {
@@ -26890,7 +26890,7 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
   },
   {
     "mcp_tool": "list_tickets",
-    "description": "List helpdesk tickets with optional filters",
+    "description": "List helpdesk tickets in the API key's organization, most recently updated first, with optional status and project filters",
     "source": "helpdesk",
     "parameters": [
       {
@@ -26908,35 +26908,12 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
         "description": "Filter by ticket status"
       },
       {
-        "name": "assignee_id",
+        "name": "project_id",
         "type": "string",
         "format": "uuid",
         "required": false,
         "nullable": false,
-        "description": "Filter by assigned agent"
-      },
-      {
-        "name": "client_id",
-        "type": "string",
-        "format": "uuid",
-        "required": false,
-        "nullable": false,
-        "description": "Filter by client"
-      },
-      {
-        "name": "cursor",
-        "type": "string",
-        "required": false,
-        "nullable": false,
-        "description": "Pagination cursor"
-      },
-      {
-        "name": "limit",
-        "type": "number",
-        "format": "integer",
-        "required": false,
-        "nullable": false,
-        "description": "Number of results"
+        "description": "Filter to tickets routed into this Bam project"
       }
     ]
   },

@@ -16,9 +16,15 @@
 import type { FastifyRequest } from 'fastify';
 import { sql } from 'drizzle-orm';
 import argon2 from 'argon2';
-import { bearerToken, sqlApiKeyStore, verifyApiKeyToken, type UserKind } from '@bigbluebam/auth-core';
+import {
+  bearerToken,
+  keyProjectRestriction,
+  sqlApiKeyStore,
+  verifyApiKeyToken,
+  type ScopedUser,
+  type UserKind,
+} from '@bigbluebam/auth-core';
 import { db } from '../db/index.js';
-import { keyProjectRestriction } from '@bigbluebam/auth-core';
 
 export interface BamApiKeyCaller {
   userId: string;
@@ -41,6 +47,20 @@ const apiKeyStore = sqlApiKeyStore({
 export function bamBearerToken(request: FastifyRequest): string | null {
   const token = bearerToken(request.headers.authorization);
   return token && token.startsWith('bbam_') && token.length > 8 ? token : null;
+}
+
+/**
+ * The caller as @bigbluebam/auth-core's scope gate reads it (#351). `role` is the holder's
+ * current role in the org the request acts in; pass '' where the gate needs no role.
+ */
+export function scopedUser(caller: BamApiKeyCaller, role = ''): ScopedUser {
+  return {
+    id: caller.userId,
+    role,
+    is_superuser: caller.isSuperuser,
+    api_key_scope: caller.scope,
+    kind: caller.kind,
+  };
 }
 
 export async function verifyBamApiKey(request: FastifyRequest, token: string): Promise<BamApiKeyCaller | null> {

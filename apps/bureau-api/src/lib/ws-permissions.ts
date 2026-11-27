@@ -10,7 +10,11 @@
 // that only end or leave something the caller started (leaving must never be
 // blocked) and the keepalive.
 
-import { createHttpPermissionChecker } from '@bigbluebam/permissions';
+import {
+  createHttpPermissionChecker,
+  createWsFrameGate,
+  type WsPermissionCheck,
+} from '@bigbluebam/permissions';
 import { env } from '../env.js';
 
 export const WS_FRAME_PERMISSIONS: Readonly<Record<string, readonly string[]>> = {
@@ -46,40 +50,36 @@ export const WS_FRAME_PERMISSIONS: Readonly<Record<string, readonly string[]>> =
   bring_leave: [],
 };
 
-export type WsPermissionCheck = (
-  caller: { user_id: string; org_id: string | null },
-  permissionId: string,
-  logger?: { warn: (obj: object, msg: string) => void },
-) => Promise<boolean>;
+export type { WsPermissionCheck };
 
-// Fails closed in enforce mode when the resolver gives no answer: unlike the
-// REST routes there is no legacy role gate behind most of these frames.
-let check: WsPermissionCheck = createHttpPermissionChecker({
-  mode: env.BBB_PERMISSIONS_ENFORCE,
-  apiInternalUrl: env.BBB_API_INTERNAL_URL,
-  internalSecret: env.INTERNAL_SERVICE_SECRET ?? '',
-  onUnknown: 'deny',
-});
+// The suite-wide per-frame gate (issue #177, @bigbluebam/permissions). Fails
+// closed in enforce mode when the resolver gives no answer: unlike the REST
+// routes there is no legacy role gate behind most of these frames.
+export const wsFrameGate = createWsFrameGate(
+  WS_FRAME_PERMISSIONS,
+  createHttpPermissionChecker({
+    mode: env.BBB_PERMISSIONS_ENFORCE,
+    apiInternalUrl: env.BBB_API_INTERNAL_URL,
+    internalSecret: env.INTERNAL_SERVICE_SECRET ?? '',
+    onUnknown: 'deny',
+  }),
+);
 
 /** Test seam. */
 export function setWsPermissionCheckForTests(fn: WsPermissionCheck): void {
-  check = fn;
+  wsFrameGate.setCheckerForTests(fn);
 }
 
 /**
  * Returns the first catalog id the caller lacks for this frame type, or null
- * when the frame may run. Unknown frame types return null; the hub's default
- * branch answers those with UNKNOWN_TYPE.
+ * when the frame may run. Unknown frame types return null here; the hub's
+ * default branch answers those with UNKNOWN_TYPE and runs nothing.
  */
 export async function deniedPermissionForFrame(
   type: string,
   caller: { user_id: string; org_id: string | null },
   logger?: { warn: (obj: object, msg: string) => void },
 ): Promise<string | null> {
-  const required = WS_FRAME_PERMISSIONS[type];
-  if (!required) return null;
-  for (const id of required) {
-    if (!(await check(caller, id, logger))) return id;
-  }
-  return null;
+  const denial = await wsFrameGate.check(type, caller, logger);
+  return denial?.code === 'PERMISSION_DENIED' ? denial.permission_id : null;
 }

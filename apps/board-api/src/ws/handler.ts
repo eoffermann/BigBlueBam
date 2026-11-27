@@ -14,6 +14,7 @@ import {
 } from '../db/schema/index.js';
 import { env } from '../env.js';
 import { saveScene } from './persistence.js';
+import { wsFrameGate } from '../lib/ws-frames.js';
 import { BoardRedisState } from './redis-state.js';
 import {
   BOARD_ELEMENT_SOFT_LIMIT,
@@ -398,6 +399,18 @@ export default async function websocketHandler(fastify: FastifyInstance) {
 
       try {
         const msg = JSON.parse(typeof raw === 'string' ? raw : raw.toString());
+
+        // Per-frame catalog gate, the REST twin's (issue #177). An undeclared
+        // frame type runs nothing.
+        const denial = await wsFrameGate.check(msg?.type, { user_id: userId, org_id: orgId }, request.log);
+        if (denial) {
+          if (denial.code === 'PERMISSION_DENIED') {
+            socket.send(
+              JSON.stringify({ type: 'error', data: denial, timestamp: new Date().toISOString() }),
+            );
+          }
+          return;
+        }
 
         switch (msg.type) {
           case 'join_board': {

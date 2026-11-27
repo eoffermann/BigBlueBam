@@ -25,6 +25,7 @@ import { projectMemberships } from '../db/schema/project-memberships.js';
 import { projects } from '../db/schema/projects.js';
 import { env } from '../env.js';
 import { buildAuthUser, type AuthUser } from './auth.js';
+import { createApiWsFrameGate } from '../lib/ws-frames.js';
 
 const REDIS_CHANNEL = 'bigbluebam:events';
 
@@ -275,6 +276,9 @@ async function websocketPlugin(fastify: FastifyInstance) {
           userId: user.id,
         }));
 
+        // Per-frame catalog gate, the REST twin's (issue #177).
+        const frameGate = createApiWsFrameGate(fastify, user);
+
         // Handle incoming messages
         socket.on('message', async (raw: Buffer | string) => {
           try {
@@ -282,6 +286,17 @@ async function websocketPlugin(fastify: FastifyInstance) {
               type: string;
               room?: string;
             };
+
+            // An undeclared frame type runs nothing.
+            const denial = await frameGate.check(
+              msg?.type,
+              { user_id: user.id, org_id: user.active_org_id },
+              request.log,
+            );
+            if (denial) {
+              if (denial.code === 'PERMISSION_DENIED') socket.send(JSON.stringify({ type: 'error', ...denial }));
+              return;
+            }
 
             if (msg.type === 'subscribe' && msg.room) {
               if (msg.room.startsWith('project:')) {

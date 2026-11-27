@@ -45,6 +45,22 @@ export type {
 };
 
 export {
+  createWsFrameGate,
+  classifyYjsFrame,
+  wsFramePermissionId,
+  WS_SHADOW_PREFIX,
+  YJS_FRAME_TYPES,
+  type WsCaller,
+  type WsFrameDenial,
+  type WsFrameGate,
+  type WsFrameGateOptions,
+  type WsFrameMap,
+  type WsLogger,
+  type WsPermissionCheck,
+  type YjsFrameType,
+} from './ws-frames.js';
+
+export {
   PERMISSIONS,
   PERMISSIONS_BY_ID,
   ALWAYS_PERMITTED,

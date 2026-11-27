@@ -30,20 +30,14 @@ import type { FastifyRequest, FastifyReply } from 'fastify';
 import { sql } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import { verifyAgentApiKey } from './agent-auth.js';
-import { bamBearerToken, verifyBamApiKey, type BamApiKeyCaller } from './bam-api-key.js';
-import { ORG_ADMIN_ROLES, keyRoleCapApplies, scopeAtLeast } from '@bigbluebam/auth-core';
-
+import { bamBearerToken, scopedUser, verifyBamApiKey, type BamApiKeyCaller } from './bam-api-key.js';
+import { homeOrg, rowsOf } from './caller-lookups.js';
+import { isApiKeyOrgPinned, keyActingOrgId, orgAdminSurfaceDecision } from '@bigbluebam/auth-core';
 
 declare module 'fastify' {
   interface FastifyRequest {
     adminUserId?: string;
   }
-}
-
-function rowsOf(raw: unknown): Array<Record<string, unknown>> {
-  return (Array.isArray(raw) ? raw : ((raw as { rows?: unknown[] })?.rows ?? [])) as Array<
-    Record<string, unknown>
-  >;
 }
 
 async function sessionCaller(sessionId: string): Promise<{ userId: string; orgId: string | null } | null> {
@@ -56,11 +50,6 @@ async function sessionCaller(sessionId: string): Promise<{ userId: string; orgId
   `);
   const row = rowsOf(raw)[0];
   return row?.user_id ? { userId: String(row.user_id), orgId: (row.org_id as string | null) ?? null } : null;
-}
-
-async function homeOrg(userId: string): Promise<string | null> {
-  const row = rowsOf(await db.execute(sql`SELECT org_id FROM users WHERE id = ${userId} LIMIT 1`))[0];
-  return (row?.org_id as string | null | undefined) ?? null;
 }
 
 async function isSuperuser(userId: string): Promise<boolean> {
@@ -105,7 +94,8 @@ export async function requireAdminAuth(request: FastifyRequest, reply: FastifyRe
         apiKey = await verifyBamApiKey(request, bearer);
         if (apiKey) {
           userId = apiKey.userId;
-          callerOrg = apiKey.keyOrgId ?? (await homeOrg(apiKey.userId));
+          callerOrg =
+            keyActingOrgId(apiKey.keyOrgId, apiKey.isSuperuser, null) ?? (await homeOrg(apiKey.userId));
         }
       }
     }
@@ -131,37 +121,39 @@ export async function requireAdminAuth(request: FastifyRequest, reply: FastifyRe
     return deny(400, 'ORG_REQUIRED', 'Send an X-Org-Slug header naming the organization to administer');
   }
 
-  if (apiKey) {
-    // Mirrors apps/api: a write on an admin surface needs an 'admin'-scope
-    // key (requireScope('admin')); reads accept any scope.
-    const isRead = request.method === 'GET' || request.method === 'HEAD';
-    if (!isRead && !scopeAtLeast(apiKey.scope, 'admin')) {
-      return deny(403, 'FORBIDDEN', "API key requires at least 'admin' scope");
-    }
-    // A non-SuperUser key is pinned to its own org (apps/api P2-8), whatever
-    // X-Org-Slug names.
-    if (!apiKey.isSuperuser && apiKey.keyOrgId && apiKey.keyOrgId !== orgId) {
-      return deny(403, 'FORBIDDEN', 'This API key is scoped to a different organization');
-    }
+  // A non-SuperUser key is pinned to its own org (P2-8, @bigbluebam/auth-core),
+  // whatever X-Org-Slug names.
+  if (apiKey && isApiKeyOrgPinned(apiKey.keyOrgId, apiKey.isSuperuser) && apiKey.keyOrgId !== orgId) {
+    return deny(403, 'FORBIDDEN', 'This API key is scoped to a different organization');
   }
 
+  // SuperUsers pass before any scope check, as requireScope does (#351: a
+  // SuperUser's 'read' key used to be refused an admin write here).
   if (await isSuperuser(userId)) {
     request.adminUserId = userId;
     return;
   }
 
   const { member, role } = await orgRole(userId, orgId);
-  // The org-admin role set and the service/agent key exemption are
-  // @bigbluebam/auth-core's (#340), the same rule requireScope('admin') applies.
-  // A service/agent account's admin-scope key stands on its own scope, as it does there.
-  const roleCapExempt = apiKey !== null && scopeAtLeast(apiKey.scope, 'admin') && !keyRoleCapApplies(apiKey.kind);
-  const allowed = member && (viaAgentKey || roleCapExempt || (role !== null && ORG_ADMIN_ROLES.has(role)));
-  if (!allowed) {
+  // Sessions and Bam keys: @bigbluebam/auth-core's org-admin surface rule (#351).
+  // Writes are requireScope('admin') (key scope, the #336 role cap, the
+  // service/agent exemption); reads also admit a current org admin with any key
+  // scope. An X-Agent-Key is an operator-issued automation credential of its own
+  // type, so membership in the org is enough for it.
+  const denial = viaAgentKey
+    ? null
+    : orgAdminSurfaceDecision(
+        apiKey
+          ? scopedUser(apiKey, role ?? '')
+          : { id: userId, role: role ?? '', is_superuser: false, api_key_scope: null },
+        request.method,
+      );
+  if (!member || denial) {
     request.log.warn(
       { user_id: userId, target_org_id: orgId, member, role, via_agent_key: viaAgentKey, path: request.url },
       'helpdesk requireAdminAuth: denied, caller is not an admin of the target org',
     );
-    return deny(403, 'FORBIDDEN', 'Organization admin privileges required for this organization');
+    return deny(403, 'FORBIDDEN', member && denial ? denial.message : 'Organization admin privileges required for this organization');
   }
   request.adminUserId = userId;
 }

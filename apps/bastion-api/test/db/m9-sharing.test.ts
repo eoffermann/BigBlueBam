@@ -262,13 +262,25 @@ describe.skipIf(!DATABASE_URL)('M9 sharing, packets, sweep and mirror (live data
       expect(Number(row.passcode_failures)).toBeLessThanOrEqual(BASTION_ROOM_PASSCODE_MAX_FAILURES);
 
       // Sequentially from a fresh state: a right answer gives its try back, and the next request
-      // with the same passcode is remembered (no second argon2).
-      await sql`UPDATE bastion_auditor_rooms SET passcode_failures = 0, locked_at = NULL WHERE id = ${created.data.id as string}`;
+      // with the same passcode is remembered (no second argon2). #357: on a room of its own. When
+      // the right answer won one of the burst's tries above, the burst room already remembers the
+      // passcode (a Redis key a row reset does not clear), so the first request there verified
+      // 0 times or 1 depending on how the 11 requests interleaved.
+      const fresh = await sharing.createRoom(d.sharing, viewerOf(s), {
+        label: 'Burst, sequential',
+        framework_id: s.framework,
+        period_start: '2026-01-01',
+        period_end: '2026-12-31',
+        expires_in_days: 10,
+        passcode: '271828',
+        restricted_evidence_ids: [],
+        confirm: true,
+      }, false);
       verify.mockClear();
-      await room.publicRoomOverview(d.room, ctx(token, { passcode: '271828' }));
-      await room.publicRoomOverview(d.room, ctx(token, { passcode: '271828' }));
+      await room.publicRoomOverview(d.room, ctx(fresh.data.token, { passcode: '271828' }));
+      await room.publicRoomOverview(d.room, ctx(fresh.data.token, { passcode: '271828' }));
       expect(verify.mock.calls.length).toBe(1);
-      expect((await sql`SELECT passcode_failures FROM bastion_auditor_rooms WHERE id = ${created.data.id as string}`)[0]!.passcode_failures).toBe(0);
+      expect((await sql`SELECT passcode_failures FROM bastion_auditor_rooms WHERE id = ${fresh.data.id as string}`)[0]!.passcode_failures).toBe(0);
     } finally {
       verify.mockRestore();
     }

@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import postgres from 'postgres';
+import { bastionExceptionSchema, bastionFixDraftSchema } from '@bigbluebam/shared';
 import { aggregateControl, type RunRow } from '../../src/engine/evaluator.js';
 import { orgTx, type EngineDeps } from '../../src/engine/context.js';
 import { GAP_RANK_LOCK_TIMEOUT_MS } from '../../src/engine/budgets.js';
@@ -29,6 +30,8 @@ if (!DATABASE_URL) console.warn('[bastion-api/m6-decisions] SKIPPING: DATABASE_U
 
 const DAY = 86_400_000;
 const SHA = 'a'.repeat(64);
+/** A service result as the route sends it (Dates become ISO strings). */
+const wire = (v: unknown): unknown => JSON.parse(JSON.stringify(v));
 
 describe.skipIf(!DATABASE_URL)('M6 gaps, fixes, exceptions and drift (live database)', () => {
   let sql: postgres.Sql;
@@ -167,8 +170,10 @@ describe.skipIf(!DATABASE_URL)('M6 gaps, fixes, exceptions and drift (live datab
         compensating_note: 'Only reachable from the island network',
         expires_on: until,
       })
-    ).data as unknown as { id: string; proposal_id: string; status: string };
+    ).data;
     expect(proposed.status).toBe('proposed');
+    // #348: what the route sends (the service row through JSON) is the shared response shape.
+    expect(bastionExceptionSchema.safeParse(wire(proposed)).error).toBeUndefined();
     const [mirror] = await sql`SELECT owning_app, require_human_decider, approver_id FROM agent_proposals WHERE id = ${proposed.proposal_id}`;
     expect(mirror).toMatchObject({ owning_app: 'bastion', require_human_decider: true, approver_id: s.owner });
 
@@ -251,7 +256,7 @@ describe.skipIf(!DATABASE_URL)('M6 gaps, fixes, exceptions and drift (live datab
         reason: 'Island hut, one laptop',
         expires_on: new Date(Date.now() + 30 * DAY).toISOString().slice(0, 10),
       })
-    ).data as unknown as { id: string };
+    ).data;
     const self =(await decideException(d, viewer(s.org, s.owner), ex.id, { decision: 'approve', confirm: true })).data as Record<string, unknown>;
     expect(self).toMatchObject({ status: 'active', small_team_self_approval: true, approval_label: 'approved by the proposer (small team)' });
 
@@ -260,27 +265,29 @@ describe.skipIf(!DATABASE_URL)('M6 gaps, fixes, exceptions and drift (live datab
     await orgTx(sql, s.org, (tx) => rankOrgGaps(tx, s.org, deps.now()));
     const gap = (await listGaps(d, viewer(s.org, s.owner), { status: 'active', sort: 'risk', limit: 50 })).data.find((g) => g.gap_kind === 'failing')!;
     expect(gap).toBeDefined();
-    const draft = (await proposeFix(d, viewer(s.org, s.owner, 'api_key'), gap.id, null)).data as unknown as { id: string; proposal_id: string; status: string; template: string };
+    const draft = (await proposeFix(d, viewer(s.org, s.owner, 'api_key'), gap.id, null)).data;
     expect(draft).toMatchObject({ status: 'proposed', template: 'config_change' });
+    expect(bastionFixDraftSchema.safeParse(wire(draft)).error).toBeUndefined();
     await expect(proposeFix(d, viewer(s.org, s.owner), gap.id, null)).rejects.toMatchObject({ code: 'FIX_ALREADY_PROPOSED' });
     const [mirror] = await sql`SELECT proposed_action, owning_app, require_human_decider FROM agent_proposals WHERE id = ${draft.proposal_id}`;
     expect(mirror).toMatchObject({ proposed_action: 'bastion.fix.config_change', owning_app: 'bastion', require_human_decider: true });
 
     await expect(decideFix(d, viewer(s.org, s.owner, 'api_key'), draft.id, { decision: 'approve' }, true)).rejects.toMatchObject({ code: 'SESSION_REQUIRED' });
-    const decided = (await decideFix(d, viewer(s.org, s.owner), draft.id, { decision: 'approve' }, false)).data as unknown as { status: string };
+    const decided = (await decideFix(d, viewer(s.org, s.owner), draft.id, { decision: 'approve' }, false)).data;
     expect(decided.status).toBe('approved');
+    expect(bastionFixDraftSchema.safeParse(wire(decided)).error).toBeUndefined();
     expect((await outbox(s.org, `fix:${draft.id}`)).map((r) => r.kind)).toEqual(['proposal_close']);
 
     // Reconcile: a reject reopens the gap for a fresh draft, which is then decided OUTSIDE Bastion.
     await sql`UPDATE bastion_gaps SET status = 'open' WHERE id = ${gap.id}`;
-    const second = (await proposeFix(d, viewer(s.org, s.owner), gap.id, null)).data as unknown as { id: string; proposal_id: string };
+    const second = (await proposeFix(d, viewer(s.org, s.owner), gap.id, null)).data;
     await sql`UPDATE agent_proposals SET status = 'approved', decided_at = now() WHERE id = ${second.proposal_id}`;
     const r1 = await proposalReconcile(deps, { organization_id: s.org });
     expect(r1.fixes_decision_rejected).toBe(1);
     expect((await sql`SELECT status FROM bastion_fix_drafts WHERE id = ${second.id}`)[0]!.status).toBe('decision_rejected');
     expect((await sql`SELECT status FROM bastion_gaps WHERE id = ${gap.id}`)[0]!.status).toBe('open');
 
-    const third = (await proposeFix(d, viewer(s.org, s.owner), gap.id, null)).data as unknown as { id: string; proposal_id: string };
+    const third = (await proposeFix(d, viewer(s.org, s.owner), gap.id, null)).data;
     await sql`UPDATE agent_proposals SET expires_at = now() - interval '1 minute' WHERE id = ${third.proposal_id}`;
     const r2 = await proposalReconcile(deps, { organization_id: s.org });
     expect(r2.fixes_expired).toBe(1);
@@ -289,7 +296,7 @@ describe.skipIf(!DATABASE_URL)('M6 gaps, fixes, exceptions and drift (live datab
     // #282: deciding a fix whose proposal has expired is refused AND the expiry is kept: the draft
     // is expired and the gap reopened at once, without waiting for the reconcile.
     await sql`UPDATE bastion_gaps SET status = 'open' WHERE id = ${gap.id}`;
-    const fourth = (await proposeFix(d, viewer(s.org, s.owner), gap.id, null)).data as unknown as { id: string; proposal_id: string };
+    const fourth = (await proposeFix(d, viewer(s.org, s.owner), gap.id, null)).data;
     expect((await sql`SELECT status FROM bastion_gaps WHERE id = ${gap.id}`)[0]!.status).toBe('proposed');
     await sql`UPDATE agent_proposals SET expires_at = now() - interval '1 minute' WHERE id = ${fourth.proposal_id}`;
     await expect(decideFix(d, viewer(s.org, s.owner), fourth.id, { decision: 'approve' }, false)).rejects.toMatchObject({ code: 'FIX_EXPIRED' });
@@ -384,7 +391,7 @@ describe.skipIf(!DATABASE_URL)('M6 gaps, fixes, exceptions and drift (live datab
     } finally {
       answer();
     }
-    const draft = (await proposing).data as unknown as { status: string; cited_refs: unknown[] };
+    const draft = (await proposing).data;
     expect(draft.status).toBe('proposed');
     expect((await sql`SELECT status FROM bastion_gaps WHERE id = ${gap.id}`)[0]!.status).toBe('proposed');
   });
@@ -398,7 +405,7 @@ describe.skipIf(!DATABASE_URL)('M6 gaps, fixes, exceptions and drift (live datab
     const d: DecisionDeps = { engine: deps, canAccess: async () => true };
     const gap = (await listGaps(d, viewer(s.org, s.owner), { status: 'active', sort: 'risk', limit: 50 })).data.find((g) => g.gap_kind === 'failing')!;
     // A waiting fix, so the org has something to decide and something for reconcile to visit.
-    const draft = (await proposeFix(d, viewer(s.org, s.owner), gap.id, null)).data as unknown as { id: string };
+    const draft = (await proposeFix(d, viewer(s.org, s.owner), gap.id, null)).data;
 
     let release!: () => void;
     const released = new Promise<void>((r) => {
@@ -434,7 +441,7 @@ describe.skipIf(!DATABASE_URL)('M6 gaps, fixes, exceptions and drift (live datab
       await holder;
     }
     // Once the holder commits the same call goes through, and the lock_timeout it set is gone.
-    expect(((await decideFix(d, viewer(s.org, s.owner), draft.id, { decision: 'approve' }, false)).data as unknown as { status: string }).status).toBe('approved');
+    expect(((await decideFix(d, viewer(s.org, s.owner), draft.id, { decision: 'approve' }, false)).data).status).toBe('approved');
     expect(await orgTx(sql, s.org, async (tx) => {
       await lockOrgGapRank(tx, s.org);
       return String((await tx`SELECT current_setting('lock_timeout') AS v`)[0]!.v);

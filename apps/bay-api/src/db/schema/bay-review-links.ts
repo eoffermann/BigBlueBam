@@ -6,12 +6,13 @@ import {
   integer,
   timestamp,
   index,
+  uniqueIndex,
 } from 'drizzle-orm/pg-core';
 import { organizations, users } from './bbb-refs.js';
 import { bayAssets } from './bay-assets.js';
 
 // Bay public review share links (0217). A reviewer mints a token that an
-// unauthenticated guest opens (at /bay/r/:token) to view the review and
+// unauthenticated guest opens (at /bay/r#<token>) to view the review and
 // optionally comment. The token is the sole bearer of access — long, random,
 // revocable (revoked_at), and optionally time-limited (expires_at).
 export const bayReviewLinks = pgTable(
@@ -24,8 +25,9 @@ export const bayReviewLinks = pgTable(
     asset_id: uuid('asset_id')
       .notNull()
       .references(() => bayAssets.id, { onDelete: 'cascade' }),
-    // DB default mints 24 random bytes hex (48 chars); set server-side too.
-    token: varchar('token', { length: 64 }).notNull().unique(),
+    // SHA-256 (hex) of the 48-hex-char bearer token (#122, migration 0340). The raw
+    // token is shown once, when the link is minted, and never stored.
+    token_hash: varchar('token_hash', { length: 64 }).notNull(),
     allow_comments: boolean('allow_comments').notNull().default(true),
     created_by: uuid('created_by')
       .notNull()
@@ -37,7 +39,7 @@ export const bayReviewLinks = pgTable(
     view_count: integer('view_count').notNull().default(0),
   },
   (table) => [
-    index('idx_bay_review_links_token').on(table.token),
+    uniqueIndex('uq_bay_review_links_token_hash').on(table.token_hash),
     index('idx_bay_review_links_org').on(table.org_id),
     index('idx_bay_review_links_asset').on(table.asset_id),
   ],

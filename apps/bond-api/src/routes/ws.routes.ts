@@ -34,6 +34,7 @@ import { z } from 'zod';
 import { env } from '../env.js';
 import { requireAuth } from '../plugins/auth.js';
 import { getPipeline } from '../services/pipeline.service.js';
+import { wsFrameGate } from '../lib/ws-frames.js';
 
 const subscribeSchema = z.object({
   type: z.literal('subscribe'),
@@ -89,11 +90,20 @@ export default async function wsRoutes(fastify: FastifyInstance) {
             send({ type: 'error', code: 'BAD_FRAME', message: 'Frames must be JSON' });
             return;
           }
-          const sub = subscribeSchema.safeParse(parsed);
-          if (!sub.success) {
-            // Tolerate unknown frames (e.g. a client pong) silently.
+          // Per-frame catalog gate, the REST twin's (issue #177). An
+          // undeclared frame type runs nothing (tolerated silently, e.g. a
+          // client pong).
+          const denial = await wsFrameGate.check(
+            (parsed as { type?: unknown } | null)?.type,
+            { user_id: user.id, org_id: user.org_id },
+            request.log,
+          );
+          if (denial) {
+            if (denial.code === 'PERMISSION_DENIED') send({ type: 'error', ...denial });
             return;
           }
+          const sub = subscribeSchema.safeParse(parsed);
+          if (!sub.success) return;
           const pipelineId = sub.data.pipeline_id;
           try {
             // Same org gate the REST routes use — getPipeline throws when the

@@ -28,11 +28,20 @@
 // scripts/lib/auth-core-single-source.test.mjs fails when a service defines its own
 // requireScope or verifies api_keys.key_hash itself.
 //
+// helpdesk-api (#351): request.user there is a portal customer, not a Bam user, so its two
+// Bam-key guards cannot use the requireScope preHandler. They gate the resolved caller with the
+// same rules as pure functions from here instead, and the guard test flags any scopeAtLeast /
+// keyRoleCapApplies call outside this package:
+//   - lib/agent-auth.ts: scopeDecision(caller, scopeForMethod(method, 'read', 'read_write'))
+//     and keyActingOrgId for the org. A SuperUser key passes the scope gate and, like a
+//     NULL-org key, is not pinned: it acts in its holder's home org (the agent surface has no
+//     org selector), the same as apps/api with no X-Org-Id.
+//   - lib/admin-auth.ts: orgAdminSurfaceDecision (writes need requireScope('admin'); reads also
+//     admit a current org admin with any key scope), the pin via isApiKeyOrgPinned, and a
+//     SuperUser passes before any scope check (it used to be refused a write with a 'read' key).
+//
 // Contracts that differ per service and are deliberately NOT forked here:
-//   - helpdesk-api's admin guard (lib/admin-auth.ts) resolves its target org from X-Org-Slug
-//     and lets reads through with any key scope. It still verifies the key with
-//     verifyApiKeyToken, compares scopes with scopeAtLeast, and checks roles with
-//     ORG_ADMIN_ROLES / keyRoleCapApplies from this module.
+//   - helpdesk-api's admin guard resolves its target org from X-Org-Slug.
 //   - helpdesk-api's per-agent X-Agent-Key (helpdesk_agent_api_keys) is a different credential
 //     type with its own table and is not a bbam_ key; it is out of scope here.
 
@@ -452,6 +461,21 @@ export function resolveKeyOrgPin(
   return { orgId: apiKeyOrgId, role: memberships.find((m) => m.org_id === apiKeyOrgId)?.role ?? 'viewer' };
 }
 
+/**
+ * The org an API-key caller acts in when its host has no per-request org selector: the key's
+ * org when the key is pinned (isApiKeyOrgPinned), else `unpinnedOrgId` (the org the host would
+ * use for any other caller, normally the holder's home org). A SuperUser key and a NULL-org key
+ * are not pinned, so they act in `unpinnedOrgId`, exactly as they would in apps/api without an
+ * X-Org-Id header.
+ */
+export function keyActingOrgId(
+  apiKeyOrgId: string | null | undefined,
+  isSuperuser: boolean,
+  unpinnedOrgId: string | null,
+): string | null {
+  return isApiKeyOrgPinned(apiKeyOrgId, isSuperuser) && apiKeyOrgId ? apiKeyOrgId : unpinnedOrgId;
+}
+
 /** The AuthUser fields the org pin rewrites. Every service's AuthUser satisfies it. */
 export interface PinnableUser {
   org_id: string;
@@ -497,6 +521,74 @@ function sendError(request: FastifyRequest, reply: FastifyReply, status: number,
   return reply.status(status).send({ error: { code, message, details: [], request_id: request.id } });
 }
 
+/** Why a scope gate refused a caller. `log` is set when the refusal is worth a warn line. */
+export interface ScopeDenial {
+  status: 403;
+  code: 'FORBIDDEN';
+  message: string;
+  log?: string;
+}
+
+/**
+ * The decision requireScope(minScope) makes, as a pure function: null when `user` passes,
+ * else the denial. For hosts whose request.user is not a Bam user (helpdesk-api, where
+ * request.user is a portal customer) and which therefore gate a resolved caller directly.
+ * See requireScope for the rules.
+ */
+export function scopeDecision(user: ScopedUser, minScope: ApiKeyScope): ScopeDenial | null {
+  if (user.is_superuser) return null;
+  const adminDenied: ScopeDenial = {
+    status: 403,
+    code: 'FORBIDDEN',
+    message: 'Organization admin privileges required',
+  };
+  if (user.api_key_scope === null) {
+    if (minScope === 'admin' && !ORG_ADMIN_ROLES.has(user.role)) {
+      return { ...adminDenied, log: 'requireScope(admin): denied a non-admin session on an org-admin route' };
+    }
+    return null;
+  }
+  if (!scopeAtLeast(user.api_key_scope, minScope)) {
+    return { status: 403, code: 'FORBIDDEN', message: `API key requires '${minScope}' scope or higher` };
+  }
+  if (minScope === 'admin' && keyRoleCapApplies(user.kind) && !ORG_ADMIN_ROLES.has(user.role)) {
+    return {
+      ...adminDenied,
+      log: 'requireScope(admin): denied an admin-scope API key whose holder is no longer an org admin',
+    };
+  }
+  return null;
+}
+
+/** True for HTTP methods that only read (GET, HEAD, OPTIONS). */
+export function isReadMethod(method: string): boolean {
+  return method === 'GET' || method === 'HEAD' || method === 'OPTIONS';
+}
+
+/** The scope a request needs on a surface that gates reads at `readScope` and writes at `writeScope`. */
+export function scopeForMethod(method: string, readScope: ApiKeyScope, writeScope: ApiKeyScope): ApiKeyScope {
+  return isReadMethod(method) ? readScope : writeScope;
+}
+
+/**
+ * The gate for an org-admin surface whose reads, like its writes, are for org admins only
+ * (helpdesk-api's settings/users/analytics admin routes, #351):
+ *
+ *  - writes: exactly scopeDecision(user, 'admin');
+ *  - reads: also admitted for a caller whose CURRENT org role is admin/owner, whatever the key
+ *    scope (a 'read' key held by an org admin may read the admin surface, not change it).
+ *
+ * SuperUsers pass both, as everywhere.
+ */
+export function orgAdminSurfaceDecision(user: ScopedUser, method: string): ScopeDenial | null {
+  const denial = scopeDecision(user, 'admin');
+  if (!denial) return null;
+  if (isReadMethod(method) && ORG_ADMIN_ROLES.has(user.role) && scopeLevel(user.api_key_scope ?? 'read') >= 0) {
+    return null;
+  }
+  return denial;
+}
+
 /**
  * Route gate: the caller's credential must allow `minScope`.
  *
@@ -518,28 +610,11 @@ export function requireScope(minScope: ApiKeyScope) {
   return async function checkScope(request: FastifyRequest, reply: FastifyReply) {
     const user = (request as unknown as { user?: ScopedUser | null }).user;
     if (!user) return sendError(request, reply, 401, 'UNAUTHORIZED', 'Authentication required');
-    if (user.is_superuser) return;
-
-    if (user.api_key_scope === null) {
-      if (minScope === 'admin' && !ORG_ADMIN_ROLES.has(user.role)) {
-        request.log.warn(
-          { userId: user.id, role: user.role, path: request.url, method: request.method },
-          'requireScope(admin): denied a non-admin session on an org-admin route',
-        );
-        return sendError(request, reply, 403, 'FORBIDDEN', 'Organization admin privileges required');
-      }
-      return;
+    const denial = scopeDecision(user, minScope);
+    if (!denial) return;
+    if (denial.log) {
+      request.log.warn({ userId: user.id, role: user.role, path: request.url, method: request.method }, denial.log);
     }
-
-    if (!scopeAtLeast(user.api_key_scope, minScope)) {
-      return sendError(request, reply, 403, 'FORBIDDEN', `API key requires '${minScope}' scope or higher`);
-    }
-    if (minScope === 'admin' && keyRoleCapApplies(user.kind) && !ORG_ADMIN_ROLES.has(user.role)) {
-      request.log.warn(
-        { userId: user.id, role: user.role, path: request.url, method: request.method },
-        'requireScope(admin): denied an admin-scope API key whose holder is no longer an org admin',
-      );
-      return sendError(request, reply, 403, 'FORBIDDEN', 'Organization admin privileges required');
-    }
+    return sendError(request, reply, denial.status, denial.code, denial.message);
   };
 }

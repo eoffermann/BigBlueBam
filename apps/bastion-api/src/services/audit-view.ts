@@ -146,13 +146,10 @@ export async function sealHistory(tx: Tx, orgId: string, limit = 400) {
  * auditor: "History lost by restore, epoch E entries X to Y" or "Unexplained gap, ...".
  */
 export async function restoreNotices(deps: EngineDeps, orgId: string): Promise<string[]> {
-  const records = await bucketRestoreRecords(deps, orgId).catch(() => []);
+  // Only records whose signature verifies (#208): a planted object never reaches an auditor.
+  const { records } = await bucketRestoreRecords(deps, orgId).catch(() => ({ records: [] }));
   const out: string[] = [];
   for (const r of records) {
-    if (r.unreadable) {
-      out.push('A record of lost evidence history could not be read.');
-      continue;
-    }
     const epoch = r.bucket_epoch ?? '?';
     const range = r.lost_from_seq != null && r.lost_to_seq != null ? `entries ${r.lost_from_seq} to ${r.lost_to_seq}` : 'some entries';
     if (r.status === 'acknowledged' && r.resolution === 'restore_acknowledged') out.push(`History lost by restore, epoch ${epoch} ${range}`);

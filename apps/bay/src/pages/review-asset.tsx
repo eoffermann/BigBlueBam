@@ -57,7 +57,7 @@ interface ReviewAssetPageProps {
 }
 
 // Mints a public, token-gated share link and copies it to the clipboard. The
-// guest opens it at /bay/r/:token (no login) to view + comment.
+// guest opens it at /bay/r#<token> (no login) to view + comment.
 function ShareReviewButton({ assetId }: { assetId: string }) {
   const createLink = useCreateReviewLink(assetId);
   const [url, setUrl] = useState<string | null>(null);
@@ -75,8 +75,11 @@ function ShareReviewButton({ assetId }: { assetId: string }) {
 
   const mint = async () => {
     const res = await createLink.mutateAsync({ allow_comments: true });
-    setUrl(res.data.url);
-    copy(res.data.url);
+    // The create response is the only one that carries the url (#122).
+    const minted = res.data.url;
+    if (!minted) return;
+    setUrl(minted);
+    copy(minted);
   };
 
   return (
