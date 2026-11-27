@@ -275,10 +275,11 @@ export default async function knocksRoutes(fastify: FastifyInstance) {
       // notifies the owner. On any transport failure we still fall back to
       // a logged 202 so the visitor isn't stuck waiting on Banter.
       const internalSecret = env.INTERNAL_SERVICE_SECRET;
-      // Banter API internal base — bureau-api does not yet have a dedicated
-      // env var for it, so derive from the docker-compose service name and
-      // allow override via BANTER_INTERNAL_URL.
-      const banterInternalUrl = process.env.BANTER_INTERNAL_URL ?? 'http://banter-api:4002';
+      // banter-api's private base (#303): BANTER_API_URL, the one name the api,
+      // worker and mcp-server read too, declared in env.ts and provisioned by
+      // the Railway catalog. (This used to read a second name that nothing
+      // provisioned, so every note failed on Railway.)
+      const banterInternalUrl = env.BANTER_API_URL;
 
       let delivered = false;
       if (internalSecret) {

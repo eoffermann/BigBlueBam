@@ -24,6 +24,7 @@ vi.mock('../src/env.js', () => ({
     REDIS_URL: 'redis://localhost:6379',
     NODE_ENV: 'test',
     INTERNAL_SERVICE_SECRET: 's'.repeat(40),
+    BANTER_API_URL: 'http://banter-api.railway.internal:8080',
   },
 }));
 
@@ -45,7 +46,8 @@ describe('fanoutNotification banter_dm', () => {
     const [result] = await fanoutNotification({ ...base, actor_user_id: '00000000-0000-4000-8000-0000000000c1' }, ['banter_dm']);
     expect(result).toEqual({ channel: 'banter_dm', status: 'sent' });
     const [url, init] = fetchSpy.mock.calls[0]!;
-    expect(String(url)).toMatch(/\/v1\/internal\/dm$/);
+    // #303: the base comes from env.BANTER_API_URL, not a hard-coded compose default.
+    expect(String(url)).toBe('http://banter-api.railway.internal:8080/v1/internal/dm');
     expect((init!.headers as Record<string, string>)['X-Internal-Secret']).toBe('s'.repeat(40));
     const body = JSON.parse(String(init!.body));
     // Exactly the fields banter's zod schema reads: org_id, from_user_id, to_user_id, content, source.

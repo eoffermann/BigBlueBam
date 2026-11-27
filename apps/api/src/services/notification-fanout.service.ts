@@ -155,7 +155,9 @@ async function dispatchBanterDm(payload: NotificationPayload): Promise<FanoutRes
   try {
     // Internal HTTP call to banter-api over the private network (the guard refuses
     // anything relayed by the edge). Fire-and-forget: failures are reported, not thrown.
-    const banterBaseUrl = process.env.BANTER_API_URL ?? 'http://banter-api:4002';
+    // #303: env.ts owns the name and the default (BANTER_API_URL, shared with bureau-api,
+    // worker and mcp-server, provisioned by the Railway catalog).
+    const banterBaseUrl = env.BANTER_API_URL;
     const res = await fetch(`${banterBaseUrl}/v1/internal/dm`, {
       method: 'POST',
       headers: {

@@ -559,6 +559,9 @@ export const APP_SERVICES = [
         'LIVEKIT_URL',
         'BOLT_API_INTERNAL_URL',
         'BOOK_INTERNAL_URL', 'BOARD_INTERNAL_URL', 'BRIEF_INTERNAL_URL',
+        // banter-api's private base for the leave-a-note DM (knocks.routes.ts, #303). Without it
+        // bureau-api falls back to http://banter-api:4002, the wrong host and port on Railway.
+        'BANTER_API_URL',
         'RATE_LIMIT_MAX', 'RATE_LIMIT_WINDOW_MS',
       ],
     },
@@ -690,6 +693,9 @@ export const APP_SERVICES = [
         // http://mcp-server:3001 — wrong host AND port on Railway — so Bolt
         // automations with MCP-tool actions silently fail. env-hints computes it.
         'MCP_INTERNAL_URL',
+        // banter-api's private base: the call-transcription callback URL handed to the voice
+        // agent (banter-transcription.job.ts, #303). Same name as api / bureau-api / mcp-server.
+        'BANTER_API_URL',
         'S3_ENDPOINT', 'S3_ACCESS_KEY', 'S3_SECRET_KEY', 'S3_BUCKET', 'S3_REGION',
         // worker reads EMAIL_FROM (apps/worker/src/env.ts:10) — the single
         // canonical SMTP from-address fallback (the shared @bigbluebam/smtp-

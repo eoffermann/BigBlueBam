@@ -568,7 +568,7 @@ banterRetentionWorker.on('failed', (job, err) => {
 const banterTranscriptionWorker = new Worker<BanterTranscriptionJobData>(
   'banter-transcription',
   async (job: Job<BanterTranscriptionJobData>) => {
-    await processBanterTranscriptionJob(job, logger);
+    await processBanterTranscriptionJob(job, env, logger);
   },
   { ...connection, concurrency: 2 },
 );

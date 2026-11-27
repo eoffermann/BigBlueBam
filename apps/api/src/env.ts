@@ -114,6 +114,10 @@ const envSchema = z.object({
   // Helpdesk API internal URL for agent queue proxy
   HELPDESK_API_INTERNAL_URL: z.string().default('http://helpdesk-api:4001'),
 
+  // banter-api on the private network, for the assignment-notification DM (#278, #303). One name
+  // (BANTER_API_URL) across api, bureau-api, worker and mcp-server.
+  BANTER_API_URL: z.string().url().default('http://banter-api:4002'),
+
   // Per-action permissions enforcement mode (Wave A foundation in this PR).
   //   off  — plugin loads but every requireCan() check no-ops to ALLOW.
   //          Day-1 default; behavior is identical to the legacy role gate.

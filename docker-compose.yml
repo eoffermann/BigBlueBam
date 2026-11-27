@@ -118,6 +118,9 @@ services:
       SMTP_PASS: ${SMTP_PASS:-}
       EMAIL_FROM: ${SMTP_FROM:-noreply@bigbluebam.com}
       PUBLIC_URL: ${PUBLIC_URL:-http://localhost}
+      # banter-api's private base (assignment DMs). One name across api, bureau-api, worker and
+      # mcp-server (#303).
+      BANTER_API_URL: http://banter-api:4002
       # env.ts auto-promotes COOKIE_SECURE to true whenever NODE_ENV=production
       # (which it always is in this image). Browsers silently drop a Secure
       # cookie sent over plain HTTP, so the session cookie never comes back
@@ -266,6 +269,8 @@ services:
       TRACKING_BASE_URL: ${PUBLIC_URL:-http://localhost}
       INTERNAL_SERVICE_SECRET: ${INTERNAL_SERVICE_SECRET:-}
       BOLT_API_INTERNAL_URL: http://bolt-api:4006
+      # banter-api's private base (call-transcription callback, #303).
+      BANTER_API_URL: http://banter-api:4002
       # Book task #63: the book-calendar-sync sweep calls the Book API's
       # internal sync-due route to run the external-calendar sync engine.
       BOOK_API_INTERNAL_URL: http://book-api:4012
@@ -1583,6 +1588,8 @@ services:
       - BRIEF_INTERNAL_URL=http://brief-api:4005
       - BBB_API_INTERNAL_URL=http://api:4000
       - BOLT_API_INTERNAL_URL=http://bolt-api:4006
+      # banter-api's private base (leave-a-note DM, #303).
+      - BANTER_API_URL=http://banter-api:4002
       - NODE_ENV=production
       - PORT=4015
       - HOST=0.0.0.0
