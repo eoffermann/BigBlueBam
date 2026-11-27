@@ -231,8 +231,9 @@ export function useResolveReview() {
 export interface ReviewLink {
   id: string;
   asset_id: string;
-  token: string;
-  url: string;
+  /** Only on the create response: the raw token is never stored, so a list has no token or url (#122). */
+  token?: string;
+  url?: string;
   allow_comments: boolean;
   expires_at: string | null;
   revoked_at: string | null;

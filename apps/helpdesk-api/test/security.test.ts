@@ -697,10 +697,14 @@ describe('HB-6: agent org scoping', () => {
     app = await buildApp();
   });
 
-  it('agent with valid BBB session sees only tickets whose project belongs to session.org_id', async () => {
-    dbMock.execute.mockResolvedValue({
-      rows: [{ user_id: SESSION_USER, display_name: 'Sam Session', org_id: SESSION_ORG }],
-    });
+  // #173: the session must be the key owner's own, and it scopes to the
+  // session's ACTIVE org (here SESSION_ORG), not the owner's home org.
+  it("agent with its owner's BBB session sees only tickets whose project belongs to the session's active org", async () => {
+    dbMock.execute
+      .mockResolvedValueOnce({
+        rows: [{ user_id: TEST_USER_ID, active_org_id: SESSION_ORG, org_id: KEY_USER_ORG }],
+      })
+      .mockResolvedValueOnce({ rows: [{ id: TEST_USER_ID }] }); // membership in SESSION_ORG
     const ticketsChain = makeTicketsSelectChain();
     dbMock.select
       .mockReturnValueOnce(makeAgentKeySelectChain([makeCandidate()]))
@@ -835,14 +839,21 @@ describe('HB-14: message author_id forgery prevention', () => {
     });
   }
 
-  it('when a BBB session accompanies the request, author_id is taken from the session and cannot be overridden by the request body', async () => {
-    dbMock.execute.mockResolvedValue({
-      rows: [{ user_id: SESSION_USER, display_name: 'Sam Session', org_id: TICKET_ORG }],
-    });
+  it("when the key owner's BBB session accompanies the request, author_id is taken from the session and cannot be overridden by the request body", async () => {
+    dbMock.execute
+      .mockResolvedValueOnce({
+        rows: [{ user_id: TEST_USER_ID, active_org_id: TICKET_ORG, org_id: TICKET_ORG }],
+      })
+      .mockResolvedValueOnce({ rows: [{ id: TEST_USER_ID }] }); // membership
     dbMock.select
       .mockReturnValueOnce(makeAgentKeySelectChain([makeCandidate()]))
       .mockReturnValueOnce(makeTicketExistsChain())
-      .mockReturnValueOnce(makeTicketOrgChain(TICKET_ORG));
+      .mockReturnValueOnce(makeTicketOrgChain(TICKET_ORG))
+      .mockReturnValueOnce({
+        from: vi.fn().mockReturnThis(),
+        where: vi.fn().mockReturnThis(),
+        limit: vi.fn().mockResolvedValue([{ display_name: 'Jonas Grumby', email: null }]),
+      });
     const insertChain = stubMessageInsert();
 
     const res = await postMessage(
@@ -852,14 +863,29 @@ describe('HB-14: message author_id forgery prevention', () => {
 
     expect(res.statusCode).toBe(201);
     expect(insertChain.values).toHaveBeenCalledWith(
-      expect.objectContaining({ author_id: SESSION_USER, author_type: 'agent' }),
+      expect.objectContaining({ author_id: TEST_USER_ID, author_type: 'agent' }),
     );
     expect(insertChain.values.mock.calls[0][0].author_id).not.toBe(FORGED_AUTHOR);
     expect(logTicketActivity).toHaveBeenCalledWith(
-      expect.objectContaining({ actorId: SESSION_USER, action: 'message.posted' }),
+      expect.objectContaining({ actorId: TEST_USER_ID, action: 'message.posted' }),
     );
-    // Two session lookups (org scope + author identity); no body-author lookup.
+    // One session lookup and one membership check; no body-author lookup.
     expect(dbMock.execute).toHaveBeenCalledTimes(2);
+  });
+
+  // #173: key X plus another user's session used to post as that user.
+  it("another user's BBB session alongside the key is 403 and nothing is written", async () => {
+    dbMock.execute.mockResolvedValueOnce({
+      rows: [{ user_id: SESSION_USER, active_org_id: TICKET_ORG, org_id: TICKET_ORG }],
+    });
+    dbMock.select.mockReturnValueOnce(makeAgentKeySelectChain([makeCandidate()]));
+    stubMessageInsert();
+
+    const res = await postMessage({ body: 'hello' }, { session: 'howell-session' });
+
+    expect(res.statusCode).toBe(403);
+    expect(res.json().error.code).toBe('AGENT_SESSION_MISMATCH');
+    expect(dbMock.insert).not.toHaveBeenCalled();
   });
 
   it('X-Agent-Key-only caller must supply author_id → 400 AUTHOR_REQUIRED, nothing written', async () => {

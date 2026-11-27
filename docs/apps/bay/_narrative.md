@@ -9,7 +9,7 @@ Bay is BigBlueBam's media review and approval app. It turns a file in your Bin s
 - **Coordinate-anchored annotations.** Notes are glued to a precise place: a video `frame` or `timerange`, an image `region` box, or a 3D `viewpoint` (remembered camera plus optional surface spot). Annotations resolve, reopen, and thread.
 - **Per-reviewer decisions.** One decision per reviewer per version (Approved, Changes requested, Rejected, Pending), upserted so changing your mind updates in place; the panel shows every reviewer's verdict together.
 - **Immutable version stack.** Upload a new cut as the next version; older versions, with their own notes and decisions, are preserved.
-- **Guest review links.** A public, token-gated `/bay/r/:token` URL with optional expiry and an allow-comments toggle; revoke is soft and keeps view stats.
+- **Guest review links.** A public, token-gated `/bay/r#<token>` URL with optional expiry and an allow-comments toggle; revoke is soft and keeps view stats.
 - **3D / FBX model review.** Upload FBX, OBJ, STL, GLB, glTF, PLY, DAE, or USD; the worker converts it to a browser-loadable GLB proxy. Orbit/pan/zoom, Remember viewpoint, a surface Spot that survives orbit, and a model stats line (tris, materials, clips).
 - **AI agent surface** of `bay_*` MCP tools covering review resolve, asset/version CRUD, annotations, decisions, and share links.
 

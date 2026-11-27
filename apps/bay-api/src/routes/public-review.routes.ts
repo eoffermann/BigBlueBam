@@ -4,11 +4,15 @@ import * as reviewLinkService from '../services/review-link.service.js';
 import * as binMedia from '../lib/bin-media.js';
 import { NotFoundError, GoneError, ForbiddenError } from '../services/errors.js';
 import { broadcastToVersion } from '../lib/broadcast.js';
+import { REVIEW_TOKEN_HEADER } from '../lib/review-token.js';
 
-// Public guest-review surface. NO auth — the path token is the sole credential.
+// Public guest-review surface. NO auth: the review token is the sole credential.
 // Mounted under /v1/public so the existing /bay/api/ nginx proxy serves it with
-// no new public route. Tokens are 48 hex chars (unguessable); a per-route rate
-// limit adds defense in depth.
+// no new public route. Tokens are 48 hex chars (unguessable) and stored only as
+// a SHA-256 (#122). They never appear in a path or query string, so they stay
+// out of access logs and Referer headers: the JSON routes take the token in the
+// X-Bay-Review-Token header, and media takes a short-lived ticket. A per-route
+// rate limit adds defense in depth.
 
 const guestCommentSchema = z.object({
   body: z.string().min(1).max(5000),
@@ -35,6 +39,12 @@ function sendError(reply: FastifyReply, request: FastifyRequest, err: unknown) {
   throw err;
 }
 
+/** The review token from its header ('' when absent, which the service rejects as not found). */
+function reviewToken(request: FastifyRequest): string {
+  const raw = request.headers[REVIEW_TOKEN_HEADER];
+  return (Array.isArray(raw) ? raw[0] : raw) ?? '';
+}
+
 function variantOf(q: unknown): binMedia.ServeVariant {
   const v = (q as { variant?: string })?.variant;
   return v === 'proxy' || v === 'poster' ? v : 'original';
@@ -44,13 +54,14 @@ export default async function publicReviewRoutes(fastify: FastifyInstance) {
   // A tighter limit than the global one for the unauthenticated surface.
   const rateLimit = { max: 120, timeWindow: 60_000 };
 
-  // GET /public/review/:token — the read-only review bundle (no media bytes)
-  fastify.get<{ Params: { token: string } }>(
-    '/public/review/:token',
+  // GET /public/review: the read-only review bundle (no media bytes). The
+  // token comes in the X-Bay-Review-Token header, never the path (#122).
+  fastify.get(
+    '/public/review',
     { config: { rateLimit } },
     async (request, reply) => {
       try {
-        const review = await reviewLinkService.getPublicReviewByToken(request.params.token);
+        const review = await reviewLinkService.getPublicReviewByToken(reviewToken(request));
         return reply.send({ data: review });
       } catch (err) {
         return sendError(reply, request, err);
@@ -58,15 +69,16 @@ export default async function publicReviewRoutes(fastify: FastifyInstance) {
     },
   );
 
-  // GET /public/review/:token/media?variant=proxy|poster — stream the bytes
-  fastify.get<{ Params: { token: string }; Querystring: { variant?: string } }>(
-    '/public/review/:token/media',
+  // GET /public/review/media?ticket=...&variant=proxy|poster: stream the bytes.
+  // A media element cannot send headers, so it carries the short-lived media
+  // ticket from the bundle (lib/review-token.ts), never the link token.
+  fastify.get<{ Querystring: { ticket?: string; variant?: string } }>(
+    '/public/review/media',
     { config: { rateLimit } },
     async (request, reply) => {
       try {
-        // The link's own org scopes every bin_assets read below; the path
-        // token is the only credential on this anonymous surface.
-        const resolved = await reviewLinkService.resolveTokenBinAsset(request.params.token);
+        // The link's own org scopes every bin_assets read below.
+        const resolved = await reviewLinkService.resolveTicketBinAsset(request.query.ticket);
         if (!resolved) throw new NotFoundError('No media for this review');
         const { binAssetId, orgId } = resolved;
         const variant = variantOf(request.query);
@@ -106,14 +118,14 @@ export default async function publicReviewRoutes(fastify: FastifyInstance) {
     },
   );
 
-  // POST /public/review/:token/comments — guest comment (if the link allows it)
-  fastify.post<{ Params: { token: string } }>(
-    '/public/review/:token/comments',
+  // POST /public/review/comments: guest comment (if the link allows it)
+  fastify.post(
+    '/public/review/comments',
     { config: { rateLimit: { max: 20, timeWindow: 60_000 } } },
     async (request, reply) => {
       const body = guestCommentSchema.parse(request.body);
       try {
-        const annotation = await reviewLinkService.addGuestComment(request.params.token, body);
+        const annotation = await reviewLinkService.addGuestComment(reviewToken(request), body);
         // Members watching this version see the guest comment appear live.
         await broadcastToVersion(fastify.redis, annotation.version_id, {
           type: 'bay.annotation.created',

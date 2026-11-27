@@ -54,12 +54,13 @@ vi.mock('../src/lib/agent-auth.js', () => ({
 // Bam API keys (Bearer bbam_...), the credential the MCP server forwards (#325).
 const bamKeys: Record<
   string,
-  { userId: string; keyOrgId: string; scope: string; isSuperuser: boolean; kind?: string }
+  { userId: string; keyOrgId: string | null; scope: string; isSuperuser: boolean; kind?: string }
 > = {};
 vi.mock('../src/lib/bam-api-key.js', async (orig) => {
   const real = await orig<typeof import('../src/lib/bam-api-key.js')>();
   return {
     bamBearerToken: real.bamBearerToken,
+    scopedUser: real.scopedUser,
     verifyBamApiKey: async (_req: unknown, token: string) => bamKeys[token] ?? null,
   };
 });
@@ -172,6 +173,34 @@ describe('helpdesk requireAdminAuth', () => {
       bamKeys.bbam_svc_read = { userId: 'svcA', keyOrgId: ORG_A, scope: 'read', isSuperuser: false, kind: 'service' };
       expect((await get(bearer('bbam_svc_admin'))).statusCode).toBe(200);
       expect((await get(bearer('bbam_svc_read'))).statusCode).toBe(403);
+    });
+
+    // #351: the guard now takes requireScope's rules and the org pin from
+    // @bigbluebam/auth-core instead of re-deriving them; these are the three
+    // places the hand-rolled copy disagreed.
+    describe('matches @bigbluebam/auth-core (#351)', () => {
+      const patch = (k: string, extra: Record<string, string> = {}) =>
+        app.inject({ method: 'PATCH', url: '/admin', headers: { ...bearer(k), ...extra }, payload: {} });
+
+      it("a SuperUser's 'read' key may write, as requireScope passes SuperUsers", async () => {
+        bamKeys.bbam_su_read = { userId: 'su', keyOrgId: ORG_A, scope: 'read', isSuperuser: true };
+        expect((await patch('bbam_su_read', { 'x-org-slug': 'org-b' })).statusCode).toBe(200);
+      });
+
+      it('a SuperUser key is not pinned: header-less, it acts in its home org', async () => {
+        people.su!.homeOrg = ORG_B;
+        const res = await get(bearer('bbam_superuser'));
+        expect(res.statusCode).toBe(200);
+        expect(res.json().org).toBe(ORG_B);
+      });
+
+      it('a NULL-org key is not pinned: it acts in its home org and still needs membership elsewhere', async () => {
+        bamKeys.bbam_admin_null = { userId: 'adminA', keyOrgId: null, scope: 'admin', isSuperuser: false };
+        const res = await get(bearer('bbam_admin_null'));
+        expect(res.statusCode).toBe(200);
+        expect(res.json().org).toBe(ORG_A);
+        expect((await get({ ...bearer('bbam_admin_null'), 'x-org-slug': 'org-b' })).statusCode).toBe(403);
+      });
     });
   });
 

@@ -99,7 +99,7 @@ import assetRoutes from './routes/assets.routes.js';
 import annotationRoutes from './routes/annotations.routes.js';
 import decisionRoutes from './routes/decisions.routes.js';
 import reviewLinkRoutes from './routes/review-links.routes.js';
-// Public guest-review surface (no auth; the path token is the credential).
+// Public guest-review surface (no auth; the X-Bay-Review-Token header is the credential).
 import publicReviewRoutes from './routes/public-review.routes.js';
 // Realtime WS hub (subscribe to a review version's live events).
 import wsRoutes from './routes/ws.routes.js';

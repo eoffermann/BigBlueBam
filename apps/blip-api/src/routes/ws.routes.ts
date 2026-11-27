@@ -27,6 +27,7 @@ import { blipTrackedApps } from '../db/schema/index.js';
 import { backfillEntries } from '../services/entry.service.js';
 import { tailChannel } from '../lib/broadcast.js';
 import { evalPredicate, type Predicate } from '../lib/predicate.js';
+import { wsFrameGate } from '../lib/ws-frames.js';
 
 const subscribeSchema = z.object({
   type: z.literal('subscribe'),
@@ -86,8 +87,19 @@ export default async function wsRoutes(fastify: FastifyInstance) {
           send({ type: 'error', code: 'BAD_FRAME', message: 'Frames must be JSON' });
           return;
         }
+        // Per-frame catalog gate, the REST twin's (issue #177). An undeclared
+        // frame type runs nothing (tolerated silently, e.g. a client pong).
+        const denial = await wsFrameGate.check(
+          (parsed as { type?: unknown } | null)?.type,
+          { user_id: user.id, org_id: user.active_org_id },
+          request.log,
+        );
+        if (denial) {
+          if (denial.code === 'PERMISSION_DENIED') send({ type: 'error', ...denial });
+          return;
+        }
         const sub = subscribeSchema.safeParse(parsed);
-        if (!sub.success) return; // tolerate unknown frames (e.g. client pong)
+        if (!sub.success) return;
         const { tracked_app_id, report_type, filter, since_seq } = sub.data;
 
         // Same org gate the REST routes use: the app must be in the caller's org.

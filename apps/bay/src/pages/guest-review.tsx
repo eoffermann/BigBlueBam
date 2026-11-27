@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ModelViewer } from '@/components/model-viewer';
 import type { ViewpointAnchor, ViewpointAnnotation } from '@/hooks/use-bay';
+import { fragmentFormPath, readReviewToken } from '@/lib/review-token';
 
-// Public, unauthenticated guest review page (served at /bay/r/:token). It talks
+// Public, unauthenticated guest review page (served at /bay/r#<token>). It talks
 // only to the token-scoped public API and never touches the auth store, so it
 // works for anonymous browsers with no BigBlueBam session.
 
@@ -32,12 +33,19 @@ interface PublicReview {
   version: { id: string; version_number: number; bin_asset_id: string | null } | null;
   annotations: PublicAnnotation[];
   decisions: PublicDecision[];
+  /** Short-lived credential for the media stream only. */
+  media_ticket: string;
 }
 
 const API = '/bay/api/v1/public/review';
+/** The review token travels only in this header, never in a path or query (#122). */
+const REVIEW_TOKEN_HEADER = 'X-Bay-Review-Token';
 
-function mediaUrl(token: string, variant?: 'proxy' | 'poster'): string {
-  return `${API}/${token}/media${variant ? `?variant=${variant}` : ''}`;
+/** Media elements cannot send headers, so they use the bundle's short-lived media ticket. */
+function mediaUrl(ticket: string, variant?: 'proxy' | 'poster'): string {
+  const q = new URLSearchParams({ ticket });
+  if (variant) q.set('variant', variant);
+  return `${API}/media?${q.toString()}`;
 }
 
 const decisionStyle: Record<PublicDecision['decision'], string> = {
@@ -47,7 +55,16 @@ const decisionStyle: Record<PublicDecision['decision'], string> = {
   pending: 'bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300',
 };
 
-export function GuestReviewPage({ token }: { token: string }) {
+export function GuestReviewPage() {
+  const [token] = useState(() => {
+    const { pathname, hash } = window.location;
+    const t = readReviewToken(pathname, hash);
+    // A pre-#122 /r/<token> link: move the token into the fragment so it is not
+    // sent again (reloads, Referer) and does not linger in history as a path.
+    const rewritten = fragmentFormPath(pathname, hash, t);
+    if (rewritten) window.history.replaceState(null, '', rewritten);
+    return t;
+  });
   const [review, setReview] = useState<PublicReview | null>(null);
   const [status, setStatus] = useState<'loading' | 'ok' | 'notfound' | 'gone' | 'error'>('loading');
   const [useProxy, setUseProxy] = useState(true);
@@ -61,7 +78,7 @@ export function GuestReviewPage({ token }: { token: string }) {
   const load = useMemo(
     () => async () => {
       try {
-        const res = await fetch(`${API}/${token}`, { headers: { Accept: 'application/json' } });
+        const res = await fetch(API, { headers: { Accept: 'application/json', [REVIEW_TOKEN_HEADER]: token } });
         if (res.status === 404) return setStatus('notfound');
         if (res.status === 410) return setStatus('gone');
         if (!res.ok) return setStatus('error');
@@ -86,9 +103,9 @@ export function GuestReviewPage({ token }: { token: string }) {
     setPosting(true);
     setPostErr(null);
     try {
-      const res = await fetch(`${API}/${token}/comments`, {
+      const res = await fetch(`${API}/comments`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', [REVIEW_TOKEN_HEADER]: token },
         body: JSON.stringify({ guest_name: guestName.trim(), body: commentBody.trim() }),
       });
       if (!res.ok) {
@@ -134,7 +151,7 @@ export function GuestReviewPage({ token }: { token: string }) {
           }))
       : [];
   const playableSrc =
-    kind === 'video' || kind === 'audio' ? mediaUrl(token, useProxy ? 'proxy' : undefined) : mediaUrl(token);
+    kind === 'video' || kind === 'audio' ? mediaUrl(review.media_ticket, useProxy ? 'proxy' : undefined) : mediaUrl(review.media_ticket);
   const onMediaError = () => {
     if (useProxy) setUseProxy(false);
   };
@@ -162,12 +179,12 @@ export function GuestReviewPage({ token }: { token: string }) {
               </div>
             ) : kind === 'image' ? (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={mediaUrl(token)} alt={review.name} className="block w-full max-h-[32rem] object-contain bg-zinc-900" />
+              <img src={mediaUrl(review.media_ticket)} alt={review.name} className="block w-full max-h-[32rem] object-contain bg-zinc-900" />
             ) : kind === 'video' ? (
               // biome-ignore lint/a11y/useMediaCaption: shared review media has no caption track
               <video
                 src={playableSrc}
-                poster={mediaUrl(token, 'poster')}
+                poster={mediaUrl(review.media_ticket, 'poster')}
                 controls
                 className="block w-full max-h-[32rem] bg-black"
                 onError={onMediaError}
@@ -178,11 +195,11 @@ export function GuestReviewPage({ token }: { token: string }) {
                 <audio src={playableSrc} controls className="w-full max-w-md" onError={onMediaError} />
               </div>
             ) : kind === 'model' ? (
-              <ModelViewer src={mediaUrl(token, 'proxy')} annotations={modelAnnotations} />
+              <ModelViewer src={mediaUrl(review.media_ticket, 'proxy')} annotations={modelAnnotations} />
             ) : (
               <div className="aspect-video flex flex-col items-center justify-center gap-2 text-sm text-zinc-500">
                 <p>Preview not available for this media type.</p>
-                <a href={mediaUrl(token)} className="text-primary-600 underline">Download to view</a>
+                <a href={mediaUrl(review.media_ticket)} className="text-primary-600 underline">Download to view</a>
               </div>
             )}
           </div>

@@ -16,7 +16,7 @@ Bay is BigBlueBam's media review and approval app. It turns a file in your Bin s
 - **Coordinate-anchored annotations.** Notes are glued to a precise place: a video `frame` or `timerange`, an image `region` box, or a 3D `viewpoint` (remembered camera plus optional surface spot). Annotations resolve, reopen, and thread.
 - **Per-reviewer decisions.** One decision per reviewer per version (Approved, Changes requested, Rejected, Pending), upserted so changing your mind updates in place. The panel shows every reviewer's verdict as the version's approval state.
 - **Immutable version stack.** Upload a new cut as the next version; older versions, with their own notes and decisions, are preserved.
-- **Guest review links.** Mint a public, token-gated `/bay/r/:token` URL with optional expiry and an allow-comments toggle. Revoke is soft and keeps view stats.
+- **Guest review links.** Mint a public, token-gated `/bay/r#<token>` URL with optional expiry and an allow-comments toggle. Revoke is soft and keeps view stats.
 - **3D / FBX model review.** Upload FBX, OBJ, STL, GLB, glTF, PLY, DAE, or USD; the worker converts it to a browser-loadable GLB proxy. Orbit/pan/zoom, Remember viewpoint (fly the camera back to a saved angle), Spot (a highlight glued to the mesh surface that survives orbit), and a model stats line (tris, materials, animation clips).
 - **Live updates.** Annotations and decisions (including guest comments) broadcast over a WebSocket, so reviewers see them arrive without reloading.
 - **AI agent surface** of `bay_*` MCP tools covering review resolve, asset/version CRUD, annotations, decisions, and share links.
@@ -63,14 +63,14 @@ Animated models add a frame-accurate timeline transport (play/pause, scrub, fram
 
 ### Record a decision and share
 
-In the decisions panel, pick **Approved**, **Changes requested**, **Rejected**, or **Pending** (and an optional comment). Your decision is one per version and updates in place if you change it; the panel shows every reviewer's badge together. Click **Share** to mint a token-gated `/bay/r/:token` link (the URL is copied to your clipboard); optionally set an expiry and whether guests may comment. Revoke the link any time.
+In the decisions panel, pick **Approved**, **Changes requested**, **Rejected**, or **Pending** (and an optional comment). Your decision is one per version and updates in place if you change it; the panel shows every reviewer's badge together. Click **Share** to mint a token-gated `/bay/r#<token>` link (the URL is copied to your clipboard); optionally set an expiry and whether guests may comment. Revoke the link any time.
 
 ## MCP Tools
 
 | Tool | Description |
 |------|-------------|
 | `bay_review_resolve` | Open (find-or-create) the Bay review for a Bin media asset by `bin_asset_id`; idempotent. |
-| `bay_review_link_create` | Mint a public token-gated share link (`/bay/r/:token`) with optional expiry and allow-comments. |
+| `bay_review_link_create` | Mint a public token-gated share link (`/bay/r#<token>`) with optional expiry and allow-comments. |
 | `bay_asset_list` | List Bay review assets, optionally by project or including archived. |
 | `bay_asset_get` | Get one asset's metadata (media_kind, current version, project). |
 | `bay_asset_create` | Create a review asset (`image`/`video`/`audio`/`model`); bytes attach via a version. |
