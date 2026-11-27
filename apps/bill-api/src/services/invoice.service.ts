@@ -11,6 +11,7 @@ import {
   tasks,
   users,
   bondDeals,
+  projects,
 } from '../db/schema/index.js';
 import { notFound, badRequest } from '../lib/utils.js';
 import { resolveRate } from './rate.service.js';
@@ -455,6 +456,20 @@ export async function createInvoiceFromTimeEntries(
   orgId: string,
   userId: string,
 ) {
+  // 0. project_id and time_entry_ids are caller-supplied, and neither tasks
+  //    nor time_entries has an org column, so projects.org_id is the only
+  //    tenant anchor on this path. Resolve the project inside the caller's
+  //    org first (404, so foreign ids cannot be probed), and join projects on
+  //    both entry queries below. Without this, explicit ids from another org
+  //    copied that org's task titles, member names and hours onto an invoice
+  //    the caller owns.
+  const [project] = await db
+    .select({ id: projects.id })
+    .from(projects)
+    .where(and(eq(projects.id, input.project_id), eq(projects.org_id, orgId)))
+    .limit(1);
+  if (!project) throw notFound('Project not found');
+
   // 1. Fetch the candidate time entries joined with tasks to verify project
   //    ownership. When explicit IDs are supplied we look those up; otherwise
   //    we resolve all entries on the project's tasks within the date range.
@@ -477,7 +492,8 @@ export async function createInvoiceFromTimeEntries(
       .select(baseSelect)
       .from(timeEntries)
       .innerJoin(tasks, eq(tasks.id, timeEntries.task_id))
-      .where(inArray(timeEntries.id, input.time_entry_ids!));
+      .innerJoin(projects, eq(projects.id, tasks.project_id))
+      .where(and(inArray(timeEntries.id, input.time_entry_ids!), eq(projects.org_id, orgId)));
   } else {
     if (!input.date_from || !input.date_to) {
       throw badRequest('Provide either time_entry_ids or both date_from and date_to');
@@ -486,9 +502,11 @@ export async function createInvoiceFromTimeEntries(
       .select(baseSelect)
       .from(timeEntries)
       .innerJoin(tasks, eq(tasks.id, timeEntries.task_id))
+      .innerJoin(projects, eq(projects.id, tasks.project_id))
       .where(
         and(
           eq(tasks.project_id, input.project_id),
+          eq(projects.org_id, orgId),
           gte(timeEntries.date, input.date_from),
           lte(timeEntries.date, input.date_to),
         ),
