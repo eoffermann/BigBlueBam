@@ -3,7 +3,7 @@ import { CheckCircle2, Circle, Loader2 } from 'lucide-react';
 import type { BastionCompanyProfile, BastionTemplateKey } from '@bigbluebam/shared';
 import { getImpersonation } from '@bigbluebam/ui/impersonation-banner';
 import { useCan } from '@bigbluebam/ui/use-can';
-import { ApiError, type AssertionRow, type FrameworkView, type PopulationView, type SetupState } from '@/lib/api';
+import { ApiError, type FrameworkView, type PopulationView, type ProposedCheck as ProposedCheckRow, type SetupState } from '@/lib/api';
 import { friendlyError, technicalDetails } from '@/lib/errors';
 import {
   useAdoptFramework,
@@ -447,7 +447,7 @@ function ProposedCheck({
   perms,
   connected,
 }: {
-  check: AssertionRow;
+  check: ProposedCheckRow;
   impersonating: boolean;
   perms: SetupPermissions;
   connected: NonNullable<SetupState['connected_populations']>;
