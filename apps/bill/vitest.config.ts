@@ -10,8 +10,7 @@ export default defineConfig({
     },
   },
   test: {
-    testTimeout: 60_000,
-    hookTimeout: 60_000,
+    // Test, hook and Testing Library wait budgets come from @bigbluebam/ui/test-setup (#391).
     environment: 'jsdom',
     setupFiles: ['./test/setup.ts'],
     include: ['test/**/*.test.{ts,tsx}'],

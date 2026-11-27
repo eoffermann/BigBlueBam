@@ -11,14 +11,7 @@ export default defineConfig({
     },
   },
   test: {
-
-    // CI runners sometimes blow through the 5s default on first-test-in-file
-
-    // import cost (drizzle + peer-app-stubs can take multiple seconds).
-
-    testTimeout: 60_000,
-
-    hookTimeout: 60_000,
+    // Test, hook and Testing Library wait budgets come from @bigbluebam/ui/test-setup (#391).
     environment: 'jsdom',
     setupFiles: ['./test/setup.ts'],
     globals: true,

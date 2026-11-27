@@ -30,4 +30,8 @@ export default defineConfig({
       },
     },
   },
+  test: {
+    // Shared SPA test setup (#391): Testing Library wait + test budgets.
+    setupFiles: ['./test/setup.ts'],
+  },
 });

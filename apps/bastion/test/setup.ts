@@ -1,13 +1,11 @@
 import '@testing-library/jest-dom';
 import { configure } from '@testing-library/react';
 import { afterEach, beforeEach, vi } from 'vitest';
+import { applySpaTestDefaults } from '@bigbluebam/ui/test-setup';
 
-// findBy* / waitFor default to a 1 s budget. When the SPA suite runs alongside other packages
-// the first render of a page (React Query fetch, Suspense, PermissionsProvider) can take several
-// seconds, so a correct page failed with "Unable to find ..." (#384). Give every async wait the
-// same generous budget; it only bounds how long a wait may take, so what each test asserts is
-// unchanged. Stays well under the 60 s testTimeout in vitest.config.ts.
-configure({ asyncUtilTimeout: 20_000 });
+// Shared Testing Library wait + test budgets for every SPA (#384, #391). Under parallel load the
+// first render of a page can take several seconds, so the 1 s default wait failed correct pages.
+applySpaTestDefaults({ configure, vi });
 
 // Fail any test that lets a React update land outside act() (#224). Such a warning means a
 // refetch or state update settled after the test asserted, the ordering-dependent pattern that

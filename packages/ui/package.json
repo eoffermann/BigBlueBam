@@ -4,6 +4,10 @@
   "private": true,
   "type": "module",
   "exports": {
+    "./test-setup": {
+      "types": "./test-setup.ts",
+      "default": "./test-setup.ts"
+    },
     "./help-center": {
       "types": "./help-center.tsx",
       "default": "./help-center.tsx"
