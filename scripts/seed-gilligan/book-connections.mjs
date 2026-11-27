@@ -26,9 +26,17 @@
  * bundles the `minio` client used to host the fixture. The book-api container
  * is what fetches the feed during sync, and it can reach http://minio:9000 on
  * the same compose network. The two are wired by the shared MinIO host.
+ *
+ * book-api fetches every ICS feed through @bigbluebam/egress-guard, which refuses
+ * private addresses (#247). The only exception is book-api's operator allowlist,
+ * EGRESS_ALLOW_PRIVATE_HOSTS, which docker-compose.yml defaults to exactly this
+ * feed's host:port (minio:9000). apps/book-api/test/gilligan-feed-rehearsal.test.ts
+ * runs book-api's real create check, fetch and parse on this script's fixture and
+ * checks the two stay in agreement.
+ *
+ * Importing this module (BBB_SEED_IMPORT_ONLY=1) exposes the fixture without
+ * running the seed.
  */
-
-import * as Minio from 'minio';
 
 const BOOK = 'http://book-api:4012/v1';
 const KEYS = JSON.parse(process.env.GKEYS || '{}');
@@ -37,13 +45,20 @@ const KEYS = JSON.parse(process.env.GKEYS || '{}');
 // connection is his.
 const OWNER = 'skipper';
 
-// MinIO: default dev creds + a dedicated public-read bucket so the feed URL is
-// unauthenticated and stable across syncs.
-const S3_ENDPOINT = process.env.S3_ENDPOINT || 'http://minio:9000';
-const S3_ACCESS_KEY = process.env.S3_ACCESS_KEY || 'minioadmin';
-const S3_SECRET_KEY = process.env.S3_SECRET_KEY || 'minioadmin';
-const FEED_BUCKET = 'gilligan-feeds';
-const FEED_KEY = 'rescue-watch-rota.ics';
+// The stack's object storage (the api container's own S3_* settings) + a
+// dedicated public-read bucket so the feed URL is unauthenticated and stable
+// across syncs. No credential defaults: the api container always has them.
+export const DEFAULT_S3_ENDPOINT = 'http://minio:9000';
+const S3_ENDPOINT = process.env.S3_ENDPOINT || DEFAULT_S3_ENDPOINT;
+const S3_ACCESS_KEY = process.env.S3_ACCESS_KEY || process.env.MINIO_ROOT_USER;
+const S3_SECRET_KEY = process.env.S3_SECRET_KEY || process.env.MINIO_ROOT_PASSWORD;
+export const FEED_BUCKET = 'gilligan-feeds';
+export const FEED_KEY = 'rescue-watch-rota.ics';
+
+/** The feed URL this seed registers for a given storage endpoint. */
+export function feedUrlFor(endpoint = DEFAULT_S3_ENDPOINT) {
+  return `${endpoint.replace(/\/$/, '')}/${FEED_BUCKET}/${FEED_KEY}`;
+}
 
 const CONN_NAME = 'Rescue Watch Rota';
 
@@ -90,7 +105,7 @@ function z(date, hhmm) {
   return new Date(utcMs).toISOString().replace(/[-:]/g, '').replace(/\.\d{3}Z$/, 'Z');
 }
 
-const ROTA = [
+export const ROTA = [
   {
     uid: 'rota-2026-06-15-dawn@gilligan-island',
     summary: 'Rescue Watch: Dawn Horizon Sweep',
@@ -135,7 +150,7 @@ const ROTA = [
   },
 ];
 
-function buildIcs() {
+export function buildIcs() {
   return [
     'BEGIN:VCALENDAR',
     'VERSION:2.0',
@@ -150,7 +165,11 @@ function buildIcs() {
   ].join('\r\n');
 }
 
-(async () => {
+async function main() {
+  if (!S3_ACCESS_KEY || !S3_SECRET_KEY) {
+    throw new Error('S3_ACCESS_KEY / S3_SECRET_KEY are not set; run this in the api container (see the header).');
+  }
+  const Minio = await import('minio');
   // ---- 1. Host the ICS fixture on MinIO with a public-read policy. ----
   const url = new URL(S3_ENDPOINT);
   const mc = new Minio.Client({
@@ -188,7 +207,7 @@ function buildIcs() {
   await mc.putObject(FEED_BUCKET, FEED_KEY, Buffer.from(ics, 'utf8'), Buffer.byteLength(ics), {
     'Content-Type': 'text/calendar; charset=utf-8',
   });
-  const feedUrl = `${S3_ENDPOINT.replace(/\/$/, '')}/${FEED_BUCKET}/${FEED_KEY}`;
+  const feedUrl = feedUrlFor(S3_ENDPOINT);
   console.log(`minio: uploaded ${FEED_KEY} (${ROTA.length} VEVENTs) -> ${feedUrl}`);
 
   // ---- 2. Resolve the target Book calendar (Island Calendar, fallback default). ----
@@ -233,18 +252,24 @@ function buildIcs() {
     console.error(`Connection did not reach active status: ${why}`);
     if (/private|internal/i.test(String(why))) {
       // #247: this seed hosts its feed on the stack's MinIO (a private address) so it works with
-      // no outbound internet. A book-api built with the shared egress guard (BOK-1, commit
-      // 850d57d0 on worktree-robustness-audit) refuses private feed URLs by design, and has no
-      // operator allowlist, so this feed cannot sync on such a build. See issue #247.
+      // no outbound internet, and book-api's egress guard refuses private feed URLs unless the
+      // host:port is in its EGRESS_ALLOW_PRIVATE_HOSTS allowlist.
+      const hostPort = new URL(feedUrl).host;
       console.error(
-        '  The running book-api refuses feed URLs on private addresses (egress guard), and this seed ' +
-          `hosts its feed at ${feedUrl}. Not a seed-data bug; see issue #247 for the decision it needs.`,
+        `  book-api refused ${feedUrl} as a private address. Its EGRESS_ALLOW_PRIVATE_HOSTS must include ` +
+          `"${hostPort}". docker-compose.yml defaults it to minio:9000 for book-api; a book-api container ` +
+          'created before that change (or a .env that sets EGRESS_ALLOW_PRIVATE_HOSTS without it) lacks it. ' +
+          'Fix: docker compose up -d --force-recreate book-api, then re-run this seed.',
       );
     }
     process.exit(1);
   }
   console.log('\nBook Connections seed done.');
-})().catch((e) => {
-  console.error('seed failed:', e.message);
-  process.exit(1);
-});
+}
+
+if (process.env.BBB_SEED_IMPORT_ONLY !== '1') {
+  main().catch((e) => {
+    console.error('seed failed:', e.message);
+    process.exit(1);
+  });
+}
