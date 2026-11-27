@@ -2,9 +2,11 @@
  * Reshoot the Basis screenshots against the GILLIGAN project (the hard CLAUDE.md
  * rule). Captures both LIGHT and DARK themes (dark proves the dropdown-readability
  * fix) and three screens per theme:
- *   site/public/screenshots/basis/<theme>/catalog.png
- *   site/public/screenshots/basis/<theme>/metric-detail.png
- *   site/public/screenshots/basis/<theme>/builder.png
+ *   docs/apps/basis/screenshots/<theme>/01-catalog.png
+ *   docs/apps/basis/screenshots/<theme>/02-builder.png
+ *   docs/apps/basis/screenshots/<theme>/03-metric-detail.png
+ * then syncs them into site/public/screenshots/basis/ with identical names
+ * (scripts/docs/sync-site-screenshots.mjs, the one docs-to-site path, #380).
  *
  * Run against a live local stack (nginx on :80) AFTER the Basis SPA is deployed:
  *   pnpm --filter @bigbluebam/e2e exec node ../../scripts/screenshots/capture-basis-marketing.mjs
@@ -16,9 +18,10 @@ import { chromium } from 'playwright';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 import { mkdirSync } from 'node:fs';
+import { syncSiteScreenshots } from '../docs/sync-site-screenshots.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const ROOT = resolve(__dirname, '../../site/public/screenshots/basis');
+const ROOT = resolve(__dirname, '../../docs/apps/basis/screenshots');
 const BASE = process.env.SHOTS_BASE_URL || 'http://localhost';
 const EMAIL = process.env.DOCS_CAPTURE_USER || 'skipper@gilligantravel.example';
 const PASSWORD = process.env.DOCS_CAPTURE_PASSWORD || 'E2eTestP@ss123!';
@@ -63,7 +66,7 @@ async function captureTheme(browser, theme) {
   await page.getByRole('heading', { name: 'Metric Catalog' }).waitFor({ timeout: 20_000 });
   await page.locator('[data-testid=metrics-table]').waitFor({ timeout: 20_000 });
   await page.waitForTimeout(800);
-  await page.screenshot({ path: resolve(outDir, 'catalog.png'), fullPage: false });
+  await page.screenshot({ path: resolve(outDir, '01-catalog.png'), fullPage: false });
 
   // Builder: select a real source so the measure/agg/time-column dropdowns
   // populate, then frame the builder panel (proves the field pickers + dark-mode
@@ -77,7 +80,7 @@ async function captureTheme(browser, theme) {
   await page.getByTestId('field-name').fill('Rescue Sightings');
   await page.getByTestId('create-metric').scrollIntoViewIfNeeded();
   await page.waitForTimeout(500);
-  await page.screenshot({ path: resolve(outDir, 'builder.png'), fullPage: false });
+  await page.screenshot({ path: resolve(outDir, '02-builder.png'), fullPage: false });
 
   // Detail: a themed certified metric with version history + a live value.
   log(`[${theme}] detail ...`);
@@ -92,7 +95,7 @@ async function captureTheme(browser, theme) {
     // Wait for the value to resolve (not the loading dots).
     await page.locator('[data-testid=metric-value], [data-testid=value-error]').first().waitFor({ timeout: 20_000 }).catch(() => {});
     await page.waitForTimeout(600);
-    await page.screenshot({ path: resolve(outDir, 'metric-detail.png'), fullPage: false });
+    await page.screenshot({ path: resolve(outDir, '03-metric-detail.png'), fullPage: false });
   } else {
     log(`[${theme}] WARNING: no metric-row found; skipping detail (seed gilligan basis metrics first)`);
   }
@@ -108,7 +111,8 @@ async function main() {
     await captureTheme(browser, theme);
   }
   await browser.close();
-  log('all themes done.');
+  log('all themes done; syncing docs screenshots into site/public ...');
+  log(`synced ${syncSiteScreenshots().length} file(s).`);
 }
 
 main().catch((err) => {

@@ -28,6 +28,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { readLaunchpadCatalog, docDirForAppId } from './lib/tool-source.mjs';
+import { staleSiteScreenshots, syncSiteScreenshots } from './sync-site-screenshots.mjs';
 
 const checkMode = process.argv.includes('--check');
 
@@ -173,21 +174,51 @@ function build() {
   // Intrinsic dimensions for every embedded screenshot. The client reserves
   // space via aspect-ratio so lazy-loading images don't shift layout — which
   // is what made anchor-scrolling land short of the target section.
+  //
+  // The embeds point at site/public/screenshots/<app>/..., which is a straight
+  // copy of docs/apps/<app>/screenshots/... (#380). Write mode materializes the
+  // copy first; check mode verifies it, so a renamed or missing copy fails.
+  if (checkMode) {
+    const staleShots = staleSiteScreenshots(ROOT);
+    if (staleShots.length) {
+      console.error(
+        `[stale] ${staleShots.length} site screenshot copy(ies) missing or out of date:\n` +
+          staleShots.map((r) => `  - site/public/screenshots/${r}`).join('\n') +
+          '\nRun: pnpm docs:manual  (it syncs docs/apps/*/screenshots into site/public).',
+      );
+      staleFiles.push('site/public/screenshots (copies of docs/apps/*/screenshots)');
+    }
+  } else {
+    console.log('Syncing docs/apps/*/screenshots into site/public/screenshots ...');
+    const copied = syncSiteScreenshots(ROOT);
+    console.log(`  ${copied.length} screenshot file(s) copied.`);
+  }
+
   const imageDims = {};
-  let dimsMissing = 0;
+  const dimsMissing = [];
   for (const e of entries) {
     const re = /\]\((\/screenshots\/[^)]+\.png)\)/g;
     let m;
     while ((m = re.exec(e.markdown)) !== null) {
       const src = m[1];
-      if (imageDims[src]) continue;
+      if (imageDims[src] || dimsMissing.includes(src)) continue;
       const dim = pngSize(path.join(PUBLIC_DIR, src));
       if (dim) imageDims[src] = [dim.w, dim.h];
-      else dimsMissing++;
+      else dimsMissing.push(src);
     }
   }
   emit(OUT_DIMS, JSON.stringify(imageDims, null, 2) + '\n');
-  console.log(`${checkMode ? 'Checked' : 'Wrote'} ${path.relative(ROOT, OUT_DIMS)} with ${Object.keys(imageDims).length} image dimensions${dimsMissing ? ` (${dimsMissing} unreadable)` : ''}.`);
+  console.log(`${checkMode ? 'Checked' : 'Wrote'} ${path.relative(ROOT, OUT_DIMS)} with ${Object.keys(imageDims).length} image dimensions.`);
+  // A manual image that does not resolve under site/public ships broken on the
+  // site and in the printed book. That is an error in both modes, never a note.
+  if (dimsMissing.length) {
+    console.error(
+      `  ERROR: ${dimsMissing.length} manual image(s) missing or unreadable under site/public:\n` +
+        dimsMissing.map((s) => `    - ${s}`).join('\n') +
+        '\n  Fix the embed in docs/apps/<app>/help.md or add the file under docs/apps/<app>/screenshots/.',
+    );
+    process.exitCode = 1;
+  }
 
   // --- report ---
   // A genuinely-relative leftover is `](screenshots/` or `](./screenshots/`,
@@ -223,7 +254,7 @@ function build() {
     );
     process.exit(1);
   }
-  if (checkMode) console.log('\nManual generated files are current.');
+  if (checkMode && !process.exitCode) console.log('\nManual generated files are current.');
 }
 
 build();
