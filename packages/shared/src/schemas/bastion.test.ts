@@ -290,3 +290,14 @@ describe('Bastion feed and audience contracts', () => {
     expect(bastionPolicyAudienceSchema.safeParse({ kind: 'users', user_ids: [] }).success).toBe(false);
   });
 });
+
+// #272: one owner for "string flag -> boolean" (boolQueryParam). An inline copy of its preprocess
+// is the one-fact problem of #251 coming back inside Bastion.
+describe('boolean flags use boolQueryParam, never an inline copy (#272)', () => {
+  it('bastion.ts has no inline "v === \'true\'" preprocess outside the helper itself', () => {
+    const lines = readFileSync(join(__dirname, 'bastion.ts'), 'utf8')
+      .split('\n')
+      .filter((l) => !/^\s*(\/\/|\*|\/\*)/.test(l) && !/^export const boolQueryParam/.test(l));
+    expect(lines.filter((l) => /v === 'true'/.test(l))).toEqual([]);
+  });
+});

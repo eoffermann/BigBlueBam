@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { staleWriteSchema, isStaleWrite, staleWriteError } from '@bigbluebam/shared';
 import { requireAuth, requireScope } from '../plugins/auth.js';
 import { requireBeaconEditAccess, requireBeaconReadAccess } from '../middleware/authorize.js';
+import { assertCanCreateBeacon } from '../lib/beacon-access.js';
 import { shadowOnly } from '../middleware/dual-read.js';
 import * as beaconService from '../services/beacon.service.js';
 import * as entryUpsertService from '../services/entry-upsert.service.js';
@@ -71,11 +72,9 @@ export default async function beaconRoutes(fastify: FastifyInstance) {
     async (request, reply) => {
       const body = upsertEntrySchema.parse(request.body);
       try {
-        const result = await entryUpsertService.upsertEntryBySlug(
-          body,
-          request.user!.id,
-          request.user!.org_id,
-        );
+        // The service applies the shared create and edit rules (#299), so the
+        // beacon_upsert_by_slug MCP tool, which calls this route, gets them too.
+        const result = await entryUpsertService.upsertEntryBySlug(body, request.user!);
         // Fire-and-forget Bolt event. Enrichment matches beacon.created.
         buildBeaconEventPayload(result.data, request.user!.id, {
           created: result.created,
@@ -117,6 +116,8 @@ export default async function beaconRoutes(fastify: FastifyInstance) {
     },
     async (request, reply) => {
       const data = createBeaconSchema.parse(request.body);
+      // The create rule shared with the slug upsert's create branch (#299).
+      await assertCanCreateBeacon(request.user!, data.project_id);
       const beacon = await beaconService.createBeacon(
         data,
         request.user!.id,

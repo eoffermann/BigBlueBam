@@ -13,12 +13,12 @@
  */
 import type { FastifyInstance } from 'fastify';
 import type Redis from 'ioredis';
-import { z } from 'zod';
 import { eq, and } from 'drizzle-orm';
 import {
   LLM_CALL_TIMEOUT_MAX_MS,
-  LLM_CALL_TIMEOUT_MIN_MS,
+  LLM_PROXY_SHUTTING_DOWN_CODE,
   LLM_UPSTREAM_TIMEOUT_CODE,
+  internalLlmChatRequestSchema,
   llmCallDeadlineMs,
   llmHoldWindowMs,
 } from '@bigbluebam/shared';
@@ -38,9 +38,9 @@ import { requireInternalSecretOrHelpdeskToken } from '../lib/internal-secret.js'
 //
 //   - Concurrency: at most LLM_INTERNAL_MAX_CONCURRENT_PER_SERVICE in-flight
 //     /chat calls per service. Held in a sorted set keyed by a random token with
-//     score = admit time (ms). Stale tokens older than HOLD_WINDOW_MS are purged
-//     on every admit so a crashed request cannot permanently hold a slot, and the
-//     token is ZREM'd in a finally once the upstream call returns.
+//     score = the instant the token expires (its call's deadline plus the hold
+//     margin, #294). Expired tokens are purged on every admit so a crashed request
+//     cannot permanently hold a slot, and the token is ZREM'd once the reply is sent.
 //   - Rate: a fixed one-minute window counter (INCR + EXPIRE 60). Exceeding
 //     LLM_INTERNAL_RATE_PER_MINUTE rejects.
 //
@@ -49,9 +49,11 @@ import { requireInternalSecretOrHelpdeskToken } from '../lib/internal-secret.js'
 // log at debug and admit.
 // ---------------------------------------------------------------------------
 
-// A token older than this is treated as a leaked slot from a crashed request. Derived from the
-// longest deadline a caller may ask for (#257), so a legitimately slow call never loses its slot.
-const INFLIGHT_HOLD_WINDOW_MS = llmHoldWindowMs(LLM_CALL_TIMEOUT_MAX_MS);
+// Each in-flight token's score is the instant it EXPIRES (#294): its own call's deadline plus the
+// hold margin, llmHoldWindowMs(deadline). A slot leaked by a crashed request therefore blocks its
+// service only as long as that one call could have run (90 s for a 60 s call), never for the 210 s
+// the longest allowed call needs. The set's own key TTL must outlive its longest member.
+const INFLIGHT_KEY_TTL_MS = llmHoldWindowMs(LLM_CALL_TIMEOUT_MAX_MS);
 
 function bucketKey(service: string): string {
   return `llm:bucket:${service}`;
@@ -70,9 +72,10 @@ interface BucketAdmission {
  * Try to admit one /chat call for `service`. Fails OPEN on any Redis error.
  * When admitted through the concurrency slot, returns the token to release later.
  */
-async function admitLlmCall(
+export async function admitLlmCall(
   redis: Redis | undefined,
   service: string,
+  deadlineMs: number,
   log: import('fastify').FastifyBaseLogger,
 ): Promise<BucketAdmission> {
   if (!redis) return { admitted: true, service };
@@ -102,9 +105,11 @@ async function admitLlmCall(
     // Purge leaked slots, then admit our token, then count. Doing the ZADD before
     // the ZCARD keeps the check-and-set atomic enough for this advisory cap; if we
     // are over the limit we immediately ZREM our own token and reject.
-    await redis.zremrangebyscore(inflightKey, 0, now - INFLIGHT_HOLD_WINDOW_MS);
-    await redis.zadd(inflightKey, now, token);
-    await redis.expire(inflightKey, Math.ceil(INFLIGHT_HOLD_WINDOW_MS / 1000));
+    // Scores are expiry instants (#294): purge what has expired, then hold ours until its own
+    // call's deadline plus the margin.
+    await redis.zremrangebyscore(inflightKey, 0, now);
+    await redis.zadd(inflightKey, now + llmHoldWindowMs(deadlineMs), token);
+    await redis.expire(inflightKey, Math.ceil(INFLIGHT_KEY_TTL_MS / 1000));
     const inFlight = await redis.zcard(inflightKey);
     if (inFlight > env.LLM_INTERNAL_MAX_CONCURRENT_PER_SERVICE) {
       await redis.zrem(inflightKey, token).catch(() => {});
@@ -150,21 +155,57 @@ const requireInternalAuth = requireInternalSecretOrHelpdeskToken;
 // Request schema
 // ---------------------------------------------------------------------------
 
-const chatRequestSchema = z.object({
-  provider_id: z.string().uuid(),
-  messages: z.array(
-    z.object({
-      role: z.enum(['system', 'user', 'assistant']),
-      content: z.string(),
-    }),
-  ).min(1),
-  model: z.string().max(200).optional(),
-  max_tokens: z.number().int().positive().max(100000).optional(),
-  temperature: z.number().min(0).max(2).optional(),
-  // The upstream deadline for this call (#257): clamped to LLM_CALL_TIMEOUT_MAX_MS; absent means
-  // LLM_CALL_TIMEOUT_DEFAULT_MS (60 s, what every caller had before).
-  timeout_ms: z.number().int().min(LLM_CALL_TIMEOUT_MIN_MS).max(LLM_CALL_TIMEOUT_MAX_MS).optional(),
-});
+// The contract lives in @bigbluebam/shared (#283), next to llm-deadline.ts, and every caller builds
+// its body through the shared client (@bigbluebam/shared/internal-llm-client), so a field added
+// there reaches the proxy and every caller together. timeout_ms (#257) is bounded by
+// LLM_CALL_TIMEOUT_MIN_MS..LLM_CALL_TIMEOUT_MAX_MS; absent means LLM_CALL_TIMEOUT_DEFAULT_MS.
+const chatRequestSchema = internalLlmChatRequestSchema;
+
+// ---------------------------------------------------------------------------
+// Shutdown drain (#294)
+//
+// On SIGTERM the api stops admitting calls and lets the in-flight ones run for the drain budget
+// server.ts derives from the platform stop grace (stop-grace.ts). Whatever is still running then is
+// stopped and answered 503 SHUTTING_DOWN with Retry-After, so the caller retries on another
+// instance and the reply releases the concurrency slot, instead of a kill leaving both behind.
+// ---------------------------------------------------------------------------
+
+const inflightCalls = new Set<AbortController>();
+let llmShuttingDown = false;
+const SHUTDOWN_RETRY_AFTER_SECONDS = 5;
+
+/**
+ * Stop admitting calls, wait up to `budgetMs` for the in-flight ones, then stop the rest.
+ * Resolves with how many calls were stopped.
+ */
+export async function drainInternalLlmCalls(budgetMs: number, pollMs = 250): Promise<number> {
+  llmShuttingDown = true;
+  const until = Date.now() + Math.max(0, budgetMs);
+  while (inflightCalls.size > 0 && Date.now() < until) {
+    await new Promise((r) => setTimeout(r, Math.min(pollMs, Math.max(1, until - Date.now()))));
+  }
+  const stopped = inflightCalls.size;
+  for (const c of inflightCalls) c.abort(new Error('the api is shutting down'));
+  return stopped;
+}
+
+/** Tests only: admit calls again after a drain. */
+export function resetInternalLlmDrainForTests(): void {
+  llmShuttingDown = false;
+  inflightCalls.clear();
+}
+
+function shuttingDownReply(reply: import('fastify').FastifyReply, requestId: string) {
+  reply.header('Retry-After', String(SHUTDOWN_RETRY_AFTER_SECONDS));
+  return reply.status(503).send({
+    error: {
+      code: LLM_PROXY_SHUTTING_DOWN_CODE,
+      message: 'This api instance is shutting down; retry the call',
+      details: [],
+      request_id: requestId,
+    },
+  });
+}
 
 /** True for the error fetch throws when AbortSignal.timeout fires. */
 function isTimeoutError(err: unknown): boolean {
@@ -199,6 +240,9 @@ export default async function internalLlmRoutes(fastify: FastifyInstance) {
     { preHandler: [requireInternalAuth] },
     async (request, reply) => {
       const body = chatRequestSchema.parse(request.body);
+      if (llmShuttingDown) return shuttingDownReply(reply, request.id);
+      // The caller's deadline, read BEFORE admission so its slot is held exactly as long (#294).
+      const deadlineMs = llmCallDeadlineMs(body.timeout_ms);
 
       // Internal LLM concurrency cap (spec 9.7.1): admit through the per-service
       // token bucket before any provider work. Fails open on a Redis outage. A
@@ -207,7 +251,7 @@ export default async function internalLlmRoutes(fastify: FastifyInstance) {
       const service =
         (Array.isArray(svcHeader) ? svcHeader[0] : svcHeader)?.toString().slice(0, 64) ||
         'unknown';
-      const admission = await admitLlmCall(fastify.redis, service, request.log);
+      const admission = await admitLlmCall(fastify.redis, service, deadlineMs, request.log);
       if (!admission.admitted) {
         reply.header('Retry-After', String(admission.retryAfter ?? 1));
         return reply.status(429).send({
@@ -267,7 +311,10 @@ export default async function internalLlmRoutes(fastify: FastifyInstance) {
       const model = body.model ?? provider.model_id;
       const maxTokens = body.max_tokens ?? provider.max_tokens ?? 4096;
       const temperature = body.temperature ?? (provider.temperature != null ? Number(provider.temperature) : 0.7);
-      const deadlineMs = llmCallDeadlineMs(body.timeout_ms);
+      // The upstream call ends at its deadline, or earlier when a shutdown drain stops it (#294).
+      const stop = new AbortController();
+      inflightCalls.add(stop);
+      const signal = AbortSignal.any([AbortSignal.timeout(deadlineMs), stop.signal]);
 
       try {
         if (provider.provider_type === 'anthropic') {
@@ -288,7 +335,7 @@ export default async function internalLlmRoutes(fastify: FastifyInstance) {
                 : {}),
               temperature,
             }),
-            signal: AbortSignal.timeout(deadlineMs),
+            signal,
           });
 
           if (!response.ok) {
@@ -335,7 +382,7 @@ export default async function internalLlmRoutes(fastify: FastifyInstance) {
               messages: body.messages,
               temperature,
             }),
-            signal: AbortSignal.timeout(deadlineMs),
+            signal,
           });
 
           if (!response.ok) {
@@ -367,6 +414,10 @@ export default async function internalLlmRoutes(fastify: FastifyInstance) {
         }
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Unknown error';
+        if (stop.signal.aborted) {
+          request.log.warn({ service }, 'internal-llm: call stopped by the shutdown drain; the caller retries');
+          return shuttingDownReply(reply, request.id);
+        }
         if (isTimeoutError(err)) {
           // A deadline, not a broken provider (#257): its own status and code, so a caller can
           // count timeouts apart and tell its operator to raise the deadline, not the token budget.
@@ -389,6 +440,8 @@ export default async function internalLlmRoutes(fastify: FastifyInstance) {
             request_id: request.id,
           },
         });
+      } finally {
+        inflightCalls.delete(stop);
       }
     },
   );

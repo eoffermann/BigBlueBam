@@ -30,7 +30,9 @@ vi.mock('../src/db/index.js', () => ({
 vi.mock('../src/services/llm-provider.service.js', () => ({ decryptApiKey: () => 'key' }));
 vi.mock('../src/lib/internal-secret.js', () => ({ requireInternalSecretOrHelpdeskToken: async () => {} }));
 
-const { default: internalLlmRoutes } = await import('../src/routes/internal-llm.routes.js');
+const { default: internalLlmRoutes, admitLlmCall, drainInternalLlmCalls, resetInternalLlmDrainForTests } = await import(
+  '../src/routes/internal-llm.routes.js'
+);
 
 const timeouts: number[] = [];
 const realTimeout = AbortSignal.timeout.bind(AbortSignal);
@@ -83,6 +85,60 @@ describe('internal LLM proxy deadline (#257)', () => {
     expect(res.json().error.code).toBe('UPSTREAM_TIMEOUT');
     vi.stubGlobal('fetch', vi.fn(async () => { throw new Error('ECONNRESET'); }));
     expect((await chat()).statusCode).toBe(502);
+  });
+
+  it('a shutdown drain stops a call still running and answers 503 SHUTTING_DOWN with Retry-After (#294)', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        (_u: string, init: { signal: AbortSignal }) =>
+          new Promise((_r, reject) => init.signal.addEventListener('abort', () => reject(init.signal.reason))),
+      ),
+    );
+    const pending = chat({ timeout_ms: 120_000 });
+    await new Promise((r) => setTimeout(r, 30));
+    expect(await drainInternalLlmCalls(20, 5)).toBe(1);
+    const res = await pending;
+    expect(res.statusCode).toBe(503);
+    expect(res.json().error.code).toBe('SHUTTING_DOWN');
+    expect(res.headers['retry-after']).toBe('5');
+    // New calls are refused while shutting down.
+    expect((await chat()).statusCode).toBe(503);
+    resetInternalLlmDrainForTests();
+    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, json: async () => ({ choices: [{ message: { content: 'ok' } }] }) })));
+    expect((await chat()).statusCode).toBe(200);
+  });
+
+  it('each in-flight slot expires with its own call, not with the longest allowed call (#294)', async () => {
+    const zadds: Array<[string, number, string]> = [];
+    const purges: Array<[string, number, number]> = [];
+    const redis = {
+      incr: async () => 1,
+      expire: async () => 1,
+      zremrangebyscore: async (k: string, a: number, b: number) => {
+        purges.push([k, a, b]);
+        return 0;
+      },
+      zadd: async (k: string, score: number, m: string) => {
+        zadds.push([k, score, m]);
+        return 1;
+      },
+      zcard: async () => 1,
+      zrem: async () => 1,
+    };
+    const log = { debug: () => undefined } as never;
+    const before = Date.now();
+    await admitLlmCall(redis as never, 'burn', LLM_CALL_TIMEOUT_DEFAULT_MS, log);
+    await admitLlmCall(redis as never, 'bastion', LLM_CALL_TIMEOUT_MAX_MS, log);
+    const after = Date.now();
+    // Score = expiry instant: a 60 s caller's slot lives 90 s, a 180 s caller's 210 s.
+    expect(zadds[0]![1]).toBeGreaterThanOrEqual(before + llmHoldWindowMs(LLM_CALL_TIMEOUT_DEFAULT_MS));
+    expect(zadds[0]![1]).toBeLessThanOrEqual(after + llmHoldWindowMs(LLM_CALL_TIMEOUT_DEFAULT_MS));
+    expect(zadds[1]![1] - zadds[0]![1]).toBeGreaterThanOrEqual(LLM_CALL_TIMEOUT_MAX_MS - LLM_CALL_TIMEOUT_DEFAULT_MS);
+    // The purge removes what has expired by now, whatever deadline it was admitted with.
+    expect(purges[0]![1]).toBe(0);
+    expect(purges[0]![2]).toBeGreaterThanOrEqual(before);
+    expect(purges[0]![2]).toBeLessThanOrEqual(after);
   });
 
   it('the deadline clamps, and every hold window outlives its call', () => {

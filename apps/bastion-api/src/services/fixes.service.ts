@@ -30,11 +30,11 @@ import { orgTx, type Tx } from '../engine/context.js';
 import { lockOrgGapRank, sortGaps } from '../engine/gaps.js';
 import { loadControlStates } from '../engine/numbers.js';
 import { enqueueBastionEvent, enqueueOutbox } from '../engine/outbox.js';
-import { enqueueProposalClose, remediationSettings } from '../engine/remediation.js';
+import { enqueueProposalClose, type RemediationSettings, remediationSettings } from '../engine/remediation.js';
 import type { CitedRef } from '../engine/status.js';
 import { anOrgAdmin, assertHumanDecider, citationVisible, type DecisionDeps, fileMirroredProposal, visibleRefs } from './decisions.service.js';
 import { ARTICLE_PROBLEM, articleStateFromSummary, cannotOpen } from '../lib/policy-access.js';
-import { populationVisibility } from '../lib/population-visibility.js';
+import { nameVisibility, repositoryProjects } from '../lib/population-visibility.js';
 import { beaconEntryIdBySlug } from '../lib/beacon-slug.js';
 import type { Viewer } from './types.js';
 
@@ -154,7 +154,7 @@ export async function listGaps(d: DecisionDeps, viewer: Viewer, q: BastionGapLis
   });
 }
 
-async function loadGap(tx: Tx, orgId: string, id: string) {
+async function loadGap(tx: Tx, orgId: string, id: string, forUpdate = true) {
   const g = (
     await tx`
       SELECT g.*, c.title AS control_title, c.owner_user_id, c.plain_summary, u.display_name AS owner_name,
@@ -164,7 +164,7 @@ async function loadGap(tx: Tx, orgId: string, id: string) {
         LEFT JOIN users u ON u.id = c.owner_user_id
         LEFT JOIN bastion_assertions a ON a.id = g.assertion_id AND a.organization_id = g.organization_id
        WHERE g.organization_id = ${orgId} AND g.id = ${id}
-       FOR UPDATE OF g`
+       ${forUpdate ? tx`FOR UPDATE OF g` : tx``}`
   )[0];
   if (!g) throw new NotFoundError('We could not find that gap.');
   return g;
@@ -206,7 +206,52 @@ function memberLabels(unlisted: unknown[]): { quoted: string[]; suspect: number 
   return { quoted, suspect };
 }
 
-async function draftFor(d: DecisionDeps, tx: Tx, viewer: Viewer, g: Record<string, unknown>): Promise<Draft> {
+const memberName = (m: unknown) =>
+  typeof m === 'string' ? m : String((m as { label?: unknown; value?: unknown })?.label ?? (m as { value?: unknown })?.value ?? '');
+
+/**
+ * Everything a draft reads from the database, gathered in one short read transaction that takes
+ * no lock (#293). draftFor then makes its can_access calls with no transaction open, so no
+ * connection and no lock is held across the network.
+ */
+export interface DraftInputs {
+  /** The assertion's latest snapshot (its id is re-checked under the lock before the write). */
+  latest: Record<string, unknown> | undefined;
+  /** policy.attested: the pinned policy and its Beacon article. */
+  policyPin: { id: string; beacon_entry_id: string } | null;
+  /** population_drift: repository name -> the Bam projects it is connected to. */
+  repoProjects: Map<string, string[]>;
+  /** bolt_rule: the org's remediation settings. */
+  remediation: RemediationSettings | null;
+}
+
+async function readDraftInputs(tx: Tx, viewer: Viewer, g: Record<string, unknown>): Promise<DraftInputs> {
+  const latest = g.assertion_id
+    ? (await tx`SELECT id, cited_refs, population_unlisted, summary FROM bastion_evidence_snapshots
+                 WHERE organization_id = ${viewer.org_id} AND assertion_id = ${g.assertion_id as string}
+                 ORDER BY created_at DESC, id DESC LIMIT 1`)[0]
+    : undefined;
+  const template = String(g.fix_template);
+  let policyPin: DraftInputs['policyPin'] = null;
+  let repoProjects = new Map<string, string[]>();
+  let remediation: RemediationSettings | null = null;
+  if (template === 'config_change' && g.gap_kind === 'population_drift') {
+    const names = ((latest?.population_unlisted as unknown[] | null) ?? []).map(memberName);
+    repoProjects = await repositoryProjects(tx, viewer.org_id, names);
+  } else if (template === 'config_change' && g.probe_key === 'policy.attested' && g.assertion_id) {
+    const pin = (await tx`
+      SELECT p.id, p.beacon_entry_id FROM bastion_assertions a
+        JOIN bastion_policies p ON p.organization_id = a.organization_id AND p.id::text = a.params->>'policy_id'
+       WHERE a.organization_id = ${viewer.org_id} AND a.id = ${g.assertion_id as string}`)[0];
+    policyPin = pin ? { id: String(pin.id), beacon_entry_id: String(pin.beacon_entry_id) } : null;
+  } else if (template === 'bolt_rule') {
+    remediation = await remediationSettings(tx, viewer.org_id);
+  }
+  return { latest, policyPin, repoProjects, remediation };
+}
+
+/** The draft's words and citations. No database access: every can_access call runs outside any transaction (#293). */
+async function draftFor(d: DecisionDeps, viewer: Viewer, g: Record<string, unknown>, inputs: DraftInputs): Promise<Draft> {
   const template = String(g.fix_template);
   const control = String(g.control_title);
   const owner = (g.owner_name as string | null) ?? 'the control owner';
@@ -214,11 +259,7 @@ async function draftFor(d: DecisionDeps, tx: Tx, viewer: Viewer, g: Record<strin
   const rawSpec = (g.manual_evidence_spec as { title?: string; description?: string } | null) ?? null;
   const spec = rawSpec ? { what: rawSpec.title, example: rawSpec.description } : null;
   const statement = (g.plain_statement as string | null) ?? null;
-  const latest = g.assertion_id
-    ? (await tx`SELECT cited_refs, population_unlisted, summary FROM bastion_evidence_snapshots
-                 WHERE organization_id = ${viewer.org_id} AND assertion_id = ${g.assertion_id as string}
-                 ORDER BY created_at DESC LIMIT 1`)[0]
-    : undefined;
+  const { latest } = inputs;
 
   // Citations pass can_access at write for the person asking (spec 2.4); a refusal drops it.
   const refs = ((latest?.cited_refs as CitedRef[] | null) ?? []).slice(0, MAX_CITATIONS);
@@ -256,9 +297,7 @@ async function draftFor(d: DecisionDeps, tx: Tx, viewer: Viewer, g: Record<strin
         // The unlisted members are repository names for the change.* probes: only those of Bam
         // projects the drafter can open are named or proposed (#250, the evidence.service rule).
         const rawUnlisted = (latest?.population_unlisted as unknown[] | null) ?? [];
-        const memberName = (m: unknown) =>
-          typeof m === 'string' ? m : String((m as { label?: unknown; value?: unknown })?.label ?? (m as { value?: unknown })?.value ?? '');
-        const canSee = await populationVisibility(tx, d.canAccess, viewer, rawUnlisted.map(memberName));
+        const canSee = await nameVisibility(d.canAccess, viewer, rawUnlisted.map(memberName), inputs.repoProjects);
         const unlisted = rawUnlisted.filter((m) => canSee(memberName(m)));
         const hiddenCount = rawUnlisted.length - unlisted.length;
         const hiddenNote =
@@ -281,10 +320,7 @@ async function draftFor(d: DecisionDeps, tx: Tx, viewer: Viewer, g: Record<strin
       if (g.probe_key === 'policy.attested' && g.assertion_id) {
         // Spec 3.6 (M7): people who cannot open the article cannot acknowledge it. can_access per
         // person still due; those refused are the cited "N people can't open this policy".
-        const pin = (await tx`
-          SELECT p.id, p.beacon_entry_id FROM bastion_assertions a
-            JOIN bastion_policies p ON p.organization_id = a.organization_id AND p.id::text = a.params->>'policy_id'
-           WHERE a.organization_id = ${viewer.org_id} AND a.id = ${g.assertion_id as string}`)[0];
+        const pin = inputs.policyPin;
         // #244: an article that is missing, retired or expired in Beacon is the problem to fix, not
         // the people (nobody is due on it); the draft names the owner's action.
         const article = articleStateFromSummary(latest?.summary as Record<string, unknown> | null);
@@ -335,7 +371,7 @@ async function draftFor(d: DecisionDeps, tx: Tx, viewer: Viewer, g: Record<strin
         payload: { probe_key: g.probe_key ?? null },
       };
     case 'bolt_rule': {
-      const s = await remediationSettings(tx, viewer.org_id);
+      const s = inputs.remediation ?? { compliance_project_id: null };
       const shape = boltRuleShapeFor(String(g.gap_kind), (g.probe_key as string | null) ?? null, {
         control_id: String(g.control_id),
         control_title: control,
@@ -381,9 +417,7 @@ function processChange(base: Draft, control: string, statement: string | null): 
 
 export async function proposeFix(d: DecisionDeps, viewer: Viewer, gapId: string, note: string | null) {
   const now = d.engine.now();
-  const draftId = await orgTx(d.engine.sql, viewer.org_id, async (tx) => {
-    await lockOrgGapRank(tx, viewer.org_id); // #255: the gap-rank lock first, like every gap writer
-    const g = await loadGap(tx, viewer.org_id, gapId);
+  const assertDraftable = (g: Record<string, unknown>) => {
     if (g.status !== 'open') {
       throw new ConflictError(
         g.status === 'proposed' ? 'A fix for this gap is already waiting for a decision.' : 'Only an open gap can get a fix.',
@@ -391,7 +425,31 @@ export async function proposeFix(d: DecisionDeps, viewer: Viewer, gapId: string,
       );
     }
     if (!g.fix_template) throw new ConflictError('There is nothing Bastion can draft for this gap; it needs whoever runs the installation.', 'NO_FIX_FOR_GAP');
-    const draft = await draftFor(d, tx, viewer, g);
+  };
+  // #293: read, then ask can_access with no transaction open, then write under the gap-rank lock.
+  // The lock is never held across a network call; the write re-checks what the draft was built on.
+  const read = await orgTx(d.engine.sql, viewer.org_id, async (tx) => {
+    const g = await loadGap(tx, viewer.org_id, gapId, false);
+    assertDraftable(g);
+    return { g, inputs: await readDraftInputs(tx, viewer, g) };
+  });
+  const draft = await draftFor(d, viewer, read.g, read.inputs);
+  const draftId = await orgTx(d.engine.sql, viewer.org_id, async (tx) => {
+    await lockOrgGapRank(tx, viewer.org_id); // #255: the gap-rank lock first, like every gap writer
+    const g = await loadGap(tx, viewer.org_id, gapId);
+    assertDraftable(g);
+    const latestNow = g.assertion_id
+      ? (await tx`SELECT id FROM bastion_evidence_snapshots
+                   WHERE organization_id = ${viewer.org_id} AND assertion_id = ${g.assertion_id as string}
+                   ORDER BY created_at DESC, id DESC LIMIT 1`)[0]
+      : undefined;
+    if (
+      g.fix_template !== read.g.fix_template ||
+      g.gap_kind !== read.g.gap_kind ||
+      String(latestNow?.id ?? '') !== String(read.inputs.latest?.id ?? '')
+    ) {
+      throw new ConflictError('This gap changed while the fix was being drafted. Try again.', 'GAP_CHANGED');
+    }
     const kind = String((await tx`SELECT kind FROM users WHERE id = ${viewer.id}`)[0]?.kind ?? 'human');
     const ins = await tx`
       INSERT INTO bastion_fix_drafts (organization_id, gap_id, template, title, body_markdown, payload, cited_refs,
@@ -530,7 +588,9 @@ export async function getFixDraft(d: DecisionDeps, viewer: Viewer, id: string) {
  */
 export async function decideFix(d: DecisionDeps, viewer: Viewer, id: string, body: BastionFixDecide, canControlWrite: boolean) {
   const now = d.engine.now();
-  await orgTx(d.engine.sql, viewer.org_id, async (tx) => {
+  // #282: an expired fix is recorded (draft expired, gap reopened) and THEN refused. The refusal
+  // is thrown after the transaction commits; thrown inside it, it rolled the expiry back.
+  const outcome = await orgTx(d.engine.sql, viewer.org_id, async (tx): Promise<'decided' | 'expired'> => {
     // #255: the gap-rank lock first (this reopens the gap and row-locks the draft), the same order
     // as the reconcile, exception approval and every re-rank.
     await lockOrgGapRank(tx, viewer.org_id);
@@ -554,7 +614,7 @@ export async function decideFix(d: DecisionDeps, viewer: Viewer, id: string, bod
       if (p && (p.status === 'expired' || new Date(p.expires_at as string) <= now)) {
         await tx`UPDATE bastion_fix_drafts SET status = 'expired' WHERE id = ${id}`;
         if (r.gap_id) await tx`UPDATE bastion_gaps SET status = 'open' WHERE id = ${r.gap_id as string} AND status = 'proposed'`;
-        throw new ConflictError('This fix expired before anyone decided it. Draft it again if it is still needed.', 'FIX_EXPIRED');
+        return 'expired';
       }
     }
     const approve = body.decision === 'approve';
@@ -577,7 +637,9 @@ export async function decideFix(d: DecisionDeps, viewer: Viewer, id: string, bod
       effects,
       decided_as: r.owner_user_id === viewer.id ? 'control_owner' : 'control_write',
     });
+    return 'decided';
   });
+  if (outcome === 'expired') throw new ConflictError('This fix expired before anyone decided it. Draft it again if it is still needed.', 'FIX_EXPIRED');
   return getFixDraft(d, viewer, id);
 }
 

@@ -7,7 +7,10 @@ vi.mock('@bigbluebam/ui/impersonation-banner', () => ({
   getImpersonation: () => (impersonating ? { user_id: 'u-g', display_name: 'Gilligan' } : null),
 }));
 
-import { QuestionnaireDetailPage, QuestionnairesPage, draftingEstimate } from '@/pages/questionnaires';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { BASTION_CONFIDENCE_WORDS } from '@bigbluebam/shared';
+import { QuestionnaireDetailPage, QuestionnairesPage, bandCountsWords, draftingEstimate } from '@/pages/questionnaires';
 import { ALL_BASTION_PERMISSIONS, MEMBER_PERMISSIONS, jsonResponse, routedFetch, settled, wrap } from './helpers';
 
 // M8 page (spec 6.1-6.3): Questionnaires. Plain words ("Sure", "Check this", "Needs an expert"),
@@ -189,6 +192,154 @@ describe('Questionnaires (M8)', () => {
     await screen.findByText('Howell Industries Vendor Security Review');
     expect(screen.queryByText('Add a questionnaire')).toBeNull();
     await settled(reader.qc);
+  });
+
+  // #268: the human path has "Ask someone" with a member picker, by name.
+  it('"Ask someone" hands a row to a member picked by name', async () => {
+    const patches: unknown[] = [];
+    const base = api(BLOCKED, patches);
+    vi.stubGlobal('fetch', async (url: string, init: RequestInit = {}) =>
+      String(url).includes('/b3/api/org/members')
+        ? jsonResponse(200, { data: [{ id: '0b0b0b0b-0000-4000-8000-000000000002', display_name: 'The Professor', email: 'professor@gilligantravel.example' }] })
+        : base(url, init),
+    );
+    const view = wrap(<QuestionnaireDetailPage questionnaireId={Q} onNavigate={() => {}} />, OWNER);
+    await screen.findByText('Are all company laptops encrypted?');
+    fireEvent.click(screen.getAllByText('Ask someone')[1] as HTMLElement);
+    const picker = (await screen.findByTestId('member-picker')) as HTMLSelectElement;
+    await screen.findByText('The Professor');
+    expect(UUID_RE.test(screen.getByTestId('ask-someone').textContent ?? '')).toBe(false);
+    fireEvent.change(picker, { target: { value: '0b0b0b0b-0000-4000-8000-000000000002' } });
+    fireEvent.click(screen.getByText('Ask them'));
+    await waitFor(() => expect(patches).toEqual([{ review_status: 'needs_owner', assigned_to: '0b0b0b0b-0000-4000-8000-000000000002' }]));
+    await settled(view.qc);
+  });
+
+  // #268: Approve says what it vouches for when "Check this" answers were not reviewed.
+  it('Approve asks first when "Check this" answers were not reviewed, naming how many', async () => {
+    let approved = 0;
+    const base = api(READY);
+    vi.stubGlobal('fetch', async (url: string, init: RequestInit = {}) => {
+      if (String(url).endsWith(`/questionnaires/${Q}/approve`)) {
+        approved += 1;
+        return jsonResponse(200, { data: QUESTIONNAIRE });
+      }
+      return base(url, init);
+    });
+    const view = wrap(<QuestionnaireDetailPage questionnaireId={Q} onNavigate={() => {}} />, OWNER);
+    await waitFor(() => expect((screen.getByTestId('approve') as HTMLButtonElement).disabled).toBe(false));
+    fireEvent.click(screen.getByTestId('approve'));
+    expect(screen.getByTestId('approve-confirm').textContent).toMatch(/1 answer marked "Check this" has not been reviewed\. Approving sends it as written\./);
+    expect(approved).toBe(0);
+    fireEvent.click(screen.getByText('Approve anyway'));
+    await waitFor(() => expect(approved).toBe(1));
+    await settled(view.qc);
+  });
+
+  it('Retire asks first, and retired answers can be shown and brought back', async () => {
+    const patches: unknown[] = [];
+    const urls: string[] = [];
+    const ROW = { id: '0c0c0c0c-0000-4000-8000-000000000001', question_text: 'Do you use MFA?', answer_text: 'Yes.', yes_no: true, cited_refs: [], approved_by_name: 'Skipper', approved_at: null, stale: false, stale_words: null, retired_at: null };
+    vi.stubGlobal('fetch', async (url: string, init: RequestInit = {}) => {
+      urls.push(String(url));
+      if ((init.method ?? 'GET') === 'PATCH') {
+        patches.push(JSON.parse(String(init.body)));
+        return jsonResponse(200, { data: ROW });
+      }
+      if (String(url).includes('/answer-library')) return jsonResponse(200, { data: [String(url).includes('include_retired=true') ? { ...ROW, retired_at: '2026-11-20T00:00:00Z' } : ROW] });
+      return jsonResponse(200, { data: [] });
+    });
+    const view = wrap(<QuestionnairesPage onNavigate={() => {}} />, OWNER);
+    await screen.findByText('Do you use MFA?');
+    fireEvent.click(screen.getByText('Retire'));
+    expect(screen.getByTestId('retire-confirm').textContent).toMatch(/stop reusing this answer/);
+    expect(patches).toEqual([]);
+    fireEvent.click(screen.getByText('Retire it'));
+    await waitFor(() => expect(patches).toEqual([{ retired: true }]));
+    fireEvent.click(screen.getByLabelText('Show retired answers'));
+    await screen.findByText('Bring it back');
+    expect(urls.some((u) => u.includes('include_retired=true'))).toBe(true);
+    await settled(view.qc);
+  });
+
+  // #266: every sheet is shown and saved; dropping one needs a confirmation.
+  it('maps every sheet: saving one sheet\'s change sends all of them, and leaving one out asks first', async () => {
+    const access = { sheet_name: 'Access', header_row: 0, first_row: 1, question_column: 0, answer_column: 1, yes_no_column: null, section_column: null, answer_kind: 'yes_no_text' };
+    const devices = { ...access, sheet_name: 'Devices' };
+    const MAPPING = {
+      ...QUESTIONNAIRE,
+      status: 'mapping',
+      rows_done: 0,
+      column_map: { sheets: [access, devices], guessed: true },
+      sheet_preview: [
+        { name: 'Access', row_count: 2, column_count: 3, rows: [['Question', 'Answer', 'Notes'], ['Do you use MFA?', '', '']] },
+        { name: 'Devices', row_count: 2, column_count: 2, rows: [['Question', 'Answer'], ['Are laptops encrypted?', '']] },
+        { name: 'Read me', row_count: 1, column_count: 1, rows: [['Please answer every question.']] },
+      ],
+    };
+    const patches: unknown[] = [];
+    vi.stubGlobal(
+      'fetch',
+      routedFetch({
+        [`GET /bastion/api/v1/questionnaires/${Q}`]: () => jsonResponse(200, { data: MAPPING }),
+        [`PATCH /bastion/api/v1/questionnaires/${Q}`]: (init) => {
+          patches.push(JSON.parse(String(init.body)));
+          return jsonResponse(200, { data: MAPPING });
+        },
+      }),
+    );
+    const view = wrap(<QuestionnaireDetailPage questionnaireId={Q} onNavigate={() => {}} />, OWNER);
+    await screen.findByText('Do you use MFA?');
+    const blocks = screen.getAllByTestId('sheet-mapping');
+    expect(blocks.map((b) => b.getAttribute('data-sheet'))).toEqual(['Access', 'Devices', 'Read me']);
+    expect(blocks[2]!.textContent).toMatch(/Not used/);
+    // Change the first sheet's question column: the save carries every mapped sheet.
+    fireEvent.change(blocks[0]!.querySelector('select') as HTMLSelectElement, { target: { value: '2' } });
+    fireEvent.click(screen.getByText('Use these columns'));
+    await waitFor(() => expect(patches).toHaveLength(1));
+    expect((patches[0] as { column_map: { sheets: Array<{ sheet_name: string; question_column: number }> } }).column_map.sheets.map((s) => [s.sheet_name, s.question_column])).toEqual([
+      ['Access', 2],
+      ['Devices', 0],
+    ]);
+    expect((patches[0] as Record<string, unknown>).drop_unmapped_sheets).toBeUndefined();
+    // Leaving a sheet out asks first, then says so to the server.
+    fireEvent.click(screen.getAllByText('Do not use this sheet')[1] as HTMLElement);
+    fireEvent.click(screen.getByText('Use these columns'));
+    expect(screen.getByTestId('confirm-drop').textContent).toMatch(/"Devices" will be left out/);
+    fireEvent.click(screen.getByText('Leave them out'));
+    await waitFor(() => expect(patches).toHaveLength(2));
+    expect(patches[1]).toMatchObject({ drop_unmapped_sheets: true });
+    await settled(view.qc);
+  });
+
+  // #268: the surface map names buttons that exist; every quoted label in its questionnaire rows'
+  // UI column is on the page.
+  it('the surface map\'s questionnaire UI labels are the page\'s labels', () => {
+    const map = readFileSync(join(__dirname, '../../../docs/reference/mcp-endpoint-mapping.md'), 'utf8');
+    const page = readFileSync(join(__dirname, '../src/pages/questionnaires.tsx'), 'utf8');
+    const rows = map.split('\n').filter((l) => /^\| `(GET|POST|PATCH) \/v1\/(questionnaire|answer)/.test(l));
+    expect(rows.length).toBeGreaterThanOrEqual(12);
+    const labels = rows.flatMap((l) => [...(l.split('|')[4] ?? '').matchAll(/"([^"]+)"/g)].map((m) => m[1]!));
+    expect(labels.length).toBeGreaterThan(5);
+    for (const label of labels) expect(page, label).toContain(label);
+  });
+
+  // #272: the page, the hooks and the types use @bigbluebam/shared, not hand-copied literals.
+  it('takes the confidence words, request bodies and enums from @bigbluebam/shared', () => {
+    const page = readFileSync(join(__dirname, '../src/pages/questionnaires.tsx'), 'utf8')
+      .split('\n')
+      .filter((l) => !/^\s*(\/\/|\/\*\*|\*)/.test(l))
+      .join('\n');
+    const hooks = readFileSync(join(__dirname, '../src/hooks/use-bastion.ts'), 'utf8');
+    const types = readFileSync(join(__dirname, '../src/lib/api.ts'), 'utf8');
+    for (const w of ['Sure', 'Check this', 'Needs an expert']) expect(page, w).not.toMatch(new RegExp(`[\\d}] ${w}[,'"]|"${w}"`));
+    expect(bandCountsWords({ high_count: 1, medium_count: 2, low_count: 3 })).toBe(
+      `1 ${BASTION_CONFIDENCE_WORDS.high}, 2 ${BASTION_CONFIDENCE_WORDS.medium}, 3 ${BASTION_CONFIDENCE_WORDS.low}`,
+    );
+    expect(hooks).not.toMatch(/review_status: 'accepted' \| 'edited'/);
+    expect(hooks).not.toMatch(/source: \{ kind: 'bin_asset'/);
+    expect(types).not.toMatch(/status: 'uploaded' \| 'mapping'/);
+    expect(types).toMatch(/QuestionnaireSheetMap = BastionQuestionnaireSheetMap/);
   });
 
   it('estimates drafting time from the spec 7.3 throughput', () => {

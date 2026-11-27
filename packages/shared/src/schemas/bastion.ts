@@ -1655,6 +1655,16 @@ export const BASTION_QUESTIONNAIRE_MAX_PASTED_CHARS = 500_000;
 export const BASTION_QUESTIONNAIRE_MAX_COLUMNS = 40;
 /** Cell text kept per cell (the question column is 4000, the database limit). */
 export const BASTION_QUESTIONNAIRE_MAX_CELL_CHARS = 4000;
+/**
+ * Cells kept across every sheet of one questionnaire, empty cells before a filled one included
+ * (#265, #273). A file holding more is refused, not stored.
+ */
+export const BASTION_QUESTIONNAIRE_MAX_CELLS = 200_000;
+/**
+ * Characters kept across every cell of one questionnaire, a repeated (shared) cell counted every
+ * time it appears (#265, #273). This, not the file size, bounds what is read and stored.
+ */
+export const BASTION_QUESTIONNAIRE_MAX_TOTAL_CHARS = 4_000_000;
 
 /** Plain words for the three confidence bands (spec 6.1). */
 export const BASTION_CONFIDENCE_WORDS: Record<BastionConfidenceBand, string> = {
@@ -1729,6 +1739,12 @@ export const bastionQuestionnaireUpdateSchema = z
     owner_user_id: z.string().uuid().nullable().optional(),
     bond_deal_id: z.string().uuid().nullable().optional(),
     column_map: bastionQuestionnaireColumnMapSchema.optional(),
+    /**
+     * #266: a column_map that leaves out a sheet which holds questions now is refused (409
+     * SHEETS_DROPPED) unless this is true, so a mapping fixed on one sheet never silently drops
+     * the questions on the others.
+     */
+    drop_unmapped_sheets: z.boolean().optional(),
   })
   .strict()
   .refine((b) => Object.keys(b).length > 0, { message: 'Nothing to change' });
@@ -1753,10 +1769,16 @@ export const bastionQuestionnaireItemListQuerySchema = z
   .strict();
 export type BastionQuestionnaireItemListQuery = z.infer<typeof bastionQuestionnaireItemListQuerySchema>;
 
-/** POST /questionnaires/:id/autofill (row 76, 202). `redraft` drafts again every row nobody reviewed yet. */
+/**
+ * POST /questionnaires/:id/autofill (row 76, 202). `redraft` drafts again every row nobody reviewed
+ * yet. `use_ai: false` drafts without calling the AI (#271): each row reuses a strong approved
+ * answer from the library, with the hard rules applied to the controls it cites, or is left for a
+ * person. Deterministic, so the seed and its story tests do not depend on a live model.
+ */
 export const bastionQuestionnaireAutofillSchema = z
   .object({
     redraft: z.boolean().default(false),
+    use_ai: z.boolean().default(true),
   })
   .strict();
 export type BastionQuestionnaireAutofill = z.infer<typeof bastionQuestionnaireAutofillSchema>;
@@ -1860,6 +1882,10 @@ export const bastionQuestionnaireSliceSchema = z.object({
   slice_running: z.boolean(),
   released: z.boolean().optional(),
   waiting: z.enum(['ai_slot', 'ai_throttled']).nullable().optional(),
+  /** AI calls charged to this questionnaire so far, across every run (#261). */
+  llm_calls_used: z.number().int().nonnegative().optional(),
+  /** Consecutive failed AI calls; the rows wait and are retried until it reaches the limit (#260). */
+  ai_failure_streak: z.number().int().nonnegative().optional(),
 });
 export type BastionQuestionnaireSlice = z.infer<typeof bastionQuestionnaireSliceSchema>;
 

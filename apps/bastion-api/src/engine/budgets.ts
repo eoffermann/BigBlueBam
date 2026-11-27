@@ -12,6 +12,11 @@ export const PROBE_TIMEOUT_MS = 8_000;
 export const PUT_TIMEOUT_MS = 5_000;
 /** SET LOCAL lock_timeout for the per-org ledger advisory lock. */
 export const LEDGER_LOCK_TIMEOUT_MS = 3_000;
+/**
+ * How long a gap writer waits for the per-org gap-rank lock (#293). Its holders do database work
+ * only (a whole-org re-rank is the longest), so a longer wait means something is stuck.
+ */
+export const GAP_RANK_LOCK_TIMEOUT_MS = 10_000;
 /** The worker's bound on one engine call (BASTION_ENGINE_TIMEOUT_MS). */
 export const ENGINE_TIMEOUT_MS = 30_000;
 /** Headroom past the write for what no timeout bounds: the heartbeat, finish()'s counts, the reply. */

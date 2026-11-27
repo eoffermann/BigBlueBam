@@ -1,5 +1,11 @@
 import { impersonateHeader } from '@bigbluebam/ui/impersonation-banner';
 import type {
+  BastionAnswerKind,
+  BastionConfidenceBand,
+  BastionItemReviewStatus,
+  BastionQuestionnaireFormat,
+  BastionQuestionnaireSheetMap,
+  BastionQuestionnaireStatus,
   BastionDriftTaskStatus,
   BastionEvidenceSourceColumn,
   BastionExceptionScope,
@@ -112,8 +118,18 @@ export interface BamProject {
   is_archived?: boolean;
 }
 
+/** One organization member, as GET /b3/api/org/members returns it (the people other suite SPAs pick from). */
+export interface OrgMember {
+  id: string;
+  display_name: string;
+  email: string;
+  is_active?: boolean;
+}
+
 export const bamApi = {
   listProjects: () => request<{ data: BamProject[] }>('/b3/api', 'GET', '/projects'),
+  /** The organization's members (#268: the "Ask someone" picker). */
+  listMembers: () => request<{ data: OrgMember[] }>('/b3/api', 'GET', '/org/members'),
   createComplianceProject: () => {
     const csrf = readCsrfToken();
     return request<{ data: BamProject }>(
@@ -183,24 +199,17 @@ export interface CompileRun {
 
 /* ------------------------------ M8: questionnaires ------------------------------ */
 
-export interface QuestionnaireSheetMap {
-  sheet_name: string;
-  header_row: number | null;
-  first_row: number;
-  question_column: number;
-  answer_column: number | null;
-  yes_no_column: number | null;
-  section_column: number | null;
-  answer_kind: 'yes_no' | 'text' | 'yes_no_text';
-}
+// #272: request bodies, enums and the sheet mapping come from @bigbluebam/shared (the one Zod
+// source the API validates with); only response shapes are declared here.
+export type QuestionnaireSheetMap = BastionQuestionnaireSheetMap;
 
 /** One questionnaire (shapeQuestionnaire in apps/bastion-api/src/services/questionnaires.service.ts). */
 export interface QuestionnaireRow {
   id: string;
   title: string;
   requester_label: string | null;
-  format: 'xlsx' | 'csv';
-  status: 'uploaded' | 'mapping' | 'answering' | 'in_review' | 'approved' | 'exported' | 'failed';
+  format: BastionQuestionnaireFormat;
+  status: BastionQuestionnaireStatus;
   injection_suspected: boolean;
   row_count: number;
   rows_done: number;
@@ -232,17 +241,17 @@ export interface QuestionnaireItemRow {
   row_index: number;
   section: string | null;
   question_text: string;
-  answer_kind: 'yes_no' | 'text' | 'yes_no_text';
+  answer_kind: BastionAnswerKind;
   draft_answer: string | null;
   draft_yes_no: boolean | null;
   final_answer: string | null;
   final_yes_no: boolean | null;
   cited_refs: QuestionnaireCitation[];
   hidden_citation_count: number;
-  confidence_band: 'high' | 'medium' | 'low' | null;
+  confidence_band: BastionConfidenceBand | null;
   confidence_words: string | null;
   band_reasons: Array<{ code: string; words: string }>;
-  review_status: 'pending' | 'accepted' | 'edited' | 'needs_owner';
+  review_status: BastionItemReviewStatus;
   assigned_to_name: string | null;
   reviewed_by_name: string | null;
   needs_review: boolean;
