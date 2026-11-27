@@ -36,7 +36,7 @@ const appSources = readdirSync(appsDir)
 const rel = (p) => relative(repoRoot, p).replaceAll('\\', '/');
 
 /** Source files that import minio or construct a MinIO client. */
-export function minioClientOffenders(files, read = (f) => readFileSync(f, 'utf8')) {
+function minioClientOffenders(files, read = (f) => readFileSync(f, 'utf8')) {
   const out = [];
   for (const f of files) {
     const src = read(f);
