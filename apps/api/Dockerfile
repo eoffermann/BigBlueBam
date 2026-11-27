@@ -10,6 +10,7 @@ COPY pnpm-lock.yaml* ./
 COPY apps/api/package.json ./apps/api/
 COPY packages/shared/package.json ./packages/shared/
 COPY packages/auth-core/package.json ./packages/auth-core/
+COPY packages/rls-connection/package.json ./packages/rls-connection/
 COPY packages/logging/package.json ./packages/logging/
 COPY packages/storage/package.json ./packages/storage/
 COPY packages/service-health/package.json ./packages/service-health/
@@ -26,6 +27,7 @@ COPY tsconfig.base.json ./
 COPY packages/shared/src ./packages/shared/src
 COPY packages/shared/tsconfig.json packages/shared/tsup.config.ts ./packages/shared/
 COPY packages/auth-core/ ./packages/auth-core/
+COPY packages/rls-connection/ ./packages/rls-connection/
 COPY packages/logging/ ./packages/logging/
 COPY packages/storage/ ./packages/storage/
 COPY packages/service-health/ ./packages/service-health/
@@ -37,6 +39,7 @@ COPY apps/api/tsconfig.json apps/api/tsup.config.ts ./apps/api/
 
 RUN pnpm --filter @bigbluebam/shared build \
  && pnpm --filter @bigbluebam/auth-core build \
+ && pnpm --filter @bigbluebam/rls-connection build \
  && pnpm --filter @bigbluebam/logging build \
  && pnpm --filter @bigbluebam/storage build \
  && pnpm --filter @bigbluebam/service-health build \
@@ -55,6 +58,7 @@ FROM deps AS dev
 COPY tsconfig.base.json ./
 COPY packages/shared/ ./packages/shared/
 COPY packages/auth-core/ ./packages/auth-core/
+COPY packages/rls-connection/ ./packages/rls-connection/
 COPY packages/logging/ ./packages/logging/
 COPY packages/storage/ ./packages/storage/
 COPY packages/service-health/ ./packages/service-health/

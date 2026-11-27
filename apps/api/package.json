@@ -19,6 +19,7 @@
     "@bigbluebam/egress-guard": "workspace:*",
     "@bigbluebam/logging": "workspace:*",
     "@bigbluebam/permissions": "workspace:*",
+    "@bigbluebam/rls-connection": "workspace:*",
     "@bigbluebam/service-health": "workspace:*",
     "@bigbluebam/shared": "workspace:*",
     "@bigbluebam/smtp-resolver": "workspace:*",

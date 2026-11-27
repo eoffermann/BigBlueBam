@@ -12,6 +12,7 @@
       "tsconfig.base.json",
       "apps/api/Dockerfile",
       "packages/auth-core/**",
+      "packages/rls-connection/**",
       "packages/logging/**",
       "packages/storage/**",
       "packages/service-health/**",
