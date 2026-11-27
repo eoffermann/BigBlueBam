@@ -83,13 +83,50 @@ function sendRestricted(request: FastifyRequest, reply: FastifyReply, message: s
 }
 
 /**
+ * A route's opt-out from the final gate (#367), declared in its route config, never by path:
+ *
+ *   fastify.get('/auth/me', { config: { keyProjectExempt: true }, ... })
+ *   fastify.post('/v1/agent-policies/:agent_user_id/check',
+ *     { config: { keyProjectExempt: (req) => req.params.agent_user_id === req.user?.id }, ... })
+ *
+ * Reserved for identity-only routes that reveal nothing beyond the caller itself, which every
+ * client (the MCP server's policy gate first of all) needs before it can use a restricted key for
+ * the projects it IS allowed. `true` exempts every request; a predicate exempts only the requests
+ * it returns true for (e.g. "asking about yourself").
+ */
+export type KeyProjectExempt = true | ((request: FastifyRequest) => boolean);
+
+declare module 'fastify' {
+  interface FastifyContextConfig {
+    /** Identity-only route a project-restricted API key may still call (#367). See key-project.ts. */
+    keyProjectExempt?: KeyProjectExempt;
+  }
+}
+
+/** Whether this request's route declares it exempt from the project-restriction final gate. */
+export function isKeyProjectExempt(request: FastifyRequest): boolean {
+  const config = (request as unknown as { routeOptions?: { config?: { keyProjectExempt?: unknown } } })
+    .routeOptions?.config;
+  const exempt = config?.keyProjectExempt;
+  if (exempt === true) return true;
+  if (typeof exempt === 'function') {
+    try {
+      return (exempt as (r: FastifyRequest) => unknown)(request) === true;
+    } catch {
+      return false;
+    }
+  }
+  return false;
+}
+
+/**
  * apps/api's fail-closed final gate: a project-restricted key is refused unless a project guard
  * (requireProjectAccess, requireProjectAccessForEntity, or requireCan with a project scope)
- * admitted it to a listed project earlier in this request. Org-wide and non-project routes
- * therefore refuse restricted keys.
+ * admitted it to a listed project earlier in this request, or the route is an identity-only route
+ * declared exempt (isKeyProjectExempt). Other org-wide and non-project routes refuse restricted keys.
  */
 export async function requireKeyProjectChecked(request: FastifyRequest, reply: FastifyReply) {
-  if (!isKeyProjectRestricted(request) || keyProjectAccessChecked(request)) return;
+  if (!isKeyProjectRestricted(request) || keyProjectAccessChecked(request) || isKeyProjectExempt(request)) return;
   return sendRestricted(
     request,
     reply,

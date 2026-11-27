@@ -455,6 +455,14 @@ the SuperUser Console (see **Email delivery (SMTP)** below).
 
 ![Integrations and API keys](screenshots/light/06-settings-integrations.png)
 
+When you create an API key or an agent on the **Integrations** tab you can
+**Restrict to projects**. A key restricted to projects can only use Bam for
+those projects. It cannot use any other app (Banter, Bond, Helpdesk and the
+rest) or org-wide Bam features such as the project list or search, so tool
+patterns like `banter_*` never work for it. It can still identify itself, so an
+agent using it keeps its Bam tools for those projects. Leave **Restrict to
+projects** empty for an agent that needs other apps.
+
 ### Email delivery (SMTP)
 
 BigBlueBam sends outbound mail (org invitations, password resets, system and

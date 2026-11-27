@@ -581,3 +581,23 @@ describe('agent-policy routes', () => {
     });
   });
 });
+
+// #367: the MCP policy gate calls the check route about its own caller before every tool call,
+// so a project-restricted agent key must be allowed to ask about itself, and only itself.
+describe('POST /v1/agent-policies/:id/check keyProjectExempt (#367)', () => {
+  it('declares a self-only exemption from the project-restriction gate', async () => {
+    const a = Fastify({ logger: false });
+    a.decorateRequest('user', null);
+    a.decorate('redis', mockRedis as any);
+    let cfg: any;
+    a.addHook('onRoute', (r) => {
+      if (r.url === '/v1/agent-policies/:agent_user_id/check') cfg = r.config;
+    });
+    await a.register(agentPoliciesRoutes);
+    await a.ready();
+    expect(typeof cfg?.keyProjectExempt).toBe('function');
+    expect(cfg.keyProjectExempt({ params: { agent_user_id: AGENT_USER }, user: { id: AGENT_USER } })).toBe(true);
+    expect(cfg.keyProjectExempt({ params: { agent_user_id: AGENT_USER_2 }, user: { id: AGENT_USER } })).toBe(false);
+    await a.close();
+  });
+});

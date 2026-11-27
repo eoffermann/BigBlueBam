@@ -97,6 +97,10 @@ if (IN_CI && !usable) {
     app.get('/phases/:id', { preHandler: [requireAuth, requireProjectAccessForEntity('phase')] }, async () => ({ ok: true }));
     // Org-wide: establishes no project.
     app.get('/projects', { preHandler: [requireAuth] }, async () => ({ ok: true }));
+    // #367: identity-only route declared exempt, like the real GET /auth/me.
+    app.get('/auth/me', { preHandler: [requireAuth], config: { keyProjectExempt: true } }, async (request: { user: { id: string } }) => ({
+      id: request.user.id,
+    }));
     await app.ready();
   });
 
@@ -137,6 +141,12 @@ if (IN_CI && !usable) {
     const res = await get('/projects', { key: restrictedKey });
     expect(res.statusCode, res.body).toBe(403);
     expect(res.json().error.code).toBe('API_KEY_PROJECT_RESTRICTED');
+  });
+
+  it('lets a restricted key identify itself on an exempt identity route (#367)', async () => {
+    const res = await get('/auth/me', { key: restrictedKey });
+    expect(res.statusCode, res.body).toBe(200);
+    expect(res.json().id).toBe(skipper);
   });
 
   it('leaves sessions and unrestricted keys alone', async () => {
