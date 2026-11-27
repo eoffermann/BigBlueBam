@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import postgres from 'postgres';
 import { bastionEvaluateRunSliceSchema, bastionEvaluateTickResultSchema } from '@bigbluebam/shared';
 import type { EngineDeps } from '../../src/engine/context.js';
@@ -26,8 +26,6 @@ import { clock, DATABASE_URL, fakeBucket, makeDeps, seedOrg, wipeOrg } from './e
 if (!DATABASE_URL) {
   console.warn('[bastion-api/m4-runs] SKIPPING: DATABASE_URL is not set. Point it at a migrated database.');
 }
-
-vi.setConfig({ testTimeout: 180_000, hookTimeout: 60_000 });
 
 const MIN = 60_000;
 

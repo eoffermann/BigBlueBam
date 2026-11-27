@@ -303,7 +303,7 @@ export async function refreshRollups(
       await publishBoltEvent(
         'consumption.threshold_crossed',
         'burn',
-        { 'engagement.id': cr.chain_root_id, chain_root_id: cr.chain_root_id, band: cr.band, 'org.id': oid },
+        { engagement: { id: cr.chain_root_id }, chain_root_id: cr.chain_root_id, band: cr.band, org: { id: oid } },
         oid,
       ).catch(() => {});
     }

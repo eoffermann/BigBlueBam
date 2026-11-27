@@ -85,7 +85,7 @@ export default async function nodeRoutes(fastify: FastifyInstance) {
         publishBoltEvent(
           'node.created',
           'blueprint',
-          { 'diagram.id': request.params.id, 'node.id': row.id, 'node.shape': row.shape },
+          { diagram: { id: request.params.id }, node: { id: row.id, shape: row.shape } },
           orgId,
           userId,
           'user',
@@ -184,9 +184,8 @@ export default async function nodeRoutes(fastify: FastifyInstance) {
           'node.created',
           'blueprint',
           {
-            'diagram.id': request.params.id,
-            'node.id': row.id,
-            'node.shape': row.shape,
+            diagram: { id: request.params.id },
+            node: { id: row.id, shape: row.shape },
             duplicate_of: request.params.nodeId,
           },
           orgId,

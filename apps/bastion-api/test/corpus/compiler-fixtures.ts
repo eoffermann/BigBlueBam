@@ -7,6 +7,7 @@ import { requirementsForControl, templateControlKeys, libraryControl, type Libra
 import { ISO27001 } from '../../src/library/iso27001.js';
 import { SOC2 } from '../../src/library/soc2.js';
 import type { ConnectedPopulations } from '../../src/library/compile-plan.js';
+import type { RecordedResponse, RecordingDeadlineMeta } from './llm-recording.js';
 
 export const CORPUS_PROFILE = {
   company_size: '1-10',
@@ -53,6 +54,7 @@ export function corpusControls(): CorpusControl[] {
 }
 
 export interface RecordedCorpus {
-  meta: { recorded_at: string; prompt_version: number; model: string; provider_type: string; note: string; max_tokens?: number };
-  responses: Record<string, { content: string; finish_reason: string | null } | { error: string }>;
+  /** deadline_ms / llm_kind: the deadline the recording was made against (#317, llm-recording.ts). */
+  meta: { recorded_at: string; prompt_version: number; model: string; provider_type: string; note: string; max_tokens?: number } & RecordingDeadlineMeta;
+  responses: Record<string, RecordedResponse>;
 }

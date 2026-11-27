@@ -154,7 +154,7 @@ export async function createDraft(viewer: Viewer, kind: BursarDraftKind, body: B
     void publishBoltEvent(
       'draft.created',
       'bursar',
-      { 'draft.id': draft.id, kind, 'vendor.id': body.vendor_id ?? null, 'org.id': viewer.org_id },
+      { draft: { id: draft.id }, kind, vendor: { id: body.vendor_id ?? null }, org: { id: viewer.org_id } },
       viewer.org_id,
     ).catch(() => {});
 
@@ -182,7 +182,7 @@ async function decideDraft(viewer: Viewer, id: string, decision: 'approved' | 'r
       `);
     }
 
-    void publishBoltEvent('draft.decided', 'bursar', { 'draft.id': id, decision, 'org.id': viewer.org_id }, viewer.org_id).catch(() => {});
+    void publishBoltEvent('draft.decided', 'bursar', { draft: { id: id }, decision, org: { id: viewer.org_id } }, viewer.org_id).catch(() => {});
     return { data: { id, status: decision } };
   });
 }

@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import postgres from 'postgres';
 import { RunLeaseHeldError } from '../../src/engine/evaluator.js';
 import { orgTx } from '../../src/engine/context.js';
@@ -49,8 +49,6 @@ import { clock, DATABASE_URL, makeDeps, seedOrg, wipeOrg } from './engine-harnes
  */
 
 if (!DATABASE_URL) console.warn('[bastion-api/m7] SKIPPING: DATABASE_URL is not set. Point it at a migrated database.');
-
-vi.setConfig({ testTimeout: 180_000, hookTimeout: 60_000 });
 
 const RECORDED = JSON.parse(readFileSync(join(__dirname, '..', 'corpus', 'compiler-recorded.json'), 'utf8')) as {
   responses: Record<string, { content: string; finish_reason: string | null }>;

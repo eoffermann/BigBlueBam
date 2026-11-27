@@ -3,6 +3,7 @@ import type { AddressInfo } from 'node:net';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   BOLT_PUBLISH_TIMEOUT_DEFAULT_MS,
+  nestBoltPayload,
   publishBoltEvent,
   publishBoltEventChecked,
   resolveBoltPublishTimeoutMs,
@@ -116,6 +117,17 @@ describe('publishBoltEvent timeout', () => {
     expect(JSON.parse(String(a!.body))).toEqual({ event_type: 'thing.happened', source: 'bam', payload: { a: 1 }, org_id: ORG, actor_id: 'u1', actor_type: 'user' });
   });
 
+  it('sends dotted payload keys as nested objects, the shape Bolt reads (#316)', async () => {
+    process.env.BOLT_API_INTERNAL_URL = 'http://bolt-api:4006';
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async () => new Response('{}', { status: 202 }));
+    const payload = { 'diagram.id': 'd1', 'diagram.name': 'Map', 'org.id': ORG, node_count: 3 };
+    await publishBoltEvent('diagram.generated', 'blueprint', payload, ORG);
+    const body = JSON.parse(String(fetchSpy.mock.calls[0]![1]?.body));
+    expect(body.payload).toEqual({ diagram: { id: 'd1', name: 'Map' }, org: { id: ORG }, node_count: 3 });
+    // The caller's object is not mutated.
+    expect(payload).toEqual({ 'diagram.id': 'd1', 'diagram.name': 'Map', 'org.id': ORG, node_count: 3 });
+  });
+
   it('publishBoltEventChecked reports a timeout as timedOut with no status', async () => {
     server = createServer(() => {
       // never answers
@@ -123,5 +135,26 @@ describe('publishBoltEvent timeout', () => {
     process.env.BOLT_API_INTERNAL_URL = await listen(server);
     process.env.BOLT_PUBLISH_TIMEOUT_MS = '100';
     expect(await publishBoltEventChecked('thing.happened', 'bam', {}, ORG)).toMatchObject({ ok: false, status: null, timedOut: true, timeoutMs: 100 });
+  });
+});
+
+describe('nestBoltPayload (#316)', () => {
+  it('merges dotted keys into an existing nested object without mutating it', () => {
+    const actor = { id: 'u1' };
+    const out = nestBoltPayload({ actor, 'actor.name': 'Skipper', 'board.id': 'b1', 'board.project.id': 'p1' });
+    expect(out).toEqual({ actor: { id: 'u1', name: 'Skipper' }, board: { id: 'b1', project: { id: 'p1' } } });
+    expect(actor).toEqual({ id: 'u1' });
+  });
+
+  it('leaves keys it cannot nest: a collision with a scalar, an existing leaf, empty or unsafe segments', () => {
+    expect(nestBoltPayload({ org: 'acme', 'org.id': 'o1' })).toEqual({ org: 'acme', 'org.id': 'o1' });
+    expect(nestBoltPayload({ org: { id: 'a' }, 'org.id': 'b' })).toEqual({ org: { id: 'a' }, 'org.id': 'b' });
+    expect(nestBoltPayload({ 'a..b': 1, '__proto__.x': 2 })).toEqual({ 'a..b': 1, '__proto__.x': 2 });
+    expect(({} as Record<string, unknown>).x).toBeUndefined();
+  });
+
+  it('does not touch dotted keys below the top level or non-dotted payloads', () => {
+    const p = { changes: { 'board.name': 'x' }, list: [{ 'a.b': 1 }] };
+    expect(nestBoltPayload(p)).toEqual(p);
   });
 });

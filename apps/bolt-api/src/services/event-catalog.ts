@@ -5,6 +5,13 @@
 import { MCP_TOOL_SCHEMAS, type McpToolParameter } from './mcp-tool-schemas.generated.js';
 
 export interface PayloadField {
+  /**
+   * The field path. A dotted name is a NESTED path: `diagram.id` means the payload is
+   * `{ diagram: { id } }`, because rule conditions, templates and trigger filters walk one object
+   * level per dot. A publisher must never send the literal top-level key `'diagram.id'`
+   * (issue #316; scripts/check-bolt-catalog.mjs fails on it, and the shared publishBoltEvent nests
+   * any such key that reaches it from a dynamically built payload).
+   */
   name: string;
   type: string;
   description: string;

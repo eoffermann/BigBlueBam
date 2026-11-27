@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import postgres from 'postgres';
 import { evaluationMissed, retention } from '../../src/engine/sweeps.js';
 import {
@@ -21,8 +21,6 @@ import { clock, DATABASE_URL, makeDeps, seedOrg, wipeOrg } from './engine-harnes
  */
 
 if (!DATABASE_URL) console.warn('[bastion-api/b11-policies] SKIPPING: DATABASE_URL is not set. Point it at a migrated database.');
-
-vi.setConfig({ testTimeout: 120_000, hookTimeout: 60_000 });
 
 const viewer = (org: string, id: string): Viewer => ({
   id,

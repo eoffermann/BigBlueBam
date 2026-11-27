@@ -313,7 +313,7 @@ export default async function internalRoutes(fastify: FastifyInstance) {
         await publishBoltEvent(
           'exclusion.detected',
           'bursar',
-          { 'offer.id': result.processedOfferId, 'request.id': request_id, 'org.id': orgId, gap_count: result.publishedGaps },
+          { offer: { id: result.processedOfferId }, request: { id: request_id }, org: { id: orgId }, gap_count: result.publishedGaps },
           orgId,
         ).catch(() => {});
       }
@@ -321,7 +321,7 @@ export default async function internalRoutes(fastify: FastifyInstance) {
         await publishBoltEvent(
           'quote.leveled',
           'bursar',
-          { 'request.id': request_id, 'run.id': run_id, 'org.id': orgId, status: result.status, offer_count: result.offerCount },
+          { request: { id: request_id }, run: { id: run_id }, org: { id: orgId }, status: result.status, offer_count: result.offerCount },
           orgId,
         ).catch(() => {});
       }
