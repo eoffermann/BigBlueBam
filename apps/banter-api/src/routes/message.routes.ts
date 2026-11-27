@@ -381,6 +381,27 @@ export default async function messageRoutes(fastify: FastifyInstance) {
         });
       }
 
+      // A reply's parent must exist in this channel. The banter_messages reference trigger
+      // (0361, #368) would reject a missing parent with 23503 anyway; answer it as a 404
+      // instead of a 500, and keep replies from crossing channels.
+      if (body.thread_parent_id) {
+        const [parent] = await db
+          .select({ id: banterMessages.id })
+          .from(banterMessages)
+          .where(and(eq(banterMessages.id, body.thread_parent_id), eq(banterMessages.channel_id, id)))
+          .limit(1);
+        if (!parent) {
+          return reply.status(404).send({
+            error: {
+              code: 'THREAD_PARENT_NOT_FOUND',
+              message: 'The message this reply belongs to does not exist in this channel',
+              details: [{ field: 'thread_parent_id', issue: 'not found' }],
+              request_id: request.id,
+            },
+          });
+        }
+      }
+
       const policy = coercePolicy(channelRow.quiet_hours_policy);
       const now = new Date();
 

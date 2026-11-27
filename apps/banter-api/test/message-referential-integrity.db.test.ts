@@ -22,9 +22,13 @@ const CHANNEL = randomUUID();
 
 describe.skipIf(!DATABASE_URL)('banter message referential integrity (#160, real DB)', () => {
   let sql: postgres.Sql;
+  // A second session, for the concurrent insert/delete cases (#368).
+  let other: postgres.Sql;
 
   beforeAll(async () => {
-    sql = postgres(DATABASE_URL as string, { max: 1, onnotice: () => {} });
+    // Two connections: the concurrency cases reserve one and probe pg_stat_activity on the other.
+    sql = postgres(DATABASE_URL as string, { max: 2, onnotice: () => {} });
+    other = postgres(DATABASE_URL as string, { max: 1, onnotice: () => {} });
     const slug = `refint-${ORG.slice(0, 8)}`;
     await sql`INSERT INTO organizations (id, name, slug) VALUES (${ORG}, ${slug}, ${slug})`;
     await sql`INSERT INTO users (id, org_id, email, display_name) VALUES (${USER}, ${ORG}, ${`gilligan-${USER.slice(0, 8)}@refint.test`}, 'Gilligan')`;
@@ -38,6 +42,7 @@ describe.skipIf(!DATABASE_URL)('banter message referential integrity (#160, real
     await sql`DELETE FROM users WHERE id = ${USER}`;
     await sql`DELETE FROM organizations WHERE id = ${ORG}`;
     await sql.end({ timeout: 5 });
+    await other.end({ timeout: 5 });
   });
 
   async function message(threadParent: string | null = null): Promise<string> {
@@ -89,6 +94,67 @@ describe.skipIf(!DATABASE_URL)('banter message referential integrity (#160, real
       (e: unknown) => e,
     );
     expect((err2 as { code?: string }).code).toBe('23503');
+  });
+
+  // ── #368: the insert-side check locks the message like a foreign key does ──
+
+  /** Wait until `settled()` or the backend `pid` is blocked on a lock; true when it blocked. */
+  async function blocksOnLock(pid: number, settled: () => boolean): Promise<boolean> {
+    const deadline = Date.now() + 20_000;
+    while (Date.now() < deadline) {
+      if (settled()) return false;
+      const [row] = await sql<{ w: string | null }[]>`SELECT wait_event_type AS w FROM pg_stat_activity WHERE pid = ${pid}`;
+      if (row?.w === 'Lock') return true;
+      await new Promise((r) => setTimeout(r, 50));
+    }
+    throw new Error(`backend ${pid} neither finished nor blocked within 20 s`);
+  }
+
+  it('a child inserted while its message is deleted never commits as an orphan (#368)', async () => {
+    const msg = await message();
+    const [{ pid }] = (await other<{ pid: number }[]>`SELECT pg_backend_pid() AS pid`) as [{ pid: number }];
+    const inserter = await sql.reserve();
+    await inserter`BEGIN`;
+    await inserter`INSERT INTO banter_message_reactions (message_id, user_id, emoji) VALUES (${msg}, ${USER}, 'raft')`;
+    let deleted = false;
+    const deleting = other`DELETE FROM banter_messages WHERE id = ${msg}`.then(() => {
+      deleted = true;
+    });
+    // The delete waits on the inserter's FOR KEY SHARE lock instead of racing past it.
+    const deleteWaited = await blocksOnLock(pid, () => deleted);
+    await inserter`COMMIT`;
+    inserter.release();
+    await deleting;
+    expect(deleteWaited).toBe(true);
+    expect(await count('banter_message_reactions', 'message_id', msg)).toBe(0);
+  });
+
+  it('a child inserted while a delete of its message is in flight fails with 23503 (#368)', async () => {
+    const msg = await message();
+    const deleter = await other.reserve();
+    await deleter`BEGIN`;
+    await deleter`DELETE FROM banter_messages WHERE id = ${msg}`;
+    const inserter = await sql.reserve();
+    const [{ pid }] = (await inserter<{ pid: number }[]>`SELECT pg_backend_pid() AS pid`) as [{ pid: number }];
+    let settled = false;
+    const inserting = inserter`INSERT INTO banter_message_reactions (message_id, user_id, emoji) VALUES (${msg}, ${USER}, 'coconut')`
+      .catch((e: unknown) => e)
+      .finally(() => {
+        settled = true;
+      });
+    const insertWaited = await blocksOnLock(pid, () => settled);
+    await deleter`COMMIT`;
+    deleter.release();
+    const err = (await inserting) as { code?: string } | undefined;
+    inserter.release();
+    expect(insertWaited).toBe(true);
+    expect(err?.code).toBe('23503');
+    expect(await count('banter_message_reactions', 'message_id', msg)).toBe(0);
+  });
+
+  it('a reply under a message that does not exist fails with 23503 (#368)', async () => {
+    const err = await message(randomUUID()).catch((e: unknown) => e);
+    expect((err as { code?: string }).code).toBe('23503');
   });
 
   it('banter_messages has real foreign keys to its channel and author again', async () => {
