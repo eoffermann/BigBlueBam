@@ -40,6 +40,11 @@ export function getBucketCheckStatus(): BucketCheckResult {
   return current;
 }
 
+/** The one "evidence storage is working" rule the Readiness banner and Settings share. */
+export function bucketStorageOk(): boolean {
+  return current.status === 'ok' || current.status === 'pending';
+}
+
 const CHECK_PREFIX = '_bastion_boot_check';
 
 function withTimeout<T>(p: Promise<T>, ms: number, what: string): Promise<T> {
