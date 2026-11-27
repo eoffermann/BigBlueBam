@@ -129,7 +129,9 @@ export async function processBasisExplainJob(
 ): Promise<void> {
   const db = getDb();
   const limit = Math.min(job.data?.limit ?? 25, 100);
-  const apiUrl = process.env.API_INTERNAL_URL ?? 'http://api:4000';
+  // #192: the worker's one name for the api's private base is BBB_API_INTERNAL_URL (the name its
+  // deploy catalog entry lists and Railway computes). API_INTERNAL_URL is not set for the worker.
+  const apiUrl = process.env.BBB_API_INTERNAL_URL ?? 'http://api:4000';
   const secret = process.env.INTERNAL_SERVICE_SECRET ?? '';
   const start = Date.now();
 

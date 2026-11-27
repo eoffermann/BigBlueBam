@@ -42,4 +42,20 @@ describe('basis-explain LLM deadline (#283)', () => {
     expect(init.headers['X-Internal-Service']).toBe('basis');
     expect((logger.info as ReturnType<typeof vi.fn>).mock.calls.at(-1)?.[0]).toMatchObject({ failed: 1, narrated: 0 });
   });
+
+  it('calls the api at BBB_API_INTERNAL_URL, the worker-wide name Railway computes (#192)', async () => {
+    vi.stubEnv('INTERNAL_SERVICE_SECRET', 's'.repeat(32));
+    vi.stubEnv('BBB_API_INTERNAL_URL', 'http://api.railway.internal:8080');
+    vi.stubEnv('API_INTERNAL_URL', 'http://wrong-name:1');
+    const row = {
+      cache_key: 'k', metric_id: 'm', organization_id: 'o', metric_name: 'Revenue', unit: 'usd',
+      dimension: 'region', delta_abs: '10', delta_pct: '5', drivers: [{ dimension_value: 'EU', label: 'EU', contribution_abs: 10, contribution_pct: 100 }],
+    };
+    execute.mockResolvedValueOnce([row]).mockResolvedValueOnce([{ id: 'prov' }]);
+    const f = vi.fn(async () => ({ ok: false, status: 504, headers: new Headers(), json: async () => ({ error: { code: 'UPSTREAM_TIMEOUT' } }) }));
+    vi.stubGlobal('fetch', f);
+    await processBasisExplainJob({ id: 'j', data: {} } as never, logger);
+    const [url] = f.mock.calls[0] as unknown as [string];
+    expect(String(url).startsWith('http://api.railway.internal:8080/')).toBe(true);
+  });
 });

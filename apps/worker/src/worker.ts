@@ -2866,7 +2866,7 @@ const banterPatternMatchConsumer = await startBanterPatternMatchConsumer(
   redis,
   logger,
   {
-    apiInternalUrl: env.API_INTERNAL_URL,
+    apiInternalUrl: env.BBB_API_INTERNAL_URL,
     internalServiceSecret: env.INTERNAL_SERVICE_SECRET,
   },
 );

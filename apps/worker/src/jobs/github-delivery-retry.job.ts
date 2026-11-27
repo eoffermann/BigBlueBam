@@ -17,9 +17,8 @@ import type { Logger } from 'pino';
 import type { GithubDeliveryRetryJobData } from '@bigbluebam/shared';
 
 /**
- * BBB_API_INTERNAL_URL, not API_INTERNAL_URL: the worker's deploy catalog entry lists (and
- * Railway computes) only BBB_API_INTERNAL_URL, so API_INTERNAL_URL falls back to
- * http://api:4000 there, which is the wrong host and port on Railway.
+ * BBB_API_INTERNAL_URL is the worker's one name for the api's private base (#192); it is the
+ * name the worker's deploy catalog entry lists, so Railway computes it.
  */
 export interface GithubDeliveryRetryEnv {
   BBB_API_INTERNAL_URL: string;

@@ -449,11 +449,11 @@ export function buildFeedFaninDeps(
 /** BullMQ entry point — matches the worker.ts (job, env, logger) convention. */
 export async function processBanterFeedFaninJob(
   job: Job<BanterFeedFaninJobData>,
-  env: { API_INTERNAL_URL: string; INTERNAL_SERVICE_SECRET: string },
+  env: { BBB_API_INTERNAL_URL: string; INTERNAL_SERVICE_SECRET: string },
   logger: Logger,
 ): Promise<void> {
   const deps = buildFeedFaninDeps(logger, {
-    apiInternalUrl: env.API_INTERNAL_URL,
+    apiInternalUrl: env.BBB_API_INTERNAL_URL,
     internalServiceSecret: env.INTERNAL_SERVICE_SECRET,
   });
   await handleFeedFanin(job.data, deps);

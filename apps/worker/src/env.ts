@@ -16,9 +16,6 @@ const envSchema = z.object({
   WORKER_SHUTDOWN_DEADLINE_MS: z.coerce.number().int().positive().default(8_000),
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).default('info'),
   BOLT_API_INTERNAL_URL: z.string().url().default('http://bolt-api:4006'),
-  // §1 Wave 5 banter subs - pattern-match consumer posts can_access preflights
-  // against the Bam api on this URL. Default mirrors docker-compose.
-  API_INTERNAL_URL: z.string().url().default('http://api:4000'),
   INTERNAL_SERVICE_SECRET: z.string().default(''),
   // banter-api on the private network (#303): the transcription callback the voice agent posts
   // to. One name (BANTER_API_URL) across api, bureau-api, worker and mcp-server.
@@ -28,8 +25,11 @@ const envSchema = z.object({
   BOARD_INTERNAL_URL: z.string().url().default('http://board-api:4008'),
   BRIEF_INTERNAL_URL: z.string().url().default('http://brief-api:4005'),
 
-  // Braid engine (spec §9.2). BBB_API_INTERNAL_URL is the platform llm-provider + can_access
-  // preflight base; QDRANT_URL is the soft embedding-recall dependency (blocking degrades to
+  // BBB_API_INTERNAL_URL is the worker's ONE name for the api's private base (#192): the
+  // platform llm-provider (Braid, Basis explain), the can_access preflights (Banter pattern
+  // subscriptions and feed fan-in, Bureau summons) and the GitHub delivery retry all read it.
+  // It is the name the worker's deploy catalog entry lists, so Railway computes it.
+  // Braid engine (spec §9.2): QDRANT_URL is the soft embedding-recall dependency (blocking degrades to
   // key+trigram when absent); BRAID_API_INTERNAL_URL is where braid-proposal-reconcile drives
   // approved/rejected proposals through braid-api's single merge executor.
   BBB_API_INTERNAL_URL: z.string().url().default('http://api:4000'),

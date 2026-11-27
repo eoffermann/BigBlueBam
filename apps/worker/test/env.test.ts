@@ -30,6 +30,30 @@ describe('Worker env validation', () => {
     expect(env.LOG_LEVEL).toBe('info');
   });
 
+  it('has one name for the api private base: BBB_API_INTERNAL_URL, never API_INTERNAL_URL (#192)', async () => {
+    process.env.DATABASE_URL = 'postgresql://user:pass@localhost:5432/db';
+    process.env.BBB_API_INTERNAL_URL = 'http://api.railway.internal:8080';
+    const loadEnv = await loadEnvFresh();
+    const env = loadEnv() as Record<string, unknown>;
+    expect(env.BBB_API_INTERNAL_URL).toBe('http://api.railway.internal:8080');
+    expect('API_INTERNAL_URL' in env).toBe(false);
+
+    // No worker source may read the second name again.
+    const { readdirSync, readFileSync, statSync } = await import('node:fs');
+    const { join } = await import('node:path');
+    const srcDir = join(__dirname, '..', 'src');
+    const offenders: string[] = [];
+    const walk = (dir: string) => {
+      for (const name of readdirSync(dir)) {
+        const p = join(dir, name);
+        if (statSync(p).isDirectory()) walk(p);
+        else if (/\.ts$/.test(name) && /(?<![A-Z_])API_INTERNAL_URL/.test(readFileSync(p, 'utf8').replace(/\/\/.*$/gm, ''))) offenders.push(p);
+      }
+    };
+    walk(srcDir);
+    expect(offenders).toEqual([]);
+  });
+
   it('fails validation when DATABASE_URL is missing', async () => {
     delete process.env.DATABASE_URL;
     process.env.REDIS_URL = 'redis://localhost:6379';
