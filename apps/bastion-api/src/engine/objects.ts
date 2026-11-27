@@ -264,8 +264,9 @@ export async function mirrorObjects(deps: EngineDeps, dest: StorageDriver | null
       const since = sinceRaw ? new Date(sinceRaw).getTime() : null;
       progress.records_started ??= deps.now().toISOString();
       let listed = 0;
-      records: for (let idx = progress.records_prefix ?? 0; idx < MIRRORED_RECORD_PREFIXES.length; idx++) {
-        const prefix = MIRRORED_RECORD_PREFIXES[idx]!;
+      const startIdx = progress.records_prefix ?? 0;
+      records: for (const [idx, prefix] of MIRRORED_RECORD_PREFIXES.entries()) {
+        if (idx < startIdx) continue;
         let after = idx === (progress.records_prefix ?? 0) ? (progress.records_after ?? undefined) : undefined;
         for await (const page of listPages(source, prefix, deps.putTimeoutMs, after)) {
           for (const o of page) {
@@ -297,9 +298,9 @@ export async function mirrorObjects(deps: EngineDeps, dest: StorageDriver | null
         const mark = new Date(new Date(progress.records_started).getTime() - CURRENT_SLACK_MS);
         await deps.cursors.set(MIRROR_RECORDS_SINCE_KEY, mark.toISOString());
         progress.records_done = true;
-        delete progress.records_prefix;
-        delete progress.records_after;
-        delete progress.records_started;
+        progress.records_prefix = undefined;
+        progress.records_after = undefined;
+        progress.records_started = undefined;
       }
     }
 
