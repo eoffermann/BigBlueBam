@@ -1917,7 +1917,7 @@ External prefix for the Bam api is `/b3/api/`, so a route shown as `POST /v1/pro
 | `grant-superuser` | Promote a user to SuperUser by email | `PATCH /v1/platform/users/:id/superuser` | — | SuperUser → People | **No MCP tool** to grant/revoke SuperUser |
 | `revoke-superuser` | Remove SuperUser by email | `PATCH /v1/platform/users/:id/superuser` | — | SuperUser → People | same |
 | `create-api-key` | Issue a scoped user API key | `POST /org/members/:userId/api-keys` · `POST /auth/api-keys` (self) | — | People → Access · Settings | **No MCP tool** — agents cannot mint keys |
-| `revoke-api-key` | Revoke an API key by prefix | `DELETE /org/members/:userId/api-keys/:keyId` · `DELETE /auth/api-keys/:id` | — | People → Access · Settings | **No MCP tool** |
+| `revoke-api-key` | Revoke one API key, named by `--lookup <ref>` (leading hex of the unique `key_lookup`, printed at mint), `--name` [`--email` owner], `--prefix`, or `--id`; any selector matching more than one key (e.g. `--prefix bbam_svc`, shared by every service-account key) is refused with the candidates listed | `DELETE /org/members/:userId/api-keys/:keyId` · `DELETE /auth/api-keys/:id` | — | People → Access · Settings | **No MCP tool** |
 | `create-service-account` | Mint locked `bbam_svc_` service account + key | `POST /auth/service-accounts` | — | Settings | **No MCP tool** |
 | `create-helpdesk-agent-key` | Mint a per-agent helpdesk API key (`hdag_`) | — | — | — | **CLI-only** (helpdesk routes only *verify* keys; no mint endpoint/tool/UI) |
 | `revoke-helpdesk-agent-key` | Revoke a helpdesk agent key by prefix | — | — | — | **CLI-only** |

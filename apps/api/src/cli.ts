@@ -3,7 +3,7 @@ import { randomBytes } from 'node:crypto';
 import argon2 from 'argon2';
 import { API_KEY_SCOPES, apiKeyLookup } from '@bigbluebam/auth-core';
 import { drizzle } from 'drizzle-orm/postgres-js';
-import { eq, and, sql } from 'drizzle-orm';
+import { eq, and, like, sql } from 'drizzle-orm';
 import postgres from 'postgres';
 import { organizations } from './db/schema/organizations.js';
 import { users } from './db/schema/users.js';
@@ -21,6 +21,7 @@ import { pgTable, uuid, varchar, text, timestamp } from 'drizzle-orm/pg-core';
 // because they are not user-typed.
 import { generatePassword } from './services/password-generator.service.js';
 import { seedDefaultPriorities } from './services/priorities.service.js';
+import { lookupRef, parseRevokeSelector, resolveRevokeTarget } from './lib/api-key-revoke.js';
 
 // Wave E.F: fixed UUIDs of the five built-in permission groups (seeded by
 // migration 0146). Used by cli.ts to upsert account_group_memberships
@@ -82,7 +83,8 @@ Commands:
   create-api-key     Issue an API key for a user (for agentic / programmatic access)
   create-service-account     Create a locked service-account user + bbam_svc_ API key
   create-helpdesk-agent-key  Issue a per-agent helpdesk API key (HB-28 + HB-49)
-  revoke-api-key     Revoke a Bam API key by its key_prefix (hard delete)
+  revoke-api-key     Revoke one Bam API key (hard delete) by --lookup ref, --name [--email],
+                     --prefix, or --id; refuses and lists candidates if more than one key matches
   revoke-helpdesk-agent-key  Revoke a helpdesk agent API key by its key_prefix (soft by default)
   list-orgs          List all organizations (id, slug, name) — helper for other commands
   reset-password     Reset a user's password by email (generates one if --password omitted)
@@ -128,6 +130,13 @@ Examples:
 
   # Revoke a Bam API key by its prefix (user's token is destroyed)
   cli revoke-api-key --prefix bbam_abc
+
+  # Service-account keys all share the prefix bbam_svc, so name one by its ref
+  # (printed when the key is minted, and listed when a selector is ambiguous)
+  cli revoke-api-key --lookup 3f9a0c4e17b2
+
+  # ...or by key name and owner
+  cli revoke-api-key --name "mcp-internal (service account)" --email svc+mcp-internal-acme@system.local
 
   # Soft-revoke a helpdesk agent key (row kept with revoked_at set)
   cli revoke-helpdesk-agent-key --prefix hdag_xyz
@@ -438,6 +447,7 @@ async function createApiKey(flags: Record<string, string>) {
 
     console.log('API key created successfully:');
     console.log(`  Key ID:    ${key!.id}`);
+    console.log(`  Ref:       ${lookupRef(apiKeyLookup(fullToken))}  (revoke-api-key --lookup)`);
     console.log(`  Name:      ${key!.name}`);
     console.log(`  User:      ${user.email}`);
     console.log(`  Org:       ${org.name} (${org.slug})`);
@@ -587,6 +597,7 @@ async function createServiceAccount(flags: Record<string, string>) {
     console.log(`  Email:      ${email}`);
     console.log(`  Org:        ${org.name} (${org.slug})`);
     console.log(`  Key ID:     ${key!.id}`);
+    console.log(`  Ref:        ${lookupRef(apiKeyLookup(fullToken))}  (revoke-api-key --lookup)`);
     console.log(`  Scope:      ${scope}`);
     console.log('');
     console.log('  [Store this token NOW, it will not be shown again]');
@@ -655,46 +666,61 @@ async function createHelpdeskAgentKey(flags: Record<string, string>) {
 }
 
 async function revokeApiKey(flags: Record<string, string>) {
-  requireFlags(flags, ['prefix']);
-  const { prefix } = flags;
-  const idFlag = flags.id;
+  // #390: every service-account key shares key_prefix 'bbam_svc', so --prefix cannot name one.
+  // --lookup <ref> (a fragment of the unique key_lookup) or --name [--email] can; any selector
+  // that matches more than one key is refused with the candidates listed.
+  const parsed = parseRevokeSelector(flags);
+  if (!parsed.ok) {
+    console.error(`Error: ${parsed.error}`);
+    process.exit(1);
+  }
+  const selector = parsed.selector;
 
   const { db, client } = getDb();
   try {
+    let where;
+    switch (selector.kind) {
+      case 'id':
+        where = eq(apiKeys.id, selector.id);
+        break;
+      case 'lookup':
+        // The fragment is validated as hex, so it carries no LIKE metacharacters.
+        where = like(apiKeys.key_lookup, `${selector.fragment}%`);
+        break;
+      case 'prefix':
+        where = eq(apiKeys.key_prefix, selector.prefix);
+        break;
+      case 'name':
+        where = selector.email
+          ? and(eq(apiKeys.name, selector.name), sql`lower(${users.email}) = lower(${selector.email})`)
+          : eq(apiKeys.name, selector.name);
+        break;
+    }
+
     const rows = await db
       .select({
         id: apiKeys.id,
         name: apiKeys.name,
-        user_id: apiKeys.user_id,
         user_email: users.email,
+        key_prefix: apiKeys.key_prefix,
+        key_lookup: apiKeys.key_lookup,
       })
       .from(apiKeys)
       .leftJoin(users, eq(apiKeys.user_id, users.id))
-      .where(eq(apiKeys.key_prefix, prefix!));
+      .where(where);
 
-    if (rows.length === 0) {
-      console.error(`Error: no API key found with prefix "${prefix}"`);
+    const resolved = resolveRevokeTarget(rows, selector);
+    if (!resolved.ok) {
+      console.error(`Error: ${resolved.error}`);
       process.exit(1);
     }
-
-    if (rows.length > 1 && !idFlag) {
-      console.error(`Error: prefix "${prefix}" matches ${rows.length} keys. Re-run with --id <uuid> to pick one:`);
-      for (const r of rows) {
-        console.error(`  ${r.id}  name="${r.name}"  user=${r.user_email ?? '(deleted user)'}`);
-      }
-      process.exit(1);
-    }
-
-    const target = idFlag ? rows.find((r) => r.id === idFlag) : rows[0];
-    if (!target) {
-      console.error(`Error: --id ${idFlag} does not match any of the keys with prefix "${prefix}"`);
-      process.exit(1);
-    }
+    const target = resolved.target;
 
     await db.delete(apiKeys).where(eq(apiKeys.id, target.id));
 
     console.log('API key revoked (deleted):');
     console.log(`  Key ID:    ${target.id}`);
+    console.log(`  Ref:       ${lookupRef(target.key_lookup) ?? '(legacy key, no lookup id)'}`);
     console.log(`  Name:      ${target.name}`);
     console.log(`  User:      ${target.user_email ?? '(deleted user)'}`);
   } finally {
