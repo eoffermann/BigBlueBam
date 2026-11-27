@@ -3210,7 +3210,7 @@
           },
           {
             "name": "list_tickets",
-            "description": "List helpdesk tickets with optional filters"
+            "description": "List helpdesk tickets in the API key's organization, most recently updated first, with optional status and project filters"
           },
           {
             "name": "reply_to_ticket",

@@ -58,7 +58,7 @@ A tool/command "corresponds" to the endpoint(s) its handler calls. Sections are 
 | Bin | 32 | 19 | 13 | 0 |
 | Bay | 20 | 14 | 6 | 0 |
 | Blip | 40 | 38 | 2 | 0 |
-| Helpdesk | 39 | 15 | 24 | 0 |
+| Helpdesk | 37 | 12 | 25 | 0 |
 | Basis | 17 | 15 | 2 | 0 |
 | Braid | 21 | 12 | 9 | 1 |
 | Bulwark | 29 | 17 | 12 | 0 |
@@ -66,9 +66,9 @@ A tool/command "corresponds" to the endpoint(s) its handler calls. Sections are 
 | Bursar | 79 | 22 | 57 | 0 |
 | Bastion (tools pending registration at M11) | 113 | 83 | 30 | 0 |
 | Cross-app platform | 46 | 32 | 14 | 6 |
-| **Total** | **1383** | **957** | **426** | **17** |
+| **Total** | **1381** | **954** | **427** | **17** |
 
-_Counts are summed from the per-section tables (each row's REST endpoint counted once even when several MCP tools share it). After the `feat/mcp-endpoint-parity` build the "with an MCP tool" total roughly doubled (≈334 → ≈690). Of the ~247 endpoints still tool-less, the large majority are now annotated `— _(skip: …)_` with a reason — auth/OAuth/session, public-inbound (forms/booking/portal/tracking), multipart/binary upload, binary export (PDF/SVG/CSV/.ics), raw credential/API-key admin, SuperUser/permission/account admin (Bam org/admin held to a deliberately conservative scope this pass), Yjs/scene/WebSocket realtime sync, internal/service-to-service routes, and slug/name resolvers done internally — plus the deferred Helpdesk `X-Agent-Key` agent routes. Some endpoints are shared by multiple MCP tools and many are internal / webhook / public-inbound (not user-facing), so treat the totals as close approximations of the surface size, not an exact public-API inventory. The remaining intentional gaps cluster in **Bam org/admin** (SuperUser & permissions admin, integrations, credentials — UI/CLI-only) and a few per-app binary/upload/realtime tails._
+_Counts are summed from the per-section tables (each row's REST endpoint counted once even when several MCP tools share it). After the `feat/mcp-endpoint-parity` build the "with an MCP tool" total roughly doubled (≈334 → ≈690). Of the ~247 endpoints still tool-less, the large majority are now annotated `— _(skip: …)_` with a reason — auth/OAuth/session, public-inbound (forms/booking/portal/tracking), multipart/binary upload, binary export (PDF/SVG/CSV/.ics), raw credential/API-key admin, SuperUser/permission/account admin (Bam org/admin held to a deliberately conservative scope this pass), Yjs/scene/WebSocket realtime sync, internal/service-to-service routes, and slug/name resolvers done internally, plus the Helpdesk customer-portal routes (cookie-only) and the three agent routes with no tool yet. Some endpoints are shared by multiple MCP tools and many are internal / webhook / public-inbound (not user-facing), so treat the totals as close approximations of the surface size, not an exact public-API inventory. The remaining intentional gaps cluster in **Bam org/admin** (SuperUser & permissions admin, integrations, credentials — UI/CLI-only) and a few per-app binary/upload/realtime tails._
 
 ---
 
@@ -101,14 +101,12 @@ stay terse:
   scope/`requireCan`/RLS authorization, and the §15 agent-policy tool-name
   allowlist. Adding granular `TOOL_TO_PERMISSION` entries for the new tools is a
   tracked follow-up.
-- **Helpdesk agent routes deferred.** The `/helpdesk/api/agents/*` mutation
-  routes (queue, agent ticket detail, close, merge, post-message,
-  status/priority/category update) authenticate with a per-agent `X-Agent-Key`
-  (`hdag_`-prefixed) rather than the Bearer token + `X-Org-Id` the wrappers
-  forward. Wrapping them requires threading that separate credential, so they
-  are intentionally left `—` this pass and annotated accordingly in the Helpdesk
-  table. The customer/agent read tools (search, by-number, similar) are
-  unaffected. The helpdesk admin routes do accept the Bearer Bam API key (#325).
+- **Helpdesk agent routes.** At build time the `/helpdesk/api/agents/*` routes
+  accepted only a per-agent `X-Agent-Key` (`hdag_`-prefixed), so they were left
+  unwrapped and the ticket tools pointed at customer routes they could not
+  authenticate to. Since #339 the agent routes accept the Bearer Bam API key the
+  wrappers forward (as the admin routes do since #325), and every ticket tool
+  calls them. The queue, close and merge routes still have no tool.
 - **Bam org/admin held to a conservative scope.** Bam member/account-lifecycle,
   guest, OAuth/SSO, SuperUser, permissions-admin, integration (GitHub / Slack /
   webhooks), iCal, LLM-provider, and credential (API-key / service-account)
@@ -1714,23 +1712,26 @@ the upstream registers, so external path = `/helpdesk/api/` + the part after `/h
 > verified the way apps/api verifies it, pinned to the key's org, and needing an `admin`-scope key
 > for writes. So `helpdesk_get_settings`, `helpdesk_update_settings`, `helpdesk_set_default_project`,
 > `helpdesk_upsert_user` and `helpdesk_ticket_count_by_phrase` work for an org admin's key.
-> `requireAgentAuth` still rejects Bearer, so the `/helpdesk/api/agents/*` mutation routes are left
-> `—`, and the ticket tools are only reachable when the forwarded credential maps to a valid
-> helpdesk session/agent key. Giving the agent routes the same Bearer acceptance is a tracked
-> cross-service auth follow-up. Fixed this pass: the `by-number` resolver path now targets the
-> real agent route (`/helpdesk/agents/tickets/by-number/:number`) — it reaches the route (then gates on
-> the agent key) instead of 404-ing on a path that never existed.
+> **The agent routes (#339):** `requireAgentAuth` (`apps/helpdesk-api/src/lib/agent-auth.ts`, the one
+> guard for every `/helpdesk/api/agents/*` route including `similar`) accepts the same Bearer Bam API
+> key, verified the same way, pinned to the key's org, with the owner required to belong to that
+> org. A `read` key may only read; writes need `read_write` or `admin`. Every MCP ticket tool
+> (`list_tickets`, `get_ticket`, `helpdesk_get_ticket_by_number`, `helpdesk_search_tickets`,
+> `reply_to_ticket`, `update_ticket_status`, `helpdesk_find_similar_tickets`, and the helpdesk arms of
+> `resolve_references` / `search_everything`) now calls the agent routes through
+> `apps/mcp-server/src/lib/helpdesk-agent-path.ts`. The customer routes (`/helpdesk/api/tickets/*`)
+> accept only a customer's `helpdesk_session` cookie, so no tool calls them.
 
 | REST endpoint | MCP tool | Description | UI call site |
 | --- | --- | --- | --- |
-| `GET /helpdesk/api/agents/agents/queue` | — _(skip: agent routes require X-Agent-Key, not Bearer — deferred)_ | Agent SLA-aware ticket queue | — (agent console) |
-| `GET /helpdesk/api/agents/tickets` | `list_tickets` *(via customer route)* | Agent: org-scoped ticket list | — |
-| `GET /helpdesk/api/agents/tickets/:id` | — _(skip: agent routes require X-Agent-Key, not Bearer — deferred)_ | Agent: ticket detail + internal msgs | — |
+| `GET /helpdesk/api/agents/agents/queue` | — _(skip: deferred; no tool yet, the route accepts the Bearer key since #339)_ | Agent SLA-aware ticket queue | — (agent console) |
+| `GET /helpdesk/api/agents/tickets` | `list_tickets` | Agent: org-scoped ticket list (filters: status, project_id) | — |
+| `GET /helpdesk/api/agents/tickets/:id` | `get_ticket` | Agent: ticket detail + internal msgs | — |
 | `GET /helpdesk/api/agents/tickets/:id/similar` | `helpdesk_find_similar_tickets` | Ranked similar/duplicate tickets | — |
-| `POST /helpdesk/api/agents/tickets/:id/close` | — _(skip: agent routes require X-Agent-Key, not Bearer — deferred)_ | Agent: close a ticket | — |
-| `POST /helpdesk/api/agents/tickets/:id/merge` | — _(skip: agent routes require X-Agent-Key, not Bearer — deferred)_ | Agent: true-merge into a primary | — |
-| `POST /helpdesk/api/agents/tickets/:id/messages` | — _(skip: agent routes require X-Agent-Key, not Bearer — deferred)_ | Agent: post reply/internal note | — |
-| `PATCH /helpdesk/api/agents/tickets/:id` | — _(skip: agent routes require X-Agent-Key, not Bearer — deferred)_ | Agent: update status/priority/category | — |
+| `POST /helpdesk/api/agents/tickets/:id/close` | — _(skip: deferred; no tool yet, the route accepts the Bearer key since #339)_ | Agent: close a ticket | — |
+| `POST /helpdesk/api/agents/tickets/:id/merge` | — _(skip: deferred; no tool yet, the route accepts the Bearer key since #339)_ | Agent: true-merge into a primary | — |
+| `POST /helpdesk/api/agents/tickets/:id/messages` | `reply_to_ticket` | Agent: post reply/internal note (`read_write` key) | — |
+| `PATCH /helpdesk/api/agents/tickets/:id` | `update_ticket_status` | Agent: update status/priority/category (`read_write` key) | — |
 | `GET /helpdesk/api/agents/tickets/by-number/:number` | `helpdesk_get_ticket_by_number` | Resolve ticket by human number | — |
 | `GET /helpdesk/api/agents/tickets/search` | `helpdesk_search_tickets` | Fuzzy ticket search (agent, org-scoped) | — |
 | `GET /helpdesk/api/admin/projects` | — _(skip: admin project resolver (used internally))_ | List org projects for default picker | `apps/helpdesk/src/pages/org-picker.tsx` |
@@ -1740,19 +1741,17 @@ the upstream registers, so external path = `/helpdesk/api/` + the part after `/h
 | `GET /helpdesk/api/public/orgs/:slug` | — _(skip: public portal discovery (resolver))_ | Public org/portal discovery | `apps/helpdesk/src/stores/tenant.store.ts` |
 | `GET /helpdesk/api/settings` | `helpdesk_get_settings` · `helpdesk_set_default_project` | Full settings (admin) | `apps/helpdesk/src/app.tsx` |
 | `PATCH /helpdesk/api/settings` | `helpdesk_update_settings` · `helpdesk_set_default_project` | Update settings (admin) | `apps/helpdesk/src/app.tsx` |
-| `GET /helpdesk/api/tickets` | `list_tickets` | List caller's own tickets | `apps/helpdesk/src/hooks/use-tickets.ts` |
+| `GET /helpdesk/api/tickets` | — _(skip: customer-portal route, helpdesk_session cookie; `list_tickets` uses the agent route)_ | List caller's own tickets | `apps/helpdesk/src/hooks/use-tickets.ts` |
 | `POST /helpdesk/api/tickets` | — _(skip: public/customer ticket intake — customer JWT)_ | Create a ticket (customer) | `apps/helpdesk/src/pages/new-ticket.tsx` |
-| `GET /helpdesk/api/tickets/search` | `helpdesk_search_tickets` *(agent route)* | Customer FTS over own tickets | `apps/helpdesk/src/pages/tickets-list.tsx` |
-| `GET /helpdesk/api/tickets/:id` | `get_ticket` | Ticket detail + messages | `apps/helpdesk/src/pages/ticket-detail.tsx` |
-| `GET /helpdesk/api/tickets/by-number/:number` *(agent)* | `helpdesk_get_ticket_by_number` | Resolve by number — tool uses agent route | — |
+| `GET /helpdesk/api/tickets/search` | — _(skip: customer-portal route, helpdesk_session cookie; `helpdesk_search_tickets` uses the agent route)_ | Customer FTS over own tickets | `apps/helpdesk/src/pages/tickets-list.tsx` |
+| `GET /helpdesk/api/tickets/:id` | — _(skip: customer-portal route, helpdesk_session cookie; `get_ticket` uses the agent route)_ | Ticket detail + messages | `apps/helpdesk/src/pages/ticket-detail.tsx` |
 | `GET /helpdesk/api/tickets/:id/activity` | — _(skip: customer-portal route — customer JWT, not Bearer)_ | Ticket audit trail | `apps/helpdesk/src/pages/ticket-detail.tsx` |
 | `GET /helpdesk/api/tickets/:id/attachments` | — _(skip: multipart attachment upload/download)_ | List ticket attachments | `apps/helpdesk/src/hooks/use-attachments.ts` |
 | `POST /helpdesk/api/tickets/:id/attachments` | — _(skip: multipart attachment upload/download)_ | Upload a ticket attachment | `apps/helpdesk/src/hooks/use-attachments.ts` |
 | `DELETE /helpdesk/api/tickets/:id/attachments/:attachmentId` | — _(skip: multipart attachment upload/download)_ | Delete a ticket attachment | `apps/helpdesk/src/hooks/use-attachments.ts` |
 | `GET /helpdesk/api/tickets/:id/events` | — _(skip: SSE event stream — not an agent surface)_ | Per-ticket event-log replay | `apps/helpdesk/src/hooks/use-tickets.ts` |
 | `GET /helpdesk/api/tickets/:id/messages` | — _(skip: customer-portal route — customer JWT, not Bearer)_ | Paginated message history | `apps/helpdesk/src/hooks/use-ticket-messages.ts` |
-| `POST /helpdesk/api/tickets/:id/messages` | `reply_to_ticket` | Post a message (customer/agent) | `apps/helpdesk/src/pages/ticket-detail.tsx` |
-| `PATCH /helpdesk/api/tickets/:id` *(agent route)* | `update_ticket_status` | Update ticket status (tool → agent route) | `apps/helpdesk/src/pages/ticket-detail.tsx` |
+| `POST /helpdesk/api/tickets/:id/messages` | — _(skip: customer-portal route, helpdesk_session cookie; `reply_to_ticket` uses the agent route)_ | Customer posts a message | `apps/helpdesk/src/pages/ticket-detail.tsx` |
 | `POST /helpdesk/api/tickets/:id/close` | — _(skip: customer-portal route — customer JWT, not Bearer)_ | Customer closes own ticket | `apps/helpdesk/src/pages/ticket-detail.tsx` |
 | `POST /helpdesk/api/tickets/:id/reopen` | — _(skip: customer-portal route — customer JWT, not Bearer)_ | Customer reopens a ticket | `apps/helpdesk/src/pages/ticket-detail.tsx` |
 | `POST /helpdesk/api/tickets/:id/update-priority` | — _(skip: customer-portal route — customer JWT, not Bearer)_ | Customer changes priority | `apps/helpdesk/src/pages/ticket-detail.tsx` |

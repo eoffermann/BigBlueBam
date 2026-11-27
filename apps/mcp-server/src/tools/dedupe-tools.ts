@@ -2,6 +2,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import type { ApiClient } from '../middleware/api-client.js';
 import { registerTool } from '../lib/register-tool.js';
+import { helpdeskAgentPath } from '../lib/helpdesk-agent-path.js';
 
 /**
  * Dedupe MCP tools (Wave 5 AGENTIC_TODO §7).
@@ -166,7 +167,7 @@ export function registerDedupeTools(
       if (limit !== undefined) qs.set('limit', String(limit));
       if (window_days !== undefined) qs.set('window_days', String(window_days));
       if (min_confidence !== undefined) qs.set('min_confidence', String(min_confidence));
-      const path = `/helpdesk/agents/tickets/${ticket_id}/similar${qs.toString() ? `?${qs.toString()}` : ''}`;
+      const path = helpdeskAgentPath(`/tickets/${ticket_id}/similar${qs.toString() ? `?${qs.toString()}` : ''}`);
       const result = await helpdesk.request('GET', path);
       if (!result.ok) {
         return {
