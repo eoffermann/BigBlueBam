@@ -67,7 +67,11 @@ describe('Bastion pending tools stay out of the registered surface until M11', (
   });
 
   it('is not imported or registered by server.ts', () => {
-    expect(SERVER).not.toMatch(/bastion/i);
+    // The one Bastion line server.ts may carry before M11 is the search_everything arm's URL
+    // (M10, spec 8.5): it registers no Bastion tool.
+    const searchUrl = /^\s*bastionApiUrl: env\.BASTION_API_URL,\s*$/m;
+    expect(SERVER).toMatch(searchUrl);
+    expect(SERVER.replace(searchUrl, '')).not.toMatch(/bastion/i);
   });
 
   it('every handler goes through registerTool (agent policies apply once registered)', () => {
@@ -769,5 +773,26 @@ describe('Bastion M9 sharing, settings and audit tools', () => {
     expect(names).not.toMatch(/create_auditor_room|revoke_auditor_room|unlock_auditor_room|download/);
     const CLIENT = readFileSync(join(SRC, 'clients', 'bastion-client.ts'), 'utf8');
     expect(CLIENT).not.toMatch(/'POST', '\/auditor-rooms'|auditor-rooms\/\$\{[^}]+\}\/(revoke|unlock)|\/public\/room|\/exports\/\$\{[^}]+\}\/download/);
+  });
+});
+
+describe('Bastion M10 client completion', () => {
+  it('bastion_control_status reads just the checks with checks_only (row 16)', async () => {
+    const tool = await load();
+    await tool('bastion_control_status').handler({ control_id: CTRL } as never);
+    await tool('bastion_control_status').handler({ control_id: CTRL, checks_only: true } as never);
+    expect(calls.map((c) => `${c.method} ${c.url}`)).toEqual([
+      `GET http://bastion-api:4024/v1/controls/${CTRL}`,
+      `GET http://bastion-api:4024/v1/controls/${CTRL}/assertions`,
+    ]);
+  });
+
+  it('the client reads GET /search (row 95) with the asker, for search_everything', async () => {
+    const { createBastionClient } = await import('../src/clients/bastion-client.js');
+    const client = createBastionClient('http://bastion-api:4024/v1/', { token: 'bbam_test' } as never, fakeFetch);
+    await client.search({ q: 'laptop encryption', limit: 5, asker_user_id: ASSERTION });
+    expect(calls.map((c) => `${c.method} ${c.url}`)).toEqual([
+      `GET http://bastion-api:4024/v1/search?q=laptop+encryption&limit=5&asker_user_id=${ASSERTION}`,
+    ]);
   });
 });

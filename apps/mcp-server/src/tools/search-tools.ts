@@ -42,7 +42,9 @@ type EntityType =
   | 'beacon'
   | 'message'
   | 'board'
-  | 'metric';
+  | 'metric'
+  | 'control'
+  | 'policy';
 
 type SourceApp =
   | 'bam'
@@ -52,7 +54,8 @@ type SourceApp =
   | 'beacon'
   | 'banter'
   | 'board'
-  | 'basis';
+  | 'basis'
+  | 'bastion';
 
 interface Hit {
   entity_type: EntityType;
@@ -93,6 +96,9 @@ const URL_BUILDERS: Record<EntityType, (id: string) => string> = {
   message: (id) => `/banter/messages/${id}`,
   board: (id) => `/board/boards/${id}`,
   metric: (id) => `/basis/metrics/${id}`,
+  control: (id) => `/bastion/controls/${id}`,
+  // Bastion has no per-policy page; the Policies page lists them all.
+  policy: () => '/bastion/policies',
 };
 
 /** Per-app weights applied after normalization. */
@@ -107,6 +113,8 @@ const APP_WEIGHTS: Record<EntityType, number> = {
   board: 0.9,
   message: 0.7,
   metric: 1.1,
+  control: 1.0,
+  policy: 1.0,
 };
 
 /**
@@ -122,6 +130,8 @@ const CAN_ACCESS_TYPE: Partial<Record<EntityType, string>> = {
   company: 'bond.company',
   document: 'brief.document',
   beacon: 'beacon.entry',
+  control: 'bastion.control',
+  policy: 'bastion.policy',
   // message: not in the Wave 2 allowlist
   // board:   not in the Wave 2 allowlist
 };
@@ -610,7 +620,46 @@ const ENTITY_TYPES: readonly EntityType[] = [
   'message',
   'board',
   'metric',
+  'control',
+  'policy',
 ] as const;
+
+// Bastion controls and linked policies (spec 5.1 row 95, 8.5). bastion-api's GET /search does
+// the matching and returns hits whose entity_type is already the can_access type
+// (`bastion.control` / `bastion.policy`), so the as_user_id preflight below gates them like any
+// other allowlisted hit. One request serves both entity types; `types` picks which are kept.
+async function searchBastion(
+  bastionApiUrl: string,
+  api: ApiClient,
+  query: string,
+  limit: number,
+  wanted: ReadonlySet<EntityType>,
+  timeoutMs: number,
+): Promise<ArmResult> {
+  const base = bastionApiUrl.replace(/\/$/, '');
+  const headers = authHeaders(api);
+  const qs = new URLSearchParams({ q: query, limit: String(Math.min(limit, 50)) });
+  const r = await fetchWithTimeout(`${base}/search?${qs.toString()}`, { method: 'GET', headers }, timeoutMs);
+  if (!r.ok) throw new Error(`status ${r.status}`);
+  const rows = ((r.data as { data?: Array<Record<string, unknown>> } | null)?.data) ?? [];
+  const hits: ArmResult['hits'] = [];
+  for (const h of rows) {
+    const type: EntityType | null =
+      h.entity_type === 'bastion.control' ? 'control' : h.entity_type === 'bastion.policy' ? 'policy' : null;
+    if (!type || !wanted.has(type)) continue;
+    const id = String(h.id ?? '');
+    hits.push({
+      entity_type: type,
+      entity_id: id,
+      title: String(h.title ?? (type === 'control' ? '(untitled control)' : '(untitled policy)')),
+      snippet: truncateSnippet(h.snippet as string | undefined),
+      local_score: typeof h.score === 'number' ? h.score : 0,
+      source_app: 'bastion',
+      url: URL_BUILDERS[type](id),
+    });
+  }
+  return { hits };
+}
 
 /** Bundle of URLs so the tool can fan out to every app. */
 export interface SearchToolUrls {
@@ -622,6 +671,8 @@ export interface SearchToolUrls {
   banterApiUrl: string;
   boardApiUrl: string;
   basisApiUrl: string;
+  /** Bastion (M10). Optional so a caller without bastion-api simply has no Bastion arm. */
+  bastionApiUrl?: string;
 }
 
 export function registerSearchTools(
@@ -632,7 +683,7 @@ export function registerSearchTools(
   registerTool(server, {
     name: 'search_everything',
     description:
-      "Cross-app unified search. Fans out in parallel to per-app search endpoints (Bam tasks, Helpdesk tickets, Bond contacts/companies, Brief documents, Beacon entries, Banter messages, Board elements), normalizes each app's native relevance score, applies a per-app weight, and returns a ranked unified hit list. Use `types` to prune fan-out to a subset of entity kinds. Pass `as_user_id` to run a visibility preflight (can_access) on every supported hit and drop anything the asker cannot see; the count of dropped hits is reported as `filtered_count`. Note: Banter messages, Board elements, and Basis metrics are NOT in the Wave 2 can_access allowlist, so those hits are always included based on the source app's own RLS (banter channel membership, board visibility, and org-scoped metric catalog respectively). Each arm has a 3s timeout; arm-level failures are reported in `errors[]` without failing the whole call.",
+      "Cross-app unified search. Fans out in parallel to per-app search endpoints (Bam tasks, Helpdesk tickets, Bond contacts/companies, Brief documents, Beacon entries, Banter messages, Board elements, Basis metrics, Bastion compliance controls and linked policies), normalizes each app's native relevance score, applies a per-app weight, and returns a ranked unified hit list. Use `types` to prune fan-out to a subset of entity kinds. Pass `as_user_id` to run a visibility preflight (can_access) on every supported hit and drop anything the asker cannot see; the count of dropped hits is reported as `filtered_count`. Note: Banter messages, Board elements, and Basis metrics are NOT in the Wave 2 can_access allowlist, so those hits are always included based on the source app's own RLS (banter channel membership, board visibility, and org-scoped metric catalog respectively). Each arm has a 3s timeout; arm-level failures are reported in `errors[]` without failing the whole call.",
     input: {
       query: z
         .string()
@@ -679,6 +730,7 @@ export function registerSearchTools(
             'banter',
             'board',
             'basis',
+            'bastion',
           ]),
           url: z.string(),
         }),
@@ -781,6 +833,14 @@ export function registerSearchTools(
           source_app: 'basis',
           fetch: () =>
             searchBasisMetrics(urls.basisApiUrl, api, query, TIMEOUT_MS),
+        });
+      }
+      const bastionApiUrl = urls.bastionApiUrl;
+      if (bastionApiUrl && (wantedTypes.has('control') || wantedTypes.has('policy'))) {
+        arms.push({
+          source_app: 'bastion',
+          fetch: () =>
+            searchBastion(bastionApiUrl, api, query, capLimit, wantedTypes, TIMEOUT_MS),
         });
       }
       // `deal` is declared in the schema for forward-compat but there is no
