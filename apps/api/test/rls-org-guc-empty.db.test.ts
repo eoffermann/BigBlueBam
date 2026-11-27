@@ -71,11 +71,12 @@ if (IN_CI && !usable) {
   it('an unbound query on a connection that ran a transaction-local set_config sees no rows, not 22P02', async () => {
     const one = postgres(PROBE_URL ?? '', { max: 1, onnotice: () => {} });
     try {
-      await one.begin(async (tx) => {
-        await tx`SELECT set_config('app.current_org_id', ${orgA}, true)`;
-        const inside = await tx`SELECT count(*)::int AS n FROM projects WHERE id = ${projA}`;
-        expect(inside[0]!.n).toBe(1);
-      });
+      // max: 1, so BEGIN, the scoped read and COMMIT all run on the one connection.
+      await one`BEGIN`;
+      await one`SELECT set_config('app.current_org_id', ${orgA}, true)`;
+      const inside = await one`SELECT count(*)::int AS n FROM projects WHERE id = ${projA}`;
+      await one`COMMIT`;
+      expect(inside[0]!.n).toBe(1);
       const [guc] = await one`SELECT current_setting('app.current_org_id', true) AS v`;
       expect(guc!.v).toBe('');
       const after = await one`SELECT count(*)::int AS n FROM projects WHERE id = ${projA}`;
