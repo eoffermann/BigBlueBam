@@ -18,7 +18,7 @@ type WebSocket = {
 };
 import { eq, and } from 'drizzle-orm';
 import Redis from 'ioredis';
-import { db } from '../db/index.js';
+import { db, rlsStorage, runInOrgScope } from '../db/index.js';
 import { sessions } from '../db/schema/sessions.js';
 import { users } from '../db/schema/users.js';
 import { projectMemberships } from '../db/schema/project-memberships.js';
@@ -31,6 +31,9 @@ const REDIS_CHANNEL = 'bigbluebam:events';
 // BAM-027: Maximum WebSocket connections per user. When exceeded, the oldest
 // connection is closed to make room.
 const MAX_CONNECTIONS_PER_USER = 20;
+
+// project ids are uuids; anything else could never match and would fail the uuid cast in SQL.
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 interface WsConnection {
   socket: WebSocket;
@@ -110,7 +113,22 @@ function sendToRoom(room: string, message: string) {
   }
 }
 
-async function authenticateRequest(request: FastifyRequest): Promise<AuthUser | null> {
+/**
+ * Authenticate a WebSocket upgrade from its session cookie (#344).
+ *
+ * The rls plugin never reserves an org-bound connection for an upgrade (a WS
+ * lives far longer than a request, #102), so nothing here may rely on one.
+ * Identity is resolved before any org is known, the way the HTTP auth plugin
+ * does it: sessions is not org-gated (migration 0311) and buildAuthUser reads
+ * memberships and roles through the identity functions. The read runs outside
+ * any request-scoped RLS store so it always uses the pool, never a connection
+ * some other request bound.
+ */
+export async function authenticateWsRequest(request: FastifyRequest): Promise<AuthUser | null> {
+  return rlsStorage.exit(() => authenticateFromSession(request));
+}
+
+async function authenticateFromSession(request: FastifyRequest): Promise<AuthUser | null> {
   // The browser sends cookies automatically on the WebSocket upgrade request.
   // Parse the session cookie the same way the auth plugin does.
   const sessionId = request.cookies?.session;
@@ -142,6 +160,37 @@ async function authenticateRequest(request: FastifyRequest): Promise<AuthUser | 
   if (!row.user.is_active) return null;
 
   return await buildAuthUser(row.user, null, request);
+}
+
+/**
+ * May this user join `project:<projectId>`? The project must belong to the
+ * user's active org and the user must be a member of it. projects and
+ * project_memberships are org-gated, so under BBB_RLS_ENFORCE=1 the reads run
+ * per operation in the user's org (runInOrgScope, #344): a WS message has no
+ * request-scoped binding, and without one the reads saw nothing (every
+ * project room was refused) or could land on a connection bound for someone
+ * else. SuperUsers may join any project room, as before.
+ */
+export async function canJoinProjectRoom(
+  user: Pick<AuthUser, 'id' | 'is_superuser' | 'active_org_id'>,
+  projectId: string,
+): Promise<boolean> {
+  if (user.is_superuser) return true;
+  if (!user.active_org_id) return false;
+  return runInOrgScope(user.active_org_id, async (tx) => {
+    const [project] = await tx
+      .select({ org_id: projects.org_id })
+      .from(projects)
+      .where(and(eq(projects.id, projectId), eq(projects.org_id, user.active_org_id)))
+      .limit(1);
+    if (!project) return false;
+    const [membership] = await tx
+      .select({ id: projectMemberships.id })
+      .from(projectMemberships)
+      .where(and(eq(projectMemberships.project_id, projectId), eq(projectMemberships.user_id, user.id)))
+      .limit(1);
+    return !!membership;
+  });
 }
 
 // ── Plugin ───────────────────────────────────────────────────
@@ -183,7 +232,7 @@ async function websocketPlugin(fastify: FastifyInstance) {
     }
 
     // Authenticate
-    authenticateRequest(request)
+    authenticateWsRequest(request)
       .then((user) => {
         if (!user) {
           socket.close(4001, 'Unauthorized');
@@ -236,35 +285,9 @@ async function websocketPlugin(fastify: FastifyInstance) {
 
             if (msg.type === 'subscribe' && msg.room) {
               if (msg.room.startsWith('project:')) {
-                // Authorize: verify user is a member of the project and project belongs to their org
+                // Authorize: the project is in the user's org and the user is a member.
                 const projectId = msg.room.slice('project:'.length);
-                let canSubscribe = false;
-
-                if (conn.user.is_superuser) {
-                  canSubscribe = true;
-                } else {
-                  // Verify project exists and belongs to user's org
-                  const [project] = await db
-                    .select({ org_id: projects.org_id })
-                    .from(projects)
-                    .where(eq(projects.id, projectId))
-                    .limit(1);
-
-                  if (project && project.org_id === conn.user.active_org_id) {
-                    // Verify user is a member of this project
-                    const [membership] = await db
-                      .select({ id: projectMemberships.id })
-                      .from(projectMemberships)
-                      .where(
-                        and(
-                          eq(projectMemberships.project_id, projectId),
-                          eq(projectMemberships.user_id, conn.user.id),
-                        ),
-                      )
-                      .limit(1);
-                    canSubscribe = !!membership;
-                  }
-                }
+                const canSubscribe = UUID_RE.test(projectId) && (await canJoinProjectRoom(conn.user, projectId));
 
                 if (canSubscribe) {
                   addToRoom(conn, msg.room);
