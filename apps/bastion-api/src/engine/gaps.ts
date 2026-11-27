@@ -17,7 +17,9 @@ import {
   type BastionGapKind,
 } from '@bigbluebam/shared';
 import { failingTemplate, TEMPLATE_BY_GAP_KIND } from '../library/fix-templates.js';
-import { type EngineDeps, orgTx, type Tx, utcDate } from './context.js';
+import { type EngineDeps, orgTx, sqlstateOf, type Tx, utcDate } from './context.js';
+import { UnavailableError } from '../lib/errors.js';
+import { GAP_RANK_LOCK_TIMEOUT_MS } from './budgets.js';
 import { type CitedRef, effectiveStatus, type ExceptionRow } from './status.js';
 
 const DAY_MS = 86_400_000;
@@ -280,9 +282,31 @@ export interface GapRankOrgResult {
  * commit last, and two passes never lock the same gap rows in opposite orders. A caller that also
  * takes other locks (exception approval takes the ledger's) takes this one FIRST, so the order is
  * always gap-rank lock, then everything else. Re-entrant within one transaction.
+ *
+ * Holders never make network calls while holding it (#293): a caller that needs can_access
+ * verdicts takes them first, then the lock, then re-validates cheaply. A waiter gives up after
+ * GAP_RANK_LOCK_TIMEOUT_MS with GapRankBusyError (503, "try again in a moment") instead of pinning
+ * a pool connection behind a slow holder; the transaction's previous lock_timeout is restored once
+ * the lock is held, so later row locks in it keep their own rules.
  */
 export async function lockOrgGapRank(tx: Tx, orgId: string): Promise<void> {
-  await tx`SELECT pg_advisory_xact_lock(hashtextextended(${`bastion_gap_rank:${orgId}`}, 0))`;
+  const prev = String((await tx`SELECT current_setting('lock_timeout') AS v`)[0]?.v ?? '0');
+  await tx`SELECT set_config('lock_timeout', ${`${GAP_RANK_LOCK_TIMEOUT_MS}ms`}, true)`;
+  try {
+    await tx`SELECT pg_advisory_xact_lock(hashtextextended(${`bastion_gap_rank:${orgId}`}, 0))`;
+  } catch (err) {
+    if (sqlstateOf(err) === '55P03') throw new GapRankBusyError();
+    throw err;
+  }
+  await tx`SELECT set_config('lock_timeout', ${prev}, true)`;
+}
+
+/** A gap writer waited GAP_RANK_LOCK_TIMEOUT_MS for another one in the same org (#293). */
+export class GapRankBusyError extends UnavailableError {
+  constructor() {
+    super('Bastion is busy updating this organization\'s gaps. Try again in a moment.', 'GAP_RANK_BUSY');
+    this.name = 'GapRankBusyError';
+  }
 }
 
 /** As lockOrgGapRank, but answers false at once when another pass holds it. */
