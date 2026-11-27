@@ -19,6 +19,7 @@ import {
   BASTION_EFFECTIVE_STATE_SEVERITY,
   BASTION_EXCEPTION_MAX_DAYS,
   endOfDayInTz,
+  type BastionException,
   type BastionExceptionDecide,
   type BastionExceptionListQuery,
   type BastionExceptionPropose,
@@ -67,10 +68,16 @@ const FROM = `FROM bastion_exceptions e
   LEFT JOIN users du ON du.id = e.decided_by
   LEFT JOIN bastion_assertions a ON a.id = e.assertion_id AND a.organization_id = e.organization_id`;
 
-function shape(r: Record<string, unknown>, now: Date) {
+/**
+ * The response row (shared bastionExceptionSchema, #348). The cast covers what JSON does on the
+ * way out: timestamp columns are Date here and ISO strings on the wire, as the schema says.
+ */
+function shape(r: Record<string, unknown>, now: Date): BastionException {
   const expires = new Date(r.expires_at as string);
   return {
-    ...r,
+    ...(r as unknown as BastionException),
+    // bigint arrives from Postgres as a string; the response carries a number.
+    ledger_seq: r.ledger_seq === null || r.ledger_seq === undefined ? null : Number(r.ledger_seq),
     days_left: Math.max(0, Math.ceil((expires.getTime() - now.getTime()) / DAY_MS)),
     approval_label: r.small_team_self_approval ? 'approved by the proposer (small team)' : null,
     state_words: r.status === 'active' ? 'Not met, risk accepted' : null,

@@ -17,6 +17,7 @@ import {
   BASTION_STALE_GAP_KIND,
   bastionControlTaskExternalId,
   type BastionFixDecide,
+  type BastionFixDraft,
   type BastionFixDraftListQuery,
   type BastionFixMarkApplied,
   type BastionGapListQuery,
@@ -547,12 +548,17 @@ const DRAFT_FROM = `FROM bastion_fix_drafts d
   LEFT JOIN users cu ON cu.id = d.created_by
   LEFT JOIN agent_proposals p ON p.id = d.proposal_id`;
 
-async function shapeDraft(d: DecisionDeps, viewer: Viewer, r: Record<string, unknown>) {
+/**
+ * The response row (shared bastionFixDraftSchema, #348). The cast covers what JSON does on the way
+ * out: timestamp columns are Date here and ISO strings on the wire, as the schema says.
+ */
+async function shapeDraft(d: DecisionDeps, viewer: Viewer, r: Record<string, unknown>): Promise<BastionFixDraft> {
   // Citations pass can_access again at read, for whoever is reading (spec 2.4).
   const refs = (r.cited_refs as CitedRef[] | null) ?? [];
   const visible = await visibleRefs(d.canAccess, viewer, refs);
   return {
-    ...r,
+    ...(r as unknown as BastionFixDraft),
+    dropped_citation_count: Number(r.dropped_citation_count ?? 0),
     cited_refs: visible,
     hidden_citation_count: refs.length - visible.length + Number(r.dropped_citation_count ?? 0),
     gap_words: r.gap_kind ? (GAP_WORDS[r.gap_kind as string] ?? null) : null,

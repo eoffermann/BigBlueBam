@@ -2346,3 +2346,123 @@ export const bastionSearchHitSchema = z.object({
   url: z.string(),
 });
 export type BastionSearchHit = z.infer<typeof bastionSearchHitSchema>;
+
+// ── Response rows (#348) ────────────────────────────────────────────────────────────────
+// What the routes send, as JSON (timestamps are ISO strings), so bastion-api's services, the
+// SPA and the MCP tools type the same fields from one place.
+
+/** A drafted fix: GET /fix-drafts, GET /fix-drafts/:id, POST /gaps/:id/fix, POST /fix-drafts/:id/decide. */
+export const bastionFixDraftSchema = z.object({
+  id: z.string().uuid(),
+  gap_id: z.string().uuid().nullable(),
+  template: BastionFixTemplate,
+  template_words: z.string(),
+  title: z.string(),
+  body_markdown: z.string().nullable(),
+  payload: z.record(z.unknown()),
+  cited_refs: z.array(bastionCitedRefSchema),
+  dropped_citation_count: z.number().int(),
+  hidden_citation_count: z.number().int(),
+  proposal_id: z.string().uuid().nullable(),
+  status: BastionFixDraftStatus,
+  decided_by: z.string().uuid().nullable(),
+  decided_by_name: z.string().nullable(),
+  decided_at: z.string().nullable(),
+  applied_entity_type: z.string().nullable(),
+  applied_entity_id: z.string().nullable(),
+  created_by: z.string().uuid().nullable(),
+  created_by_name: z.string().nullable(),
+  created_by_kind: z.string().nullable(),
+  created_at: z.string(),
+  updated_at: z.string(),
+  gap_kind: BastionGapKind.nullable(),
+  gap_words: z.string().nullable(),
+  control_id: z.string().uuid().nullable(),
+  control_title: z.string().nullable(),
+  owner_user_id: z.string().uuid().nullable(),
+  owner_name: z.string().nullable(),
+  proposal_expires_at: z.string().nullable(),
+});
+export type BastionFixDraft = z.infer<typeof bastionFixDraftSchema>;
+
+/** An exception: GET /exceptions, POST /exceptions, POST /exceptions/:id/decide. */
+export const bastionExceptionSchema = z.object({
+  id: z.string().uuid(),
+  control_id: z.string().uuid(),
+  control_title: z.string(),
+  owner_user_id: z.string().uuid().nullable(),
+  owner_name: z.string().nullable(),
+  assertion_id: z.string().uuid().nullable(),
+  assertion_statement: z.string().nullable(),
+  scope: BastionExceptionScope,
+  cited_entity_type: z.string().nullable(),
+  cited_entity_id: z.string().nullable(),
+  frozen_refs: z.array(bastionCitedRefSchema).nullable(),
+  reason: z.string(),
+  compensating_note: z.string().nullable(),
+  proposal_id: z.string().uuid().nullable(),
+  status: BastionExceptionStatus,
+  proposed_by: z.string().uuid(),
+  proposed_by_name: z.string().nullable(),
+  decided_by: z.string().uuid().nullable(),
+  decided_by_name: z.string().nullable(),
+  decided_at: z.string().nullable(),
+  small_team_self_approval: z.boolean(),
+  approval_label: z.string().nullable(),
+  expires_at: z.string(),
+  days_left: z.number().int(),
+  state_words: z.string().nullable(),
+  ledger_seq: z.number().int().nullable(),
+  created_at: z.string(),
+  updated_at: z.string(),
+});
+export type BastionException = z.infer<typeof bastionExceptionSchema>;
+
+/** The lost range fields a restore row and a bucket restore record share. */
+const bastionRestoreRangeFields = {
+  id: z.string().uuid(),
+  detected_at: z.string(),
+  db_head_seq: z.number().int().nullable(),
+  bucket_seal_date: z.string().nullable(),
+  bucket_epoch: z.number().int().nullable(),
+  bucket_head_seq: z.number().int().nullable(),
+  lost_from_seq: z.number().int().nullable(),
+  lost_to_seq: z.number().int().nullable(),
+  provisional_epoch: z.number().int(),
+  platform_restore_id: z.string().uuid().nullable(),
+  status: BastionRestoreStatus,
+  resolution: BastionRestoreResolution.nullable(),
+  resolved_at: z.string().nullable(),
+  label: z.enum(['History lost by restore', 'Unexplained gap']),
+  summary: z.string(),
+};
+
+/** A database restore row of GET /ledger/restores. */
+export const bastionRestoreRowSchema = z.object({
+  ...bastionRestoreRangeFields,
+  resolved_by: z.string().uuid().nullable(),
+  appends_blocked: z.boolean(),
+});
+export type BastionRestoreRow = z.infer<typeof bastionRestoreRowSchema>;
+
+/** A lost range the database no longer holds, read from a signed bucket record (#208). */
+export const bastionBucketRestoreSchema = z.object({
+  ...bastionRestoreRangeFields,
+  record: z.literal('ledger_restore'),
+  organization_id: z.string().uuid(),
+  bucket_head_hash: z.string().nullable(),
+  signing_key_id: z.string(),
+  object_key: z.string(),
+});
+export type BastionBucketRestore = z.infer<typeof bastionBucketRestoreSchema>;
+
+/** GET /ledger/restores. bucket_only, bucket_available and bucket_rejected are first-page facts. */
+export const bastionRestoreListResponseSchema = z.object({
+  data: z.array(bastionRestoreRowSchema),
+  has_more: z.boolean(),
+  next_cursor: z.string().nullable(),
+  bucket_only: z.array(bastionBucketRestoreSchema),
+  bucket_available: z.boolean(),
+  bucket_rejected: z.number().int(),
+});
+export type BastionRestoreListResponse = z.infer<typeof bastionRestoreListResponseSchema>;

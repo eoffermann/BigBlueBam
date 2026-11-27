@@ -97,6 +97,16 @@ export function clock(): Clock {
   return c;
 }
 
+/**
+ * A clock that does not move on its own: now() is `at` plus offsetMs. For tests whose assertions
+ * must not depend on how long a loaded host takes between two statements (an outbox backoff that
+ * lapses mid-test), nor on the database's own clock (#347).
+ */
+export function frozenClock(at: number): Clock {
+  const c: Clock = { offsetMs: 0, now: () => new Date(at + c.offsetMs) };
+  return c;
+}
+
 export function makeDeps(
   sql: postgres.Sql,
   opts: { bucket?: StorageDriver | null; clock?: Clock; readSql?: postgres.Sql; sealCache?: Map<string, SealCacheEntry>; leaseMs?: number } = {},

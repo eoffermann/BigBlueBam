@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import postgres from 'postgres';
+import { bastionRestoreListResponseSchema } from '@bigbluebam/shared';
 import type { EngineDeps } from '../../src/engine/context.js';
 import { runEvaluationSlice } from '../../src/engine/evaluator.js';
 import { defaultDeliverer, drainOutbox, type Deliverer } from '../../src/engine/outbox.js';
@@ -222,8 +223,10 @@ describe.skipIf(!DATABASE_URL)('M4 restore detection (live database)', () => {
     });
     const listed = await evidence.listRestores(booted, viewer(s));
     expect(listed.data).toEqual([]);
-    expect(listed.bucket_only.map((b) => (b as typeof b & { id?: unknown }).id)).toEqual([ident.opened]);
+    expect(listed.bucket_only.map((b) => b.id)).toEqual([ident.opened]);
     expect(listed.bucket_only[0]!.summary).toBe('History lost by restore, epoch 1 seq 2-2');
+    // #348: the response as sent (through JSON) is the shared restores-list shape.
+    expect(bastionRestoreListResponseSchema.safeParse(JSON.parse(JSON.stringify(listed))).error).toBeUndefined();
   });
 
   it('restore with restart and NO matching platform restore: unmatched, integrity_failed, only continue_unexplained', async () => {
@@ -253,7 +256,8 @@ describe.skipIf(!DATABASE_URL)('M4 restore detection (live database)', () => {
     await runToEnd(booted, s, c);
     expect(await maxSeq(s.org)).toBe(4);
     const listed = await evidence.listRestores(booted, viewer(s));
-    expect(listed.data[0]).toMatchObject({ label: 'Unexplained gap', appends_blocked: false });
+    expect(listed.data[0]).toMatchObject({ label: 'Unexplained gap', appends_blocked: false, lost_from_seq: 2, lost_to_seq: 2 });
+    expect(bastionRestoreListResponseSchema.safeParse(JSON.parse(JSON.stringify(listed))).error).toBeUndefined();
   });
 
   it('restore in place (no restart): the warm engine notices the platform restore on the next append batch', async () => {

@@ -4,6 +4,9 @@
 // transaction (RLS GUC bound).
 
 import type {
+  BastionBucketRestore,
+  BastionRestoreListResponse,
+  BastionRestoreRow,
   BastionEvaluationListQuery,
   BastionEvidenceListQuery,
   BastionRestoreAcknowledge,
@@ -21,7 +24,7 @@ import { enqueueEvaluationRun } from '../lib/queue.js';
 import { type EngineDeps, orgTx, sqlstateOf, type Tx } from '../engine/context.js';
 import { appendLedger, lockLedger } from '../engine/ledger.js';
 import { enqueueBastionEvent } from '../engine/outbox.js';
-import { bucketRestoreRecords, refreshSeals, highestSeal, writeRestoreObject } from '../engine/restore.js';
+import { bucketRestoreRecords, refreshSeals, highestSeal, type RestoreRecord, writeRestoreObject } from '../engine/restore.js';
 import { probeDefinition } from '../probes/definitions.js';
 import type { BastionProbeResult } from '@bigbluebam/shared';
 import { auditRaw } from '../lib/audit-raw.js';
@@ -403,7 +406,11 @@ export async function listSeals(deps: EngineDeps, viewer: Viewer, q: BastionSeal
  * lost range recorded in the bucket that the database no longer holds (they survive a DB
  * rewrite). `bucket_only` is computed against ALL database ids and returned on the first page.
  */
-export async function listRestores(deps: EngineDeps, viewer: Viewer, q: BastionRestoreListQuery = { limit: 50 }) {
+export async function listRestores(
+  deps: EngineDeps,
+  viewer: Viewer,
+  q: BastionRestoreListQuery = { limit: 50 },
+): Promise<BastionRestoreListResponse> {
   const after = q.cursor ? decodeIdCursor(q.cursor) : null;
   const { rows, allIds } = await orgTx(deps.sql, viewer.org_id, async (tx) => ({
     rows: await tx`
@@ -418,31 +425,50 @@ export async function listRestores(deps: EngineDeps, viewer: Viewer, q: BastionR
     allIds: after ? [] : await tx`SELECT id FROM bastion_ledger_restores WHERE organization_id = ${viewer.org_id}`,
   }));
   const page = pageOf(rows, q.limit, (r) => encodeIdCursor(r.id as string));
-  let bucket: Array<Record<string, unknown>> = [];
+  let bucket: RestoreRecord[] = [];
+  let bucketRejected = 0;
   let bucketAvailable = true;
   if (!after) {
     try {
-      bucket = await bucketRestoreRecords(deps, viewer.org_id);
+      ({ records: bucket, rejected: bucketRejected } = await bucketRestoreRecords(deps, viewer.org_id));
     } catch {
       bucketAvailable = false;
     }
   }
   const known = new Set(allIds.map((r) => r.id as string));
-  const label = (status: unknown, resolution: unknown) =>
+  const label = (status: unknown, resolution: unknown): BastionRestoreRow['label'] =>
     status === 'acknowledged' || resolution === 'restore_acknowledged' ? 'History lost by restore' : 'Unexplained gap';
+  // bigint columns arrive from Postgres as strings; the response carries them as numbers (#348).
+  const int = (v: unknown) => (v === null || v === undefined ? null : Number(v));
   return {
     has_more: page.has_more,
     next_cursor: page.next_cursor,
     data: page.data.map((r) => ({
-      ...r,
+      ...(r as unknown as BastionRestoreRow),
+      db_head_seq: int(r.db_head_seq),
+      bucket_epoch: int(r.bucket_epoch),
+      bucket_head_seq: int(r.bucket_head_seq),
+      lost_from_seq: int(r.lost_from_seq),
+      lost_to_seq: int(r.lost_to_seq),
+      provisional_epoch: Number(r.provisional_epoch),
       label: label(r.status, r.resolution),
       appends_blocked: r.resolution === null,
       summary: `${label(r.status, r.resolution)}, epoch ${r.bucket_epoch} seq ${r.lost_from_seq}-${r.lost_to_seq}`,
     })),
     bucket_only: bucket
-      .filter((b) => typeof b.id === 'string' && !known.has(b.id as string))
-      .map((b) => ({ ...b, label: label(b.status, b.resolution), summary: `${label(b.status, b.resolution)}, epoch ${b.bucket_epoch} seq ${b.lost_from_seq}-${b.lost_to_seq}` })),
+      .filter((b) => !known.has(b.id))
+      .map(
+        (b): BastionBucketRestore => ({
+          ...b,
+          status: b.status as BastionBucketRestore['status'],
+          resolution: b.resolution as BastionBucketRestore['resolution'],
+          label: label(b.status, b.resolution),
+          summary: `${label(b.status, b.resolution)}, epoch ${b.bucket_epoch} seq ${b.lost_from_seq}-${b.lost_to_seq}`,
+        }),
+      ),
     bucket_available: bucketAvailable,
+    // #208: restore record objects that did not verify against a published seal key (ignored).
+    bucket_rejected: bucketRejected,
   };
 }
 
