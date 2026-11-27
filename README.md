@@ -688,8 +688,6 @@ Burn reads a signed proposal or SOW into a priced ledger of what was sold, then 
 
 Bursar reads a request into a scope tree, then measures every vendor offer against it and tells you, in plain terms, what each offer leaves out. Reach for Bursar when you take in competing quotes and need to know which one quietly omits the thing you actually require.
 
-undefined routes, undefined schemas
-
 <img src="docs/apps/bursar/screenshots/light/01-vendor-portfolio.png" width="400" alt="Bursar - Vendor-side procurement and absence detection">
 
 [Help](docs/apps/bursar/help.md) | [Guide](docs/apps/bursar/guide.md)
