@@ -19,6 +19,7 @@ import { AvatarPicker } from '@/components/settings/avatar-picker';
 import { usePriorities, priorityInlineStyle } from '@/hooks/use-priorities';
 import { timezoneSelectOptions } from '@/lib/timezones';
 import { launchpadRows, type LaunchpadRow } from '@/lib/launchpad-catalog';
+import { nonBamToolPatterns } from '@/lib/agent-tool-patterns';
 import { SettingsFtueTour, type SettingsTab } from '@/components/ftue/settings-tour';
 
 /** Notification preference keys shown in the Notifications tab. */
@@ -1393,6 +1394,9 @@ export function SettingsPage({ onNavigate, ftue = false, onFtueComplete }: Setti
                             })
                           )}
                         </div>
+                        <p className="mt-1 text-xs text-zinc-500">
+                          An agent restricted to projects can only use Bam tools for those projects. It cannot use any other app (Banter, Bond, Helpdesk and the rest) or org-wide Bam features. Leave this empty if the agent needs other apps.
+                        </p>
                       </div>
                       <div>
                         <label className="text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1 block">
@@ -1408,6 +1412,12 @@ export function SettingsPage({ onNavigate, ftue = false, onFtueComplete }: Setti
                         <p className="mt-1 text-xs text-zinc-500">
                           Patterns use glob-prefix syntax (<code className="text-xs">banter_*</code> matches every Banter tool). Runtime role/scope checks still apply — this is an extra filter, not an escalation.
                         </p>
+                        {newAgentProjectIds.length > 0 && nonBamToolPatterns(newAgentAllowedTools).length > 0 && (
+                          <p role="alert" className="mt-1 text-xs text-amber-700 dark:text-amber-400">
+                            This agent is restricted to projects, so these patterns will never work:{' '}
+                            {nonBamToolPatterns(newAgentAllowedTools).join(', ')}. Remove the project restriction, or remove these patterns.
+                          </p>
+                        )}
                       </div>
                       <div className="flex items-center gap-2 pt-1">
                         <Button

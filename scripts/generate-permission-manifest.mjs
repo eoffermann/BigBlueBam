@@ -646,9 +646,10 @@ const EXCLUDED_PATH_PREFIXES = [
 // triage in docs/wave-d-audit/phase1-triage.json found that mount-prefix
 // resolution would be needed to catch these via path prefixes alone (the
 // internal-helpdesk routes declare 'POST /tasks' and rely on the server.ts
-// '/internal/helpdesk' mount prefix). File-level exclusion is the simple
-// fix; teaching the generator to compose mount prefixes is the long-term
-// fix tracked as a follow-up.
+// '/internal/helpdesk' mount prefix). Since #378 the generator also composes
+// server.ts mount prefixes (readMountPrefixes), so a new route file mounted
+// under /internal is excluded by rule and needs no entry here; the internal-*
+// entries below are kept as belt-and-suspenders.
 const EXCLUDED_FILE_BASENAMES = new Set([
   'auth.routes.ts',
   'oauth.routes.ts',
@@ -707,12 +708,48 @@ function isFileExcluded(fileBasename) {
   return EXCLUDED_FILE_BASENAMES.has(fileBasename);
 }
 
+/**
+ * Mount prefixes from an app's src/server.ts (and src/app.ts): for each
+ * `import X from './routes/<file>.js'` registered as
+ * `fastify.register(X, { prefix: '<p>' })`, map '<file>.ts' -> ['<p>', ...].
+ * A route file mounted under `/internal` is service-to-service by the
+ * server's own declaration, so its routes are excluded by rule (#378) even
+ * when the file declares a bare path such as `POST /projects/ensure`.
+ */
+export function readMountPrefixes(appSrcDir) {
+  const out = new Map();
+  for (const f of ['server.ts', 'app.ts']) {
+    const p = join(appSrcDir, f);
+    if (!existsSync(p)) continue;
+    const text = readFileSync(p, 'utf8');
+    const idToFile = new Map();
+    const importRe = /import\s+(\w+)(?:\s*,\s*\{[^}]*\})?\s+from\s+['"]\.\/routes\/([^'"]+?)\.js['"]/g;
+    let m;
+    while ((m = importRe.exec(text)) !== null) idToFile.set(m[1], `${basename(m[2])}.ts`);
+    const regRe = /\.register\(\s*(\w+)\s*,\s*\{[^}]*?\bprefix:\s*['"`]([^'"`]+)['"`]/g;
+    while ((m = regRe.exec(text)) !== null) {
+      const file = idToFile.get(m[1]);
+      if (!file) continue;
+      if (!out.has(file)) out.set(file, []);
+      out.get(file).push(m[2].replace(/\/$/, ''));
+    }
+  }
+  return out;
+}
+
+/** True when every mount of the file puts its routes under an excluded prefix. */
+function isMountExcluded(mounts, routePath) {
+  if (!mounts || mounts.length === 0) return false;
+  return mounts.every((mp) => isPathExcluded(`${mp}${routePath.startsWith('/') ? '' : '/'}${routePath}`));
+}
+
 function extractRestRoutes() {
   const routes = [];
   const apps = Object.keys(APP_TO_PREFIX);
   for (const app of apps) {
     const dir = join(APPS_DIR, app, 'src/routes');
     if (!existsSync(dir)) continue;
+    const mountPrefixes = readMountPrefixes(join(APPS_DIR, app, 'src'));
     const stack = [dir];
     while (stack.length > 0) {
       const cur = stack.pop();
@@ -744,6 +781,7 @@ function extractRestRoutes() {
           const method = mm[1];
           const routePath = pathMatch[1];
           if (isPathExcluded(routePath)) continue;
+          if (isMountExcluded(mountPrefixes.get(entry), routePath)) continue;
           const prefix = APP_TO_PREFIX[app];
           const hasIdParam = routePath.includes('/:');
           const verb = methodVerb(method, routePath, hasIdParam);

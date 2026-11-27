@@ -86,7 +86,7 @@ export function BursarSection() {
       {/* Hero screenshot: the leveling matrix, the punchline of the app. */}
       <AnimatedReveal delay={0.1} withScale>
         <FloatingFrame
-          src="/screenshots/bursar/light/leveling-matrix.png"
+          src="/screenshots/bursar/light/04-leveling-matrix.png"
           alt="The Bursar leveling matrix: competing offers as columns, scope nodes as rows, with covered / partial / excluded / absent verdicts and a gap-adjusted comparable total per offer"
         />
         <p className="mt-3 text-center text-sm text-zinc-500">
@@ -99,7 +99,7 @@ export function BursarSection() {
       <AnimatedReveal delay={0.13} withScale>
         <div className="mt-8 mx-auto max-w-3xl">
           <FloatingFrame
-            src="/screenshots/bursar/light/exclusion-diff.png"
+            src="/screenshots/bursar/light/05-exclusion-diff.png"
             alt="The Bursar exclusion diff: every mandatory scope node shown exactly once per offer, with a blocking banner when any node is unverified and a blanket-claim callout"
           />
           <p className="mt-3 text-center text-sm text-zinc-500">
@@ -113,7 +113,7 @@ export function BursarSection() {
       <AnimatedReveal delay={0.15} withScale>
         <div className="mt-8 mx-auto max-w-3xl">
           <FloatingFrame
-            src="/screenshots/bursar/light/vendor-portfolio.png"
+            src="/screenshots/bursar/light/01-vendor-portfolio.png"
             alt="The Bursar vendor portfolio, with award status as a first-class column and vendors that have spend but no award on file called out"
           />
           <p className="mt-3 text-center text-sm text-zinc-500">
@@ -127,7 +127,7 @@ export function BursarSection() {
       <AnimatedReveal delay={0.18} withScale>
         <div className="mt-8 mx-auto max-w-3xl">
           <FloatingFrame
-            src="/screenshots/bursar/dark/leveling-matrix.png"
+            src="/screenshots/bursar/dark/04-leveling-matrix.png"
             alt="The Bursar leveling matrix in dark mode, on the same shared shell as every other app in the suite"
           />
           <p className="mt-3 text-center text-sm text-zinc-500">

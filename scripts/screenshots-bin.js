@@ -3,9 +3,7 @@ const fs = require('fs');
 const path = require('path');
 
 const IMAGES_DIR = path.resolve(__dirname, '..', 'images');
-const SITE_DIR = path.resolve(__dirname, '..', 'site', 'public', 'screenshots');
 fs.mkdirSync(IMAGES_DIR, { recursive: true });
-fs.mkdirSync(SITE_DIR, { recursive: true });
 
 // Screenshots come from the GILLIGAN project ONLY (see CLAUDE.md). Login is the
 // gilligan cast; the assets are the themed island records seeded by
@@ -85,9 +83,9 @@ async function safe(label, fn) {
 
   await browser.close();
 
-  for (const f of captured) {
-    fs.copyFileSync(path.join(IMAGES_DIR, f), path.join(SITE_DIR, f));
-  }
+  // No flat copy into site/public: the site and manual read Bin screenshots from
+  // site/public/screenshots/bin/<theme>/, synced from docs/apps/bin/screenshots
+  // by scripts/docs/sync-site-screenshots.mjs (#380).
 
   console.log('\n=== SUMMARY ===');
   console.log(`Captured: ${captured.length}`);
