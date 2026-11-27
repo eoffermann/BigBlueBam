@@ -157,4 +157,45 @@ describe('agent routes accept a Bam API key as Bearer (#339)', () => {
     expect(res.statusCode, res.body).toBe(200);
     expect(findSimilarTickets).toHaveBeenCalledWith(expect.objectContaining({ org_id: KEY_ORG }));
   });
+
+  // #351: the org pin is @bigbluebam/auth-core's. A SuperUser key and a NULL-org
+  // key are not pinned, so they act in the owner's home org (this surface has no
+  // org selector), and a SuperUser passes the scope gate.
+  const HOME_ORG = '66666666-6666-4666-8666-666666666666';
+  const similar = (method: 'GET' = 'GET') =>
+    app.inject({ method, url: '/helpdesk/agents/tickets/44444444-4444-4444-8444-444444444444/similar', headers: bearer });
+
+  it('a SuperUser key is not pinned to its key org: it acts in the home org', async () => {
+    verifyBamApiKey.mockResolvedValueOnce({ ...caller('read'), isSuperuser: true });
+    dbMock.execute.mockResolvedValueOnce([{ org_id: HOME_ORG }]).mockResolvedValueOnce([{ id: USER_ID }]);
+    findSimilarTickets.mockResolvedValueOnce({ data: [] });
+    const res = await similar();
+    expect(res.statusCode, res.body).toBe(200);
+    expect(findSimilarTickets).toHaveBeenCalledWith(expect.objectContaining({ org_id: HOME_ORG }));
+  });
+
+  it('a NULL-org key acts in the home org', async () => {
+    verifyBamApiKey.mockResolvedValueOnce(caller('read', null));
+    dbMock.execute.mockResolvedValueOnce([{ org_id: HOME_ORG }]).mockResolvedValueOnce([{ id: USER_ID }]);
+    findSimilarTickets.mockResolvedValueOnce({ data: [] });
+    const res = await similar();
+    expect(res.statusCode, res.body).toBe(200);
+    expect(findSimilarTickets).toHaveBeenCalledWith(expect.objectContaining({ org_id: HOME_ORG }));
+  });
+
+  it("a SuperUser's 'read' key may write, as requireScope passes SuperUsers", async () => {
+    verifyBamApiKey.mockResolvedValueOnce({ ...caller('read'), isSuperuser: true });
+    dbMock.execute.mockResolvedValueOnce([{ org_id: HOME_ORG }]).mockResolvedValueOnce([]);
+    const res = await app.inject({
+      method: 'PATCH',
+      url: '/helpdesk/agents/tickets/44444444-4444-4444-8444-444444444444',
+      headers: bearer,
+      payload: { status: 'resolved' },
+    });
+    // Past the scope gate: it reaches the org/membership step (mocked to refuse),
+    // not the scope refusal a non-SuperUser 'read' key gets.
+    expect(res.statusCode).toBe(403);
+    expect(res.json().error.message).not.toMatch(/scope/);
+    expect(dbMock.execute).toHaveBeenCalled();
+  });
 });

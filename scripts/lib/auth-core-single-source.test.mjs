@@ -34,12 +34,34 @@ const RULES = [
     what: 'a private org-admin role set (use ORG_ADMIN_ROLES)',
     re: /new Set\(\s*\[\s*'(?:admin|owner)'\s*,\s*'(?:admin|owner)'\s*\]\s*\)/,
   },
+  // #351: helpdesk-api's two Bam-key guards re-derived requireScope from these primitives (a
+  // method-based scope check, an inline role-cap exemption) and drifted from it in three ways,
+  // passing every rule above. A scope gate is scopeDecision / orgAdminSurfaceDecision /
+  // requireScope from auth-core; calling the primitives directly is how a copy starts.
+  {
+    what: 'a hand-rolled scope gate (use requireScope / scopeDecision / scopeForMethod from @bigbluebam/auth-core)',
+    re: /\bscopeAtLeast\(\s*[\w.!?]/,
+  },
+  {
+    what: 'a hand-rolled #336 role cap (use requireScope / scopeDecision / orgAdminSurfaceDecision)',
+    re: /\bkeyRoleCapApplies\(\s*[\w.!?]/,
+  },
+  {
+    what: 'a hand-rolled P2-8 org pin (use isApiKeyOrgPinned / keyActingOrgId / applyKeyOrgPin)',
+    re: /\b(?:keyOrgId|apiKey\.org_id)\s*\?\?\s*\(?\s*await\b|!\s*\w+\.isSuperuser\s*&&\s*\w+\.keyOrgId\b/,
+  },
 ];
+
+const SCOPE_GATE_RULE = RULES.findIndex((r) => r.what.startsWith('a hand-rolled scope gate'));
 
 // Files allowed to carry one of the literals for a reason unrelated to key verification.
 const EXEMPT = new Map([
   // The scope list itself is declared once here (client and server share it); auth-core re-exports it.
   [`packages${sep}shared${sep}src${sep}constants${sep}index.ts`, new Set([3])],
+  // Minting ceilings, not route gates: a caller may only mint a key (or service-account key)
+  // whose scope does not exceed its own.
+  [`apps${sep}api${sep}src${sep}routes${sep}api-key.routes.ts`, new Set([SCOPE_GATE_RULE])],
+  [`apps${sep}api${sep}src${sep}routes${sep}service-account.routes.ts`, new Set([SCOPE_GATE_RULE])],
 ]);
 
 function* walk(dir) {

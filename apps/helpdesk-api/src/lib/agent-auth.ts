@@ -2,12 +2,13 @@ import type { FastifyRequest, FastifyReply } from 'fastify';
 import { eq, sql } from 'drizzle-orm';
 import argon2 from 'argon2';
 import { carriesInternalToken, createInternalSecretGuard } from '@bigbluebam/service-health';
-import { scopeAtLeast } from '@bigbluebam/auth-core';
+import { keyActingOrgId, scopeDecision, scopeForMethod } from '@bigbluebam/auth-core';
 import { env } from '../env.js';
 import { db } from '../db/index.js';
 import { helpdeskAgentApiKeys } from '../db/schema/helpdesk-agent-api-keys.js';
 import { users } from '../db/schema/bbb-refs.js';
-import { bamBearerToken, verifyBamApiKey } from './bam-api-key.js';
+import { bamBearerToken, scopedUser, verifyBamApiKey } from './bam-api-key.js';
+import { homeOrg, isActiveMemberOrSuperuser, rowsOf } from './caller-lookups.js';
 
 /**
  * Agent-surface authentication for /helpdesk/agents/* (agent.routes.ts and
@@ -48,12 +49,6 @@ declare module 'fastify' {
 }
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-function rowsOf(raw: unknown): Array<Record<string, unknown>> {
-  return (Array.isArray(raw) ? raw : ((raw as { rows?: unknown[] })?.rows ?? [])) as Array<
-    Record<string, unknown>
-  >;
-}
 
 function deny(request: FastifyRequest, reply: FastifyReply, status: number, code: string, message: string) {
   return reply.status(status).send({ error: { code, message, details: [], request_id: request.id } });
@@ -173,30 +168,6 @@ async function tryInternalProxyAuth(request: FastifyRequest, reply: FastifyReply
   return true;
 }
 
-/** The user exists, is active, and belongs to orgId (or is a SuperUser, who may act in any org). */
-async function isActiveMemberOrSuperuser(userId: string, orgId: string): Promise<boolean> {
-  const result = await db.execute(
-    sql`SELECT u.id
-        FROM users u
-        WHERE u.id = ${userId}
-          AND u.is_active = true
-          AND (
-            u.is_superuser = true
-            OR EXISTS (
-              SELECT 1 FROM organization_memberships m
-              WHERE m.user_id = u.id AND m.org_id = ${orgId}
-            )
-          )
-        LIMIT 1`,
-  );
-  return rowsOf(result).length > 0;
-}
-
-async function homeOrg(userId: string): Promise<string | null> {
-  const row = rowsOf(await db.execute(sql`SELECT org_id FROM users WHERE id = ${userId} LIMIT 1`))[0];
-  return (row?.org_id as string | null | undefined) ?? null;
-}
-
 /**
  * Bam API key as Bearer (#339). Returns true when handled (authorized, or a
  * reply was sent); false when the request carries no bbam_ Bearer token.
@@ -211,15 +182,18 @@ async function tryBamBearerAuth(request: FastifyRequest, reply: FastifyReply): P
     return true;
   }
 
-  const isRead = request.method === 'GET' || request.method === 'HEAD';
-  if (!isRead && !scopeAtLeast(caller.scope, 'read_write')) {
-    deny(request, reply, 403, 'FORBIDDEN', "API key requires at least 'read_write' scope");
+  // The scope gate and the org pin are @bigbluebam/auth-core's (#351): a 'read'
+  // key may only read, a SuperUser passes, and a pinned key acts in its own org.
+  // A SuperUser or NULL-org key is not pinned and acts in its owner's home org
+  // (this surface has no org selector), as in apps/api without X-Org-Id.
+  const denial = scopeDecision(scopedUser(caller), scopeForMethod(request.method, 'read', 'read_write'));
+  if (denial) {
+    deny(request, reply, denial.status, denial.code, denial.message);
     return true;
   }
 
-  // API keys are pinned to one org (P2-8 in apps/api); a legacy key with no
-  // org acts in its owner's home org.
-  const orgId = caller.keyOrgId ?? (await homeOrg(caller.userId));
+  const orgId =
+    keyActingOrgId(caller.keyOrgId, caller.isSuperuser, null) ?? (await homeOrg(caller.userId));
   if (!orgId || !(await isActiveMemberOrSuperuser(caller.userId, orgId))) {
     deny(request, reply, 403, 'FORBIDDEN', 'API key owner is not a member of the key organization');
     return true;
