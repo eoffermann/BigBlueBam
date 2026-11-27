@@ -15,7 +15,7 @@
 //   - reads never reach outside the room's controls, period and restricted allowlist, whatever
 //     ids are supplied; evidence explanations are counts-only (no cited item ever leaves).
 
-import { createHash, createHmac } from 'node:crypto';
+import { createHash, createHmac, randomUUID } from 'node:crypto';
 import { Readable } from 'node:stream';
 import argon2 from 'argon2';
 import { withStorageTimeout } from '@bigbluebam/storage';
@@ -139,8 +139,10 @@ const PASSCODE_VERIFIED_TTL_S = 15 * 60;
  * the room's 5 tries in a single guarded UPDATE before argon2 runs, so however many requests
  * arrive at once, at most 5 guesses can ever be in flight or spent per lockout: a burst cannot
  * test more codes than the counter allows, and a right answer that finishes after the room locked
- * is refused. A right answer gives its try back; a wrong one keeps it, and the attempt that leaves
- * the counter at 5 locks the room and tells its creator.
+ * is refused. A right answer gives its try back; a wrong one turns it into a miss, and the miss
+ * that brings the count to 5 locks the room and tells its creator. A reservation that is never
+ * settled (failed write, crash) is dropped in `finally` or expires on its own, and never counts
+ * as a miss (#327).
  *
  * A passcode verified once is remembered for 15 minutes under a keyed hash of (room, passcode),
  * so the auditor's later page loads skip argon2 and never compete for tries. A hit proves the
@@ -151,65 +153,112 @@ async function checkPasscode(deps: RoomDeps, orgId: string, roomId: string, room
   const okKey = verifiedKey(deps, roomId, hash, passcode);
   if ((await safeCount(() => deps.counters.get(okKey))) > 0) return;
   const reserved = await reservePasscodeTry(deps.engine, orgId, roomId);
-  if (reserved === 'gone') throw new NotFoundError(ROOM_GONE);
-  if (reserved === 'busy') {
+  if (reserved.status !== 'reserved') {
+    if (reserved.status === 'gone') throw new NotFoundError(ROOM_GONE);
     throw new RateLimitedError('Too many passcode tries are being checked at once. Wait a moment and try again.', 'ROOM_PASSCODE_BUSY', 5);
   }
-  let ok = false;
+  const tryId = reserved.id;
+  // Set once the reservation has been turned into a release or a miss. Until then a throw (a failed
+  // write, a crash in the response path) drops the reservation in `finally`; if even that fails,
+  // or the process dies, the reservation expires on its own after PASSCODE_TRY_LEASE_MS (#327).
+  let settled = false;
   try {
-    ok = /^\d{6}$/.test(passcode) && (await argon2.verify(hash, passcode));
-  } catch {
-    ok = false;
+    let ok = false;
+    try {
+      ok = /^\d{6}$/.test(passcode) && (await argon2.verify(hash, passcode));
+    } catch {
+      ok = false;
+    }
+    if (ok) {
+      // Give the try back, but only while the room is still open: a lock that landed during the
+      // verify (other guesses used up the tries) wins.
+      const released = await releasePasscodeTry(deps.engine, orgId, roomId, tryId);
+      settled = true;
+      if (!released) throw new NotFoundError(ROOM_GONE);
+      await deps.counters.set(okKey, PASSCODE_VERIFIED_TTL_S).catch(() => undefined);
+      return;
+    }
+    const left = await recordPasscodeMiss(deps.engine, orgId, roomId, tryId);
+    settled = true;
+    if (left <= 0) throw new NotFoundError(ROOM_GONE);
+    throw new RoomPasscodeRequired(true, left);
+  } finally {
+    if (!settled) {
+      await dropPasscodeTry(deps.engine, orgId, roomId, tryId).catch((err: unknown) =>
+        deps.engine.log.warn({ organization_id: orgId, room_id: roomId, err: (err as Error).message }, 'bastion-room: could not drop a passcode try; it expires on its own'),
+      );
+    }
   }
-  if (ok) {
-    // Give the try back, but only while the room is still open: a lock that landed during the
-    // verify (other guesses used up the tries) wins.
-    if (!(await releasePasscodeTry(deps.engine, orgId, roomId))) throw new NotFoundError(ROOM_GONE);
-    await deps.counters.set(okKey, PASSCODE_VERIFIED_TTL_S).catch(() => undefined);
-    return;
-  }
-  const left = await recordPasscodeMiss(deps.engine, orgId, roomId);
-  if (left <= 0) throw new NotFoundError(ROOM_GONE);
-  throw new RoomPasscodeRequired(true, left);
 }
 
 /**
- * Take one of the room's tries before verifying. `gone` = locked, revoked or missing (the usual
- * 404); `busy` = open, but every remaining try is already being checked by another request.
+ * How long a reserved passcode try counts as in flight (#327). argon2 takes well under a second,
+ * so a reservation this old belongs to a request that died; it no longer holds a slot.
  */
-export async function reservePasscodeTry(engine: EngineDeps, orgId: string, roomId: string): Promise<'reserved' | 'gone' | 'busy'> {
+export const PASSCODE_TRY_LEASE_MS = 60_000;
+
+/** Live (unexpired) reservations in `passcode_inflight`, as a SQL count. */
+const liveTries = (tx: Tx, nowMs: number) =>
+  tx`(SELECT count(*) FROM jsonb_each_text(passcode_inflight) AS t(k, v) WHERE t.v::bigint > ${nowMs})`;
+/** `passcode_inflight` with expired reservations pruned. */
+const prunedTries = (tx: Tx, nowMs: number) =>
+  tx`(SELECT coalesce(jsonb_object_agg(t.k, t.v::bigint), '{}'::jsonb) FROM jsonb_each_text(passcode_inflight) AS t(k, v) WHERE t.v::bigint > ${nowMs})`;
+
+export type PasscodeReservation = { status: 'reserved'; id: string } | { status: 'gone' | 'busy' };
+
+/**
+ * Take one of the room's tries before verifying: a reservation in `passcode_inflight` that expires
+ * after PASSCODE_TRY_LEASE_MS, granted only while misses plus live reservations stay under 5 (#327).
+ * `gone` = locked, revoked or missing (the usual 404); `busy` = open, but every remaining try is
+ * already being checked by another request.
+ */
+export async function reservePasscodeTry(engine: EngineDeps, orgId: string, roomId: string): Promise<PasscodeReservation> {
+  const id = randomUUID();
+  const nowMs = engine.now().getTime();
   return orgTx(engine.sql, orgId, async (tx) => {
     const [r] = await tx`
-      UPDATE bastion_auditor_rooms SET passcode_failures = passcode_failures + 1
+      UPDATE bastion_auditor_rooms
+         SET passcode_inflight = ${prunedTries(tx, nowMs)} || jsonb_build_object(${id}::text, ${nowMs + PASSCODE_TRY_LEASE_MS}::bigint)
        WHERE organization_id = ${orgId} AND id = ${roomId} AND locked_at IS NULL AND revoked_at IS NULL
-         AND passcode_failures < ${BASTION_ROOM_PASSCODE_MAX_FAILURES}
-      RETURNING passcode_failures`;
-    if (r) return 'reserved' as const;
+         AND passcode_failures + ${liveTries(tx, nowMs)} < ${BASTION_ROOM_PASSCODE_MAX_FAILURES}
+      RETURNING id`;
+    if (r) return { status: 'reserved' as const, id };
     const [cur] = await tx`SELECT locked_at, revoked_at FROM bastion_auditor_rooms WHERE organization_id = ${orgId} AND id = ${roomId}`;
-    if (!cur || cur.locked_at || cur.revoked_at) return 'gone' as const;
-    // Every try is reserved but none has locked the room yet: the in-flight guesses decide.
-    return 'busy' as const;
+    if (!cur || cur.locked_at || cur.revoked_at) return { status: 'gone' as const };
+    // Every try is spent or in flight but none has locked the room yet: the in-flight guesses decide.
+    return { status: 'busy' as const };
   });
 }
 
 /** A right answer returns its reserved try. False when the room locked in the meantime. */
-async function releasePasscodeTry(engine: EngineDeps, orgId: string, roomId: string): Promise<boolean> {
+async function releasePasscodeTry(engine: EngineDeps, orgId: string, roomId: string, tryId: string): Promise<boolean> {
   return orgTx(engine.sql, orgId, async (tx) => {
     const rows = await tx`
-      UPDATE bastion_auditor_rooms SET passcode_failures = greatest(passcode_failures - 1, 0)
+      UPDATE bastion_auditor_rooms SET passcode_inflight = passcode_inflight - ${tryId}::text
        WHERE organization_id = ${orgId} AND id = ${roomId} AND locked_at IS NULL AND revoked_at IS NULL
       RETURNING id`;
     return rows.length > 0;
   });
 }
 
+/** Best effort on a failed request: the reservation stops holding a slot (it is not a miss). */
+async function dropPasscodeTry(engine: EngineDeps, orgId: string, roomId: string, tryId: string): Promise<void> {
+  await orgTx(engine.sql, orgId, async (tx) => {
+    await tx`UPDATE bastion_auditor_rooms SET passcode_inflight = passcode_inflight - ${tryId}::text
+              WHERE organization_id = ${orgId} AND id = ${roomId}`;
+  });
+}
+
 /**
- * One wrong passcode, whose try was already reserved (and so already counted): when the counter
- * stands at 5 the room locks and its creator is told (spec 5.2). Returns tries left.
+ * One wrong passcode: its reservation becomes a miss. When the misses reach 5 the room locks and
+ * its creator is told (spec 5.2). Returns tries left.
  */
-export async function recordPasscodeMiss(engine: EngineDeps, orgId: string, roomId: string): Promise<number> {
+export async function recordPasscodeMiss(engine: EngineDeps, orgId: string, roomId: string, tryId: string): Promise<number> {
   return orgTx(engine.sql, orgId, async (tx) => {
     const now = engine.now();
+    await tx`
+      UPDATE bastion_auditor_rooms SET passcode_failures = passcode_failures + 1, passcode_inflight = passcode_inflight - ${tryId}::text
+       WHERE organization_id = ${orgId} AND id = ${roomId} AND locked_at IS NULL`;
     const [locked] = await tx`
       UPDATE bastion_auditor_rooms SET locked_at = ${now}
        WHERE organization_id = ${orgId} AND id = ${roomId} AND locked_at IS NULL

@@ -229,7 +229,7 @@ export async function unlockRoom(deps: SharingDeps, viewer: Viewer, id: string) 
     const r = await loadRoom(tx, viewer.org_id, id, true);
     if (r.revoked_at) throw new ConflictError('This room was revoked. Create a new one instead.', 'ROOM_REVOKED');
     if (!r.locked_at) throw new ConflictError('This room is not locked.', 'ROOM_NOT_LOCKED');
-    await tx`UPDATE bastion_auditor_rooms SET locked_at = NULL, passcode_failures = 0, unlocked_by = ${viewer.id}, unlocked_at = ${now}
+    await tx`UPDATE bastion_auditor_rooms SET locked_at = NULL, passcode_failures = 0, passcode_inflight = '{}'::jsonb, unlocked_by = ${viewer.id}, unlocked_at = ${now}
               WHERE organization_id = ${viewer.org_id} AND id = ${id}`;
     await auditRaw(tx, viewer, 'auditor_room.unlock', { type: 'auditor_room', id }, { locked_at: r.locked_at });
     return loadRoom(tx, viewer.org_id, id);

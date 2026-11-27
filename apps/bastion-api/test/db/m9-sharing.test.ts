@@ -8,7 +8,7 @@ import { verifyCommitments } from '../../src/engine/commitments.js';
 import { mirrorObjects, objectSweep, restoreObjectsFromBackup, SWEEP_INTENT_AGE_MS } from '../../src/engine/objects.js';
 import { storeBuffer } from '../../src/engine/evidence-store.js';
 import { sha256Hex } from '../../src/lib/ledger-canonical.js';
-import { DATABASE_URL, fakeBucket, type FakeBucket, makeDeps, seedOrg, type SeededOrg, wipeOrg } from './engine-harness.js';
+import { clock, DATABASE_URL, fakeBucket, type FakeBucket, makeDeps, seedOrg, type SeededOrg, wipeOrg } from './engine-harness.js';
 
 /**
  * M9 gates against a real migrated database and the real engine and service code (spec 5.2, 7.2,
@@ -274,6 +274,41 @@ describe.skipIf(!DATABASE_URL)('M9 sharing, packets, sweep and mirror (live data
     // Sharing restricted evidence needs read_restricted.
     await expect(
       sharing.createRoom(d.sharing, viewerOf(s), { label: 'x', framework_id: s.framework, period_start: '2026-01-01', period_end: '2027-12-31', expires_in_days: 5, restricted_evidence_ids: [shared], confirm: true }, false),
+  it('passcode: a try reserved by a request that died is not a miss and expires on its own (#327)', async () => {
+    const s = await setUp('leak');
+    const c = clock();
+    const engine = makeDeps(sql, { clock: c });
+    const d = deps(engine);
+    const created = await sharing.createRoom(d.sharing, viewerOf(s), {
+      label: 'Leak',
+      framework_id: s.framework,
+      period_start: '2026-01-01',
+      period_end: '2026-12-31',
+      expires_in_days: 10,
+      passcode: '161803',
+      restricted_evidence_ids: [],
+      confirm: true,
+    }, false);
+    const token = created.data.token;
+    const roomId = created.data.id as string;
+    // Four requests reserve a try and die before giving it back (crash during argon2, or a failed
+    // release write): nothing ever settles them.
+    for (let i = 0; i < 4; i++) expect((await room.reservePasscodeTry(engine, s.org, roomId)).status).toBe('reserved');
+    // One real typo is one miss, not the fifth: the room stays open and says 4 tries are left.
+    await expect(room.publicRoomOverview(d.room, ctx(token, { passcode: '000000' }))).rejects.toMatchObject({ wrong: true, attemptsLeft: 4 });
+    let row = (await sql`SELECT passcode_failures, locked_at FROM bastion_auditor_rooms WHERE id = ${roomId}`)[0]!;
+    expect(row.locked_at).toBeNull();
+    expect(Number(row.passcode_failures)).toBe(1);
+
+    // Leaked tries fill every slot: the room is busy, but only until they expire.
+    expect((await room.reservePasscodeTry(engine, s.org, roomId)).status).toBe('busy');
+    c.offsetMs += room.PASSCODE_TRY_LEASE_MS + 1_000;
+    await expect(room.publicRoomOverview(d.room, ctx(token, { passcode: '161803' }))).resolves.toBeDefined();
+    row = (await sql`SELECT passcode_failures, passcode_inflight, locked_at FROM bastion_auditor_rooms WHERE id = ${roomId}`)[0]!;
+    expect(row.locked_at).toBeNull();
+    expect(row.passcode_inflight).toEqual({});
+  });
+
     ).rejects.toThrow(/restricted evidence/);
     const created = await sharing.createRoom(d.sharing, viewerOf(s), {
       label: 'Allowlist',

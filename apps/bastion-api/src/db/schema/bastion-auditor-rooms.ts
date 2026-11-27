@@ -1,7 +1,7 @@
 // Mirrors bastion_auditor_rooms as created by the Bastion migrations (0274-0280; spec 4.1). Columns only:
 // CHECK constraints, partial/unique indexes, immutability triggers and the RLS policy live in
 // the migration, which is the single source of truth (CLAUDE.md). db:check diffs these columns.
-import { date, integer, pgTable, text, timestamp, uuid, varchar } from 'drizzle-orm/pg-core';
+import { date, integer, jsonb, pgTable, text, timestamp, uuid, varchar } from 'drizzle-orm/pg-core';
 import { bastionFrameworks } from './bastion-frameworks.js';
 import { organizations, users } from './bbb-refs.js';
 
@@ -16,6 +16,8 @@ export const bastionAuditorRooms = pgTable(
     token_hint: varchar('token_hint', { length: 16 }),
     passcode_hash: text('passcode_hash'),
     passcode_failures: integer('passcode_failures').default(0).notNull(),
+    // Reserved passcode tries in flight: reservation id -> expiry epoch ms (0315, #327).
+    passcode_inflight: jsonb('passcode_inflight').default({}).notNull(),
     locked_at: timestamp('locked_at', { withTimezone: true }),
     unlocked_by: uuid('unlocked_by').references(() => users.id, { onDelete: 'set null' }),
     unlocked_at: timestamp('unlocked_at', { withTimezone: true }),

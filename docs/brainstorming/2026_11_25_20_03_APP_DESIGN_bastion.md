@@ -874,7 +874,7 @@ All tables prefixed `bastion_`, org-scoped by `organization_id`, Drizzle schema 
 **Sharing**
 
 - **`bastion_auditor_rooms`**: `id`, `organization_id`, `framework_id`, `label`, `token_sha256`
-  (unique), `token_hint`, `passcode_hash` (argon2, nullable), `passcode_failures`, `locked_at`,
+  (unique), `token_hint`, `passcode_hash` (argon2, nullable), `passcode_failures` (misses), `passcode_inflight` (jsonb, reserved tries with expiry, #327), `locked_at`,
   `unlocked_by`, `unlocked_at`, `period_start`, `period_end`, `control_ids uuid[]`,
   `restricted_evidence_ids uuid[]` (frozen allowlist), `expires_at NOT NULL`, `revoked_at`,
   `created_by`, `last_accessed_at`, `access_count`, timestamps. CHECK `expires_at <= created_at +
@@ -1128,10 +1128,13 @@ In addition:
   at once.
 - A passcode lockout (5 misses) notifies the creator, and the creator can **Unlock** from the
   access-log view (row 87).
-- The 5 tries are reserved atomically before argon2 runs (one guarded `UPDATE ... SET
-  passcode_failures = passcode_failures + 1 ... AND passcode_failures < 5`); a right answer gives
-  its try back only while the room is still open, a wrong one keeps it, and the miss that leaves
-  the counter at 5 locks the room. A burst of concurrent guesses therefore verifies at most 5
+- The 5 tries are reserved atomically before argon2 runs: one guarded `UPDATE` adds a reservation
+  (id to expiry, 60 s) to `passcode_inflight` only while `passcode_failures` plus live reservations
+  stay under 5. A right answer removes its reservation only while the room is still open, a wrong
+  one turns it into a miss (`passcode_failures + 1`), and the miss that brings the count to 5
+  locks the room. A reservation that is never settled (failed write, crash) is dropped in a
+  `finally` or simply expires; it is never a miss and never holds a slot for more than 60 s (#327).
+  A burst of concurrent guesses therefore verifies at most 5
   codes per lockout, and a request that finds every remaining try in flight gets 429
   `ROOM_PASSCODE_BUSY`. A verified passcode is remembered for 15 minutes under an HMAC of (room,
   passcode hash, passcode) so later page loads skip argon2 (#308, #314).
