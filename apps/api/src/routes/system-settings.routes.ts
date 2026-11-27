@@ -85,6 +85,7 @@ export const LAUNCHPAD_CATALOG: readonly LaunchpadAppEntry[] = [
   { id: 'bulwark', name: 'Bulwark', description: 'Contract Obligations', icon_name: 'shield-check', color: '#1d4ed8', path: '/bulwark/' },
   { id: 'burn', name: 'Burn', description: 'Scope and Margin', icon_name: 'flame', color: '#ea580c', path: '/burn/' },
   { id: 'bursar', name: 'Bursar', description: 'Vendor Procurement', icon_name: 'shopping-cart', color: '#0f766e', path: '/bursar/' },
+  { id: 'bastion', name: 'Bastion', description: 'Compliance Readiness', icon_name: 'castle', color: '#57534e', path: '/bastion/' },
 ];
 
 // Valid values for the root_redirect setting: the marketing site or any

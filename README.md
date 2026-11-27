@@ -494,6 +494,14 @@ Basis gives the whole suite one trusted definition per number, and an AI core th
 
 [Help](docs/apps/basis/help.md) | [Guide](docs/apps/basis/guide.md) | [MCP Tools](docs/apps/basis/mcp-tools.md)
 
+### Bastion - Continuous compliance readiness for SOC 2 and ISO 27001
+
+Bastion checks your SOC 2 or ISO 27001 controls every night against what actually happened in the suite, keeps tamper-evident proof of each result, and tells you first which controls nothing can prove yet, with a fix already drafted. Reach for it when a customer asks for a security review, a questionnaire arrives, or an audit is on the calendar.
+
+<img src="docs/apps/bastion/screenshots/light/01-readiness.png" width="400" alt="Bastion - Continuous compliance readiness for SOC 2 and ISO 27001">
+
+[Help](docs/apps/bastion/help.md) | [Guide](docs/apps/bastion/guide.md)
+
 ### Bay - Media review and approval
 
 Bay is the BigBlueBam media review and approval app. It turns a file sitting in Bin into a reviewable asset: a version stack, coordinate-anchored annotations, per-reviewer decisions, and a token-gated link you can hand to an outside client. It reviews stills, video, audio, and now interactive 3D models in the same place, and an AI agent reviews through the exact same tools, identity, and audit trail as a person.
@@ -704,7 +712,7 @@ Helpdesk is the public-facing support portal where your customers register, file
 
 ### Introduction to BigBlueBam
 
-An overview of the whole suite: the 24 apps, how they connect, and how AI agents work alongside your team.
+An overview of the whole suite: the 25 apps, how they connect, and how AI agents work alongside your team.
 
 [Help](docs/apps/introduction/help.md) | [Guide](docs/apps/introduction/guide.md) | [Overview](docs/apps/introduction/marketing.md) | [MCP Tools](docs/apps/introduction/mcp-tools.md)
 <!-- AUTODOCS:APP_SECTIONS:END -->
@@ -1064,6 +1072,7 @@ site/               → Marketing site (served at /)
 | [Bam (Project Management) Guide](docs/apps/bam/guide.md) | User guide and MCP tool reference |
 | [Banter (Team Messaging) Guide](docs/apps/banter/guide.md) | User guide and MCP tool reference |
 | [Basis Guide](docs/apps/basis/guide.md) | User guide and MCP tool reference |
+| [Bastion Guide](docs/apps/bastion/guide.md) | User guide and MCP tool reference |
 | [Bay Guide](docs/apps/bay/guide.md) | User guide and MCP tool reference |
 | [Beacon (Knowledge Base) Guide](docs/apps/beacon/guide.md) | User guide and MCP tool reference |
 | [Bearing (Goals & OKRs) Guide](docs/apps/bearing/guide.md) | User guide and MCP tool reference |

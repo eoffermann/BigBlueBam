@@ -40,6 +40,7 @@ export const LAUNCHPAD_APP_IDS = [
   'bulwark',
   'burn',
   'bursar',
+  'bastion',
 ] as const;
 
 export type LaunchpadAppId = (typeof LAUNCHPAD_APP_IDS)[number];
