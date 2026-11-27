@@ -135,8 +135,8 @@ export async function countTasksByPhrase(
         JOIN projects ON projects.id = tasks.project_id
        WHERE projects.org_id = ${opts.orgId}::uuid
          AND ${matchExpr}
-         AND tasks.created_at >= ${opts.since}
-         AND tasks.created_at < ${until}
+         AND tasks.created_at >= ${opts.since.toISOString()}::timestamptz
+         AND tasks.created_at < ${until.toISOString()}::timestamptz
          ${projectIdFilter}
          ${labelFilter}
        GROUP BY bucket_start

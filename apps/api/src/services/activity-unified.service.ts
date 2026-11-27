@@ -233,7 +233,7 @@ export async function queryByEntity(
   const gate = visibilityGate(q.caller);
 
   const sinceClause = q.since
-    ? sql`AND v.created_at >= ${q.since}`
+    ? sql`AND v.created_at >= ${q.since.toISOString()}::timestamptz`
     : sql``;
 
   const parsedCursor = q.cursor ? parseCursor(q.cursor) : null;
@@ -278,7 +278,7 @@ export async function queryByActor(
   const gate = visibilityGate(q.caller);
 
   const sinceClause = q.since
-    ? sql`AND v.created_at >= ${q.since}`
+    ? sql`AND v.created_at >= ${q.since.toISOString()}::timestamptz`
     : sql``;
 
   const parsedCursor = q.cursor ? parseCursor(q.cursor) : null;

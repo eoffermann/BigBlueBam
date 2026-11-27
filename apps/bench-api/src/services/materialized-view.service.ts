@@ -118,5 +118,5 @@ export async function listDueViews(now: Date = new Date()) {
   return db
     .select()
     .from(benchMaterializedViews)
-    .where(sql`${benchMaterializedViews.next_scheduled_at} <= ${now}`);
+    .where(sql`${benchMaterializedViews.next_scheduled_at} <= ${now.toISOString()}::timestamptz`);
 }

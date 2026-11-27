@@ -130,8 +130,8 @@ export async function countTicketsByPhrase(
         JOIN helpdesk_users hu ON hu.id = tickets.helpdesk_user_id
        WHERE hu.org_id = ${opts.orgId}
          AND tickets.search_vector @@ ${tsQuery}
-         AND tickets.created_at >= ${opts.since}
-         AND tickets.created_at < ${until}
+         AND tickets.created_at >= ${opts.since.toISOString()}::timestamptz
+         AND tickets.created_at < ${until.toISOString()}::timestamptz
          ${statusClause}
        GROUP BY bucket_start
        ORDER BY bucket_start ASC

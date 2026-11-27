@@ -40,7 +40,7 @@ async function upsertFindings(tx: DbTx, orgId: string, findings: Finding[], swee
       ) VALUES (
         ${orgId}, ${f.engagement_id}, ${f.chain_root_id}, ${f.deliverable_id}, ${f.variance_kind},
         ${f.severity}, ${f.dedup_key}, ${f.amount}, ${JSON.stringify(f.detail)}::jsonb, 'open',
-        ${sweepMarker}, ${sweepMarker}
+        ${sweepMarker.toISOString()}::timestamptz, ${sweepMarker.toISOString()}::timestamptz
       )
       ON CONFLICT (organization_id, dedup_key) DO UPDATE SET
         severity = EXCLUDED.severity, amount = EXCLUDED.amount, detail = EXCLUDED.detail,
@@ -156,7 +156,7 @@ export async function runVarianceSweep(
       const findings = await detectForOrg(tx, oid, settings.unscoped_alert_floor);
       const n = await upsertFindings(tx, oid, findings, sweepMarker);
       emitted.push(...findings);
-      await tx.execute(sql`UPDATE burn_org_settings SET last_variance_sweep_at = ${sweepMarker} WHERE organization_id = ${oid}`);
+      await tx.execute(sql`UPDATE burn_org_settings SET last_variance_sweep_at = ${sweepMarker.toISOString()}::timestamptz WHERE organization_id = ${oid}`);
       return { skipped: false, count: n };
     });
     if (res.skipped) { skipped += 1; continue; }

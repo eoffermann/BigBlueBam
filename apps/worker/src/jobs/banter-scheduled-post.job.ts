@@ -188,7 +188,7 @@ export async function processBanterScheduledPostJob(
     UPDATE banter_scheduled_messages
     SET status = 'delivered',
         delivered_message_id = ${inserted.id},
-        delivered_at = ${deliveredAt}
+        delivered_at = ${deliveredAt.toISOString()}::timestamptz
     WHERE id = ${row.id}
   `);
 

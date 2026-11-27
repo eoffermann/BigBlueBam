@@ -109,7 +109,7 @@ export async function processBureauKnockTimeoutJob(
   const resolvedAt = new Date();
   await db.execute(sql`
     UPDATE bureau_knocks
-    SET status = 'timed_out', resolved_at = ${resolvedAt}
+    SET status = 'timed_out', resolved_at = ${resolvedAt.toISOString()}::timestamptz
     WHERE id = ${knockId} AND status = 'pending'
   `);
 

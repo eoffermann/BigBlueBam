@@ -48,7 +48,8 @@ export async function runSilentDeliverableSweep(
         `),
       );
       let n = 0;
-      const sweepMarker = new Date();
+      // ISO string, not a Date: drizzle's postgres-js client passes raw sql params untyped (#358).
+      const sweepMarker = new Date().toISOString();
       for (const s of silent) {
         await tx.execute(sql`
           INSERT INTO burn_variances (organization_id, engagement_id, deliverable_id, variance_kind, severity, dedup_key, detail, status, detected_at, sweep_marker)

@@ -92,7 +92,7 @@ export default async function superuserLogsRoutes(fastify: FastifyInstance) {
         );
       }
       if (service) conds.push(sql`service = ${service}`);
-      if (sinceDate) conds.push(sql`created_at >= ${sinceDate}`);
+      if (sinceDate) conds.push(sql`created_at >= ${sinceDate.toISOString()}::timestamptz`);
       const where = sql.join(conds, sql` AND `);
 
       const rows = await db.execute(sql`
@@ -167,7 +167,7 @@ export default async function superuserLogsRoutes(fastify: FastifyInstance) {
       }
       if (source_app) conds.push(sql`source_app = ${source_app}`);
       if (actor_type) conds.push(sql`actor_type = ${actor_type}`);
-      if (sinceDate) conds.push(sql`created_at >= ${sinceDate}`);
+      if (sinceDate) conds.push(sql`created_at >= ${sinceDate.toISOString()}::timestamptz`);
       const where = sql.join(conds, sql` AND `);
 
       const rows = await db.execute(sql`

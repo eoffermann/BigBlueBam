@@ -238,7 +238,7 @@ export async function listDeliveries(
     conditions.push(eq(agentWebhookDeliveries.status, opts.status));
   }
   if (opts.before) {
-    conditions.push(sql`${agentWebhookDeliveries.created_at} < ${new Date(opts.before)}`);
+    conditions.push(sql`${agentWebhookDeliveries.created_at} < ${new Date(opts.before).toISOString()}::timestamptz`);
   }
 
   const rows = await db
