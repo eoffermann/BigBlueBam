@@ -119,7 +119,7 @@ async function radarOneOrg(logger: Logger, orgId: string): Promise<{ awards_scan
         void publishBoltEvent(
           'renewal.approaching',
           'bursar',
-          { 'renewal.id': existing?.id ?? a.id, 'award.id': a.id, band: b, 'org.id': orgId },
+          { renewal: { id: existing?.id ?? a.id }, award: { id: a.id }, band: b, org: { id: orgId } },
           orgId,
         ).catch(() => {});
       }

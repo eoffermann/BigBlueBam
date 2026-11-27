@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import postgres from 'postgres';
 import { createBootstrapDriver, type StorageDriver } from '@bigbluebam/storage';
 import { mirrorObjects, restoreObjectsFromBackup } from '../../src/engine/objects.js';
@@ -15,8 +15,6 @@ import { DATABASE_URL, makeDeps, seedOrg, wipeOrg } from './engine-harness.js';
 const ENDPOINT = process.env.BASTION_MINIO_TEST_ENDPOINT;
 const run = !!(DATABASE_URL && ENDPOINT);
 if (!run) console.warn('[bastion-api/m9-minio] SKIPPING: set DATABASE_URL and BASTION_MINIO_TEST_ENDPOINT to run against real MinIO.');
-
-vi.setConfig({ testTimeout: 120_000, hookTimeout: 60_000 });
 
 describe.skipIf(!run)('M9 off-site mirror on real MinIO buckets', () => {
   let sql: postgres.Sql;

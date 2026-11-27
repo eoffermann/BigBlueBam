@@ -162,7 +162,11 @@ export async function runExtraction(
       });
       extracted += 1;
       await publishBoltEvent('deliverable.extracted', 'burn', {
-        'engagement.id': engId, deliverable_kind: item.deliverable_kind, confidence: item.confidence, review_status: reviewStatus, 'org.id': orgId,
+        engagement: { id: engId },
+        deliverable_kind: item.deliverable_kind,
+        confidence: item.confidence,
+        review_status: reviewStatus,
+        org: { id: orgId },
       }, orgId).catch(() => {});
     }
 
@@ -181,7 +185,10 @@ export async function runExtraction(
   });
 
   await publishBoltEvent('engagement.extracted', 'burn', {
-    'engagement.id': engId, deliverables_extracted: extracted, low_confidence_count: lowConf, 'org.id': orgId,
+    engagement: { id: engId },
+    deliverables_extracted: extracted,
+    low_confidence_count: lowConf,
+    org: { id: orgId },
   }, orgId).catch(() => {});
 
   log.info({ org_id: orgId, engagement_id: engId, extracted, lowConf, elapsedMs: Date.now() - started }, 'burn extraction: done');

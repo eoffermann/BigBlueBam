@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import postgres from 'postgres';
 import { orgTx } from '../../src/engine/context.js';
 import { gapRank, lockOrgGapRank, rankOrgGaps } from '../../src/engine/gaps.js';
@@ -11,8 +11,6 @@ import { DATABASE_URL, makeDeps, seedOrg, wipeOrg } from './engine-harness.js';
  */
 
 if (!DATABASE_URL) console.warn('[bastion-api/m6-gap-rank-lock] SKIPPING: DATABASE_URL is not set. Point it at a migrated database.');
-
-vi.setConfig({ testTimeout: 120_000, hookTimeout: 60_000 });
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 

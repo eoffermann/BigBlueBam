@@ -11,7 +11,8 @@ import {
   parseDraftResponse,
 } from '../src/library/questionnaire-draft.js';
 import { parseReword, REWORD_PROMPT_VERSION } from '../src/library/fix-reword.js';
-import { BASTION_LLM_CALLS, llmDeadlineMs, llmMaxTokens } from '../src/library/llm-call-settings.js';
+import { BASTION_LLM_CALLS, llmDeadlineMs } from '../src/library/llm-call-settings.js';
+import { callLlmProxy, deadlineGate, type ProxyTarget, proxyTargetFromEnv, recordingDeadlineMeta } from './corpus/llm-recording.js';
 import {
   CORPUS_CONTROLS,
   CORPUS_QUESTIONS,
@@ -116,6 +117,14 @@ describe('questionnaire corpus: the recording', () => {
     expect(Object.values(CORPUS_CONTROLS).some((c) => c.state === 'pass_with_exception')).toBe(true);
   });
 
+  it('every recorded draft and reword call fits inside 80% of its production deadline, with tokens per second (#317)', () => {
+    for (const [corpus, kind] of [[RECORDED, 'questionnaire_draft'], [REWORD_RECORDED, 'fix_reword']] as const) {
+      const gate = deadlineGate(corpus, kind, llmDeadlineMs(kind, process.env));
+      for (const line of gate.report) console.log(`[deadline gate] ${line}`);
+      expect(gate.violations, kind).toEqual([]);
+    }
+  });
+
   it('the prompt carries every injection row only as delimited data', () => {
     for (const q of CORPUS_QUESTIONS.filter((x) => x.injection)) {
       const user = buildDraftMessages({ question: q.question, section: null, answer_kind: q.answer_kind, candidates: corpusCandidates(q) })[1]?.content ?? '';
@@ -209,25 +218,21 @@ describe('fix-draft injection gate (spec 11.3)', () => {
 const LIVE = process.env.BASTION_QUESTIONNAIRE_LIVE === '1';
 describe.skipIf(!LIVE)('questionnaire corpus gates, live (optional)', () => {
   it('fresh answers through the internal LLM proxy pass the same gates', async () => {
-    const api = (process.env.BASTION_RECORD_API_URL ?? '').replace(/\/+$/, '');
-    const responses: Record<string, Response> = {};
+    const target = proxyTargetFromEnv();
+    expect(target, 'set BASTION_RECORD_API_URL, BASTION_RECORD_PROVIDER_ID and INTERNAL_SERVICE_SECRET').not.toBeNull();
+    const responses: RecordedQuestionnaireCorpus['responses'] = {};
     for (const q of CORPUS_QUESTIONS) {
       const messages = buildDraftMessages({ question: q.question, section: null, answer_kind: q.answer_kind, candidates: corpusCandidates(q) });
-      const res = await fetch(`${api}/internal/llm/chat`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Internal-Secret': process.env.INTERNAL_SERVICE_SECRET ?? '', 'X-Internal-Service': 'bastion' },
-        body: JSON.stringify({
-          provider_id: process.env.BASTION_RECORD_PROVIDER_ID,
-          messages,
-          max_tokens: llmMaxTokens('questionnaire_draft', process.env),
-          temperature: 0,
-          timeout_ms: llmDeadlineMs('questionnaire_draft', process.env),
-        }),
-        signal: AbortSignal.timeout(llmDeadlineMs('questionnaire_draft', process.env) + 5_000),
-      });
-      const body = (await res.json().catch(() => ({}))) as { data?: { content?: string; finish_reason?: string | null } };
-      responses[q.id] = res.ok ? { content: body.data?.content ?? '', finish_reason: body.data?.finish_reason ?? null } : { error: String(res.status) };
+      responses[q.id] = await callLlmProxy(target as ProxyTarget, 'questionnaire_draft', messages);
     }
     expectGreen(gates(responses));
+    // #317: the live answers fit the production deadline too.
+    const gate = deadlineGate(
+      { meta: { recorded_at: new Date().toISOString(), ...recordingDeadlineMeta('questionnaire_draft') }, responses },
+      'questionnaire_draft',
+      llmDeadlineMs('questionnaire_draft', process.env),
+    );
+    for (const line of gate.report) console.log(`[deadline gate] ${line}`);
+    expect(gate.violations).toEqual([]);
   }, 600_000);
 });

@@ -1,12 +1,13 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import postgres from 'postgres';
 import { orgTx } from '../../src/engine/context.js';
 import { type LlmChat, LlmTimeoutError } from '../../src/lib/llm-errors.js';
 import type { LlmPermits } from '../../src/lib/llm-permits.js';
 import { type CompileAiDeps, createQueuedAiRun, type SliceLock } from '../../src/services/compile-ai.service.js';
 import { clock, DATABASE_URL, makeDeps, quietLog, seedOrg, wipeOrg } from './engine-harness.js';
+import { ASSERTION_INSERT, COMPILE_RUN_UPDATE, injectFault } from './fault-injection.js';
 
 /**
  * Review batch 11, AI compile slices (live database):
@@ -15,8 +16,6 @@ import { clock, DATABASE_URL, makeDeps, quietLog, seedOrg, wipeOrg } from './eng
  */
 
 if (!DATABASE_URL) console.warn('[bastion-api/b11-compile] SKIPPING: DATABASE_URL is not set. Point it at a migrated database.');
-
-vi.setConfig({ testTimeout: 120_000, hookTimeout: 60_000 });
 
 const RECORDED = JSON.parse(readFileSync(join(__dirname, '..', 'corpus', 'compiler-recorded.json'), 'utf8')) as {
   responses: Record<string, { content: string; finish_reason: string | null }>;
@@ -121,22 +120,18 @@ describe.skipIf(!DATABASE_URL)('batch 11: AI compile slices (live database)', ()
     expect((fin.drop_reasons as { done_keys: string[] }).done_keys.sort()).toEqual([...KEYS].sort());
   });
 
-  /** Make writes of one control's assertions fail deterministically (like a U+0000 the database refuses). */
-  async function breakWrites(controlId: string, onlyAi: boolean) {
-    const fn = `b11_fail_${controlId.replace(/-/g, '')}`;
-    await sql.unsafe(`
-      CREATE OR REPLACE FUNCTION ${fn}() RETURNS trigger LANGUAGE plpgsql AS $f$
-      BEGIN
-        IF NEW.control_id = '${controlId}'::uuid ${onlyAi ? "AND NEW.proposed_by = 'compiler'" : ''} THEN
-          RAISE EXCEPTION 'unsupported Unicode escape sequence (test)' USING ERRCODE = '22P05';
-        END IF;
-        RETURN NEW;
-      END $f$`);
-    await sql.unsafe(`DROP TRIGGER IF EXISTS ${fn} ON bastion_assertions; CREATE TRIGGER ${fn} BEFORE INSERT ON bastion_assertions FOR EACH ROW EXECUTE FUNCTION ${fn}()`);
-    return async () => {
-      await sql.unsafe(`DROP TRIGGER IF EXISTS ${fn} ON bastion_assertions`);
-      await sql.unsafe(`DROP FUNCTION IF EXISTS ${fn}()`);
-    };
+  /**
+   * Make writes of one control's assertions fail deterministically (like a U+0000 the database
+   * refuses). A fault row, not a trigger created here: DDL on bastion_assertions while other files
+   * write it raced in a parallel run (#320; test/db/fault-injection.ts).
+   */
+  function breakWrites(controlId: string, onlyAi: boolean) {
+    return injectFault(sql, {
+      target: ASSERTION_INSERT,
+      match: onlyAi ? { control_id: controlId, proposed_by: 'compiler' } : { control_id: controlId },
+      sqlstate: '22P05',
+      message: 'unsupported Unicode escape sequence (test)',
+    });
   }
 
   async function controlId(org: string, key: string) {
@@ -189,19 +184,16 @@ describe.skipIf(!DATABASE_URL)('batch 11: AI compile slices (live database)', ()
       return recorded(key);
     };
     const d: CompileAiDeps = { engine, llm, permits: openPermits, sliceLock: redisDown, background: false, sliceCutoffMs: 0 };
-    // The per-call count UPDATE hits a deadlock exactly once (a sequence is not rolled back with
-    // the failed statement, so it fires once), as a reset connection or deadlock would in production.
-    const tag = s.runId.replace(/-/g, '');
-    await sql.unsafe(`CREATE SEQUENCE b295_seq_${tag}`);
-    await sql.unsafe(`
-      CREATE OR REPLACE FUNCTION b295_fail_${tag}() RETURNS trigger LANGUAGE plpgsql AS $f$
-      BEGIN
-        IF NEW.id = '${s.runId}'::uuid AND NEW.llm_calls_used <> OLD.llm_calls_used AND nextval('b295_seq_${tag}') = 1 THEN
-          RAISE EXCEPTION 'deadlock detected (test)' USING ERRCODE = '40P01';
-        END IF;
-        RETURN NEW;
-      END $f$`);
-    await sql.unsafe(`CREATE TRIGGER b295_fail_${tag} BEFORE UPDATE ON bastion_compile_runs FOR EACH ROW EXECUTE FUNCTION b295_fail_${tag}()`);
+    // The per-call count UPDATE hits a deadlock exactly once, as a reset connection or deadlock
+    // would in production (a fault row, not a trigger created here: #320).
+    const restore = await injectFault(sql, {
+      target: COMPILE_RUN_UPDATE,
+      match: { id: s.runId },
+      changedCol: 'llm_calls_used',
+      once: true,
+      sqlstate: '40P01',
+      message: 'deadlock detected (test)',
+    });
     try {
       const body = { organization_id: s.org, run_id: s.runId, claimant: 'worker:W' };
       let last = await replica.compileSlice(d, body);
@@ -220,9 +212,7 @@ describe.skipIf(!DATABASE_URL)('batch 11: AI compile slices (live database)', ()
       expect(reasons.transient_releases).toBe(1);
       expect(Number(run.resume_count)).toBe(0);
     } finally {
-      await sql.unsafe(`DROP TRIGGER IF EXISTS b295_fail_${tag} ON bastion_compile_runs`);
-      await sql.unsafe(`DROP FUNCTION IF EXISTS b295_fail_${tag}()`);
-      await sql.unsafe(`DROP SEQUENCE IF EXISTS b295_seq_${tag}`);
+      await restore();
     }
   });
 

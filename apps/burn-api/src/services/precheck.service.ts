@@ -603,12 +603,12 @@ export async function runPrecheck(args: RunPrecheckArgs): Promise<BurnPrecheckRe
       'precheck.blocked',
       'burn',
       {
-        'precheck.id': response.precheck_id,
-        'engagement.id': response.engagement_id,
-        'deliverable.id': response.deliverable_id,
+        precheck: { id: response.precheck_id },
+        engagement: { id: response.engagement_id },
+        deliverable: { id: response.deliverable_id },
         verdict_reason: response.verdict_reason,
         band: response.consumption_band,
-        'org.id': orgId,
+        org: { id: orgId },
       },
       orgId,
     ).catch(() => {});
@@ -817,10 +817,10 @@ export async function overridePrecheck(
       'precheck.overridden',
       'burn',
       {
-        'precheck.id': row.id,
+        precheck: { id: row.id },
         override_reason_code: body.override_reason_code,
         band: consumptionBand(Number(row.envelope_consumed ?? 0), row.envelope_amount === null ? null : Number(row.envelope_amount)),
-        'org.id': viewer.org_id,
+        org: { id: viewer.org_id },
       },
       viewer.org_id,
     ).catch(() => {});

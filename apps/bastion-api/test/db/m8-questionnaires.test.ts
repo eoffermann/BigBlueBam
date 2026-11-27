@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import postgres from 'postgres';
 import { encodeXlsx, decodeXlsx } from '@bigbluebam/structured-data';
 import { aggregateControl, RunLeaseHeldError, type RunRow } from '../../src/engine/evaluator.js';
@@ -52,8 +52,6 @@ import { clock, DATABASE_URL, fakeBucket, makeDeps, seedOrg, wipeOrg } from './e
  */
 
 if (!DATABASE_URL) console.warn('[bastion-api/m8] SKIPPING: DATABASE_URL is not set. Point it at a migrated database.');
-
-vi.setConfig({ testTimeout: 180_000, hookTimeout: 60_000 });
 
 const SHA = 'b'.repeat(64);
 const viewer = (org: string, id: string, auth: 'session' | 'api_key' = 'session'): Viewer => ({

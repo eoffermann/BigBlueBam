@@ -366,7 +366,7 @@ export async function confirmScope(viewer: Viewer, requestId: string, body: Burs
   await publishBoltEvent(
     'scope.confirmed',
     'bursar',
-    { 'request.id': requestId, 'org.id': viewer.org_id },
+    { request: { id: requestId }, org: { id: viewer.org_id } },
     viewer.org_id,
     viewer.id,
   ).catch(() => {});

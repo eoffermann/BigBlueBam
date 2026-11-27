@@ -64,9 +64,6 @@ function mapDomainError(err: unknown, requestId: string) {
   return null;
 }
 
-function emitBolt(eventType: string, payload: Record<string, unknown>, orgId: string, userId: string) {
-  publishBoltEvent(eventType, 'blueprint', payload, orgId, userId, 'user').catch(() => {});
-}
 
 
 /** The per-diagram ACL (#167) for the :id route being served. */
@@ -100,12 +97,14 @@ export default async function diagramRoutes(fastify: FastifyInstance) {
       const userId = request.user!.id;
       try {
         const row = await svc.createDiagram(orgId, userId, body);
-        emitBolt(
+        publishBoltEvent(
           'diagram.created',
-          { 'diagram.id': row.id, 'diagram.name': row.name, 'diagram.diagram_type': row.diagram_type },
+          'blueprint',
+          { diagram: { id: row.id, name: row.name, diagram_type: row.diagram_type } },
           orgId,
           userId,
-        );
+          'user',
+        ).catch(() => {});
         return reply.status(201).send({ data: row });
       } catch (err) {
         const mapped = mapDomainError(err, request.id);
@@ -151,7 +150,7 @@ export default async function diagramRoutes(fastify: FastifyInstance) {
           await acl.manage(request);
         }
         const row = await svc.updateDiagram(orgId, request.params.id, body);
-        emitBolt('diagram.updated', { 'diagram.id': row.id, changed_fields: Object.keys(body) }, orgId, userId);
+        publishBoltEvent('diagram.updated', 'blueprint', { diagram: { id: row.id }, changed_fields: Object.keys(body) }, orgId, userId, 'user').catch(() => {});
         await broadcastToDiagram(fastify.redis, row.id, {
           type: 'blueprint.diagram.updated',
           diagram_id: row.id,
@@ -177,7 +176,7 @@ export default async function diagramRoutes(fastify: FastifyInstance) {
         // per-diagram owner check is what actually limits archive (#167).
         await acl.manage(request);
         const row = await svc.archiveDiagram(orgId, request.params.id);
-        emitBolt('diagram.archived', { 'diagram.id': row.id }, orgId, userId);
+        publishBoltEvent('diagram.archived', 'blueprint', { diagram: { id: row.id } }, orgId, userId, 'user').catch(() => {});
         return reply.send({ data: { id: row.id, is_archived: true } });
       } catch (err) {
         const mapped = mapDomainError(err, request.id);
@@ -266,16 +265,18 @@ export default async function diagramRoutes(fastify: FastifyInstance) {
           });
         }
         const result = await layoutSvc.applyLayout(request.params.id, body);
-        emitBolt(
+        publishBoltEvent(
           'layout.applied',
+          'blueprint',
           {
-            'diagram.id': request.params.id,
+            diagram: { id: request.params.id },
             layout_algorithm: result.algorithm,
             node_count: result.positions.length,
           },
           orgId,
           userId,
-        );
+          'user',
+        ).catch(() => {});
         await broadcastToDiagram(fastify.redis, request.params.id, {
           type: 'blueprint.layout.applied',
           diagram_id: request.params.id,
@@ -369,12 +370,14 @@ export default async function diagramRoutes(fastify: FastifyInstance) {
           layoutResult = await layoutSvc.applyLayout(request.params.id, {});
         }
         const graph = await svc.getDiagramGraph(orgId, request.params.id);
-        emitBolt(
+        publishBoltEvent(
           'diagram.generated',
-          { 'diagram.id': request.params.id, node_count: body.nodes.length },
+          'blueprint',
+          { diagram: { id: request.params.id }, node_count: body.nodes.length },
           orgId,
           userId,
-        );
+          'user',
+        ).catch(() => {});
         return reply.status(201).send({ data: { graph, layout: layoutResult } });
       } catch (err) {
         const mapped = mapDomainError(err, request.id);
@@ -403,7 +406,7 @@ export default async function diagramRoutes(fastify: FastifyInstance) {
         const result = await importSvc.importMermaid(request.params.id, body.source, {
           replace: body.replace,
         });
-        emitBolt('diagram.imported', { 'diagram.id': request.params.id, ...result }, orgId, userId);
+        publishBoltEvent('diagram.imported', 'blueprint', { diagram: { id: request.params.id }, ...result }, orgId, userId, 'user').catch(() => {});
         return reply.send({ data: result });
       } catch (err) {
         const mapped = mapDomainError(err, request.id);
