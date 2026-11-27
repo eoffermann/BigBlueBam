@@ -37,8 +37,9 @@ const agentMessageSchema = z.object({
 
 /**
  * Identity resolved from an authenticated agent request.
- * `userId`/`orgId` are only populated if a valid Bam session cookie accompanied
- * the request (indicating a logged-in human agent). Even when a session is
+ * `userId`/`orgId` are only populated when the credential fixes the acting
+ * user and org (Bam proxy, Bam API key, or an X-Agent-Key with its owner's own
+ * Bam session, see requireAgentAuth). Even when a session is
  * present, a valid X-Agent-Key / Bearer token is still required for auth —
  * the session alone does NOT grant access (see HB-12).
  */
@@ -46,36 +47,6 @@ interface AgentIdentity {
   userId: string | null;
   userDisplayName: string | null;
   orgId: string | null;
-}
-
-// Agent authentication (Bam proxy, Bam API key as Bearer, X-Agent-Key) lives in lib/agent-auth.ts.
-
-/**
- * Look up a Bam user + org from a session cookie. Returns null if the session
- * is missing, invalid, or expired. This is used ONLY to enrich the request
- * with caller identity (for org-scoping and authorship) — it is NOT an
- * authentication mechanism on its own (see HB-12).
- */
-async function resolveSessionIdentity(sessionCookie: string | undefined): Promise<AgentIdentity | null> {
-  if (!sessionCookie) return null;
-  try {
-    const result = await db.execute(
-      sql`SELECT u.id AS user_id, u.display_name, u.org_id
-          FROM sessions s
-          JOIN users u ON u.id = s.user_id
-          WHERE s.id = ${sessionCookie} AND s.expires_at > now()
-          LIMIT 1`,
-    );
-    const row = Array.isArray(result) ? result[0] : (result as any).rows?.[0];
-    if (!row) return null;
-    return {
-      userId: (row as any).user_id ?? null,
-      userDisplayName: (row as any).display_name ?? null,
-      orgId: (row as any).org_id ?? null,
-    };
-  } catch {
-    return null;
-  }
 }
 
 // Agent authentication (Bam proxy, Bam API key as Bearer, X-Agent-Key) lives in lib/agent-auth.ts.
@@ -128,8 +99,10 @@ export default async function agentRoutes(fastify: FastifyInstance) {
 
   // GET /tickets — list tickets visible to the caller (HB-6: org-scoped).
   //
-  // Scoping model: the caller's org is resolved from (1) a valid Bam session
-  // cookie or (2) the agent API key's bbb_user_id → users.org_id. If neither
+  // Scoping model: the caller's org is resolved from (1) the org the
+  // credential fixed (Bam proxy, Bam API key, or the key owner's own Bam
+  // session's active org, #173) or (2) the agent API key's bbb_user_id →
+  // users.org_id. If neither
   // yields an org, the request is rejected with 403 to prevent cross-org
   // data leaks. Tickets with no project_id (unlinked) are excluded from the
   // scoped view since they cannot be attributed to an org.
@@ -447,15 +420,16 @@ export default async function agentRoutes(fastify: FastifyInstance) {
     // also require the user to belong to the target ticket's org (derived
     // from the ticket's project). This prevents a holder of the shared agent
     // key from forging messages as arbitrary/non-existent users.
-    // Bam-proxied calls carry a verified acting user; treat it exactly like
-    // a session identity so the client can never choose the author.
+    // Bam-proxied calls, Bam API keys, and an X-Agent-Key with its owner's own
+    // Bam session (#173, bound in requireAgentAuth) all carry a verified acting
+    // user and org, so the client can never choose the author.
     const identity: AgentIdentity | null = request.agentOrgId && request.agentUserId
       ? {
           userId: request.agentUserId,
           userDisplayName: await resolveAgentDisplayName(request.agentUserId),
           orgId: request.agentOrgId,
         }
-      : await resolveSessionIdentity(request.cookies?.session);
+      : null;
 
     let authorId: string;
     let authorName: string;

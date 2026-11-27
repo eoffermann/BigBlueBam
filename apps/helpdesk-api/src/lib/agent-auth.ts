@@ -25,7 +25,9 @@ import { bamBearerToken, verifyBamApiKey } from './bam-api-key.js';
  *     'read_write' or 'admin', mirroring requireScope('read_write') in apps/api.
  *     Only bbam_-prefixed tokens are taken, so the customer portal's own
  *     credentials can never be mistaken for one.
- *  3. Per-agent helpdesk key in X-Agent-Key (HB-28 + HB-49).
+ *  3. Per-agent helpdesk key in X-Agent-Key (HB-28 + HB-49). A Bam session
+ *     cookie sent alongside must belong to the key's owner (403 otherwise,
+ *     #173); it then fixes the org to the session's active org.
  *
  * On success request.agentUserId is the acting Bam user, and request.agentOrgId
  * is set when the credential fixes the org (1 and 2). resolveAgentRequestOrgId
@@ -244,33 +246,63 @@ export async function requireAgentAuth(request: FastifyRequest, reply: FastifyRe
   if (!userId) {
     return deny(request, reply, 401, 'UNAUTHORIZED', 'Invalid agent API key');
   }
+
+  // #173: a Bam session cookie that accompanies an X-Agent-Key must belong to
+  // the key's owner. Before this, key X plus user Y's session read Y's org and
+  // posted as Y. A matching session fixes the org to the session's ACTIVE org
+  // (the org the user switched to in Bam), not the user's home org.
+  const sessionCookie = request.cookies?.session;
+  if (sessionCookie) {
+    const session = await liveSession(sessionCookie);
+    if (session) {
+      if (session.userId !== userId) {
+        return deny(
+          request,
+          reply,
+          403,
+          'AGENT_SESSION_MISMATCH',
+          'The agent key and the Bam session belong to different users',
+        );
+      }
+      const orgId = session.activeOrgId ?? session.homeOrgId;
+      if (!orgId || !(await isActiveMemberOrSuperuser(userId, orgId))) {
+        return deny(request, reply, 403, 'FORBIDDEN', 'Session user is not a member of the active organization');
+      }
+      request.agentOrgId = orgId;
+    }
+  }
   request.agentUserId = userId;
+}
+
+/** A live (unexpired) Bam session: its user, active org, and the user's home org. Null when absent. */
+async function liveSession(
+  sessionId: string,
+): Promise<{ userId: string; activeOrgId: string | null; homeOrgId: string | null } | null> {
+  const row = rowsOf(
+    await db.execute(
+      sql`SELECT s.user_id AS user_id, s.active_org_id AS active_org_id, u.org_id AS org_id
+          FROM sessions s
+          JOIN users u ON u.id = s.user_id
+          WHERE s.id = ${sessionId} AND s.expires_at > now()
+          LIMIT 1`,
+    ),
+  )[0];
+  if (!row?.user_id) return null;
+  return {
+    userId: String(row.user_id),
+    activeOrgId: row.active_org_id ? String(row.active_org_id) : null,
+    homeOrgId: row.org_id ? String(row.org_id) : null,
+  };
 }
 
 /**
  * The org an authenticated agent request is scoped to: the org the credential
- * fixed (Bam proxy or Bam API key), else the Bam session cookie's user org,
- * else the X-Agent-Key owner's home org. Null only if no source yields one.
+ * fixed (Bam proxy, Bam API key, or the key owner's own Bam session's active
+ * org, all set by requireAgentAuth), else the X-Agent-Key owner's home org.
+ * Null only if no source yields one.
  */
 export async function resolveAgentRequestOrgId(request: FastifyRequest): Promise<string | null> {
   if (request.agentOrgId) return request.agentOrgId;
-  const sessionCookie = request.cookies?.session;
-  if (sessionCookie) {
-    try {
-      const row = rowsOf(
-        await db.execute(
-          sql`SELECT u.org_id AS org_id
-              FROM sessions s
-              JOIN users u ON u.id = s.user_id
-              WHERE s.id = ${sessionCookie} AND s.expires_at > now()
-              LIMIT 1`,
-        ),
-      )[0];
-      if (row?.org_id) return String(row.org_id);
-    } catch {
-      // fall through to the agent key's owner
-    }
-  }
   if (!request.agentUserId) return null;
   try {
     const [row] = await db
