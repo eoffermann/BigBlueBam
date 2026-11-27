@@ -84,7 +84,7 @@ run('API keys follow org role changes (real Postgres)', () => {
 // creator is demoted or removed, the agent's admin keys in that org drop to read_write.
 run('Service/agent keys follow their creator (real Postgres)', () => {
   const sql = postgres(DB_URL ?? 'postgres://x@localhost/x', { max: 2, onnotice: () => {} });
-  const database = drizzle(sql);
+  const database = drizzle(sql) as unknown as typeof import('../src/db/index.js').db;
   const tag = `${Date.now()}d`;
   let org = '';
   let other = '';
