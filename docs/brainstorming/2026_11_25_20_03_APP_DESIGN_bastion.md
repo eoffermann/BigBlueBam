@@ -1717,6 +1717,17 @@ replica lag is under 30 seconds.
   restore detection is section 3.4. Bucket objects can be deleted by anyone holding the shared S3
   credentials, which is inside the stated honest limit; the guide tells auditors to keep their own
   copies of the signed seals and packets they receive.
+- **Amendments after the M9 review (2026-11-26).** Listing is paged with no cap and each page
+  costs O(page); a listing error fails the command (#313). The mirror's records step runs under
+  the same per-call budget as evidence objects, resumes from the last key, and only stats records
+  modified since the last finished records step (a high-water mark kept across backups); end-of-call
+  status writes land only while the row says `running` (#309). The mirror records `mirrored_at`
+  whenever bytes reached it and deletes a copy redacted mid-copy; `restore-objects` never copies a
+  key the database says is redacted (and deletes one already copied back), and exits 1 with "NOT
+  FINISHED" when no database was reachable to check (#310). Packets: bounded evidence reads (open
+  and idle timeouts; only not-found is "Evidence file missing"), a bounded upload with heartbeats
+  (#311); one claimant and one object key per attempt (`packets/<org>/<packet>/<uuid>.zip`, with
+  an intent row cleared by an idempotent, key-fenced `finish`) (#312).
 - **Key escrow.** `BASTION_SEAL_SIGNING_KEY`, `BASTION_PD_HMAC_KEY`, and `BASTION_FEED_KEY_PEPPER`
   must be exported and escrowed with the database backup; a rebuilt host without them cannot sign
   new seals under the old key id, verify commitments, or accept existing feed keys. Each row

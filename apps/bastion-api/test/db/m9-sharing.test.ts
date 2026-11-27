@@ -404,12 +404,21 @@ describe.skipIf(!DATABASE_URL)('M9 sharing, packets, sweep and mirror (live data
     const contents = 'contents' in claim ? claim.contents! : null;
     // Every attestation in the period is a holder; the one without names comes back no_personal_data.
     expect(contents!.holders.filter((h) => h.holder_kind === 'attestation')).toHaveLength(5);
-    expect(contents!.packet.object_key).toBe(`packets/${s.org}/${created.data.id as string}.zip`);
+    // Each attempt writes its own key (#312), with an intent row so the sweep can reap a leftover.
+    const attemptKey = contents!.packet.object_key;
+    expect(attemptKey).toMatch(new RegExp(`^packets/${s.org}/${created.data.id as string}/[0-9a-f-]{36}\\.zip$`));
+    expect((await sql`SELECT 1 FROM bastion_object_intents WHERE object_key = ${attemptKey}`).length).toBe(1);
     // Fenced on the claimant: another worker cannot claim a fresh running packet, report progress or finish it.
     const second = await packet.exportPacketEngine(engine, { action: 'claim', organization_id: s.org, packet_id: created.data.id as string, claimant: 'w2' });
     expect('claimed' in second && second.claimed).toBe(false);
     expect(await packet.exportPacketEngine(engine, { action: 'progress', organization_id: s.org, packet_id: created.data.id as string, claimant: 'w2', stage: 'zipping', progress: 1 })).toEqual({ ok: false });
-    expect(await packet.exportPacketEngine(engine, { action: 'finish', organization_id: s.org, packet_id: created.data.id as string, claimant: 'w1', object_key: contents!.packet.object_key, content_sha256: 'e'.repeat(64), size_bytes: 10 })).toEqual({ ok: true });
+    // finish is fenced on the attempt's key as well as the claimant.
+    expect(await packet.exportPacketEngine(engine, { action: 'finish', organization_id: s.org, packet_id: created.data.id as string, claimant: 'w1', object_key: `packets/${s.org}/${created.data.id as string}/other.zip`, content_sha256: 'e'.repeat(64), size_bytes: 10 })).toEqual({ ok: false });
+    const finishBody = { action: 'finish' as const, organization_id: s.org, packet_id: created.data.id as string, claimant: 'w1', object_key: attemptKey, content_sha256: 'e'.repeat(64), size_bytes: 10 };
+    expect(await packet.exportPacketEngine(engine, finishBody)).toEqual({ ok: true });
+    // A retry after a lost response finds its own success; the intent is gone with the finish.
+    expect(await packet.exportPacketEngine(engine, finishBody)).toEqual({ ok: true });
+    expect((await sql`SELECT 1 FROM bastion_object_intents WHERE object_key = ${attemptKey}`).length).toBe(0);
     const listed = await sharing.listExports(d.sharing, viewerOf(s), { limit: 25 });
     expect(listed.data[0]).toMatchObject({ status: 'succeeded', stage_words: 'Ready to download' });
 
