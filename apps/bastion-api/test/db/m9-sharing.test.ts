@@ -574,6 +574,16 @@ describe.skipIf(!DATABASE_URL)('M9 sharing, packets, sweep and mirror (live data
     // The oldest object is the one the link cannot carry in time; two newer ones are fine.
     const big = await put(Buffer.from('{"evidence":"very large"}'), 6);
     const newer = [await put(Buffer.from('{"evidence":"n1"}'), 3), await put(Buffer.from('{"evidence":"n2"}'), 2)];
+    // A row whose file is gone from the source: reported and passed over, read once per pass
+    // however many calls the pass takes (the pass keeps its place across calls).
+    const ghost = await put(Buffer.from('{"evidence":"gone"}'), 4);
+    source.objects.delete(ghost);
+    let ghostReads = 0;
+    const realGet = source.getStream.bind(source);
+    source.getStream = async (key) => {
+      if (key === ghost) ghostReads += 1;
+      return realGet(key);
+    };
     const [b] = await sql`INSERT INTO platform_backups (kind, status, started_at, completed_at) VALUES ('manual', 'completed', now(), now()) RETURNING id`;
     backups.push(b!.id as string);
 
@@ -602,6 +612,8 @@ describe.skipIf(!DATABASE_URL)('M9 sharing, packets, sweep and mirror (live data
     expect(row.mirrored_at).toBeNull();
     expect(Number(row.mirror_attempts)).toBe(1);
     expect(String(row.mirror_last_error)).toMatch(/timed out/);
+    expect(ghostReads).toBe(1);
+    expect((await sql`SELECT mirrored_at FROM bastion_evidence_objects WHERE object_key = ${ghost}`)[0]!.mirrored_at).toBeNull();
     expect((await sql`SELECT bastion_mirror_status FROM platform_backups WHERE id = ${b!.id as string}`)[0]!.bastion_mirror_status).toBe('partial');
   });
 
@@ -693,7 +705,12 @@ describe.skipIf(!DATABASE_URL)('M9 sharing, packets, sweep and mirror (live data
     expect(first.status).toBe('running');
     expect(stats).toBeLessThan(total);
     let res = first;
-    for (let i = 0; !res.complete && i < 200; i++) res = await mirrorObjects(engine, dest, { backup_id: b1!.id as string, timeBudgetMs: 60 });
+    // The records step resumes under the tiny budget until every seal is on the mirror...
+    const sealsMirrored = () => [...Array(12).keys()].every((i) => dest.objects.has(`seals/${tag}/2026-10-${String(i + 1).padStart(2, '0')}.json`));
+    for (let i = 0; !sealsMirrored() && i < 200; i++) res = await mirrorObjects(engine, dest, { backup_id: b1!.id as string, timeBudgetMs: 60 });
+    // ...then the rest of the pass finishes under the normal budget: the object step walks every
+    // org's unmirrored rows on a shared test database (#318), which 60 ms calls only crawl through.
+    for (let i = 0; !res.complete && i < 50; i++) res = await mirrorObjects(engine, dest, { backup_id: b1!.id as string });
     expect(res.complete).toBe(true);
     for (let i = 0; i < 12; i++) expect(dest.objects.has(`seals/${tag}/2026-10-${String(i + 1).padStart(2, '0')}.json`)).toBe(true);
     // Resumed, not restarted: each record was checked about once (a call may stop just after a stat).

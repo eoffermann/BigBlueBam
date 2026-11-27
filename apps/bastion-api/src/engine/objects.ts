@@ -153,6 +153,15 @@ interface MirrorProgress {
   records_started?: string;
   /** When this pass's object step began: an object whose copy failed since then is not retried in this pass (#332). */
   objects_started?: string;
+  /** The last evidence object this pass handled; the next call resumes after it (#332). */
+  objects_after?: ObjectsCursor;
+}
+
+/** Keyset position in the object step's order; created_at is Postgres text (microseconds kept). */
+interface ObjectsCursor {
+  attempts: number;
+  created_at: string;
+  object_key: string;
 }
 
 /**
@@ -339,29 +348,37 @@ export async function mirrorObjects(deps: EngineDeps, dest: StorageDriver | null
     }
 
     // 3. Evidence objects not yet mirrored, fewest failed attempts first and then oldest first,
-    //    within the time and per-backup budgets. An object whose copy already failed in this pass
-    //    is not tried again until the next pass, so one object that cannot be copied (too large
-    //    for the link, say) never stops the newer ones behind it (#332).
+    //    within the time and per-backup budgets. The pass keeps its place across calls
+    //    (`objects_after`, the last object handled), so every object, copied, missing or failed,
+    //    is visited once per pass; an object whose copy failed sorts after the rest and is not
+    //    tried again in this pass. One object that cannot be copied (too large for the link, say)
+    //    therefore never stops the newer ones behind it (#332).
     progress.objects_started ??= deps.now().toISOString();
     const objectsStarted = new Date(progress.objects_started);
-    let after: { attempts: number; created_at: Date; object_key: string } | null = null;
+    let after: ObjectsCursor | null = progress.objects_after ?? null;
     let budgetHit = false;
     let consecutiveFailures = 0;
+    let triedThisCall = 0;
     outer: for (let round = 0; !recordsTimeUp && round < 1000; round++) {
       const batch: Array<Record<string, unknown>> = await deps.sql`
-        SELECT organization_id, content_sha256, object_key, size_bytes, created_at, mirror_attempts FROM bastion_evidence_objects
+        SELECT organization_id, content_sha256, object_key, size_bytes, created_at, created_at::text AS created_at_text, mirror_attempts
+          FROM bastion_evidence_objects
          WHERE mirrored_at IS NULL AND bytes_redacted_at IS NULL
            AND (mirror_last_attempt_at IS NULL OR mirror_last_attempt_at < ${objectsStarted})
-           ${after ? deps.sql`AND (mirror_attempts, created_at, object_key) > (${after.attempts}, ${after.created_at}, ${after.object_key})` : deps.sql``}
+           ${after ? deps.sql`AND (mirror_attempts, created_at, object_key) > (${after.attempts}, ${after.created_at}::timestamptz, ${after.object_key})` : deps.sql``}
          ORDER BY mirror_attempts, created_at, object_key LIMIT 200`;
       if (batch.length === 0) break;
       for (const o of batch) {
-        after = { attempts: Number(o.mirror_attempts ?? 0), created_at: new Date(o.created_at as string), object_key: String(o.object_key) };
+        // Everything up to the previous object has been handled: that is where the next call resumes.
+        if (after) progress.objects_after = after;
+        after = { attempts: Number(o.mirror_attempts ?? 0), created_at: String(o.created_at_text), object_key: String(o.object_key) };
         if (progress.objects >= MIRROR_BUDGET_OBJECTS || progress.bytes >= MIRROR_BUDGET_BYTES) {
           budgetHit = true;
           break outer;
         }
-        if (Date.now() - started > timeBudget) break outer;
+        // At least one object per call, so a call whose budget went on steps 1 and 2 still moves on.
+        if (triedThisCall > 0 && Date.now() - started > timeBudget) break outer;
+        triedThisCall += 1;
         let size: number;
         try {
           size = await copyObject(source, dest, String(o.object_key), deps.putTimeoutMs, Number(o.size_bytes ?? 0));
@@ -369,16 +386,19 @@ export async function mirrorObjects(deps: EngineDeps, dest: StorageDriver | null
           const msg = (err as Error).message ?? '';
           const orgId = String(o.organization_id);
           if (isStorageNotFoundError(err) || /not found|nosuchkey/i.test(msg)) {
-            // A missing source object is reported (the evidence file is gone) and skipped.
+            // A missing source object is reported (the evidence file is gone) and skipped; the
+            // pass cursor moves past it, so it is not tried again until the next pass. It says
+            // nothing about the destination, so it does not count toward the failures in a row.
             out.failed += 1;
             deps.log.error({ organization_id: orgId }, 'bastion-mirror: an evidence file is missing from the Bastion bucket and could not be copied');
             continue;
           }
           // Credentials or a missing bucket: nothing can be copied, so the pass ends `failed`.
           if (isDestinationWideError(err)) throw err;
-          // Anything else (a timeout, a reset upload) is recorded on this object, which waits for
-          // the next pass; the pass goes on. Several in a row with no success between them mean the
-          // destination itself is failing, and that ends the pass.
+          // Anything else (a timeout, a reset upload) is recorded on this object, which then sorts
+          // after every object with fewer attempts and waits for the next pass; the pass goes on.
+          // Several in a row with no success between them mean the destination itself is failing,
+          // and that ends the pass.
           consecutiveFailures += 1;
           out.failed += 1;
           await orgTx(deps.sql, orgId, (tx) => tx`
