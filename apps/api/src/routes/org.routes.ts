@@ -316,8 +316,8 @@ export default async function orgRoutes(fastify: FastifyInstance) {
           request.log.warn(
             {
               host: cfg.host,
-              org_id: request.user!.org_id,
-              user_id: request.user!.id,
+              org_id: request.user?.org_id,
+              user_id: request.user?.id,
               reason: err instanceof Error ? err.message : String(err),
             },
             'org smtp test: blocked by egress guard',

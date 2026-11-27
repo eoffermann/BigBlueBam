@@ -41,7 +41,7 @@ export function DeploymentHealthBanner() {
     status === 'critical' ? 'bg-red-600 text-white' : status === 'warning' ? 'bg-amber-500 text-white' : 'bg-zinc-500 text-white';
 
   return (
-    <div className={`border-b text-sm shrink-0 ${barColor}`} role="status">
+    <div className={`border-b text-sm shrink-0 ${barColor}`}>
       <div className="flex items-center justify-between gap-3 px-4 py-2">
         <div className="flex items-center gap-2 min-w-0">
           {critical ? <ShieldAlert className="h-4 w-4 shrink-0" /> : <AlertTriangle className="h-4 w-4 shrink-0" />}
