@@ -108,7 +108,7 @@ stay terse:
   forward. Wrapping them requires threading that separate credential, so they
   are intentionally left `—` this pass and annotated accordingly in the Helpdesk
   table. The customer/agent read tools (search, by-number, similar) are
-  unaffected.
+  unaffected. The helpdesk admin routes do accept the Bearer Bam API key (#325).
 - **Bam org/admin held to a conservative scope.** Bam member/account-lifecycle,
   guest, OAuth/SSO, SuperUser, permissions-admin, integration (GitHub / Slack /
   webhooks), iCal, LLM-provider, and credential (API-key / service-account)
@@ -1707,14 +1707,17 @@ The realtime hub at `/bureau/ws` (a `GET /bureau/ws` upgrade on bureau-api, driv
 the upstream registers, so external path = `/helpdesk/api/` + the part after `/helpdesk/`.)
 
 > **Helpdesk auth coupling (whole surface).** helpdesk-api authenticates against its OWN credential
-> system — a `helpdesk_session` cookie (customer/admin) or a per-agent `X-Agent-Key` (`hdag_`-prefixed)
+> system — a `helpdesk_session` cookie (customer) or a per-agent `X-Agent-Key` (`hdag_`-prefixed)
 > on `/helpdesk/api/agents/*` — NOT the Bam Bearer token + `X-Org-Id` that the MCP wrappers forward.
-> A Bam service-account Bearer is rejected by both `requireAdminAuth` and `requireAgentAuth` (verified
-> by local smoke: even `helpdesk_get_settings` returns `UNAUTHORIZED`). So the `/helpdesk/api/agents/*`
-> mutation routes are left `—`, and the helpdesk MCP tools are only reachable when the forwarded
-> credential maps to a valid helpdesk session/agent key. Giving the MCP service account first-class
-> helpdesk access (mint + thread an `X-Agent-Key`, or have helpdesk-api trust a Bam service token) is a
-> tracked cross-service auth follow-up. Fixed this pass: the `by-number` resolver path now targets the
+> **Exception, the admin routes (#325):** `requireAdminAuth` (settings, admin/projects, helpdesk-user
+> upsert, count-by-phrase) accepts the caller's Bam API key as `Authorization: Bearer bbam_...`,
+> verified the way apps/api verifies it, pinned to the key's org, and needing an `admin`-scope key
+> for writes. So `helpdesk_get_settings`, `helpdesk_update_settings`, `helpdesk_set_default_project`,
+> `helpdesk_upsert_user` and `helpdesk_ticket_count_by_phrase` work for an org admin's key.
+> `requireAgentAuth` still rejects Bearer, so the `/helpdesk/api/agents/*` mutation routes are left
+> `—`, and the ticket tools are only reachable when the forwarded credential maps to a valid
+> helpdesk session/agent key. Giving the agent routes the same Bearer acceptance is a tracked
+> cross-service auth follow-up. Fixed this pass: the `by-number` resolver path now targets the
 > real agent route (`/helpdesk/agents/tickets/by-number/:number`) — it reaches the route (then gates on
 > the agent key) instead of 404-ing on a path that never existed.
 

@@ -10,7 +10,8 @@
 // settings, list its projects, or upsert helpdesk users into it.
 //
 // This guard:
-//   1. resolves the caller (Bam session cookie, else per-agent X-Agent-Key),
+//   1. resolves the caller (Bam session cookie, else a Bam API key sent as
+//      Authorization: Bearer bbam_..., else per-agent X-Agent-Key),
 //   2. picks the target org: X-Org-Slug if sent, else the caller's own org
 //      (the session's active org, else their home org), so header-less
 //      callers such as the Bam settings page keep working and get the org
@@ -29,6 +30,7 @@ import type { FastifyRequest, FastifyReply } from 'fastify';
 import { sql } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import { verifyAgentApiKey } from './agent-auth.js';
+import { bamBearerToken, verifyBamApiKey, type BamApiKeyCaller } from './bam-api-key.js';
 
 const ADMIN_ROLES: ReadonlySet<string> = new Set(['admin', 'owner']);
 
@@ -88,11 +90,24 @@ export async function requireAdminAuth(request: FastifyRequest, reply: FastifyRe
   let userId: string | null = null;
   let callerOrg: string | null = null;
   let viaAgentKey = false;
+  let apiKey: BamApiKeyCaller | null = null;
   try {
     const sessionCookie = request.cookies?.session;
     if (sessionCookie) {
       const caller = await sessionCaller(sessionCookie);
       if (caller) ({ userId, orgId: callerOrg } = caller);
+    }
+    if (!userId) {
+      // Bam API key as Bearer (#325): the credential the MCP server and every
+      // other *-api client sends. Pinned to the key's org, scope-checked below.
+      const bearer = bamBearerToken(request);
+      if (bearer) {
+        apiKey = await verifyBamApiKey(request, bearer);
+        if (apiKey) {
+          userId = apiKey.userId;
+          callerOrg = apiKey.keyOrgId ?? (await homeOrg(apiKey.userId));
+        }
+      }
     }
     if (!userId) {
       userId = await verifyAgentApiKey(request, request.headers['x-agent-key'] as string | undefined);
@@ -114,6 +129,20 @@ export async function requireAdminAuth(request: FastifyRequest, reply: FastifyRe
   }
   if (!orgId) {
     return deny(400, 'ORG_REQUIRED', 'Send an X-Org-Slug header naming the organization to administer');
+  }
+
+  if (apiKey) {
+    // Mirrors apps/api: a write on an admin surface needs an 'admin'-scope
+    // key (requireScope('admin')); reads accept any scope.
+    const isRead = request.method === 'GET' || request.method === 'HEAD';
+    if (!isRead && apiKey.scope !== 'admin') {
+      return deny(403, 'FORBIDDEN', "API key requires at least 'admin' scope");
+    }
+    // A non-SuperUser key is pinned to its own org (apps/api P2-8), whatever
+    // X-Org-Slug names.
+    if (!apiKey.isSuperuser && apiKey.keyOrgId && apiKey.keyOrgId !== orgId) {
+      return deny(403, 'FORBIDDEN', 'This API key is scoped to a different organization');
+    }
   }
 
   if (await isSuperuser(userId)) {
