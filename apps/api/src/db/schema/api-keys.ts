@@ -21,6 +21,10 @@ export const apiKeys = pgTable(
     name: varchar('name', { length: 255 }).notNull(),
     key_hash: text('key_hash').notNull(),
     key_prefix: varchar('key_prefix', { length: 12 }).notNull(),
+    // #353 (migration 0345): hex SHA-256 of the full token, @bigbluebam/auth-core's
+    // apiKeyLookup(). Locates exactly one row so a request costs one Argon2 verify. NULL on
+    // legacy keys until they first authenticate (auth_adopt_api_key_lookup).
+    key_lookup: text('key_lookup'),
     scope: varchar('scope', { length: 50 }).default('read').notNull(),
     project_ids: uuid('project_ids').array(),
     expires_at: timestamp('expires_at', { withTimezone: true }),

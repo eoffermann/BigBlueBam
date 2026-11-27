@@ -24,7 +24,12 @@ const RULES = [
   },
   {
     what: 'a private api_keys candidate lookup by prefix (use sqlApiKeyStore from @bigbluebam/auth-core)',
-    re: /FROM\s+api_keys\b[^;`]*?\bkey_prefix\s*=|\bauth_api_key_candidates\s*\(/,
+    re: /FROM\s+api_keys\b[^;`]*?\bkey_prefix\s*=|\bauth_api_key_candidates\s*\(|\bauth_api_key_legacy_candidates\s*\(/,
+  },
+  // #353: the lookup-id read/adopt and the lookup derivation live once.
+  {
+    what: 'a private api_keys lookup-id read or adopt (use sqlApiKeyStore from @bigbluebam/auth-core)',
+    re: /\bauth_api_key_by_lookup\s*\(|\bauth_adopt_api_key_lookup\s*\(|FROM\s+api_keys\b[^;`]*?\bkey_lookup\s*=/,
   },
   {
     what: 'a private API-key scope ordering (use API_KEY_SCOPES / scopeAtLeast)',
@@ -116,6 +121,31 @@ test('bbam_ key verification and requireScope are defined only in packages/auth-
     }
   }
   assert.deepEqual(offenders, [], `Use @bigbluebam/auth-core instead of a local copy:\n${offenders.join('\n')}`);
+});
+
+// #353: a key minted without key_lookup lands in the legacy prefix bucket forever (until first
+// use). Every drizzle insert into api_keys under apps/*/src must store apiKeyLookup(token).
+test('every api_keys mint path stores key_lookup', () => {
+  const missing = [];
+  for (const app of readdirSync(join(ROOT, 'apps'))) {
+    const src = join(ROOT, 'apps', app, 'src');
+    try {
+      statSync(src);
+    } catch {
+      continue;
+    }
+    for (const file of walk(src)) {
+      const text = readFileSync(file, 'utf8');
+      const re = /\.insert\(\s*apiKeys\s*\)\s*\.values\(\s*\{([\s\S]*?)\}\s*\)/g;
+      for (const m of text.matchAll(re)) {
+        if (!/\bkey_lookup\s*:\s*apiKeyLookup\(/.test(m[1])) {
+          const line = text.slice(0, m.index).split('\n').length;
+          missing.push(`${relative(ROOT, file)}:${line}`);
+        }
+      }
+    }
+  }
+  assert.deepEqual(missing, [], `Store key_lookup: apiKeyLookup(token) on every api_keys insert:\n${missing.join('\n')}`);
 });
 
 test('every service that verifies bbam_ keys depends on @bigbluebam/auth-core', () => {

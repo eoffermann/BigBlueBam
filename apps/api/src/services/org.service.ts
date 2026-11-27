@@ -1,6 +1,7 @@
 import { eq, and, sql, inArray, desc, lt, or, isNull } from 'drizzle-orm';
 import { randomBytes } from 'node:crypto';
 import argon2 from 'argon2';
+import { apiKeyLookup } from '@bigbluebam/auth-core';
 import type Redis from 'ioredis';
 import { db } from '../db/index.js';
 import { cacheGetOrSet, cacheInvalidate, CACHE_KEYS } from '../lib/cache.js';
@@ -1253,6 +1254,7 @@ export async function createMemberApiKey(
       name: data.name,
       key_hash: keyHash,
       key_prefix: keyPrefix,
+      key_lookup: apiKeyLookup(rawToken),
       scope: data.scope,
       project_ids: data.project_ids ?? null,
       expires_at: expiresAt,

@@ -3,7 +3,9 @@ import Fastify from 'fastify';
 import {
   API_KEY_SCOPES,
   ORG_ADMIN_ROLES,
+  MAX_VERIFY_CANDIDATES,
   SVC_BUCKET_MAX,
+  apiKeyLookup,
   applyKeyOrgPin,
   bearerToken,
   candidateFromRow,
@@ -191,14 +193,82 @@ describe('verifyApiKeyToken', () => {
     expect(verifyHash).toHaveBeenCalledTimes(1);
   });
 
-  it('verifies the whole bbam_svc bucket (#40)', async () => {
-    const cs = Array.from({ length: 6 }, (_, i) => candidate({ id: `s${i}` }, { kind: 'service' }));
+  // #353: the bbam_svc bucket used to verify up to 64 legacy keys per request.
+  it('verifies at most 3 legacy bbam_svc keys per request and logs the overflow', async () => {
+    const cs = Array.from({ length: 4 }, (_, i) => candidate({ id: `s${i}` }, { kind: 'service' }));
     const verifyHash = vi.fn(async (_h: string, _t: string) => false);
     verifyHash.mockImplementationOnce(async () => false).mockImplementation(async () => true);
     const findCandidates = vi.fn(async () => cs);
-    const got = await verifyApiKeyToken('bbam_svc_xyz', { findCandidates, verifyHash });
-    expect(findCandidates).toHaveBeenCalledWith('bbam_svc', SVC_BUCKET_MAX);
+    const warn = vi.fn();
+    const got = await verifyApiKeyToken('bbam_svc_xyz', { findCandidates, verifyHash }, { warn });
+    expect(findCandidates).toHaveBeenCalledWith('bbam_svc', MAX_VERIFY_CANDIDATES + 1);
     expect(got?.apiKey.id).toBe('s1');
+    expect(warn).toHaveBeenCalledWith(expect.anything(), expect.stringMatching(/DEPRECATED/));
+  });
+
+  it('caps an unauthenticated bbam_svc probe at 3 Argon2 verifies even with 64 legacy keys', async () => {
+    const cs = Array.from({ length: SVC_BUCKET_MAX }, (_, i) => candidate({ id: `s${i}` }, { kind: 'service' }));
+    const verifyHash = vi.fn(async () => false);
+    const got = await verifyApiKeyToken(
+      'bbam_svc_attacker',
+      { findCandidates: async () => cs, findByLookup: async () => [], verifyHash },
+      { warn: vi.fn() },
+    );
+    expect(got).toBeNull();
+    expect(verifyHash).toHaveBeenCalledTimes(MAX_VERIFY_CANDIDATES);
+  });
+
+  it('costs zero Argon2 verifies once no legacy bbam_svc keys remain', async () => {
+    const verifyHash = vi.fn(async () => true);
+    const got = await verifyApiKeyToken('bbam_svc_attacker', {
+      findCandidates: async () => [],
+      findByLookup: async () => [],
+      verifyHash,
+    });
+    expect(got).toBeNull();
+    expect(verifyHash).not.toHaveBeenCalled();
+  });
+
+  it('finds a lookup-id key with one verify and never reads the prefix bucket', async () => {
+    const c = candidate({ id: 'new' }, { kind: 'service' });
+    const findByLookup = vi.fn(async () => [c]);
+    const findCandidates = vi.fn(async () => []);
+    const verifyHash = vi.fn(async () => true);
+    const token = 'bbam_svc_0123456789abcdef';
+    const got = await verifyApiKeyToken(token, { findByLookup, findCandidates, verifyHash });
+    expect(got?.apiKey.id).toBe('new');
+    expect(findByLookup).toHaveBeenCalledWith(apiKeyLookup(token));
+    expect(findCandidates).not.toHaveBeenCalled();
+    expect(verifyHash).toHaveBeenCalledTimes(1);
+  });
+
+  it('refuses a lookup hit whose Argon2 verify fails, without falling back to the bucket', async () => {
+    const findCandidates = vi.fn(async () => [candidate()]);
+    const got = await verifyApiKeyToken('bbam_abcdefgh', {
+      findByLookup: async () => [candidate()],
+      findCandidates,
+      verifyHash: async () => false,
+    });
+    expect(got).toBeNull();
+    expect(findCandidates).not.toHaveBeenCalled();
+  });
+
+  it('gives a legacy key that authenticates its lookup id', async () => {
+    const adoptLookup = vi.fn(async () => {});
+    const token = 'bbam_svc_legacy';
+    const got = await verifyApiKeyToken(token, {
+      findByLookup: async () => [],
+      findCandidates: async () => [candidate({ id: 'old' })],
+      adoptLookup,
+      verifyHash: async () => true,
+    });
+    expect(got?.apiKey.id).toBe('old');
+    expect(adoptLookup).toHaveBeenCalledWith('old', apiKeyLookup(token));
+  });
+
+  it('derives the lookup id as hex sha256 of the full token', () => {
+    expect(apiKeyLookup('bbam_svc_abc')).toMatch(/^[0-9a-f]{64}$/);
+    expect(apiKeyLookup('bbam_svc_abc')).not.toBe(apiKeyLookup('bbam_svc_abd'));
   });
 });
 
@@ -232,12 +302,16 @@ describe('sqlApiKeyStore', () => {
     ]);
     const store = sqlApiKeyStore({ sql, execute, verifyHash: async () => true });
     const [c] = await store.findCandidates('bbam_abc', 10);
-    expect(seen[0]).toContain('auth_api_key_candidates(');
+    expect(seen[0]).toContain('auth_api_key_legacy_candidates(');
     expect(seen[0]).toContain('JOIN users u');
     expect(c?.apiKey.rotated_at).toBeInstanceOf(Date);
     expect(c?.user.kind).toBe('agent');
     await store.touch('k1');
     expect(seen[1]).toContain('auth_touch_api_key(');
+    await store.findByLookup?.('abc');
+    expect(seen[2]).toContain('auth_api_key_by_lookup(');
+    await store.adoptLookup?.('k1', 'abc');
+    expect(seen[3]).toContain('auth_adopt_api_key_lookup(');
   });
 
   it('maps an unknown kind to human (role cap applies)', () => {

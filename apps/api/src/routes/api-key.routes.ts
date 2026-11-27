@@ -3,7 +3,7 @@ import { eq, asc, and } from 'drizzle-orm';
 import { z } from 'zod';
 import { randomBytes } from 'crypto';
 import argon2 from 'argon2';
-import { API_KEY_SCOPES, scopeAtLeast } from '@bigbluebam/auth-core';
+import { API_KEY_SCOPES, scopeAtLeast, apiKeyLookup } from '@bigbluebam/auth-core';
 import { db } from '../db/index.js';
 import { apiKeys } from '../db/schema/api-keys.js';
 import { requireAuth } from '../plugins/auth.js';
@@ -130,6 +130,7 @@ export default async function apiKeyRoutes(fastify: FastifyInstance) {
           name: data.name,
           key_hash: keyHash,
           key_prefix: prefix,
+          key_lookup: apiKeyLookup(rawKey),
           scope: data.scope,
           project_ids: data.project_ids ?? null,
           expires_at: data.expires_at ? new Date(data.expires_at) : null,
@@ -212,6 +213,7 @@ export default async function apiKeyRoutes(fastify: FastifyInstance) {
             name: existing.name,
             key_hash: keyHash,
             key_prefix: prefix,
+            key_lookup: apiKeyLookup(fullToken),
             scope: existing.scope,
             project_ids: existing.project_ids,
             expires_at: existing.expires_at,

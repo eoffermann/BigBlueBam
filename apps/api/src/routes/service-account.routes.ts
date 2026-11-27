@@ -3,7 +3,7 @@ import { eq, and, inArray, isNull, desc } from 'drizzle-orm';
 import { z } from 'zod';
 import { randomBytes } from 'crypto';
 import argon2 from 'argon2';
-import { API_KEY_SCOPES, scopeAtLeast } from '@bigbluebam/auth-core';
+import { API_KEY_SCOPES, scopeAtLeast, apiKeyLookup } from '@bigbluebam/auth-core';
 import { db } from '../db/index.js';
 import { users } from '../db/schema/users.js';
 import { apiKeys } from '../db/schema/api-keys.js';
@@ -292,6 +292,7 @@ export default async function serviceAccountRoutes(fastify: FastifyInstance) {
             name: `${body.name} (service account)`,
             key_hash: keyHash,
             key_prefix: prefix,
+            key_lookup: apiKeyLookup(fullToken),
             scope: body.scope,
             project_ids: body.project_ids ?? null,
             expires_at: null,
@@ -408,6 +409,7 @@ export default async function serviceAccountRoutes(fastify: FastifyInstance) {
             name: existing.name,
             key_hash: keyHash,
             key_prefix: prefix,
+            key_lookup: apiKeyLookup(fullToken),
             scope: existing.scope,
             project_ids: existing.project_ids,
             expires_at: existing.expires_at,

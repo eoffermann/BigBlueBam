@@ -1,7 +1,7 @@
 import 'dotenv/config';
 import { randomBytes } from 'node:crypto';
 import argon2 from 'argon2';
-import { API_KEY_SCOPES } from '@bigbluebam/auth-core';
+import { API_KEY_SCOPES, apiKeyLookup } from '@bigbluebam/auth-core';
 import { drizzle } from 'drizzle-orm/postgres-js';
 import { eq, and, sql } from 'drizzle-orm';
 import postgres from 'postgres';
@@ -429,6 +429,7 @@ async function createApiKey(flags: Record<string, string>) {
         name: name!,
         key_hash: keyHash,
         key_prefix: prefix,
+        key_lookup: apiKeyLookup(fullToken),
         scope,
         project_ids: projectId ? [projectId] : null,
         expires_at: expiresAt,
@@ -574,6 +575,7 @@ async function createServiceAccount(flags: Record<string, string>) {
         name: `${name} (service account)`,
         key_hash: keyHash,
         key_prefix: prefix,
+        key_lookup: apiKeyLookup(fullToken),
         scope,
         project_ids: null,
         expires_at: null,
