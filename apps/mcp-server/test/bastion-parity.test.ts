@@ -12,7 +12,7 @@ import { join } from 'node:path';
 const ROOT = join(__dirname, '..', '..', '..');
 const ROUTES_DIR = join(ROOT, 'apps', 'bastion-api', 'src', 'routes');
 const CLIENT = readFileSync(join(__dirname, '..', 'src', 'clients', 'bastion-client.ts'), 'utf8');
-const PENDING = readFileSync(join(__dirname, '..', 'src', 'tools', 'bastion-tools.ts'), 'utf8');
+const TOOLS = readFileSync(join(__dirname, '..', 'src', 'tools', 'bastion-tools.ts'), 'utf8');
 const SEARCH_TOOLS = readFileSync(join(__dirname, '..', 'src', 'tools', 'search-tools.ts'), 'utf8');
 const MAP = readFileSync(join(ROOT, 'docs', 'reference', 'mcp-endpoint-mapping.md'), 'utf8');
 
@@ -130,11 +130,11 @@ describe('Bastion MCP parity cross-walk (M10)', () => {
     expect(stale).toEqual([]);
   });
 
-  it('every client method calls a real route, and a pending tool (or search_everything) uses it', () => {
+  it('every client method calls a real route, and a registered tool (or search_everything) uses it', () => {
     const shapedRoutes = new Set(ROUTES.map(shape));
     const unknown = [...METHODS].filter(([, r]) => !shapedRoutes.has(r)).map(([n, r]) => `${n}: ${r}`);
     expect(unknown).toEqual([]);
-    const used = new Set([...PENDING.matchAll(/client\.(\w+)\(/g)].map((m) => m[1]!));
+    const used = new Set([...TOOLS.matchAll(/client\.(\w+)\(/g)].map((m) => m[1]!));
     const orphans = [...METHODS.keys()].filter((n) => !used.has(n) && n !== 'search');
     expect(orphans, 'client methods no tool calls').toEqual([]);
     // GET /search is read by the platform search_everything, not by a bastion_* tool.
@@ -142,7 +142,7 @@ describe('Bastion MCP parity cross-walk (M10)', () => {
     expect(SEARCH_TOOLS).toMatch(/\$\{base\}\/search\?/);
   });
 
-  it('no pending tool calls a session-only route (the client has no method for one)', () => {
+  it('no registered tool calls a session-only route (the client has no method for one)', () => {
     for (const [route, cat] of Object.entries(SKIPS)) {
       if (cat === 'session') expect(CLIENT_ROUTES.has(shape(route)), route).toBe(false);
     }
@@ -166,10 +166,20 @@ describe('Bastion MCP parity cross-walk (M10)', () => {
     }
   });
 
-  it('every tool the surface map names for a Bastion route is a pending tool (or search_everything)', () => {
-    const names = new Set([...PENDING.matchAll(/name: '(bastion_[a-z_]+)'/g)].map((m) => m[1]!));
+  it('every tool the surface map names for a Bastion route is a registered tool (or search_everything)', () => {
+    const names = new Set([...TOOLS.matchAll(/name: '(bastion_[a-z_]+)'/g)].map((m) => m[1]!));
     for (const [route, cell] of mapRows()) {
       for (const t of cell.matchAll(/`(bastion_[a-z_]+)`/g)) expect(names.has(t[1]!), `${route}: ${t[1]}`).toBe(true);
     }
+  });
+
+  it('the surface map no longer calls the registered Bastion tools pending (#333)', () => {
+    const summary = MAP.split('\n').find((l) => /^\| Bastion\b/.test(l));
+    expect(summary, 'Bastion row in the coverage summary table').toBeDefined();
+    expect(summary).not.toMatch(/pending/i);
+    const start = MAP.indexOf('## Bastion (app)');
+    const next = MAP.indexOf('\n## ', start + 1);
+    const section = MAP.slice(start, next === -1 ? undefined : next);
+    expect(section).not.toMatch(/pending `bastion_\*` tool|used by a pending tool/);
   });
 });
