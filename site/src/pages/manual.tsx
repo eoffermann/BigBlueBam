@@ -482,6 +482,16 @@ export function ManualPage() {
               <ArrowRight className="h-3.5 w-3.5" />
             </a>
           </p>
+          <p className="mt-2 text-sm text-zinc-500">
+            Building an AI agent?{' '}
+            <a
+              href="/docs/reference"
+              className="inline-flex items-center gap-1 font-medium text-primary-600 hover:text-primary-700"
+            >
+              Browse every MCP tool, app by app
+              <ArrowRight className="h-3.5 w-3.5" />
+            </a>
+          </p>
 
           {/* Download the printable, textbook-style edition of this manual. */}
           <div className="mt-6 flex flex-wrap items-center gap-3">

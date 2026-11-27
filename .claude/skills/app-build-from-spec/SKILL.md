@@ -400,7 +400,10 @@ not as an acceptable gap.
   project only; seed gilligan data for the new app first if needed. Never generic data.
 - **Marketing site:** add the app to the `site/` marketing content (card/section, and the
   manual/book artifacts if the pipeline covers it). MCP Tool Counts should be updated
-  in the Marketing site anywhere that it mentions them. `site` bakes `site/public/` and its
+  in the Marketing site anywhere that it mentions them. `/docs` on the site is the Manual;
+  the per-app MCP tool catalog is `/docs/reference` (`site/src/pages/docs.tsx`, data from
+  `pnpm docs:catalog`; optionally add the app's icon/color to `APP_ICON`/`APP_COLOR` there).
+  Check the app's "<App> (N tools)" heading on `/docs/reference`, not on `/docs`. `site` bakes `site/public/` and its
   content into the image at BUILD time and is NOT hot-reloaded, so adding `<AppSection />` to
   the source is invisible until you **rebuild AND recreate the container** (`docker compose
   build site && docker compose up -d --force-recreate site`) - then PROVE the section renders

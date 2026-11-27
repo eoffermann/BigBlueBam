@@ -298,9 +298,12 @@ backticks are the objective checks - run them, do not eyeball.
       also `curl` one from the running frontend to confirm the path serves. The docs-capture
       bridge writes NUMBERED files (`01-<name>.png`), so a help.md that references the un-numbered
       name silently 404s every image - open the app's Help panel and look.
-- [ ] **The `/docs` MCP tool catalog includes the app.** `/docs` is AUTO-GENERATED from the
-      per-app tool sources (`pnpm docs:catalog` -> committed `site/src/content/docs-catalog.generated.json`,
-      consumed by `site/src/pages/docs.tsx`) - it is NOT hand-maintained. Verify the app's
+- [ ] **The `/docs/reference` MCP tool catalog includes the app.** (`/docs` itself is the
+      Manual; the catalog is the `DocsPage` at `/docs/reference`, linked from the Manual
+      header.) It is AUTO-GENERATED from the per-app tool sources (`pnpm docs:catalog` ->
+      committed `site/src/content/docs-catalog.generated.json`, consumed by
+      `site/src/pages/docs.tsx`) - it is NOT hand-maintained. Load `/docs/reference` on the
+      rebuilt `site` and find the app's "<App> (N tools)" heading. Verify the app's
       tool module is in `APP_TOOL_MODULES` (scripts/docs/lib/tool-source.mjs) and its
       LAUNCHPAD_CATALOG row exists, re-run `node scripts/docs/build-docs-catalog.mjs` (must be
       deterministic - no git diff), and confirm the app + its tools appear in the generated
