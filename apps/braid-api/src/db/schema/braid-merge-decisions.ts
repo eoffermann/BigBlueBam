@@ -7,9 +7,11 @@ import {
   text,
   timestamp,
   index,
+  type AnyPgColumn,
 } from 'drizzle-orm/pg-core';
 import { organizations, users } from './bbb-refs.js';
 import { actorTypeEnum } from './agent-proposals.js';
+import { braidMatchCandidates } from './braid-match-candidates.js';
 
 // Immutable audit for every merge, split, auto-merge, and reject (never updated or
 // deleted). `affected_identity_ids` records exactly which identities a decision moved,
@@ -26,8 +28,8 @@ export const braidMergeDecisions = pgTable(
     surviving_profile_id: uuid('surviving_profile_id'),
     absorbed_profile_id: uuid('absorbed_profile_id'),
     affected_identity_ids: jsonb('affected_identity_ids').notNull().default('[]'),
-    reverses_decision_id: uuid('reverses_decision_id'),
-    candidate_id: uuid('candidate_id'),
+    reverses_decision_id: uuid('reverses_decision_id').references((): AnyPgColumn => braidMergeDecisions.id, { onDelete: 'set null' }),
+    candidate_id: uuid('candidate_id').references((): AnyPgColumn => braidMatchCandidates.id, { onDelete: 'set null' }),
     score_at_decision: numeric('score_at_decision', { precision: 5, scale: 2 }),
     decided_by: uuid('decided_by')
       .notNull()

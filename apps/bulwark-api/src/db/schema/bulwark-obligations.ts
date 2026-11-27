@@ -9,6 +9,7 @@ import {
   timestamp,
   index,
   uniqueIndex,
+  type AnyPgColumn,
 } from 'drizzle-orm/pg-core';
 import { organizations, users } from './bbb-refs.js';
 import { bulwarkContracts } from './bulwark-contracts.js';
@@ -16,8 +17,8 @@ import { bulwarkExtractionRuns } from './bulwark-extraction-runs.js';
 
 // One typed, clause-cited obligation (spec 3.1). dedup_key is the stable per-obligation
 // upsert/supersession key (DI1/DI2/DK1), free of non-deterministic LLM prose; clause_ref is
-// EVIDENCE only. supersedes_obligation_id is a self-FK declared in the migration (0234) via
-// a guarded DO $$ block, not here, to avoid a circular self-reference in Drizzle. The GIN
+// EVIDENCE only. supersedes_obligation_id is a self-FK created by migration 0234 and declared
+// here with an `(): AnyPgColumn =>` callback (#360). The GIN
 // index on event_binding and the partial WHERE-is_armed index live in the migration only.
 export const bulwarkObligations = pgTable(
   'bulwark_obligations',
@@ -31,7 +32,7 @@ export const bulwarkObligations = pgTable(
       .references(() => bulwarkContracts.id, { onDelete: 'cascade' }),
     clause_ref: varchar('clause_ref', { length: 64 }),
     dedup_key: varchar('dedup_key', { length: 64 }).notNull(),
-    supersedes_obligation_id: uuid('supersedes_obligation_id'),
+    supersedes_obligation_id: uuid('supersedes_obligation_id').references((): AnyPgColumn => bulwarkObligations.id, { onDelete: 'set null' }),
     obligation_type: varchar('obligation_type', { length: 32 }).notNull(),
     title: varchar('title', { length: 512 }).notNull(),
     trigger_description: text('trigger_description'),

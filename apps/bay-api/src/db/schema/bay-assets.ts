@@ -5,17 +5,21 @@ import {
   text,
   timestamp,
   index,
+  type AnyPgColumn,
 } from 'drizzle-orm/pg-core';
 import { organizations, users, projects } from './bbb-refs.js';
+import { bayAssetVersions } from './bay-asset-versions.js';
+import { bayFolders } from './bay-folders.js';
 
 // Bay review assets (Bay master). A Bay asset is the review-and-approval catalog
 // entry for a piece of media. Unlike Bin, Bay is folder-less: organization is by
 // project + review state, not a folder tree. The canonical bytes live in Bin;
 // each Bay asset version references a Bin asset/version rather than storing bytes.
 //
-// Note: current_version_id references bay_asset_versions, but that table
-// references bay_assets, so the FK is added in the migration (not via a Drizzle
-// .references() here) to avoid a circular import / chicken-and-egg insert.
+// Note: current_version_id references bay_asset_versions, which references
+// bay_assets back. The FK is nullable (insert the asset, then the version, then
+// set current_version_id) and declared with a lazy `(): AnyPgColumn =>` callback
+// so the circular import is safe (db:check compares it, issue #360).
 export const bayAssets = pgTable(
   'bay_assets',
   {
@@ -25,7 +29,7 @@ export const bayAssets = pgTable(
       .references(() => organizations.id, { onDelete: 'cascade' }),
     project_id: uuid('project_id').references(() => projects.id, { onDelete: 'set null' }),
     // Optional folder placement (FK to bay_folders, declared in migration).
-    folder_id: uuid('folder_id'),
+    folder_id: uuid('folder_id').references((): AnyPgColumn => bayFolders.id, { onDelete: 'set null' }),
     name: varchar('name', { length: 512 }).notNull(),
     // image | video | audio | model  (CHECK in migration).
     media_kind: text('media_kind').notNull(),
@@ -34,7 +38,7 @@ export const bayAssets = pgTable(
     // 1:1 link to the canonical Bin asset this review surface wraps.
     bin_asset_id: uuid('bin_asset_id'),
     // Denormalized pointer to the active version (FK declared in migration).
-    current_version_id: uuid('current_version_id'),
+    current_version_id: uuid('current_version_id').references((): AnyPgColumn => bayAssetVersions.id, { onDelete: 'set null' }),
     created_by: uuid('created_by')
       .notNull()
       .references(() => users.id),

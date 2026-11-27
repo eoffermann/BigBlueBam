@@ -9,9 +9,11 @@ import {
   jsonb,
   index,
   uniqueIndex,
+  type AnyPgColumn,
 } from 'drizzle-orm/pg-core';
 import { organizations, projects, users } from './bbb-refs.js';
 import { banterChannelGroups } from './channel-groups.js';
+import { banterCalls } from './calls.js';
 
 export const banterChannels = pgTable(
   'banter_channels',
@@ -46,7 +48,7 @@ export const banterChannels = pgTable(
     last_message_preview: varchar('last_message_preview', { length: 200 }),
     message_count: integer('message_count').notNull().default(0),
     member_count: integer('member_count').notNull().default(0),
-    active_huddle_id: uuid('active_huddle_id'),
+    active_huddle_id: uuid('active_huddle_id').references((): AnyPgColumn => banterCalls.id, { onDelete: 'set null' }),
     // §13 Wave 4 scheduled banter — per-channel quiet-hours policy.
     // Shape: { timezone, allowed_hours:[start,end], weekday_only?, urgency_override? }.
     // Null means no policy (unrestricted posting).

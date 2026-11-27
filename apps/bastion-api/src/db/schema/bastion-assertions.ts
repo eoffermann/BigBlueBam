@@ -1,7 +1,7 @@
 // Mirrors bastion_assertions as created by the Bastion migrations (0274-0280; spec 4.1). Columns only:
 // CHECK constraints, partial/unique indexes, immutability triggers and the RLS policy live in
 // the migration, which is the single source of truth (CLAUDE.md). db:check diffs these columns.
-import { integer, jsonb, pgTable, text, timestamp, uuid, varchar } from 'drizzle-orm/pg-core';
+import { integer, jsonb, pgTable, text, timestamp, uuid, varchar, type AnyPgColumn } from 'drizzle-orm/pg-core';
 import { bastionCompileRuns } from './bastion-compile-runs.js';
 import { bastionControls } from './bastion-controls.js';
 import { bastionEvidenceFeeds } from './bastion-evidence-feeds.js';
@@ -24,8 +24,8 @@ export const bastionAssertions = pgTable(
     proposed_by: varchar('proposed_by', { length: 16 }).default('library').notNull(),
     compile_run_id: uuid('compile_run_id').references(() => bastionCompileRuns.id, { onDelete: 'set null' }),
     review_status: varchar('review_status', { length: 16 }).default('proposed').notNull(),
-    // Self-FK (SET NULL) declared in the migration.
-    supersedes_id: uuid('supersedes_id'),
+    // Self-FK (SET NULL), created by the migration.
+    supersedes_id: uuid('supersedes_id').references((): AnyPgColumn => bastionAssertions.id, { onDelete: 'set null' }),
     confirmed_by: uuid('confirmed_by').references(() => users.id, { onDelete: 'set null' }),
     confirmed_at: timestamp('confirmed_at', { withTimezone: true }),
     created_by: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),

@@ -1,4 +1,4 @@
-import { pgTable, uuid, varchar, text, boolean, integer, date, timestamp, index } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, varchar, text, boolean, integer, date, timestamp, index, type AnyPgColumn } from 'drizzle-orm/pg-core';
 import { organizations, users } from './bbb-refs.js';
 import { bursarRequests } from './bursar-requests.js';
 import { bursarOffers } from './bursar-offers.js';
@@ -21,7 +21,7 @@ export const bursarAwards = pgTable(
       .references(() => bursarRequests.id, { onDelete: 'restrict' }),
     offer_id: uuid('offer_id').references(() => bursarOffers.id, { onDelete: 'set null' }),
     vendor_id: uuid('vendor_id').references(() => bursarVendors.id, { onDelete: 'set null' }),
-    supersedes_award_id: uuid('supersedes_award_id'),
+    supersedes_award_id: uuid('supersedes_award_id').references((): AnyPgColumn => bursarAwards.id, { onDelete: 'restrict' }),
     chain_root_id: uuid('chain_root_id').notNull(),
     baseline_hash: varchar('baseline_hash', { length: 64 }),
     currency: varchar('currency', { length: 3 }).notNull().default('USD'),

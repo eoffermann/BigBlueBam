@@ -9,6 +9,7 @@ import {
   boolean,
   timestamp,
   index,
+  type AnyPgColumn,
 } from 'drizzle-orm/pg-core';
 import { organizations, users, projects } from './bbb-refs.js';
 import { burnEngagements } from './burn-engagements.js';
@@ -64,7 +65,7 @@ export const burnPrechecks = pgTable(
       .references(() => organizations.id, { onDelete: 'cascade' }),
     idempotency_key: varchar('idempotency_key', { length: 160 }).notNull(),
     superseded_at: timestamp('superseded_at', { withTimezone: true }),
-    superseded_by: uuid('superseded_by'),
+    superseded_by: uuid('superseded_by').references((): AnyPgColumn => burnPrechecks.id, { onDelete: 'set null' }),
     valid_until: timestamp('valid_until', { withTimezone: true }).notNull(),
     is_calibrating: boolean('is_calibrating').notNull().default(false),
     // bill.expense | bill.recurring | bam.task_phase_move | bam.assignment |

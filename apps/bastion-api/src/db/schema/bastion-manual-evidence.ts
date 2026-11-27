@@ -1,7 +1,7 @@
 // Mirrors bastion_manual_evidence as created by the Bastion migrations (0274-0280; spec 4.1). Columns only:
 // CHECK constraints, partial/unique indexes, immutability triggers and the RLS policy live in
 // the migration, which is the single source of truth (CLAUDE.md). db:check diffs these columns.
-import { bigint, date, integer, pgTable, text, timestamp, uuid, varchar } from 'drizzle-orm/pg-core';
+import { bigint, date, integer, pgTable, text, timestamp, uuid, varchar, type AnyPgColumn } from 'drizzle-orm/pg-core';
 import { organizations } from './bbb-refs.js';
 
 export const bastionManualEvidence = pgTable(
@@ -31,8 +31,8 @@ export const bastionManualEvidence = pgTable(
     blocked_reason: varchar('blocked_reason', { length: 48 }),
     attempts: integer('attempts').default(0).notNull(),
     next_attempt_at: timestamp('next_attempt_at', { withTimezone: true }),
-    // Self-FK (RESTRICT) declared in the migration.
-    superseded_by_id: uuid('superseded_by_id'),
+    // Self-FK (RESTRICT), created by the migration.
+    superseded_by_id: uuid('superseded_by_id').references((): AnyPgColumn => bastionManualEvidence.id, { onDelete: 'restrict' }),
     withdrawn_reason: varchar('withdrawn_reason', { length: 48 }),
     withdrawn_by: uuid('withdrawn_by'),
     withdrawn_at: timestamp('withdrawn_at', { withTimezone: true }),

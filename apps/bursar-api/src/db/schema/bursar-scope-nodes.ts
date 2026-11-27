@@ -10,6 +10,7 @@ import {
   timestamp,
   index,
   uniqueIndex,
+  type AnyPgColumn,
 } from 'drizzle-orm/pg-core';
 import { organizations } from './bbb-refs.js';
 import { bursarRequests } from './bursar-requests.js';
@@ -17,7 +18,7 @@ import { bursarExtractionRuns } from './bursar-extraction-runs.js';
 
 /**
  * Derived scope tree (spec 6.1, migration 0247). parent_id is a guarded self-FK (RESTRICT)
- * declared in the migration, not here, to avoid a circular self-reference in Drizzle.
+ * created by the migration and declared here with an `(): AnyPgColumn =>` callback (#360).
  * Soft-archive only (archived_at). Unique (organization_id, request_id, dedup_key).
  */
 export const bursarScopeNodes = pgTable(
@@ -31,7 +32,7 @@ export const bursarScopeNodes = pgTable(
       .notNull()
       .references(() => bursarRequests.id, { onDelete: 'cascade' }),
     // Self-FK (RESTRICT) declared in migration 0247.
-    parent_id: uuid('parent_id'),
+    parent_id: uuid('parent_id').references((): AnyPgColumn => bursarScopeNodes.id, { onDelete: 'restrict' }),
     path: text('path'),
     ordinal: integer('ordinal').notNull().default(0),
     title: varchar('title', { length: 512 }).notNull(),

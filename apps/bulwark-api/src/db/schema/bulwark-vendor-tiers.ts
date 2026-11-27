@@ -7,6 +7,7 @@ import {
   timestamp,
   index,
   uniqueIndex,
+  type AnyPgColumn,
 } from 'drizzle-orm/pg-core';
 import { organizations } from './bbb-refs.js';
 import { bulwarkContracts } from './bulwark-contracts.js';
@@ -25,7 +26,7 @@ export const bulwarkVendorTiers = pgTable(
     contract_id: uuid('contract_id').references(() => bulwarkContracts.id, {
       onDelete: 'set null',
     }),
-    parent_tier_id: uuid('parent_tier_id'),
+    parent_tier_id: uuid('parent_tier_id').references((): AnyPgColumn => bulwarkVendorTiers.id, { onDelete: 'set null' }),
     vendor_type: varchar('vendor_type', { length: 32 }),
     vendor_id: uuid('vendor_id'),
     tier_level: smallint('tier_level').notNull().default(1),

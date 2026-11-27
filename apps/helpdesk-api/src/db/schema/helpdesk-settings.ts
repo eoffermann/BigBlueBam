@@ -13,7 +13,7 @@ export const helpdeskSettings = pgTable('helpdesk_settings', {
     .array()
     .default(sql`'{}'::text[]`)
     .notNull(),
-  default_project_id: uuid('default_project_id').references(() => projects.id),
+  default_project_id: uuid('default_project_id').references(() => projects.id, { onDelete: 'set null' }),
   default_phase_id: uuid('default_phase_id').references(() => phases.id),
   default_priority: varchar('default_priority', { length: 20 }).default('medium').notNull(),
   categories: jsonb('categories').default([]).notNull(),

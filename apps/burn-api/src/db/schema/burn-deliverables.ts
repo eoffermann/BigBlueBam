@@ -12,6 +12,7 @@ import {
   customType,
   index,
   uniqueIndex,
+  type AnyPgColumn,
 } from 'drizzle-orm/pg-core';
 import { organizations, users } from './bbb-refs.js';
 import { burnEngagements } from './burn-engagements.js';
@@ -60,9 +61,8 @@ const tsvector = customType<{ data: string }>({
  * rank, or highlight on `search_tsv`; a member-tier `q` filter matches `title` only,
  * through the separate GIN trigram index.
  *
- * `supersedes_deliverable_id` and `amends_deliverable_id` are self-FKs declared in
- * migration 0239 via guarded DO $$ blocks, not here, to avoid a circular self-reference in
- * Drizzle. `search_tsv` is a GENERATED ALWAYS ... STORED column defined in the migration.
+ * `supersedes_deliverable_id` and `amends_deliverable_id` are self-FKs created by migration
+ * 0239 and declared here with `(): AnyPgColumn =>` callbacks (#360). `search_tsv` is a GENERATED ALWAYS ... STORED column defined in the migration.
  */
 export const burnDeliverables = pgTable(
   'burn_deliverables',
@@ -80,7 +80,7 @@ export const burnDeliverables = pgTable(
     description: text('description'),
     // work_product | milestone | recurring_service | support | expense_allowance | other
     deliverable_kind: varchar('deliverable_kind', { length: 32 }).notNull().default('work_product'),
-    amends_deliverable_id: uuid('amends_deliverable_id'),
+    amends_deliverable_id: uuid('amends_deliverable_id').references((): AnyPgColumn => burnDeliverables.id, { onDelete: 'restrict' }),
     envelope_amount_delta: bigint('envelope_amount_delta', { mode: 'number' }),
     envelope_amount: bigint('envelope_amount', { mode: 'number' }),
     envelope_hours: numeric('envelope_hours', { precision: 10, scale: 2 }),
@@ -99,7 +99,7 @@ export const burnDeliverables = pgTable(
       onDelete: 'set null',
     }),
     delta_confirmed_at: timestamp('delta_confirmed_at', { withTimezone: true }),
-    supersedes_deliverable_id: uuid('supersedes_deliverable_id'),
+    supersedes_deliverable_id: uuid('supersedes_deliverable_id').references((): AnyPgColumn => burnDeliverables.id, { onDelete: 'set null' }),
     search_tsv: tsvector('search_tsv'),
     qdrant_point_id: uuid('qdrant_point_id'),
     qdrant_synced_at: timestamp('qdrant_synced_at', { withTimezone: true }),

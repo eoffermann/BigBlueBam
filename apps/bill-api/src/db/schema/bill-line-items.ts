@@ -8,8 +8,10 @@ import {
   integer,
   timestamp,
   index,
+  type AnyPgColumn,
 } from 'drizzle-orm/pg-core';
 import { billInvoices } from './bill-invoices.js';
+import { users } from './bbb-refs.js';
 
 export const billLineItems = pgTable(
   'bill_line_items',
@@ -34,7 +36,7 @@ export const billLineItems = pgTable(
     // There is deliberately NO trusted X-Acting-User header: the acting user arrives in
     // the body and the caller is expected to have CHECKED that user's permission through
     // POST /internal/permissions/dual-read first.
-    acting_user_id: uuid('acting_user_id'),
+    acting_user_id: uuid('acting_user_id').references((): AnyPgColumn => users.id, { onDelete: 'set null' }),
     created_at: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => [

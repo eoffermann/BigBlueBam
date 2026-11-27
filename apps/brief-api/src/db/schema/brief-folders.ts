@@ -5,6 +5,7 @@ import {
   integer,
   timestamp,
   index,
+  type AnyPgColumn,
 } from 'drizzle-orm/pg-core';
 import { users, organizations, projects } from './bbb-refs.js';
 
@@ -16,7 +17,7 @@ export const briefFolders = pgTable(
       .notNull()
       .references(() => organizations.id, { onDelete: 'cascade' }),
     project_id: uuid('project_id').references(() => projects.id, { onDelete: 'cascade' }),
-    parent_id: uuid('parent_id'),
+    parent_id: uuid('parent_id').references((): AnyPgColumn => briefFolders.id, { onDelete: 'cascade' }),
     name: varchar('name', { length: 255 }).notNull(),
     slug: varchar('slug', { length: 300 }).notNull(),
     sort_order: integer('sort_order').default(0).notNull(),

@@ -1,6 +1,7 @@
-import { pgTable, uuid, boolean, text, timestamp, primaryKey, index, uniqueIndex } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, boolean, text, timestamp, primaryKey, index, uniqueIndex, type AnyPgColumn } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 import { users } from './users.js';
+import { organizations } from './organizations.js';
 
 /**
  * Per-action permissions (Wave A foundation, migrations 0144-0146; Wave B
@@ -211,7 +212,7 @@ export const permissionsDivergenceLog = pgTable(
       .notNull(),
     request_id: text('request_id'),
     user_id: uuid('user_id').references(() => users.id, { onDelete: 'set null' }),
-    org_id: uuid('org_id'),
+    org_id: uuid('org_id').references((): AnyPgColumn => organizations.id, { onDelete: 'set null' }),
     permission_id: text('permission_id').notNull(),
     scope_type: text('scope_type').notNull(),
     scope_id: uuid('scope_id'),

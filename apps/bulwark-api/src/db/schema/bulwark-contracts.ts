@@ -5,14 +5,14 @@ import {
   date,
   timestamp,
   index,
+  type AnyPgColumn,
 } from 'drizzle-orm/pg-core';
 import { organizations, users, projects } from './bbb-refs.js';
 
 // A contract (or amendment) Bulwark tracks (spec 3.1). project_id is the scoping anchor
 // for read AND write project-membership checks (spec 2.5); a null-job contract holds only
-// manual-trigger or calendar obligations. supersedes_contract_id is a self-FK declared in
-// the migration (0234) via a guarded DO $$ block, not here, to avoid a circular
-// self-reference in Drizzle. bin_asset_id / counterparty_id are dotted refs with NO
+// manual-trigger or calendar obligations. supersedes_contract_id is a self-FK created by
+// migration 0234 and declared here with an `(): AnyPgColumn =>` callback (#360). bin_asset_id / counterparty_id are dotted refs with NO
 // cross-schema FK (the entity_links convention, D8).
 export const bulwarkContracts = pgTable(
   'bulwark_contracts',
@@ -24,7 +24,7 @@ export const bulwarkContracts = pgTable(
     project_id: uuid('project_id').references(() => projects.id, { onDelete: 'set null' }),
     title: varchar('title', { length: 512 }).notNull(),
     contract_kind: varchar('contract_kind', { length: 32 }).notNull().default('subcontract'),
-    supersedes_contract_id: uuid('supersedes_contract_id'),
+    supersedes_contract_id: uuid('supersedes_contract_id').references((): AnyPgColumn => bulwarkContracts.id, { onDelete: 'set null' }),
     timezone: varchar('timezone', { length: 64 }).notNull().default('UTC'),
     jurisdiction: varchar('jurisdiction', { length: 32 }),
     bin_asset_id: uuid('bin_asset_id').notNull(),

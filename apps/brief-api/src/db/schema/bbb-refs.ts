@@ -157,7 +157,7 @@ export const tasks = pgTable('tasks', {
   id: uuid('id').primaryKey().defaultRandom(),
   org_id: uuid('org_id')
     .notNull()
-    .references(() => organizations.id),
+    .references(() => organizations.id, { onDelete: 'cascade' }),
   project_id: uuid('project_id')
     .notNull()
     .references(() => projects.id),

@@ -11,7 +11,7 @@ export const comments = pgTable(
       .references(() => tasks.id, { onDelete: 'cascade' }),
     author_id: uuid('author_id')
       .notNull()
-      .references(() => users.id),
+      .references(() => users.id, { onDelete: 'cascade' }),
     body: text('body').notNull(),
     body_plain: text('body_plain'),
     is_system: boolean('is_system').default(false).notNull(),

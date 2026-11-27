@@ -1,5 +1,6 @@
-import { pgTable, uuid, varchar, text, integer, jsonb, timestamp, boolean, index, uniqueIndex } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, varchar, text, integer, jsonb, timestamp, boolean, index, uniqueIndex, type AnyPgColumn } from 'drizzle-orm/pg-core';
 import { organizations } from './organizations.js';
+import { users } from './users.js';
 
 export const projects = pgTable(
   'projects',
@@ -18,7 +19,7 @@ export const projects = pgTable(
     default_sprint_duration_days: integer('default_sprint_duration_days').default(14).notNull(),
     settings: jsonb('settings').default({}).notNull(),
     is_archived: boolean('is_archived').default(false).notNull(),
-    created_by: uuid('created_by'),
+    created_by: uuid('created_by').references((): AnyPgColumn => users.id, { onDelete: 'set null' }),
     created_at: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
     updated_at: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
   },

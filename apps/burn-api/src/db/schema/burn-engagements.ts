@@ -8,6 +8,7 @@ import {
   date,
   timestamp,
   index,
+  type AnyPgColumn,
 } from 'drizzle-orm/pg-core';
 import { organizations, users } from './bbb-refs.js';
 
@@ -26,8 +27,8 @@ import { organizations, users } from './bbb-refs.js';
  * financials, and gate evaluation resolve over it, never over a single row.
  *
  * Both self-FKs (`amends_engagement_id`, `supersedes_engagement_id`, ON DELETE RESTRICT)
- * are declared in migration 0239 via guarded DO $$ blocks, not here, to avoid a circular
- * self-reference in Drizzle. `bin_asset_id`, `account_id`, `braid_profile_id`, and
+ * are created by migration 0239 and declared here with `(): AnyPgColumn =>` callbacks
+ * (#360). `bin_asset_id`, `account_id`, `braid_profile_id`, and
  * `bill_client_id` are dotted cross-app refs with NO cross-schema FK (the entity_links
  * convention, spec 3 "join boundary").
  */
@@ -41,8 +42,8 @@ export const burnEngagements = pgTable(
     title: varchar('title', { length: 512 }).notNull(),
     // sow | proposal | engagement_letter | msa | retainer | amendment | change_order | other
     engagement_kind: varchar('engagement_kind', { length: 32 }).notNull().default('sow'),
-    amends_engagement_id: uuid('amends_engagement_id'),
-    supersedes_engagement_id: uuid('supersedes_engagement_id'),
+    amends_engagement_id: uuid('amends_engagement_id').references((): AnyPgColumn => burnEngagements.id, { onDelete: 'restrict' }),
+    supersedes_engagement_id: uuid('supersedes_engagement_id').references((): AnyPgColumn => burnEngagements.id, { onDelete: 'restrict' }),
     chain_root_id: uuid('chain_root_id').notNull(),
     // Minor units. read_all-floored on every response (spec 2.4 point 17).
     contract_value: bigint('contract_value', { mode: 'number' }),

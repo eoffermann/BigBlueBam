@@ -10,6 +10,7 @@ import {
   timestamp,
   index,
   uniqueIndex,
+  type AnyPgColumn,
 } from 'drizzle-orm/pg-core';
 import { organizations, users } from './bbb-refs.js';
 import { bursarOffers } from './bursar-offers.js';
@@ -53,7 +54,7 @@ export const bursarOfferCoverage = pgTable(
     provisional: boolean('provisional').notNull().default(false),
     blanket_suspected: boolean('blanket_suspected').notNull().default(false),
     window_coverage: numeric('window_coverage', { precision: 5, scale: 4 }),
-    subsumed_by_coverage_id: uuid('subsumed_by_coverage_id'),
+    subsumed_by_coverage_id: uuid('subsumed_by_coverage_id').references((): AnyPgColumn => bursarOfferCoverage.id, { onDelete: 'set null' }),
     derived_covered: boolean('derived_covered').notNull().default(false),
     delta_kind: varchar('delta_kind', { length: 24 }),
     delta_quantity: numeric('delta_quantity', { precision: 18, scale: 4 }),

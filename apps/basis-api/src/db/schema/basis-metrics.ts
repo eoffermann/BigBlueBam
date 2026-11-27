@@ -7,12 +7,15 @@ import {
   timestamp,
   uniqueIndex,
   index,
+  type AnyPgColumn,
 } from 'drizzle-orm/pg-core';
 import { organizations, users } from './bbb-refs.js';
+import { basisMetricVersions } from './basis-metric-versions.js';
 
 // Governed metric. One certified definition per number, per org.
-// `current_version_id` intentionally has no Drizzle .references() to avoid a
-// circular import with basis-metric-versions; the FK is declared in the migration.
+// `current_version_id` references basis_metric_versions, which references this
+// table back; the lazy `(): AnyPgColumn =>` callback makes the circular import safe
+// (db:check compares it with the migration's FK, issue #360).
 export const basisMetrics = pgTable(
   'basis_metrics',
   {
@@ -27,7 +30,7 @@ export const basisMetrics = pgTable(
     favorable_direction: varchar('favorable_direction', { length: 8 }).notNull().default('up'),
     owner_id: uuid('owner_id').references(() => users.id, { onDelete: 'set null' }),
     certification: varchar('certification', { length: 12 }).notNull().default('draft'),
-    current_version_id: uuid('current_version_id'),
+    current_version_id: uuid('current_version_id').references((): AnyPgColumn => basisMetricVersions.id, { onDelete: 'set null' }),
     related_apps: jsonb('related_apps').notNull().default('[]'),
     target: jsonb('target'),
     resolve_status: varchar('resolve_status', { length: 12 }).notNull().default('ok'),

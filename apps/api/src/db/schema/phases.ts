@@ -1,5 +1,6 @@
-import { pgTable, uuid, varchar, text, integer, boolean, timestamp, index } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, varchar, text, integer, boolean, timestamp, index, type AnyPgColumn } from 'drizzle-orm/pg-core';
 import { projects } from './projects.js';
+import { taskStates } from './task-states.js';
 
 export const phases = pgTable(
   'phases',
@@ -15,7 +16,7 @@ export const phases = pgTable(
     wip_limit: integer('wip_limit'),
     is_start: boolean('is_start').default(false).notNull(),
     is_terminal: boolean('is_terminal').default(false).notNull(),
-    auto_state_on_enter: uuid('auto_state_on_enter'),
+    auto_state_on_enter: uuid('auto_state_on_enter').references((): AnyPgColumn => taskStates.id, { onDelete: 'set null' }),
     created_at: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
     updated_at: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
   },

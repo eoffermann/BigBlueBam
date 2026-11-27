@@ -6,6 +6,7 @@ import {
   boolean,
   timestamp,
   index,
+  type AnyPgColumn,
 } from 'drizzle-orm/pg-core';
 import { organizations, users } from './bbb-refs.js';
 import { bookCalendars } from './book-calendars.js';
@@ -39,7 +40,7 @@ export const bookEvents = pgTable(
     timezone: varchar('timezone', { length: 50 }).notNull().default('UTC'),
     recurrence_rule: varchar('recurrence_rule', { length: 30 }),
     recurrence_end_at: timestamp('recurrence_end_at', { withTimezone: true }),
-    recurrence_parent_id: uuid('recurrence_parent_id'),
+    recurrence_parent_id: uuid('recurrence_parent_id').references((): AnyPgColumn => bookEvents.id, { onDelete: 'cascade' }),
     status: varchar('status', { length: 20 }).notNull().default('confirmed'),
     visibility: varchar('visibility', { length: 20 }).notNull().default('busy'),
     linked_entity_type: varchar('linked_entity_type', { length: 20 }),

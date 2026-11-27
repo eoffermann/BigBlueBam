@@ -9,6 +9,7 @@ import {
   timestamp,
   customType,
   index,
+  type AnyPgColumn,
 } from 'drizzle-orm/pg-core';
 import { organizations } from './bbb-refs.js';
 
@@ -22,8 +23,8 @@ const tsvector = customType<{ data: string }>({
 // The golden record. One row per resolved real-world person or company.
 // PII columns (display_name/primary_email/primary_phone/attributes/email_suppressed/
 // confidence/identity_count) are an INTERNAL WORKER CACHE, re-assembled per viewer on
-// read (spec 2.1). company_profile_id and merged_into_id are self-FKs declared in the
-// migration (not here) to avoid a circular self-reference in Drizzle.
+// read (spec 2.1). company_profile_id and merged_into_id are self-FKs, declared here with
+// `(): AnyPgColumn =>` callbacks so db:check compares them with the migration (#360).
 export const braidProfiles = pgTable(
   'braid_profiles',
   {
@@ -36,12 +37,12 @@ export const braidProfiles = pgTable(
     primary_email: varchar('primary_email', { length: 320 }),
     primary_phone: varchar('primary_phone', { length: 64 }),
     email_suppressed: boolean('email_suppressed').notNull().default(false),
-    company_profile_id: uuid('company_profile_id'),
+    company_profile_id: uuid('company_profile_id').references((): AnyPgColumn => braidProfiles.id, { onDelete: 'set null' }),
     attributes: jsonb('attributes').notNull().default('{}'),
     identity_count: integer('identity_count').notNull().default(0),
     confidence: numeric('confidence', { precision: 5, scale: 2 }),
     status: varchar('status', { length: 12 }).notNull().default('active'),
-    merged_into_id: uuid('merged_into_id'),
+    merged_into_id: uuid('merged_into_id').references((): AnyPgColumn => braidProfiles.id, { onDelete: 'set null' }),
     search_vector: tsvector('search_vector'),
     qdrant_point_id: uuid('qdrant_point_id'),
     qdrant_synced_at: timestamp('qdrant_synced_at', { withTimezone: true }),

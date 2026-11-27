@@ -8,9 +8,11 @@ import {
   text,
   doublePrecision,
   jsonb,
+  type AnyPgColumn,
 } from 'drizzle-orm/pg-core';
 import { organizations, users, projects } from './bbb-refs.js';
 import { binFolders } from './bin-folders.js';
+import { binAssetVersions } from './bin-asset-versions.js';
 
 // Bin DAM assets (Bin master §9.1). An asset is the catalog entry for a stored
 // object; it carries a denormalized current_version_id plus the active-version
@@ -19,9 +21,10 @@ import { binFolders } from './bin-folders.js';
 // active provider). scan_status gates serving (§9.3): a `pending` asset is
 // listable but not served by a presigned GET until the AV scan marks it clean.
 //
-// Note: current_version_id references bin_asset_versions, but that table
-// references bin_assets, so the FK is added in the migration (not via a Drizzle
-// .references() here) to avoid a circular import / chicken-and-egg insert.
+// Note: current_version_id references bin_asset_versions, which references
+// bin_assets back. The FK is nullable (insert the asset, then the version, then
+// set current_version_id) and declared with a lazy `(): AnyPgColumn =>` callback
+// so the circular import is safe (db:check compares it, issue #360).
 export const binAssets = pgTable(
   'bin_assets',
   {
@@ -34,7 +37,7 @@ export const binAssets = pgTable(
     name: varchar('name', { length: 512 }).notNull(),
     content_type: varchar('content_type', { length: 255 }).notNull(),
     // Denormalized pointer to the active version (FK declared in migration).
-    current_version_id: uuid('current_version_id'),
+    current_version_id: uuid('current_version_id').references((): AnyPgColumn => binAssetVersions.id, { onDelete: 'set null' }),
     // Active-version reference shape (§5.4). binding_id is nullable until the
     // per-org binding resolver lands; the bootstrap `local` provider has no
     // binding row yet.

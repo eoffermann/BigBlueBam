@@ -8,8 +8,10 @@ import {
   timestamp,
   uniqueIndex,
   index,
+  type AnyPgColumn,
 } from 'drizzle-orm/pg-core';
 import { organizations } from './bbb-refs.js';
+import { agentProposals } from './agent-proposals.js';
 
 // The human review queue. `profile_a_id < profile_b_id` canonical CHECK is declared in
 // the migration. `proposal_id` links to agent_proposals (FK in migration; the subscription
@@ -30,7 +32,7 @@ export const braidMatchCandidates = pgTable(
     evidence: jsonb('evidence').notNull(),
     rationale: text('rationale'),
     status: varchar('status', { length: 12 }).notNull().default('pending'),
-    proposal_id: uuid('proposal_id'),
+    proposal_id: uuid('proposal_id').references((): AnyPgColumn => agentProposals.id, { onDelete: 'set null' }),
     created_at: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
     decided_at: timestamp('decided_at', { withTimezone: true }),
   },

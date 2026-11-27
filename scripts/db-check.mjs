@@ -301,10 +301,44 @@ function collectTableVars(root, filePath) {
 /** @type {Array<{table: string, column: string, refVar: string, refKey: string, onDelete: string, root: string, file: string, line: number}>} */
 const drizzleForeignKeys = [];
 
+/**
+ * Several schema roots can declare the same table (an app's own table plus the
+ * reference stubs other apps keep of it), so one FK can be declared more than
+ * once. Merge them (issue #360): an explicit onDelete beats an omitted one, so
+ * a stub that leaves onDelete out cannot mask the owning schema's declaration,
+ * and two declarations that disagree on the target or on an explicit onDelete
+ * are reported as conflicts. Pure; exported for scripts/lib/db-check-fk.test.mjs.
+ * @param {Array<{key: string, refTable: string, refColumn: string, onDelete: string, onDeleteExplicit: boolean, file?: string, line?: number}>} decls
+ */
+export function mergeForeignKeyDeclarations(decls) {
+  const declared = new Map();
+  const conflicts = [];
+  for (const d of decls) {
+    const { key, ...fk } = d;
+    const prev = declared.get(key);
+    if (!prev) {
+      declared.set(key, fk);
+      continue;
+    }
+    const targetDiffers = prev.refTable !== fk.refTable || prev.refColumn !== fk.refColumn;
+    const onDeleteDiffers = prev.onDeleteExplicit && fk.onDeleteExplicit && prev.onDelete !== fk.onDelete;
+    if (targetDiffers || onDeleteDiffers) {
+      conflicts.push(
+        `CONFLICTING FOREIGN KEY DECLARATIONS: ${key}: ${prev.file}:${prev.line} -> ${prev.refTable}.${prev.refColumn} (on delete ${prev.onDelete}), ` +
+          `${fk.file}:${fk.line} -> ${fk.refTable}.${fk.refColumn} (on delete ${fk.onDelete})\n` +
+          `  fix: make every schema that declares ${key} agree with the database.`,
+      );
+      continue;
+    }
+    if (!prev.onDeleteExplicit && fk.onDeleteExplicit) declared.set(key, fk);
+  }
+  return { declared, conflicts };
+}
+
 /** Resolve each declared FK's table variable to SQL names (own root first, then any root). */
 function resolveDrizzleForeignKeys() {
-  /** @type {Map<string, {refTable: string, refColumn: string, onDelete: string, file: string, line: number}>} */
-  const out = new Map();
+  /** @type {Array<{key: string, refTable: string, refColumn: string, onDelete: string, onDeleteExplicit: boolean, file: string, line: number}>} */
+  const out = [];
   for (const fk of drizzleForeignKeys) {
     let target = tableVarsByRoot.get(fk.root)?.get(fk.refVar);
     if (!target) {
@@ -316,7 +350,8 @@ function resolveDrizzleForeignKeys() {
       }
     }
     if (!target) continue; // unresolvable variable: nothing to compare
-    out.set(`${fk.table}.${fk.column}`, {
+    out.push({
+      key: `${fk.table}.${fk.column}`,
       refTable: target.table,
       refColumn: target.keys.get(fk.refKey) ?? fk.refKey,
       onDelete: fk.onDelete,
@@ -325,8 +360,20 @@ function resolveDrizzleForeignKeys() {
       line: fk.line,
     });
   }
-  return out;
+  return mergeForeignKeyDeclarations(out);
 }
+
+/**
+ * Database FKs no Drizzle schema can declare, each with the reviewed reason
+ * (issue #360). Keep this list short: the normal fix for an undeclared FK is a
+ * `.references()` (use `(): AnyPgColumn => table.id` for self and circular
+ * references). An entry whose FK is gone from the database, or that Drizzle now
+ * declares, is an error, so the list cannot rot.
+ */
+export const UNDECLARED_FK_ALLOWLIST = {
+  'bench_widgets.basis_metric_id':
+    'cross-product reference into Basis (migration 0228); bench-api declares no basis_metrics table and its code only stores the id',
+};
 
 /**
  * Compare declared and live single-column FKs. Pure; exported for
@@ -342,8 +389,9 @@ function resolveDrizzleForeignKeys() {
  * @param {Map<string, {refTable: string, refColumn: string, onDelete: string, onDeleteExplicit?: boolean, file?: string, line?: number}>} declared
  * @param {Map<string, {refTable: string, refColumn: string, onDelete: string}>} live
  * @param {Map<string, unknown>} declaredTables  tables Drizzle knows (a DB FK on an unknown table is reported as an unknown table already)
+ * @param {Record<string, string>} allowlist  undeclared DB FKs accepted on purpose (UNDECLARED_FK_ALLOWLIST)
  */
-export function diffForeignKeys(declared, live, declaredTables) {
+export function diffForeignKeys(declared, live, declaredTables, allowlist = {}) {
   const errors = [];
   const warnings = [];
   for (const [key, d] of declared) {
@@ -369,8 +417,16 @@ export function diffForeignKeys(declared, live, declaredTables) {
       else errors.push(msg);
     }
   }
+  for (const key of Object.keys(allowlist)) {
+    if (!live.has(key)) {
+      errors.push(`STALE FK ALLOWLIST ENTRY: ${key} is in UNDECLARED_FK_ALLOWLIST but the database has no such FK; remove the entry.`);
+    } else if (declared.has(key)) {
+      errors.push(`STALE FK ALLOWLIST ENTRY: ${key} is in UNDECLARED_FK_ALLOWLIST but Drizzle now declares it; remove the entry.`);
+    }
+  }
   for (const [key, l] of live) {
     if (declared.has(key)) continue;
+    if (Object.prototype.hasOwnProperty.call(allowlist, key)) continue;
     const table = key.slice(0, key.indexOf('.'));
     if (!declaredTables.has(table)) continue;
     warnings.push(
@@ -659,7 +715,9 @@ for (const [tableName, dbCols] of dbTables) {
 // Foreign keys (issue #160). A Drizzle `.references()` the database does not
 // enforce is drift: code relying on its ON DELETE (e.g. a cascade) silently
 // leaves orphans. Both directions are reported.
-const fkDiff = diffForeignKeys(resolveDrizzleForeignKeys(), dbForeignKeys, drizzleTables);
+const fkDecls = resolveDrizzleForeignKeys();
+errors.push(...fkDecls.conflicts);
+const fkDiff = diffForeignKeys(fkDecls.declared, dbForeignKeys, drizzleTables, UNDECLARED_FK_ALLOWLIST);
 errors.push(...fkDiff.errors);
 warnings.push(...fkDiff.warnings);
 

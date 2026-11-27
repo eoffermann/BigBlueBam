@@ -10,6 +10,7 @@ import {
   date,
   boolean,
   index,
+  type AnyPgColumn,
 } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 import { organizations } from './organizations.js';
@@ -18,6 +19,7 @@ import { phases } from './phases.js';
 import { taskStates } from './task-states.js';
 import { sprints } from './sprints.js';
 import { users } from './users.js';
+import { epics } from './epics.js';
 
 export const tasks = pgTable(
   'tasks',
@@ -34,16 +36,16 @@ export const tasks = pgTable(
       .notNull()
       .references(() => projects.id, { onDelete: 'cascade' }),
     human_id: varchar('human_id', { length: 50 }).notNull(),
-    parent_task_id: uuid('parent_task_id'),
+    parent_task_id: uuid('parent_task_id').references((): AnyPgColumn => tasks.id, { onDelete: 'set null' }),
     title: varchar('title', { length: 500 }).notNull(),
     description: text('description'),
     description_plain: text('description_plain'),
     phase_id: uuid('phase_id')
       .references(() => phases.id, { onDelete: 'set null' }),
-    state_id: uuid('state_id').references(() => taskStates.id),
-    sprint_id: uuid('sprint_id').references(() => sprints.id),
-    epic_id: uuid('epic_id'),
-    assignee_id: uuid('assignee_id').references(() => users.id),
+    state_id: uuid('state_id').references(() => taskStates.id, { onDelete: 'set null' }),
+    sprint_id: uuid('sprint_id').references(() => sprints.id, { onDelete: 'set null' }),
+    epic_id: uuid('epic_id').references((): AnyPgColumn => epics.id, { onDelete: 'set null' }),
+    assignee_id: uuid('assignee_id').references(() => users.id, { onDelete: 'set null' }),
     reporter_id: uuid('reporter_id')
       .references(() => users.id, { onDelete: 'set null' }),
     priority: varchar('priority', { length: 20 }).default('medium').notNull(),
@@ -87,7 +89,7 @@ export const tasks = pgTable(
     subtask_count: integer('subtask_count').default(0).notNull(),
     subtask_done_count: integer('subtask_done_count').default(0).notNull(),
     carry_forward_count: integer('carry_forward_count').default(0).notNull(),
-    original_sprint_id: uuid('original_sprint_id'),
+    original_sprint_id: uuid('original_sprint_id').references((): AnyPgColumn => sprints.id, { onDelete: 'set null' }),
     // Wave 4 §14: idempotency key for task_upsert_by_external_id. Unique per
     // project via the partial index in migration 0130
     // (tasks_project_external_id_uniq). Nullable: tasks created through the

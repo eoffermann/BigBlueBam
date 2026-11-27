@@ -8,6 +8,7 @@ import {
   jsonb,
   index,
   unique,
+  type AnyPgColumn,
 } from 'drizzle-orm/pg-core';
 import { users } from './bbb-refs.js';
 import { briefDocuments } from './brief-documents.js';
@@ -19,7 +20,7 @@ export const briefComments = pgTable(
     document_id: uuid('document_id')
       .notNull()
       .references(() => briefDocuments.id, { onDelete: 'cascade' }),
-    parent_id: uuid('parent_id'),
+    parent_id: uuid('parent_id').references((): AnyPgColumn => briefComments.id, { onDelete: 'cascade' }),
     author_id: uuid('author_id')
       .notNull()
       .references(() => users.id),

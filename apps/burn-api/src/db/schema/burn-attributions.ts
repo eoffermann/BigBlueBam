@@ -8,6 +8,7 @@ import {
   jsonb,
   timestamp,
   index,
+  type AnyPgColumn,
 } from 'drizzle-orm/pg-core';
 import { organizations, users } from './bbb-refs.js';
 import { burnWorkItems } from './burn-work-items.js';
@@ -73,7 +74,7 @@ export const burnAttributions = pgTable(
     candidate_set: jsonb('candidate_set').notNull().default([]),
     rationale: text('rationale'),
     superseded_at: timestamp('superseded_at', { withTimezone: true }),
-    superseded_by: uuid('superseded_by'),
+    superseded_by: uuid('superseded_by').references((): AnyPgColumn => burnAttributions.id, { onDelete: 'set null' }),
     decided_by: uuid('decided_by').references(() => users.id, { onDelete: 'set null' }),
     decided_at: timestamp('decided_at', { withTimezone: true }),
     vocabulary_version: integer('vocabulary_version').notNull().default(0),

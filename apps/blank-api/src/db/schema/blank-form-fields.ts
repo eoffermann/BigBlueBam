@@ -9,6 +9,7 @@ import {
   numeric,
   timestamp,
   index,
+  type AnyPgColumn,
 } from 'drizzle-orm/pg-core';
 import { blankForms } from './blank-forms.js';
 
@@ -37,7 +38,7 @@ export const blankFormFields = pgTable(
     scale_max_label: varchar('scale_max_label', { length: 100 }),
     allowed_file_types: text('allowed_file_types').array(),
     max_file_size_mb: integer('max_file_size_mb').default(10),
-    conditional_on_field_id: uuid('conditional_on_field_id'),
+    conditional_on_field_id: uuid('conditional_on_field_id').references((): AnyPgColumn => blankFormFields.id, { onDelete: 'no action' }),
     conditional_operator: varchar('conditional_operator', { length: 20 }),
     conditional_value: text('conditional_value'),
     sort_order: integer('sort_order').notNull().default(0),
