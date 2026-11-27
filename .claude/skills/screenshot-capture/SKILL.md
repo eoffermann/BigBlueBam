@@ -108,6 +108,24 @@ on `SHOTS_HELPDESK_EMAIL`, and they `expectNot: input#password` — so without
 `SHOTS_HELPDESK_EMAIL`/`SHOTS_HELPDESK_PASSWORD` they fail verification (no
 misleading capture) instead of shooting the sign-in screen.
 
+### Workspace guard: only demo people
+
+Before any recipe runs, the runner refuses the whole batch if the capture
+workspace has a member (other than a service account) whose email is not on a
+reserved demo domain, and every page is checked for real email addresses.
+
+On a local stack the operator's own account (usually the platform SuperUser)
+is often a member of the GILLIGAN workspace. Do not delete that membership to
+get past the guard. Name the account instead:
+
+```sh
+DOCS_CAPTURE_ALLOW_MEMBER_EMAILS=you@yourdomain.com pnpm --filter @bigbluebam/docs-capture exec tsx src/cli.ts --apps bastion
+```
+
+Listed members no longer stop the run, but their name and email become
+forbidden page text: any shot that shows either one fails verification and
+writes no image. Only list your own operator account; never a customer.
+
 ## Seeding (three-tier precedence)
 
 The local stack is already broadly seeded, so **most recipes need no `content`

@@ -73,6 +73,13 @@ export interface VerifyOptions {
    * "editor" capture was actually the Bam People page).
    */
   appSegment?: string;
+  /**
+   * Strings that must not appear anywhere in the page text (case-insensitive):
+   * the names and emails of real members the workspace guard was told to
+   * tolerate through DOCS_CAPTURE_ALLOW_MEMBER_EMAILS. Tolerating such a
+   * member only lets the run start; any shot that shows them still fails.
+   */
+  forbiddenText?: string[];
 }
 
 export function toArray(v: string | string[] | undefined): string[] {
@@ -107,6 +114,14 @@ export async function verifyBeforeCapture(
   const real = findRealEmails(rawText);
   if (real.length > 0) {
     return { ok: false, reason: `real email address on page (${real.length} found; only demo domains are allowed)` };
+  }
+
+  // 1c. No tolerated real member may be visible by name or email.
+  for (const text of opts.forbiddenText ?? []) {
+    const needle = text.trim().toLowerCase();
+    if (needle && bodyText.includes(needle)) {
+      return { ok: false, reason: 'a tolerated non-demo member is visible on the page (DOCS_CAPTURE_ALLOW_MEMBER_EMAILS)' };
+    }
   }
 
   // 2a. expect — each must be visible (short grace wait).

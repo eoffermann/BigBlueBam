@@ -140,7 +140,7 @@ function main() {
       );
     }
 
-    // Stage 2b: Bridge the shared tree into the docs layout (light/dark + meta.json)
+    // Stage 2b: Bridge the shared tree into the docs layout (light/dark PNGs; meta.json stays extract's)
     // for every capture that opted in via its recipe `doc:` field. Idempotent;
     // runs even with --skip-capture so docs reflect the current manifest.
     // The capture manifest (screenshots/manifest.json) is gitignored and only
