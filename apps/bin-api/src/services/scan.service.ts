@@ -156,10 +156,12 @@ export async function setScanOverride(
   allow: boolean,
   reason: string | null,
 ) {
-  const now = allow ? new Date() : null;
+  // An ISO string, not a Date: a raw db.execute parameter goes to postgres-js untyped, and a
+  // Date there threw ERR_INVALID_ARG_TYPE, so every override was a 500 (found by #178's tests).
+  const now = allow ? new Date().toISOString() : null;
   const rows = await db.execute(sql`
     UPDATE bin_assets
-    SET scan_override_at = ${now},
+    SET scan_override_at = ${now}::timestamptz,
         scan_overridden_by = ${allow ? userId : null},
         scan_override_reason = ${allow ? reason : null}
     WHERE id = ${assetId} AND org_id = ${orgId}
