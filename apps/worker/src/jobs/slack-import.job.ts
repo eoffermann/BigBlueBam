@@ -846,11 +846,15 @@ async function getOrCreateMigrationBot(orgId: string): Promise<string> {
  * The body the worker sends to the api's POST /internal/projects/ensure for a create_new
  * project (#364). The import mapping carries a free-form `key` (1-50 chars); the project's
  * identity is its slug (unique per org) and its task ids use task_id_prefix (2-6 capitals).
- * Both derive from the key, falling back to the name, then to fixed values.
+ * Both derive from the key, falling back to the name, then to fixed values. The slug is only a
+ * preference: ensure is idempotent on ensure_key, this import's own id, so a retry gets the
+ * project this import created, and a slug another project holds yields a suffixed slug rather
+ * than that project (#373).
  */
 export function importProjectBody(
   orgId: string,
   initiatedBy: string,
+  importId: string,
   choice: { name: string; key?: string | null },
 ): InternalEnsureProjectInput {
   const name = choice.name.trim().slice(0, 255) || 'Slack import';
@@ -865,24 +869,25 @@ export function importProjectBody(
     name,
     slug,
     task_id_prefix: prefix.slice(0, 6),
+    ensure_key: `slack-import:${importId}`,
   };
 }
 
 /**
  * Create (or, on a replay, find) the import's project through the api, so it gets the creator
  * membership and default phases and states that POST /projects gives (#364). The api is
- * idempotent on (org_id, slug). Any non-2xx throws and fails the phase, like any other phase
- * error, rather than importing into no project.
+ * idempotent on (org_id, ensure_key = this import's id) (#373). Any non-2xx throws and fails the
+ * phase, like any other phase error, rather than importing into no project.
  */
 export async function ensureImportProject(
-  ctx: Pick<ImportContext, 'row' | 'logger' | 'apiFetchImpl'>,
+  ctx: Pick<ImportContext, 'row' | 'logger' | 'apiFetchImpl' | 'importId'>,
   choice: { name: string; key?: string | null },
 ): Promise<string> {
   const secret = process.env.INTERNAL_SERVICE_SECRET ?? '';
   if (!secret) throw new Error('slack-import: INTERNAL_SERVICE_SECRET is not set; cannot create the import project');
   // #192: BBB_API_INTERNAL_URL is the worker's one name for the api's private base.
   const base = (process.env.BBB_API_INTERNAL_URL ?? 'http://api:4000').replace(/\/+$/, '');
-  const body = importProjectBody(ctx.row.org_id, ctx.row.initiated_by, choice);
+  const body = importProjectBody(ctx.row.org_id, ctx.row.initiated_by, ctx.importId, choice);
   const started = Date.now();
   ctx.logger.info({ slug: body.slug, task_id_prefix: body.task_id_prefix }, 'slack-import: creating project via api');
   const res = await (ctx.apiFetchImpl ?? fetch)(`${base}/internal/projects/ensure`, {
