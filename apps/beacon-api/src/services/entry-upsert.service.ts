@@ -15,6 +15,13 @@ import { and, eq, sql } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import { beaconEntries, beaconVersions } from '../db/schema/index.js';
 import { sanitizeHtml } from '../lib/sanitize.js';
+import {
+  assertCanCreateBeacon,
+  resolveBeaconAccess,
+  type BeaconAccessSubject,
+} from '../lib/beacon-access.js';
+
+type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
 export class EntryUpsertError extends Error {
   code: string;
@@ -77,8 +84,7 @@ async function resolveDefaultExpiryDays(orgId: string): Promise<number> {
  */
 export async function upsertEntryBySlug(
   input: EntryUpsertInput,
-  userId: string,
-  orgId: string,
+  actor: BeaconAccessSubject,
 ): Promise<EntryUpsertResult> {
   if (!input.slug || input.slug.trim() === '') {
     throw new EntryUpsertError(
@@ -103,19 +109,46 @@ export async function upsertEntryBySlug(
   }
 
   const slug = input.slug.trim();
+  const userId = actor.id;
+  const orgId = actor.org_id;
   const expiryDays = await resolveDefaultExpiryDays(orgId);
   const expiresAt = new Date(Date.now() + expiryDays * 24 * 60 * 60 * 1000);
+
+  const lockExisting = async (tx: Tx) => {
+    const [row] = await tx
+      .select()
+      .from(beaconEntries)
+      .where(and(eq(beaconEntries.organization_id, orgId), eq(beaconEntries.slug, slug)))
+      .limit(1)
+      .for('update');
+    return row;
+  };
 
   // One transaction, so the entry write and its beacon_versions snapshot commit or roll back
   // together (#280). Concurrency, for two callers upserting the same org + slug at once:
   //   - create race: INSERT ... ON CONFLICT DO NOTHING lets exactly one insert win; the loser
-  //     gets no row back and falls through to the update path, so its content is APPLIED as the
-  //     next version (it used to be silently dropped with created:false).
-  //   - update race: the UPDATE takes the row lock and bumps `version = version + 1` in SQL, so
-  //     the second caller waits and writes N + 2 (two callers used to both write N + 1, and the
-  //     second 500'd on beacon_versions_beacon_id_version_key after its entry update landed).
+  //     gets no row back, re-reads the winner's row under its lock and takes the update path,
+  //     so its content is APPLIED as the next version (subject to the edit rule below).
+  //   - update race: the existing row is read FOR UPDATE and `version = version + 1` runs in SQL,
+  //     so the second caller waits and writes N + 2.
+  //
+  // Access (#299): an existing row is only rewritten when the caller passes the same edit rule as
+  // PUT /beacons/:id (lib/beacon-access.ts), checked on the locked row. A row the caller cannot
+  // even read answers a neutral 409 SLUG_UNAVAILABLE rather than 404 or 403: for an upsert,
+  // "not found" means "create it", so any refusal is distinguishable from a free slug, and the
+  // safest answer is one that says only "pick another slug" (the same fact POST /beacons already
+  // reveals by suffixing a taken slug). It never creates under a different slug, which would break
+  // the idempotency the endpoint exists for. A row the caller can read but not edit answers 403,
+  // exactly as PUT does; that reveals nothing they cannot already GET.
   return db.transaction(async (tx) => {
-    const inserted = await tx
+    let existing = await lockExisting(tx);
+
+    if (!existing) {
+      // The create rule shared with POST /beacons (#299).
+      await assertCanCreateBeacon(actor, input.project_id ?? null, tx);
+    }
+
+    const inserted = existing ? [] : await tx
       .insert(beaconEntries)
       .values({
         slug,
@@ -152,8 +185,31 @@ export async function upsertEntryBySlug(
       return { data: created, created: true, idempotency_key: `slug:${slug}` };
     }
 
-    // Update path: the row exists in this org. Only the fields the caller sent replace the stored
-    // ones (body_html, visibility and metadata keep their values when omitted).
+    // Lost a create race: the winner's row now exists; lock it and treat this call as an update.
+    if (!existing) existing = await lockExisting(tx);
+    if (!existing) {
+      throw new EntryUpsertError('INTERNAL', 'Upsert found neither a free slug nor a row', 500);
+    }
+
+    const level = await resolveBeaconAccess(actor, existing, tx);
+    if (level === 'none') {
+      throw new EntryUpsertError(
+        'SLUG_UNAVAILABLE',
+        'This slug is not available. Choose a different slug.',
+        409,
+      );
+    }
+    if (level !== 'edit') {
+      throw new EntryUpsertError(
+        'FORBIDDEN',
+        'You do not have permission to modify this beacon',
+        403,
+      );
+    }
+
+    // Update path: the caller may edit this row, so a visibility change is allowed exactly as
+    // PUT /beacons/:id allows it. Only the fields the caller sent replace the stored ones
+    // (body_html, visibility and metadata keep their values when omitted).
     const set: Record<string, unknown> = {
       title: input.title,
       summary: input.summary ?? null,
@@ -168,7 +224,7 @@ export async function upsertEntryBySlug(
     const [entry] = await tx
       .update(beaconEntries)
       .set(set)
-      .where(and(eq(beaconEntries.organization_id, orgId), eq(beaconEntries.slug, slug)))
+      .where(and(eq(beaconEntries.id, existing.id), eq(beaconEntries.organization_id, orgId)))
       .returning();
     if (!entry) {
       throw new EntryUpsertError('INTERNAL', 'Update returned no row', 500);

@@ -21,8 +21,7 @@ export default async function linkRoutes(fastify: FastifyInstance) {
         request.params.id,
         target_id,
         link_type,
-        request.user!.id,
-        request.user!.org_id,
+        request.user!,
       );
       if (!link) {
         // Conflict — link already exists
