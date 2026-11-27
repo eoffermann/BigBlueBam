@@ -461,6 +461,12 @@ function ticketRowMatches(cond: unknown, row: FakeTicketRow): boolean {
   if (sql.includes('"tickets"."helpdesk_user_id" = ') && !params.includes(row.helpdesk_user_id)) {
     return false;
   }
+  // A status guard (`"tickets"."status" in (...)`) must admit the row's status.
+  const statusIn = /"tickets"\."status" in \(([^)]*)\)/.exec(sql);
+  if (statusIn) {
+    const allowed = [...statusIn[1]!.matchAll(/\$(\d+)/g)].map((m) => params[Number(m[1]) - 1]);
+    if (!allowed.includes(row.status)) return false;
+  }
   return true;
 }
 
@@ -586,7 +592,8 @@ describe('HB-4: reopen ownership enforcement', () => {
     dbMock.select
       .mockReturnValueOnce(makeHelpdeskSessionChain(CUSTOMER_A))
       .mockReturnValueOnce(makeFilteringTicketSelectChain(selectSeen))
-      .mockReturnValueOnce(makeEmptyJoinLimitChain());
+      // #174: the lost-race re-read, scoped to A, finds nothing.
+      .mockReturnValueOnce(makeFilteringTicketSelectChain(storedAtUpdate));
     dbMock.update.mockReturnValue(updateChain);
 
     const res = await reopenAs(CUSTOMER_A);
@@ -597,12 +604,59 @@ describe('HB-4: reopen ownership enforcement', () => {
     expect(sql).toContain('"tickets"."helpdesk_user_id" = ');
     expect(params).toEqual(expect.arrayContaining([TICKET_ID, CUSTOMER_A]));
 
-    // The guarded UPDATE matched nothing: no reopened row comes back and no
-    // audit row or Bolt event claims a reopen happened.
-    expect(res.statusCode).toBe(200);
-    expect(res.json().data).toBeUndefined();
+    // The guarded UPDATE matched nothing: no audit row or Bolt event claims a
+    // reopen happened, and (#174) the client is told it did not happen.
+    expect(res.statusCode).toBe(404);
+    expect(res.json().error.code).toBe('NOT_FOUND');
     expect(logTicketActivity).not.toHaveBeenCalled();
     expect(publishBoltEvent).not.toHaveBeenCalled();
+  });
+
+  it('#174: the loser of two racing reopens gets 409 CONFLICT with the error envelope, not 200 and no body', async () => {
+    // Both requests read the ticket as resolved; the winner's UPDATE lands
+    // first, so at the loser's UPDATE the stored row is already open.
+    const selectSeen = makeResolvedTicket(CUSTOMER_A);
+    const storedAtUpdate = { ...makeResolvedTicket(CUSTOMER_A), status: 'open', resolved_at: null };
+    const updateChain = makeFilteringTicketUpdateChain(storedAtUpdate);
+    dbMock.select
+      .mockReturnValueOnce(makeHelpdeskSessionChain(CUSTOMER_A))
+      .mockReturnValueOnce(makeFilteringTicketSelectChain(selectSeen))
+      .mockReturnValueOnce(makeFilteringTicketSelectChain(storedAtUpdate));
+    dbMock.update.mockReturnValue(updateChain);
+
+    const res = await reopenAs(CUSTOMER_A);
+
+    const { sql } = renderWhere(updateChain.where.mock.calls[0][0]);
+    expect(sql).toContain('"tickets"."status" in ');
+    expect(res.statusCode).toBe(409);
+    expect(res.json().error).toMatchObject({ code: 'CONFLICT', request_id: expect.any(String) });
+    expect(logTicketActivity).not.toHaveBeenCalled();
+    expect(publishBoltEvent).not.toHaveBeenCalled();
+  });
+
+  it('#174: close and update-priority on a ticket deleted mid-request answer 404, not 200 and no body', async () => {
+    for (const [url, payload] of [
+      [`/helpdesk/tickets/${TICKET_ID}/close`, undefined],
+      [`/helpdesk/tickets/${TICKET_ID}/update-priority`, { priority: 'high' }],
+    ] as const) {
+      resetDbMock();
+      const row = makeResolvedTicket(CUSTOMER_A);
+      const gone = { ...row, id: 'deleted' };
+      dbMock.select
+        .mockReturnValueOnce(makeHelpdeskSessionChain(CUSTOMER_A))
+        .mockReturnValueOnce(makeFilteringTicketSelectChain(row))
+        .mockReturnValueOnce(makeFilteringTicketSelectChain(gone));
+      dbMock.update.mockReturnValue(makeFilteringTicketUpdateChain(gone));
+      const res = await app.inject({
+        method: 'POST',
+        url,
+        cookies: { helpdesk_session: `hs-${CUSTOMER_A}` },
+        ...(payload ? { payload } : {}),
+      });
+      expect(res.statusCode, url).toBe(404);
+      expect(res.json().error.code, url).toBe('NOT_FOUND');
+      expect(logTicketActivity).not.toHaveBeenCalled();
+    }
   });
 
   it('returns 404 (not 403) when a ticket exists but is owned by a different helpdesk_user', async () => {

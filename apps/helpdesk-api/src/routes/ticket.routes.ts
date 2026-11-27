@@ -1,4 +1,4 @@
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { eq, and, asc, desc, gt, lt, or, inArray, sql } from 'drizzle-orm';
 import { db } from '../db/index.js';
@@ -40,6 +40,40 @@ const createMessageSchema = z.object({
   body: z.string().min(1),
 });
 
+
+/**
+ * #174: a customer ticket action whose guarded UPDATE matched no row lost a race.
+ * Answer with the standard error envelope instead of 200 and an empty body, so
+ * the client can tell the action did not happen: 404 when the ticket is gone (or
+ * no longer this customer's), 409 when it is still there but no longer in a
+ * state the action applies to.
+ */
+async function sendLostTicketRace(
+  request: FastifyRequest,
+  reply: FastifyReply,
+  ticketId: string,
+  helpdeskUserId: string,
+  conflictMessage: string,
+) {
+  const [current] = await db
+    .select({ id: tickets.id, status: tickets.status })
+    .from(tickets)
+    .where(and(eq(tickets.id, ticketId), eq(tickets.helpdesk_user_id, helpdeskUserId)))
+    .limit(1);
+  if (!current) {
+    return reply.status(404).send({
+      error: { code: 'NOT_FOUND', message: 'Ticket not found', details: [], request_id: request.id },
+    });
+  }
+  return reply.status(409).send({
+    error: {
+      code: 'CONFLICT',
+      message: conflictMessage,
+      details: [{ field: 'status', issue: `current status is ${current.status}` }],
+      request_id: request.id,
+    },
+  });
+}
 
 export default async function ticketRoutes(fastify: FastifyInstance) {
   // GET /helpdesk/tickets/search. G5: ranked full-text search across the
@@ -617,7 +651,8 @@ export default async function ticketRoutes(fastify: FastifyInstance) {
 
     // HB-4: Include helpdesk_user_id in the UPDATE's WHERE clause so a forged
     // ticket id cannot be reopened under another user's ownership between the
-    // SELECT and UPDATE.
+    // SELECT and UPDATE. #174: also guard on the reopenable statuses, so of two
+    // racing reopens exactly one wins and the other is told it did not happen.
     const [updated] = await db
       .update(tickets)
       .set({
@@ -625,59 +660,65 @@ export default async function ticketRoutes(fastify: FastifyInstance) {
         resolved_at: null,
         closed_at: null,
       })
-      .where(and(eq(tickets.id, id), eq(tickets.helpdesk_user_id, user.id)))
+      .where(
+        and(
+          eq(tickets.id, id),
+          eq(tickets.helpdesk_user_id, user.id),
+          inArray(tickets.status, ['resolved', 'closed']),
+        ),
+      )
       .returning();
 
-    if (updated) {
-      await broadcastTicketStatusChangedRT(id, 'open');
+    if (!updated) return sendLostTicketRace(request, reply, id, user.id, 'Ticket is no longer resolved or closed');
 
-      // HB-45: audit reopen + the corresponding status change.
-      await logTicketActivity({
-        ticketId: id,
-        actorType: 'customer',
-        actorId: user.id,
-        action: 'ticket.reopened',
-        details: { from: ticket.status },
-        logger: request.log,
-      });
-      await logTicketActivity({
-        ticketId: id,
-        actorType: 'customer',
-        actorId: user.id,
-        action: 'ticket.status_changed',
-        details: { from: ticket.status, to: 'open' },
-        logger: request.log,
-      });
+    await broadcastTicketStatusChangedRT(id, 'open');
 
-      // G3: ticket.reopened + ticket.status_changed Bolt events.
-      const orgIdForReopen = await resolveTicketOrgId(id);
-      if (orgIdForReopen) {
-        void publishBoltEvent(
-          'ticket.reopened',
-          'helpdesk',
-          {
-            ticket: { id: id, reopened_by: user.id, reopened_at: new Date().toISOString() },
-            ticket_id: id,
-            from: ticket.status,
-          },
-          orgIdForReopen,
-          user.id,
-          'user',
-        );
-        void publishBoltEvent(
-          'ticket.status_changed',
-          'helpdesk',
-          {
-            ticket: { id: id },
-            ticket_id: id,
-            from: ticket.status,
-            to: 'open',
-          },
-          orgIdForReopen,
-          user.id,
-          'user',
-        );
-      }
+    // HB-45: audit reopen + the corresponding status change.
+    await logTicketActivity({
+      ticketId: id,
+      actorType: 'customer',
+      actorId: user.id,
+      action: 'ticket.reopened',
+      details: { from: ticket.status },
+      logger: request.log,
+    });
+    await logTicketActivity({
+      ticketId: id,
+      actorType: 'customer',
+      actorId: user.id,
+      action: 'ticket.status_changed',
+      details: { from: ticket.status, to: 'open' },
+      logger: request.log,
+    });
+
+    // G3: ticket.reopened + ticket.status_changed Bolt events.
+    const orgIdForReopen = await resolveTicketOrgId(id);
+    if (orgIdForReopen) {
+      void publishBoltEvent(
+        'ticket.reopened',
+        'helpdesk',
+        {
+          ticket: { id: id, reopened_by: user.id, reopened_at: new Date().toISOString() },
+          ticket_id: id,
+          from: ticket.status,
+        },
+        orgIdForReopen,
+        user.id,
+        'user',
+      );
+      void publishBoltEvent(
+        'ticket.status_changed',
+        'helpdesk',
+        {
+          ticket: { id: id },
+          ticket_id: id,
+          from: ticket.status,
+          to: 'open',
+        },
+        orgIdForReopen,
+        user.id,
+        'user',
+      );
     }
 
     return reply.send({ data: updated });
@@ -706,6 +747,8 @@ export default async function ticketRoutes(fastify: FastifyInstance) {
       .set({ priority })
       .where(and(eq(tickets.id, id), eq(tickets.helpdesk_user_id, user.id)))
       .returning();
+
+    if (!updated) return sendLostTicketRace(request, reply, id, user.id, 'Ticket changed while it was being updated');
 
     if (updated && ticket.priority !== priority) {
       // HB-45: audit customer-driven priority change.
@@ -744,6 +787,8 @@ export default async function ticketRoutes(fastify: FastifyInstance) {
       .set({ status: 'closed', closed_at: new Date() })
       .where(and(eq(tickets.id, id), eq(tickets.helpdesk_user_id, user.id)))
       .returning();
+
+    if (!updated) return sendLostTicketRace(request, reply, id, user.id, 'Ticket changed while it was being closed');
 
     if (updated) {
       await broadcastTicketStatusChangedRT(id, 'closed');

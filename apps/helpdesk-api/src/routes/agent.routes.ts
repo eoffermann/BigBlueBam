@@ -707,6 +707,13 @@ export default async function agentRoutes(fastify: FastifyInstance) {
       .where(eq(tickets.id, id))
       .returning();
 
+    // #174: the ticket was deleted between the read and the write; say so instead of 200 + no body.
+    if (!updated) {
+      return reply.status(404).send({
+        error: { code: 'NOT_FOUND', message: 'Ticket not found', details: [], request_id: request.id },
+      });
+    }
+
     if (updated && data.status !== undefined) {
       await broadcastTicketStatusChanged(id, data.status);
       // HB-50: Mirror ticket closure onto the linked Bam task so the audit
@@ -887,6 +894,13 @@ export default async function agentRoutes(fastify: FastifyInstance) {
       })
       .where(eq(tickets.id, id))
       .returning();
+
+    // #174: the ticket was deleted between the read and the write; say so instead of 200 + no body.
+    if (!updated) {
+      return reply.status(404).send({
+        error: { code: 'NOT_FOUND', message: 'Ticket not found', details: [], request_id: request.id },
+      });
+    }
 
     if (updated) {
       await broadcastTicketStatusChanged(id, 'closed');
