@@ -116,7 +116,8 @@ describe.skipIf(!DATABASE_URL)('banter message referential integrity (#160, real
 
   it('a child inserted while its message is deleted never commits as an orphan (#368)', async () => {
     const msg = await message();
-    const [{ pid }] = (await other<{ pid: number }[]>`SELECT pg_backend_pid() AS pid`) as [{ pid: number }];
+    const [pidRow] = await other<{ pid: number }[]>`SELECT pg_backend_pid() AS pid`;
+    const pid = pidRow!.pid;
     const inserter = await sql.reserve();
     await inserter`BEGIN`;
     await inserter`INSERT INTO banter_message_reactions (message_id, user_id, emoji) VALUES (${msg}, ${USER}, 'raft')`;
@@ -139,7 +140,8 @@ describe.skipIf(!DATABASE_URL)('banter message referential integrity (#160, real
     await deleter`BEGIN`;
     await deleter`DELETE FROM banter_messages WHERE id = ${msg}`;
     const inserter = await sql.reserve();
-    const [{ pid }] = (await inserter<{ pid: number }[]>`SELECT pg_backend_pid() AS pid`) as [{ pid: number }];
+    const [pidRow] = await inserter<{ pid: number }[]>`SELECT pg_backend_pid() AS pid`;
+    const pid = pidRow!.pid;
     let settled = false;
     const inserting = inserter`INSERT INTO banter_message_reactions (message_id, user_id, emoji) VALUES (${msg}, ${USER}, 'coconut')`
       .catch((e: unknown) => e)
