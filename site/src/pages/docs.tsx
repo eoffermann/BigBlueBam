@@ -1,13 +1,13 @@
 import { useState, useEffect } from 'react';
 import {
-  ChevronDown, ChevronRight, ArrowLeft, BookOpen, Zap, MessageSquare, Compass,
-  FileText, Bot, Server, Users, Rocket, HelpCircle,
+  ChevronDown, ChevronRight, ArrowLeft, BookOpen, Zap,
+  FileText, Server, Users, Rocket, HelpCircle,
   LayoutDashboard, MessageCircle, Handshake, Mail, DollarSign, ClipboardList,
   Calendar, BarChart3, Target, PenTool, Sparkles, Database, Clapperboard,
   Activity, Headset, Building2, Ruler, GitMerge, ShieldCheck, Flame, ShoppingCart, Castle,
 } from 'lucide-react';
 import docsCatalog from '../content/docs-catalog.generated.json';
-import { MCP_TOOL_COUNT, APP_COUNT_WORDS, APP_NAMES_LIST } from '@/lib/facts';
+import { MCP_TOOL_COUNT, APP_COUNT_WORDS } from '@/lib/facts';
 
 /* ------------------------------------------------------------------ */
 /*  MCP Tool Data                                                      */
@@ -1361,808 +1361,6 @@ function ApiEndpointsContent() {
   );
 }
 
-function UserGuideContent() {
-  return (
-    <>
-      <div className="mb-10">
-        <h1 className="text-3xl font-bold tracking-tight text-zinc-900">User Guide</h1>
-        <p className="mt-3 max-w-2xl text-base text-zinc-600">
-          A practical guide to using BigBlueBam's {APP_COUNT_WORDS} integrated applications. Whether you are managing sprints,
-          messaging your team, building a knowledge base, writing documents, automating workflows, collaborating on whiteboards, managing your CRM pipeline, or handling
-          customer support tickets, this guide covers the essentials.
-        </p>
-      </div>
-
-      {/* Getting Started */}
-      <div className="mb-12">
-        <h2 className="mb-6 text-2xl font-bold text-zinc-900">Getting Started</h2>
-
-        <div className="space-y-6">
-          <div className="rounded-lg border border-zinc-200 bg-white p-6">
-            <h3 className="mb-3 text-lg font-semibold text-zinc-900">First-Time Setup</h3>
-            <p className="mb-3 text-sm text-zinc-600">
-              After deploying BigBlueBam with Docker Compose, you need to create an initial admin account. Run the
-              create-admin CLI command against the API container, providing an email, password, name, and organization
-              name. This creates both the first organization and the first user with owner permissions. Once created,
-              navigate to your domain in a browser and log in.
-            </p>
-            <div className="rounded-md bg-zinc-50 p-3">
-              <code className="text-xs text-zinc-700">
-                docker compose exec api node dist/cli.js create-admin --email admin@example.com --password your-password --name "Admin" --org "My Org"
-              </code>
-            </div>
-          </div>
-
-          <div className="rounded-lg border border-zinc-200 bg-white p-6">
-            <h3 className="mb-3 text-lg font-semibold text-zinc-900">Navigation Overview</h3>
-            <p className="mb-3 text-sm text-zinc-600">
-              BigBlueBam uses a cross-app navigation system with colored pills at the top of the screen. Each pill
-              represents one of the {APP_COUNT_WORDS} apps: {APP_NAMES_LIST}. Click any pill to switch apps without losing your place. Within each app, a collapsible
-              sidebar provides contextual navigation -- projects in Bam, channels in Banter, folders in Brief, and so on.
-            </p>
-            <p className="text-sm text-zinc-600">
-              The <strong>Command Palette</strong> is available everywhere with <kbd className="rounded border border-zinc-300 bg-zinc-100 px-1.5 py-0.5 text-xs font-medium">Ctrl+K</kbd> (or <kbd className="rounded border border-zinc-300 bg-zinc-100 px-1.5 py-0.5 text-xs font-medium">Cmd+K</kbd> on macOS).
-              It provides fuzzy search across tasks, projects, channels, beacons, documents, and navigation commands.
-              Power users can navigate the entire platform without ever touching the mouse.
-            </p>
-          </div>
-
-          <div className="rounded-lg border border-zinc-200 bg-white p-6">
-            <h3 className="mb-3 text-lg font-semibold text-zinc-900">Organizations and Projects</h3>
-            <p className="text-sm text-zinc-600">
-              Everything in BigBlueBam is scoped to an organization. Users can belong to multiple organizations and
-              switch between them from the org switcher in the top-left corner. Within an organization, you create
-              projects to organize work. Each project has its own board with configurable phases (columns), labels,
-              epics, custom fields, and team members with role-based permissions (viewer, member, admin, owner).
-            </p>
-          </div>
-        </div>
-      </div>
-
-      {/* Bam */}
-      <div className="mb-12">
-        <div className="mb-6 flex items-center gap-3">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary-100 text-primary-700">
-            <Zap className="h-4 w-4" />
-          </div>
-          <h2 className="text-2xl font-bold text-zinc-900">Bam -- Project Management</h2>
-        </div>
-
-        <div className="space-y-6">
-          <div className="rounded-lg border border-zinc-200 bg-white p-6">
-            <h3 className="mb-3 text-lg font-semibold text-zinc-900">Creating and Managing Tasks</h3>
-            <p className="mb-3 text-sm text-zinc-600">
-              Tasks are the core unit of work in Bam. Create a task by clicking the "+" button in any phase column on the
-              board or using the Command Palette. Every task has a title, optional description (rich text with Tiptap),
-              assignee, priority (urgent, high, medium, low, none), story points, labels, epic, due date, and custom
-              fields defined at the project level. Tasks can have subtasks for breaking down work into smaller pieces.
-            </p>
-            <p className="text-sm text-zinc-600">
-              Use <strong>bulk operations</strong> to update, move, or delete multiple tasks at once. Select tasks with checkboxes
-              and use the bulk action bar that appears at the bottom of the screen.
-            </p>
-          </div>
-
-          <div className="rounded-lg border border-zinc-200 bg-white p-6">
-            <h3 className="mb-3 text-lg font-semibold text-zinc-900">Using the Kanban Board</h3>
-            <p className="mb-3 text-sm text-zinc-600">
-              The board is the primary view in Bam. Each column represents a phase (e.g., Backlog, To Do, In Progress,
-              Review, Done). Drag and drop task cards between columns to update their status. Columns can have WIP
-              (Work In Progress) limits that visually highlight when a phase is over capacity. Phases are fully
-              configurable -- add, remove, rename, and reorder them from the board settings.
-            </p>
-            <p className="text-sm text-zinc-600">
-              Task positions use float values for cheap reordering without renumbering siblings, so dragging a card
-              between two others is always a single lightweight update.
-            </p>
-          </div>
-
-          <div className="rounded-lg border border-zinc-200 bg-white p-6">
-            <h3 className="mb-3 text-lg font-semibold text-zinc-900">Views: Board, List, Timeline, Calendar, Workload</h3>
-            <p className="text-sm text-zinc-600">
-              Bam offers five views for looking at your project data. The <strong>Board</strong> view is the classic Kanban
-              layout. <strong>List</strong> view shows tasks in a sortable, filterable table. <strong>Timeline</strong> view
-              displays tasks with start and due dates on a Gantt-style chart. <strong>Calendar</strong> view plots tasks on
-              a month/week calendar by due date. <strong>Workload</strong> view shows how story points and task counts are
-              distributed across team members, helping you balance the load. All views share the same filter and sort
-              controls, and you can save combinations as <strong>Saved Views</strong> for quick access.
-            </p>
-          </div>
-
-          <div className="rounded-lg border border-zinc-200 bg-white p-6">
-            <h3 className="mb-3 text-lg font-semibold text-zinc-900">Swimlanes</h3>
-            <p className="text-sm text-zinc-600">
-              On the Board view, you can group tasks into horizontal swimlanes by assignee, priority, epic, label, or
-              sprint. This turns the board into a matrix where each row represents a grouping value and each column is
-              still a phase. Swimlanes are especially useful for standup meetings (group by assignee) or for tracking
-              work across epics.
-            </p>
-          </div>
-
-          <div className="rounded-lg border border-zinc-200 bg-white p-6">
-            <h3 className="mb-3 text-lg font-semibold text-zinc-900">Sprint Management</h3>
-            <p className="mb-3 text-sm text-zinc-600">
-              Sprints are time-boxed iterations, typically 1-4 weeks. Create a sprint from the Sprints panel, set a name,
-              goal, start date, and end date. Assign tasks to the sprint by dragging them into the sprint scope or using
-              the task detail drawer. When ready, start the sprint -- only one sprint can be active at a time per project.
-            </p>
-            <p className="text-sm text-zinc-600">
-              When you complete a sprint, the carry-forward dialog shows all incomplete tasks. You choose which to carry
-              forward into the next sprint (they get a carry-forward badge and counter) and which to return to the backlog.
-              Sprint reports include velocity charts, burndown data, and completion statistics.
-            </p>
-          </div>
-
-          <div className="rounded-lg border border-zinc-200 bg-white p-6">
-            <h3 className="mb-3 text-lg font-semibold text-zinc-900">Task Detail Drawer</h3>
-            <p className="text-sm text-zinc-600">
-              Click any task card to open the detail drawer on the right side of the screen. The drawer shows the full
-              task description (editable rich text), subtasks, attachments (drag-and-drop upload), comments (threaded,
-              with emoji reactions), time entries, activity log, and all metadata fields. You can edit any field inline
-              without leaving the drawer. The activity log shows every change ever made to the task, who made it, and when.
-            </p>
-          </div>
-
-          <div className="rounded-lg border border-zinc-200 bg-white p-6">
-            <h3 className="mb-3 text-lg font-semibold text-zinc-900">Project Dashboard and Analytics</h3>
-            <p className="text-sm text-zinc-600">
-              Each project has a dashboard with key metrics: velocity across recent sprints, status distribution
-              (how many tasks in each phase), overdue task count, cycle time trends, and workload balance. Charts are
-              interactive and update in real-time. You can also generate reports for specific date ranges and export
-              data as CSV.
-            </p>
-          </div>
-
-          <div className="rounded-lg border border-zinc-200 bg-white p-6">
-            <h3 className="mb-3 text-lg font-semibold text-zinc-900">My Work</h3>
-            <p className="text-sm text-zinc-600">
-              The "My Work" view aggregates all tasks assigned to you across every project in the organization into a
-              single view. It shows tasks grouped by project with their current status, priority, and due date. This is
-              the quickest way to see everything on your plate without switching between projects.
-            </p>
-          </div>
-
-          <div className="rounded-lg border border-zinc-200 bg-white p-6">
-            <h3 className="mb-3 text-lg font-semibold text-zinc-900">People Management and Roles</h3>
-            <p className="text-sm text-zinc-600">
-              User and member management is accessed from the People page (not under Settings). Organization admins and
-              owners can invite users, assign org-level roles, and manage API keys and sessions. At the project level,
-              members can be assigned viewer, member, admin, or owner roles. The People page has tabbed user-detail
-              pages covering profile, projects, access (API keys, sessions, passwords), and activity history.
-            </p>
-          </div>
-        </div>
-      </div>
-
-      {/* Helpdesk */}
-      <div className="mb-12">
-        <div className="mb-6 flex items-center gap-3">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-sky-100 text-sky-700">
-            <HelpCircle className="h-4 w-4" />
-          </div>
-          <h2 className="text-2xl font-bold text-zinc-900">Helpdesk -- Customer Support</h2>
-        </div>
-
-        <div className="space-y-6">
-          <div className="rounded-lg border border-zinc-200 bg-white p-6">
-            <h3 className="mb-3 text-lg font-semibold text-zinc-900">How Customer Tickets Flow</h3>
-            <p className="text-sm text-zinc-600">
-              The Helpdesk presents a public-facing portal where customers submit support tickets without needing a
-              BigBlueBam account. They authenticate as guests with their email and can track their ticket status. On the
-              agent side, tickets appear in a queue with priority, status, and category filters. Agents can respond with
-              public replies (visible to the customer) or internal notes (visible only to the team). Tickets can be
-              converted into Bam tasks with one click, linking the ticket to a project for tracking.
-            </p>
-          </div>
-
-          <div className="rounded-lg border border-zinc-200 bg-white p-6">
-            <h3 className="mb-3 text-lg font-semibold text-zinc-900">AI Triage</h3>
-            <p className="text-sm text-zinc-600">
-              When an LLM provider is configured, the Helpdesk can automatically triage incoming tickets. AI triage
-              analyzes the ticket content against your knowledge base (Beacon) and suggests a priority, category, and
-              assignee. Agents can accept or override the suggestions. The AI can also suggest reply drafts based on
-              relevant Beacon articles, reducing response time for common questions.
-            </p>
-          </div>
-        </div>
-      </div>
-
-      {/* Beacon */}
-      <div className="mb-12">
-        <div className="mb-6 flex items-center gap-3">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-100 text-amber-700">
-            <Compass className="h-4 w-4" />
-          </div>
-          <h2 className="text-2xl font-bold text-zinc-900">Beacon -- Knowledge Base</h2>
-        </div>
-
-        <div className="space-y-6">
-          <div className="rounded-lg border border-zinc-200 bg-white p-6">
-            <h3 className="mb-3 text-lg font-semibold text-zinc-900">Creating and Publishing Beacons</h3>
-            <p className="text-sm text-zinc-600">
-              A "beacon" is a knowledge article -- a canonical piece of information your team relies on. Create a beacon
-              from the Beacon home page, write your content using the rich text editor, add tags for categorization, and
-              publish when ready. Beacons follow a lifecycle: Draft (being written), Active (published and current),
-              Stale (past its verification deadline), Challenged (flagged for review), Archived (soft-deleted), and
-              Retired (permanently removed from active use). Only Active beacons appear in search results by default.
-            </p>
-          </div>
-
-          <div className="rounded-lg border border-zinc-200 bg-white p-6">
-            <h3 className="mb-3 text-lg font-semibold text-zinc-900">Verification Lifecycle and Freshness</h3>
-            <p className="text-sm text-zinc-600">
-              Beacons have a verification cadence set by governance policies. An owner or designated verifier periodically
-              confirms that the content is still accurate, which resets the freshness clock. When a beacon goes past its
-              verification deadline, it enters a Stale state and surfaces in dashboards and notifications. Anyone can
-              "challenge" a beacon they believe is inaccurate, which flags it for the owner to review and either update
-              or re-verify.
-            </p>
-          </div>
-
-          <div className="rounded-lg border border-zinc-200 bg-white p-6">
-            <h3 className="mb-3 text-lg font-semibold text-zinc-900">Knowledge Graph Explorer</h3>
-            <p className="text-sm text-zinc-600">
-              Beacons are connected through typed links (e.g., "depends on," "supersedes," "related to"), forming a
-              knowledge graph. The Graph Explorer visualizes these connections as an interactive node-edge diagram. You
-              can explore neighbors within N hops of any beacon, find hub nodes (the most-connected articles), and
-              discover relationships you might not have known existed. The graph is a powerful tool for understanding
-              how knowledge in your organization is interconnected.
-            </p>
-          </div>
-
-          <div className="rounded-lg border border-zinc-200 bg-white p-6">
-            <h3 className="mb-3 text-lg font-semibold text-zinc-900">Semantic Search</h3>
-            <p className="text-sm text-zinc-600">
-              Beacon search combines three retrieval strategies: keyword matching (traditional full-text search),
-              semantic similarity (vector embeddings via Qdrant), and graph traversal (following links from matching
-              nodes). This hybrid approach means you can search by exact terms, by meaning, or by relationship. Results
-              are ranked by a weighted combination of all three signals. Saved queries let you bookmark frequently used
-              search configurations.
-            </p>
-          </div>
-
-          <div className="rounded-lg border border-zinc-200 bg-white p-6">
-            <h3 className="mb-3 text-lg font-semibold text-zinc-900">Governance Policies</h3>
-            <p className="text-sm text-zinc-600">
-              Governance policies control verification cadence, who can publish, and freshness thresholds. Policies
-              can be set at the organization level (applies to all projects) or overridden at the project level. The
-              policy resolution system merges levels, so project-specific settings take precedence over org defaults.
-              This lets engineering teams have stricter verification requirements than, say, a marketing team's
-              internal wiki.
-            </p>
-          </div>
-        </div>
-      </div>
-
-      {/* Brief */}
-      <div className="mb-12">
-        <div className="mb-6 flex items-center gap-3">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-100 text-emerald-700">
-            <FileText className="h-4 w-4" />
-          </div>
-          <h2 className="text-2xl font-bold text-zinc-900">Brief -- Documents</h2>
-        </div>
-
-        <div className="space-y-6">
-          <div className="rounded-lg border border-zinc-200 bg-white p-6">
-            <h3 className="mb-3 text-lg font-semibold text-zinc-900">Creating Documents from Templates</h3>
-            <p className="text-sm text-zinc-600">
-              Brief documents can be created from scratch or from templates. Templates provide pre-filled structure for
-              common document types like meeting notes, RFCs, sprint retrospectives, or onboarding guides. Organization
-              admins can create templates from any existing document. When creating from a template, the structure is
-              copied but you can customize everything before saving.
-            </p>
-          </div>
-
-          <div className="rounded-lg border border-zinc-200 bg-white p-6">
-            <h3 className="mb-3 text-lg font-semibold text-zinc-900">Using the WYSIWYG Editor</h3>
-            <p className="mb-3 text-sm text-zinc-600">
-              The Brief editor is built on Tiptap, a modern ProseMirror-based editor. The floating toolbar appears when
-              you select text and offers formatting options: bold, italic, strikethrough, code, links, headings (H1-H3),
-              bullet lists, numbered lists, checklists, blockquotes, code blocks with syntax highlighting, tables,
-              images, and horizontal rules.
-            </p>
-            <p className="text-sm text-zinc-600">
-              <strong>Slash commands</strong> are available by typing "/" at the start of a line. This opens a menu for
-              inserting blocks like tables, code blocks, images, task embeds (from Bam), beacon references, and more.
-              Keyboard shortcuts follow standard conventions (Ctrl+B for bold, Ctrl+I for italic, etc.).
-            </p>
-          </div>
-
-          <div className="rounded-lg border border-zinc-200 bg-white p-6">
-            <h3 className="mb-3 text-lg font-semibold text-zinc-900">Table of Contents</h3>
-            <p className="text-sm text-zinc-600">
-              Long documents automatically generate a Table of Contents from headings. The TOC appears in the sidebar
-              and updates as you edit. Click any heading in the TOC to scroll directly to that section. This makes
-              navigating lengthy specs, runbooks, and guides effortless.
-            </p>
-          </div>
-
-          <div className="rounded-lg border border-zinc-200 bg-white p-6">
-            <h3 className="mb-3 text-lg font-semibold text-zinc-900">Version History</h3>
-            <p className="text-sm text-zinc-600">
-              Every save creates a new version of the document. The version history panel shows all versions with
-              timestamps, authors, and change summaries. You can view any previous version, compare differences, and
-              restore a document to a prior version with one click. Restoring creates a new version (so nothing is
-              ever lost).
-            </p>
-          </div>
-
-          <div className="rounded-lg border border-zinc-200 bg-white p-6">
-            <h3 className="mb-3 text-lg font-semibold text-zinc-900">Inline Comments</h3>
-            <p className="text-sm text-zinc-600">
-              Select any text in a document and add an inline comment, similar to Google Docs. Comments appear as
-              highlighted regions in the text with a comment thread in the sidebar. Team members can reply to comments
-              and mark them as resolved when the feedback has been addressed. Resolved comments collapse but remain
-              accessible for reference.
-            </p>
-          </div>
-
-          <div className="rounded-lg border border-zinc-200 bg-white p-6">
-            <h3 className="mb-3 text-lg font-semibold text-zinc-900">Promoting to Beacon</h3>
-            <p className="text-sm text-zinc-600">
-              When a Brief document has stabilized and contains authoritative information that the team should rely on,
-              you can promote it to a Beacon article with one click. This copies the content into the Beacon system
-              where it enters the verification lifecycle, gets indexed for semantic search, and becomes part of the
-              knowledge graph. The original Brief document retains a link to the resulting Beacon.
-            </p>
-          </div>
-        </div>
-      </div>
-
-      {/* Bolt */}
-      <div className="mb-12">
-        <div className="mb-6 flex items-center gap-3">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-rose-100 text-rose-700">
-            <Bot className="h-4 w-4" />
-          </div>
-          <h2 className="text-2xl font-bold text-zinc-900">Bolt -- Automation</h2>
-        </div>
-
-        <div className="space-y-6">
-          <div className="rounded-lg border border-zinc-200 bg-white p-6">
-            <h3 className="mb-3 text-lg font-semibold text-zinc-900">Creating Automations (WHEN / IF / THEN)</h3>
-            <p className="text-sm text-zinc-600">
-              Every Bolt automation follows a three-part pattern. <strong>WHEN</strong> defines the trigger event -- for
-              example, "when a task moves to the Done phase" or "when a new message is posted in a channel."
-              <strong> IF</strong> adds optional conditions that filter when the automation fires -- for example, "if the
-              task has the label 'bug'" or "if the message contains '@urgent'." <strong>THEN</strong> defines one or more
-              actions to execute -- for example, "post a message in the #releases channel" or "create a Beacon article."
-              Actions are MCP tools, which means automations have access to the full {MCP_TOOL_COUNT}-tool catalog.
-            </p>
-          </div>
-
-          <div className="rounded-lg border border-zinc-200 bg-white p-6">
-            <h3 className="mb-3 text-lg font-semibold text-zinc-900">Trigger Events and Conditions</h3>
-            <p className="mb-3 text-sm text-zinc-600">
-              Bolt supports trigger events from all BigBlueBam products: task created, task updated, task moved, sprint
-              started, sprint completed, message posted, beacon published, beacon challenged, document created, ticket
-              submitted, and many more. The event discovery API lists all available events grouped by source product.
-            </p>
-            <p className="text-sm text-zinc-600">
-              Conditions use a simple expression syntax that can check event payload fields. You can combine multiple
-              conditions with AND/OR logic. For example: "task.priority = 'urgent' AND task.labels CONTAINS 'production'."
-            </p>
-          </div>
-
-          <div className="rounded-lg border border-zinc-200 bg-white p-6">
-            <h3 className="mb-3 text-lg font-semibold text-zinc-900">MCP Tool Actions with Template Variables</h3>
-            <p className="text-sm text-zinc-600">
-              Actions are MCP tool calls with parameters that can reference event data using template variables. For
-              example, an action that posts a Banter message might use{' '}
-              <code className="rounded bg-zinc-100 px-1 py-0.5 text-xs">{'{{task.title}}'}</code> and{' '}
-              <code className="rounded bg-zinc-100 px-1 py-0.5 text-xs">{'{{task.assignee.name}}'}</code> in the
-              message body. Template variables are resolved at execution time from the event payload. You can chain
-              multiple actions in sequence -- each action runs after the previous one completes.
-            </p>
-          </div>
-
-          <div className="rounded-lg border border-zinc-200 bg-white p-6">
-            <h3 className="mb-3 text-lg font-semibold text-zinc-900">Testing Automations</h3>
-            <p className="text-sm text-zinc-600">
-              Before enabling an automation for production, use the Test button to simulate it. Testing sends a
-              synthetic event payload through the automation's conditions and actions in a dry-run mode. The test
-              result shows which conditions matched, which actions would execute, and what the resolved template
-              variables look like. This lets you debug your automation without triggering real side effects.
-            </p>
-          </div>
-
-          <div className="rounded-lg border border-zinc-200 bg-white p-6">
-            <h3 className="mb-3 text-lg font-semibold text-zinc-900">Execution Log</h3>
-            <p className="text-sm text-zinc-600">
-              Every automation execution is logged with the trigger event, condition evaluation results, action outcomes
-              (success or failure), timing information, and any error messages. The execution log is accessible from the
-              automation detail page and provides a full audit trail. Failed executions show the exact error and the
-              step that failed, making debugging straightforward.
-            </p>
-          </div>
-
-          <div className="rounded-lg border border-zinc-200 bg-white p-6">
-            <h3 className="mb-3 text-lg font-semibold text-zinc-900">Using Templates</h3>
-            <p className="text-sm text-zinc-600">
-              Bolt comes with pre-built automation templates for common workflows: notify a channel when a sprint starts,
-              auto-assign tickets based on category, create a recap Beacon when a sprint completes, and more. Templates
-              are a starting point -- create an automation from a template and then customize the conditions, actions, and
-              parameters to fit your team's workflow.
-            </p>
-          </div>
-        </div>
-      </div>
-
-      {/* Bearing */}
-      <div className="mb-12">
-        <div className="mb-6 flex items-center gap-3">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-100 text-indigo-700">
-            <Compass className="h-4 w-4" />
-          </div>
-          <h2 className="text-2xl font-bold text-zinc-900">Bearing -- Goals & OKRs</h2>
-        </div>
-
-        <div className="space-y-6">
-          <div className="rounded-lg border border-zinc-200 bg-white p-6">
-            <h3 className="mb-3 text-lg font-semibold text-zinc-900">Setting Up OKR Periods</h3>
-            <p className="text-sm text-zinc-600">
-              Bearing organizes goals into time-boxed periods -- quarters, halves, annual, monthly, or custom date ranges.
-              Navigate to the Bearing app and create a period first. Periods move through three statuses: planning (goals can
-              be drafted and refined), active (the team is executing), and completed (final scores are locked in). Only
-              organization admins can create and manage periods.
-            </p>
-          </div>
-
-          <div className="rounded-lg border border-zinc-200 bg-white p-6">
-            <h3 className="mb-3 text-lg font-semibold text-zinc-900">Creating Goals and Key Results</h3>
-            <p className="text-sm text-zinc-600">
-              Within a period, create goals (objectives) that describe what you want to achieve. Each goal can be scoped
-              to the organization, a team, a project, or an individual. Under each goal, add measurable key results with
-              target values, metric types (number, percentage, currency, boolean), and a direction (increase or decrease).
-              Key results track progress from a start value toward a target value.
-            </p>
-          </div>
-
-          <div className="rounded-lg border border-zinc-200 bg-white p-6">
-            <h3 className="mb-3 text-lg font-semibold text-zinc-900">Linking Key Results to Bam Tasks</h3>
-            <p className="text-sm text-zinc-600">
-              Key results can be linked to Bam entities -- epics, projects, sprints, or individual tasks -- for automatic
-              progress tracking. When a linked task completes or a sprint closes, the key result's current value updates
-              automatically. This eliminates manual progress updates and ensures goals reflect the actual state of work.
-              You can also set key results to manual mode and record value check-ins directly.
-            </p>
-          </div>
-
-          <div className="rounded-lg border border-zinc-200 bg-white p-6">
-            <h3 className="mb-3 text-lg font-semibold text-zinc-900">Status Tracking and At-Risk Detection</h3>
-            <p className="text-sm text-zinc-600">
-              Goals carry a status: draft, on_track, at_risk, behind, achieved, or missed. The system automatically
-              flags goals as at-risk or behind when progress falls below the expected pace for the current point in the
-              period. You can override the computed status manually, and post status updates with commentary to keep
-              stakeholders informed. Watchers receive notifications when goal status changes.
-            </p>
-          </div>
-
-          <div className="rounded-lg border border-zinc-200 bg-white p-6">
-            <h3 className="mb-3 text-lg font-semibold text-zinc-900">Reports</h3>
-            <p className="text-sm text-zinc-600">
-              Bearing provides three report types: period reports (summary of all goals in a period with completion
-              rates), at-risk reports (all goals currently flagged as at-risk or behind across the organization), and
-              owner reports (all goals owned by a specific user). Reports can be generated via the UI or through
-              30 MCP tools that let AI agents produce reports, flag risks, and share summaries in Banter channels.
-            </p>
-          </div>
-        </div>
-      </div>
-
-      {/* Board */}
-      <div className="mb-12">
-        <div className="mb-6 flex items-center gap-3">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-cyan-100 text-cyan-700">
-            <Zap className="h-4 w-4" />
-          </div>
-          <h2 className="text-2xl font-bold text-zinc-900">Board -- Visual Collaboration</h2>
-        </div>
-
-        <div className="space-y-6">
-          <div className="rounded-lg border border-zinc-200 bg-white p-6">
-            <h3 className="mb-3 text-lg font-semibold text-zinc-900">Whiteboard Rooms</h3>
-            <p className="text-sm text-zinc-600">
-              Board organizes canvases into rooms, each scoped to a project. Create a room from the Board home page,
-              give it a name and optional description, and start collaborating. Rooms can be created from scratch or
-              from one of 10 built-in templates (retrospective, brainstorm, user story map, kanban, etc.). Each room
-              has its own infinite canvas, side chat, and optional audio conferencing session.
-            </p>
-          </div>
-
-          <div className="rounded-lg border border-zinc-200 bg-white p-6">
-            <h3 className="mb-3 text-lg font-semibold text-zinc-900">Infinite Canvas</h3>
-            <p className="text-sm text-zinc-600">
-              The canvas is built on tldraw and supports shapes, sticky notes, freehand drawing, text blocks, arrows,
-              images, and embeds. Zoom in and out with scroll or pinch-to-zoom on touch devices. Pan with middle-click
-              drag or two-finger swipe. The canvas is truly infinite -- there are no boundaries. Shapes can be grouped,
-              aligned, distributed, and locked.
-            </p>
-          </div>
-
-          <div className="rounded-lg border border-zinc-200 bg-white p-6">
-            <h3 className="mb-3 text-lg font-semibold text-zinc-900">Real-Time Collaboration and Audio</h3>
-            <p className="text-sm text-zinc-600">
-              Multiple users can edit the same canvas simultaneously with CRDT-based conflict resolution. Each
-              participant sees live cursors and presence indicators showing who is on the board. Built-in audio
-              conferencing via LiveKit lets participants talk while collaborating -- no need to open a separate call
-              in Banter. The side chat panel provides persistent text messaging per room for sharing links, notes,
-              and decisions alongside the canvas.
-            </p>
-          </div>
-
-          <div className="rounded-lg border border-zinc-200 bg-white p-6">
-            <h3 className="mb-3 text-lg font-semibold text-zinc-900">Sticky-to-Task Pipeline</h3>
-            <p className="text-sm text-zinc-600">
-              During brainstorming sessions, ideas captured as sticky notes can be converted into tracked Bam tasks
-              with a single click. The sticky note title becomes the task title, the body becomes the description,
-              and the color maps to a priority or label. You can also embed existing Bam tasks, Beacon articles,
-              Brief documents, and Bearing goals directly onto the canvas as interactive cards that link back to the
-              source item.
-            </p>
-          </div>
-
-          <div className="rounded-lg border border-zinc-200 bg-white p-6">
-            <h3 className="mb-3 text-lg font-semibold text-zinc-900">AI Canvas Analysis</h3>
-            <p className="text-sm text-zinc-600">
-              Board exposes 40 MCP tools that let AI agents interact with whiteboards programmatically. Agents can
-              read the full canvas state as structured data, add and arrange shapes, generate snapshots, upload
-              assets, convert stickies to tasks, and embed cross-product content. This enables workflows like
-              "analyze this retrospective board and summarize the themes" or "create a task for each action item
-              sticky."
-            </p>
-          </div>
-        </div>
-      </div>
-
-      {/* Bond */}
-      <div className="mb-12">
-        <div className="mb-6 flex items-center gap-3">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-pink-100 text-pink-700">
-            <Zap className="h-4 w-4" />
-          </div>
-          <h2 className="text-2xl font-bold text-zinc-900">Bond -- CRM</h2>
-        </div>
-
-        <div className="space-y-6">
-          <div className="rounded-lg border border-zinc-200 bg-white p-6">
-            <h3 className="mb-3 text-lg font-semibold text-zinc-900">Pipeline Board</h3>
-            <p className="text-sm text-zinc-600">
-              Bond organizes sales work around a visual pipeline board. Deals appear as cards on a Kanban-style
-              board where each column represents a pipeline stage (e.g., Prospecting, Qualified, Proposal, Negotiation,
-              Closed Won, Closed Lost). Drag deals between stages to advance them through the pipeline. Each stage
-              shows the weighted pipeline value so you can see your forecast at a glance. Pipelines are fully
-              configurable -- add, rename, reorder, and color-code stages to match your sales process.
-            </p>
-          </div>
-
-          <div className="rounded-lg border border-zinc-200 bg-white p-6">
-            <h3 className="mb-3 text-lg font-semibold text-zinc-900">Contacts and Companies</h3>
-            <p className="text-sm text-zinc-600">
-              Contacts are people you do business with. Each contact record stores name, email, phone, job title,
-              company association, tags, custom fields, and a complete activity timeline. Companies group contacts
-              into organizations with their own metadata (industry, size, website, address). Bond detects potential
-              duplicates and lets you merge contact records to keep your database clean. Contacts and companies link
-              to deals, so you always know who is involved in each opportunity.
-            </p>
-          </div>
-
-          <div className="rounded-lg border border-zinc-200 bg-white p-6">
-            <h3 className="mb-3 text-lg font-semibold text-zinc-900">Deals and Activity Tracking</h3>
-            <p className="text-sm text-zinc-600">
-              A deal represents a sales opportunity with a value, expected close date, probability, pipeline stage,
-              owner, and linked contacts. The deal detail page shows the full activity timeline -- calls, emails,
-              meetings, notes, and tasks -- so anyone on the team can pick up context instantly. Log activities
-              against contacts, companies, or deals with a single click. Stage history tracks every pipeline
-              transition with timestamps and the user who made the change.
-            </p>
-          </div>
-
-          <div className="rounded-lg border border-zinc-200 bg-white p-6">
-            <h3 className="mb-3 text-lg font-semibold text-zinc-900">Cross-Product Integration</h3>
-            <p className="text-sm text-zinc-600">
-              Bond integrates deeply with the rest of the BigBlueBam suite. Link a closed-won deal to a Bam project
-              to kick off onboarding work. Reference Helpdesk tickets on a deal to track support interactions with
-              prospects. Attach Beacon knowledge articles that helped close the deal. When a deal closes, Bolt
-              automations can create the implementation project, notify the team via Banter, and generate a customer
-              knowledge Beacon -- all without manual intervention.
-            </p>
-          </div>
-
-          <div className="rounded-lg border border-zinc-200 bg-white p-6">
-            <h3 className="mb-3 text-lg font-semibold text-zinc-900">Pipeline Reports</h3>
-            <p className="text-sm text-zinc-600">
-              Bond provides pipeline analytics including conversion rates between stages, average deal size,
-              average stage duration, revenue forecast (weighted by deal probability), and win/loss analysis.
-              Reports can be filtered by date range, pipeline, owner, and company. AI agents can generate and
-              share pipeline reports in Banter channels through 69 dedicated MCP tools, including a
-              contact upsert-by-email endpoint and dedupe primitives that surface likely duplicate
-              contacts with confidence scores.
-            </p>
-          </div>
-        </div>
-      </div>
-
-      {/* Banter */}
-      <div className="mb-12">
-        <div className="mb-6 flex items-center gap-3">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-violet-100 text-violet-700">
-            <MessageSquare className="h-4 w-4" />
-          </div>
-          <h2 className="text-2xl font-bold text-zinc-900">Banter -- Messaging</h2>
-        </div>
-
-        <div className="space-y-6">
-          <div className="rounded-lg border border-zinc-200 bg-white p-6">
-            <h3 className="mb-3 text-lg font-semibold text-zinc-900">Channels, DMs, and Threads</h3>
-            <p className="text-sm text-zinc-600">
-              Banter organizes conversations into channels (public or private), direct messages (1:1), and group DMs.
-              Public channels are discoverable and joinable by any org member; private channels require an invitation.
-              Any message in a channel can start a thread for focused side conversations without cluttering the main
-              channel. Messages support rich text formatting, emoji reactions, file attachments, and cross-product embeds
-              (share a Bam task, sprint summary, or Helpdesk ticket as a rich card in any channel).
-            </p>
-          </div>
-
-          <div className="rounded-lg border border-zinc-200 bg-white p-6">
-            <h3 className="mb-3 text-lg font-semibold text-zinc-900">Search</h3>
-            <p className="text-sm text-zinc-600">
-              Banter search lets you find messages across all channels you have access to. Search by keywords, sender,
-              date range, or channel. Results are ranked by relevance and show context around the matching text. You can
-              also search call transcripts separately if your team uses voice/video calls with transcription enabled.
-              Bookmark important messages for quick reference later.
-            </p>
-          </div>
-
-          <div className="rounded-lg border border-zinc-200 bg-white p-6">
-            <h3 className="mb-3 text-lg font-semibold text-zinc-900">Scheduled Posts and Quiet Hours</h3>
-            <p className="text-sm text-zinc-600">
-              Every channel can carry a quiet-hours policy (IANA timezone, allowed hours, optional
-              weekday-only, optional urgency-override consent flag). Immediate posts that land in a
-              quiet window return 409 unless the caller explicitly defers (auto-converts to a
-              scheduled post at the next allowed time) or the channel policy grants an urgency
-              override. Scheduled posts are persisted to banter_scheduled_messages and fire via a
-              BullMQ delayed job; a startup reconciler re-enqueues any pending rows that survived
-              a Redis flush. The banter_schedule_post MCP tool is the clean-named caller for
-              deferred sends.
-            </p>
-          </div>
-
-          <div className="rounded-lg border border-zinc-200 bg-white p-6">
-            <h3 className="mb-3 text-lg font-semibold text-zinc-900">Agent Pattern Subscriptions</h3>
-            <p className="text-sm text-zinc-600">
-              Agent-class callers can register pattern subscriptions on a channel (keyword,
-              interrogative, mention, or admin-only regex). A worker consumes banter message
-              events, evaluates active subscriptions, and fires a banter.message.matched Bolt event
-              per match so downstream rules can route the signal. Channels gate who may subscribe
-              via agent_subscription_policy, rate-limits are per-subscription-per-hour plus a
-              per-subscriber ceiling, and a can_access preflight runs before any event emits so
-              private-channel content cannot leak into public routing fan-outs.
-            </p>
-          </div>
-
-          <div className="rounded-lg border border-zinc-200 bg-white p-6">
-            <h3 className="mb-3 text-lg font-semibold text-zinc-900">Admin Settings</h3>
-            <p className="text-sm text-zinc-600">
-              Workspace admins can configure Banter settings including default notification preferences, message
-              retention policies, who can create channels, file upload limits, and external webhook integrations.
-              User groups (like @backend-team or @design) can be created to mention and notify groups of people at once.
-              Presence status (online, away, do not disturb, offline) is shown next to user avatars across the platform.
-            </p>
-          </div>
-        </div>
-      </div>
-
-      {/* Agentic Platform */}
-      <div className="mb-12">
-        <div className="mb-6 flex items-center gap-3">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-100 text-indigo-700">
-            <Bot className="h-4 w-4" />
-          </div>
-          <h2 className="text-2xl font-bold text-zinc-900">Agentic Platform -- Cross-App Capabilities</h2>
-        </div>
-
-        <div className="space-y-6">
-          <div className="rounded-lg border border-zinc-200 bg-white p-6">
-            <h3 className="mb-3 text-lg font-semibold text-zinc-900">Agent Identity, Audit, and Heartbeat</h3>
-            <p className="text-sm text-zinc-600">
-              Every user carries an actor_type (human, agent, service). activity_log rows mirror
-              the actor_type at write time so queries like "everything an agent did in the last
-              24 hours" run without email-pattern inference. Agent runners call agent_heartbeat
-              on a schedule; the platform tracks last_heartbeat_at and surface liveness alongside
-              the runner's advertised capabilities. agent_audit and agent_self_report round out
-              the self-observation surface so an agent can produce its own daily digest.
-            </p>
-          </div>
-
-          <div className="rounded-lg border border-zinc-200 bg-white p-6">
-            <h3 className="mb-3 text-lg font-semibold text-zinc-900">Approval Queues (agent_proposals)</h3>
-            <p className="text-sm text-zinc-600">
-              Durable proposal registry replaces ad-hoc Banter-thread HITL. Agents call
-              proposal_create with a proposed action, payload, and approver; humans see
-              everything waiting on them via proposal_list; proposal_decide records the verdict
-              and fires proposal.created and proposal.decided Bolt events. The confirm_action
-              two-step token flow runs in Redis with a dynamic TTL (5 minutes for human approvers,
-              60 seconds for agent-to-agent chains).
-            </p>
-          </div>
-
-          <div className="rounded-lg border border-zinc-200 bg-white p-6">
-            <h3 className="mb-3 text-lg font-semibold text-zinc-900">Visibility Preflight (can_access)</h3>
-            <p className="text-sm text-zinc-600">
-              Before an agent surfaces any entity into a shared surface, it must preflight the
-              asker's ability to see it. can_access resolves a user + entity_type + entity_id
-              pair to a structured allow/deny reason, reusing each app's existing visibility
-              predicates so answers are consistent with what the list and detail endpoints
-              would return.
-            </p>
-          </div>
-
-          <div className="rounded-lg border border-zinc-200 bg-white p-6">
-            <h3 className="mb-3 text-lg font-semibold text-zinc-900">Read Plane: Search, Resolve, Activity, Composite Views</h3>
-            <p className="text-sm text-zinc-600">
-              search_everything fans out across all seven searchable apps with normalized scoring
-              and optional asker-mode filtering via can_access. resolve_references turns
-              free-text mentions (plus the canonical [[TASK-123]], [[deal:Acme]], @jane,
-              #project-slug syntax) into ranked entity candidates with confidence and
-              disambiguation hints. activity_query and activity_by_actor read a unified view
-              over Bam, Bond, and Helpdesk activity logs with correct actor_type mapping.
-              account_view, project_view, and user_view compose parallel fan-outs across the
-              suite with partial-failure semantics and a five-second per-arm timeout.
-            </p>
-          </div>
-
-          <div className="rounded-lg border border-zinc-200 bg-white p-6">
-            <h3 className="mb-3 text-lg font-semibold text-zinc-900">Write Plane: Upserts, Entity Links, Attachments</h3>
-            <p className="text-sm text-zinc-600">
-              Idempotent upserts land for bond_upsert_contact (by email), beacon_upsert_by_slug,
-              helpdesk_upsert_user, and task_upsert_by_external_id. Each returns a created flag
-              so callers can log create vs. update correctly, and each emits a *.upserted Bolt
-              event. entity_links is a durable cross-app linking table backfilled from existing
-              per-app FKs (tickets.task_id, bill_invoices.bond_deal_id, etc.) with three MCP
-              tools for listing, creating, and removing links. Attachment metadata is exposed
-              through a federated Bam-api dispatcher so attachment_get and attachment_list
-              surface scan_status, mime, size, signature, and uploader across Bam, Helpdesk,
-              Beacon, and Brief without reaching into MinIO directly.
-            </p>
-          </div>
-
-          <div className="rounded-lg border border-zinc-200 bg-white p-6">
-            <h3 className="mb-3 text-lg font-semibold text-zinc-900">Agent Policies and Outbound Webhooks</h3>
-            <p className="text-sm text-zinc-600">
-              agent_policies drives per-agent kill switches and tool allowlists. A register-tool
-              wrapper in the MCP server fails closed on any service-account invocation when
-              enabled=false or the tool is not in allowed_tools; a short-TTL cache with Redis
-              PubSub invalidation makes policy flips propagate across MCP instances in seconds.
-              Outbound webhook delivery pushes subscribed Bolt events to agent runners via
-              HMAC-signed POSTs with a 0s/30s/2m/10m/30m/2h/6h/dead-letter backoff schedule,
-              SSRF guards on the target URL, a 256KB payload cap, and a circuit breaker that
-              auto-disables the webhook after 20 consecutive failures.
-            </p>
-          </div>
-
-          <div className="rounded-lg border border-zinc-200 bg-white p-6">
-            <h3 className="mb-3 text-lg font-semibold text-zinc-900">Long Tail: Dedupe, Trends, Expertise, Observability</h3>
-            <p className="text-sm text-zinc-600">
-              dedupe_decisions records "duplicate" / "not duplicate" / "needs review" verdicts
-              in a canonical ordered-pair form so the same pair cannot be re-surfaced without
-              consensus. bond_find_duplicates and helpdesk_find_similar_tickets return scored
-              candidates with prior-decision annotations. helpdesk_ticket_count_by_phrase and
-              bam_task_count_by_phrase bucket tsvector hits by hour/day/week over a bounded
-              window. expertise_for_topic ranks people across Beacon ownership, Bam activity,
-              Brief authorship, and Bond coverage with a configurable time-decay half-life.
-              bolt_event_trace and bolt_recent_events explain why rules fired or skipped, and
-              a runtime catalog.drift_detected event surfaces producer/catalog drift with 24h
-              Redis-backed suppression.
-            </p>
-          </div>
-        </div>
-      </div>
-    </>
-  );
-}
-
 function DeploymentContent() {
   return (
     <>
@@ -2564,7 +1762,7 @@ function FaqsContent() {
 
       <div className="space-y-2">
         {faqs.map((faq, index) => (
-          <div key={index} className="rounded-lg border border-zinc-200 bg-white">
+          <div key={faq.question} className="rounded-lg border border-zinc-200 bg-white">
             <button
               type="button"
               onClick={() => setOpenIndex(openIndex === index ? null : index)}
@@ -2604,7 +1802,12 @@ function FaqsContent() {
 /*  Sidebar                                                            */
 /* ------------------------------------------------------------------ */
 
-type SectionId = 'mcp-tools' | 'api-endpoints' | 'user-guide' | 'deployment' | 'faqs';
+// There is no "User Guide" section: the per-app user guide is the Manual at
+// /docs, generated from every docs/apps/<app>/help.md (#399). The sidebar links
+// there, and an old /docs/reference#user-guide link is sent there too.
+type SectionId = 'mcp-tools' | 'api-endpoints' | 'deployment' | 'faqs';
+const MANUAL_HREF = '/docs';
+const RETIRED_USER_GUIDE_HASH = 'user-guide';
 
 interface SidebarSection {
   id: SectionId;
@@ -2616,7 +1819,6 @@ interface SidebarSection {
 const sidebarSections: SidebarSection[] = [
   { id: 'mcp-tools', label: 'MCP Tools', sublabel: `${MCP_TOOL_COUNT} tools`, icon: <Zap className="h-4 w-4" /> },
   { id: 'api-endpoints', label: 'API Endpoints', icon: <Server className="h-4 w-4" /> },
-  { id: 'user-guide', label: 'User Guide', icon: <Users className="h-4 w-4" /> },
   { id: 'deployment', label: 'Deployment', icon: <Rocket className="h-4 w-4" /> },
   { id: 'faqs', label: 'FAQs', icon: <HelpCircle className="h-4 w-4" /> },
 ];
@@ -2652,6 +1854,18 @@ function Sidebar({ activeSection, onSectionChange }: { activeSection: SectionId;
                 </button>
               </li>
             ))}
+            <li>
+              <a
+                href={MANUAL_HREF}
+                className="flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-sm font-medium text-zinc-600 transition-colors hover:bg-zinc-50 hover:text-zinc-900"
+              >
+                <span className="text-zinc-400">
+                  <Users className="h-4 w-4" />
+                </span>
+                User Manual
+                <span className="ml-auto text-xs text-zinc-400">{APP_COUNT_WORDS} apps</span>
+              </a>
+            </li>
           </ul>
         </nav>
 
@@ -2710,17 +1924,26 @@ function Sidebar({ activeSection, onSectionChange }: { activeSection: SectionId;
 /* ------------------------------------------------------------------ */
 
 export function DocsPage() {
+  // The retired User Guide tab now lives in the Manual (#399). Navigate there and
+  // do not touch the hash meanwhile: a same-document hash change could cancel
+  // the pending navigation.
+  const [redirectToManual] = useState(() => window.location.hash === `#${RETIRED_USER_GUIDE_HASH}`);
+  useEffect(() => {
+    if (redirectToManual) window.location.replace(MANUAL_HREF);
+  }, [redirectToManual]);
+
   const [activeSection, setActiveSection] = useState<SectionId>(() => {
     const hash = window.location.hash.replace('#', '');
-    const validSections: SectionId[] = ['mcp-tools', 'api-endpoints', 'user-guide', 'deployment', 'faqs'];
+    const validSections: SectionId[] = ['mcp-tools', 'api-endpoints', 'deployment', 'faqs'];
     if (validSections.includes(hash as SectionId)) return hash as SectionId;
     return 'mcp-tools';
   });
 
   useEffect(() => {
+    if (redirectToManual) return;
     window.location.hash = activeSection;
     window.scrollTo({ top: 0, behavior: 'smooth' });
-  }, [activeSection]);
+  }, [activeSection, redirectToManual]);
 
   const renderContent = () => {
     switch (activeSection) {
@@ -2728,8 +1951,6 @@ export function DocsPage() {
         return <McpToolsContent />;
       case 'api-endpoints':
         return <ApiEndpointsContent />;
-      case 'user-guide':
-        return <UserGuideContent />;
       case 'deployment':
         return <DeploymentContent />;
       case 'faqs':

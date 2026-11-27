@@ -1,3 +1,11 @@
+// #398: docs:compose (and so the one-shot docs:generate) used to replace a
+// hand-written docs/apps/<app>/guide.md with a stub whenever the app had no
+// _narrative.md, so the pipeline could not be run end to end and agents ran
+// stages piecemeal. Compose now writes only files it generated (marked with
+// GENERATED_MARKER, or the legacy `generated:` front-matter key), skips apps
+// with no source partial instead of inventing stubs, and leaves a file alone
+// when only its timestamp would change.
+
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import {
@@ -11,13 +19,6 @@ import {
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-// #398: docs:compose (and so the one-shot docs:generate) used to replace a
-// hand-written docs/apps/<app>/guide.md with a stub whenever the app had no
-// _narrative.md, so the pipeline could not be run end to end and agents ran
-// stages piecemeal. Compose now writes only files it generated (marked with
-// GENERATED_MARKER, or the legacy `generated:` front-matter key), skips apps
-// with no source partial instead of inventing stubs, and leaves a file alone
-// when only its timestamp would change.
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import {
