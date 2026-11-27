@@ -56,7 +56,7 @@ export const beaconVisibilityStubEnum = pgEnum('beacon_visibility', [
 export const helpdeskTicketsStub = pgTable('tickets', {
   id: uuid('id').primaryKey(),
   project_id: uuid('project_id'),
-  helpdesk_user_id: uuid('helpdesk_user_id'),
+  helpdesk_user_id: uuid('helpdesk_user_id').notNull(),
 });
 
 // ---------------------------------------------------------------------------
@@ -718,7 +718,7 @@ export const bastionManualEvidenceStub = pgTable('bastion_manual_evidence', {
   organization_id: uuid('organization_id').notNull(),
   sensitivity: varchar('sensitivity', { length: 16 }).notNull(),
   owner_user_id: uuid('owner_user_id'),
-  uploaded_by: uuid('uploaded_by'),
+  uploaded_by: uuid('uploaded_by').notNull(),
 });
 
 export const bastionPoliciesStub = pgTable('bastion_policies', {

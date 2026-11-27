@@ -405,7 +405,9 @@ export async function createUpdate(
       goal_id: goalId,
       author_id: userId,
       status: input.status,
-      body: input.body ?? null,
+      // body is NOT NULL in the database; a status-only update (no body) used to
+      // insert null and fail. db:check now compares nullability (#359).
+      body: input.body ?? '',
       // Snapshot the goal's status and progress at update time. These
       // columns exist on the DB row since migration 0028 (NOT NULL) and
       // were previously omitted by this insert, which would have failed on

@@ -560,6 +560,20 @@ describe('createUpdate', () => {
     expect(result.body).toBe('Making great progress.');
   });
 
+  it('writes an empty body (never null) for a status-only update, since body is NOT NULL (#359)', async () => {
+    mockSelect.mockReturnValue(chainable([makeGoal()]));
+    const insertChain = chainable([makeUpdate()]);
+    mockInsert.mockReturnValue(insertChain);
+
+    await createUpdate(GOAL_ID, { status: 'at_risk' }, USER_ID, ORG_ID);
+    await createUpdate(GOAL_ID, { status: 'at_risk', body: null }, USER_ID, ORG_ID);
+
+    expect(insertChain.values).toHaveBeenCalledTimes(2);
+    for (const [row] of insertChain.values.mock.calls) {
+      expect(row.body).toBe('');
+    }
+  });
+
   it('should throw NOT_FOUND when goal does not exist', async () => {
     mockSelect.mockReturnValue(chainable([]));
 

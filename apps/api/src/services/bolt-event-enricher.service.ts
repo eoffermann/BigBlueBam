@@ -112,7 +112,8 @@ interface TaskRow {
 
 export interface EnrichedTaskPayload {
   task: Record<string, unknown>;
-  project: { id: string; name: string; slug: string; key: string } | null;
+  /** key is the project's task_id_prefix, which the database allows to be null (#359). */
+  project: { id: string; name: string; slug: string; key: string | null } | null;
   phase: { id: string; name: string } | null;
   sprint: { id: string; name: string } | null;
   epic: { id: string; name: string } | null;
@@ -232,7 +233,7 @@ export async function loadProjectContext(projectId: string): Promise<{
   id: string;
   name: string;
   slug: string;
-  key: string;
+  key: string | null;
 } | null> {
   const [row] = await db
     .select({

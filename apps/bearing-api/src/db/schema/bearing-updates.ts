@@ -11,7 +11,7 @@ export const bearingUpdates = pgTable('bearing_updates', {
   // ('on_track' / 'at_risk' / 'behind' / 'achieved' / 'missed'). Migration
   // 0078 keeps the column nullable because existing rows pre-date it.
   status: varchar('status', { length: 20 }),
-  body: text('body'),
+  body: text('body').notNull(),
   // status_at_time and progress_at_time were introduced by migration 0028 as
   // NOT NULL and were never reflected in Drizzle. Declared here so db-check
   // stops flagging them as unknown-in-Drizzle. They are filled by the

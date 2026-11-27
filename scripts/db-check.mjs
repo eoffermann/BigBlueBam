@@ -19,7 +19,12 @@
  * `.references()` the database does not enforce, a different target, or an
  * explicit `onDelete` that differs from the database fails the build. A
  * database FK Drizzle leaves out, or an `onDelete` Drizzle leaves out, is a
- * warning. See diffForeignKeys.
+ * warning. See diffForeignKeys. Every database FK must be declared or listed
+ * with a reason in UNDECLARED_FK_ALLOWLIST (issue #360).
+ *
+ * Column nullability is compared too (issue #359): every Drizzle declaration
+ * of a column, including other apps' reference stubs, must agree with the
+ * database's NOT NULL, or the build fails. See diffNullability.
  *
  * Debugging:
  *   Set DEBUG_DB_CHECK=1 to print the discovered SCHEMA_ROOTS list on stderr
@@ -222,6 +227,16 @@ function parseSchemaFile(filePath, root) {
       }
     }
 
+    // Nullability (issue #359): a column is NOT NULL when its chain says
+    // .notNull() / .primaryKey(), it is a serial, or it is in a composite
+    // primaryKey(...) in the table's extra-config callback.
+    const compositePk = compositePrimaryKeyKeys(src.slice(braceClose, nextPgTableIndex(src, braceClose)));
+    const builderOf = new Map();
+    for (const line of lines) {
+      const cm = line.match(COLUMN_RE);
+      if (cm) builderOf.set(cm[1], cm[2]);
+    }
+
     // Foreign keys (issue #160): a column's builder chain runs from its own
     // line to the next column's line; a `.references(() => table.col, {...})`
     // inside it is a declared single-column FK.
@@ -229,6 +244,13 @@ function parseSchemaFile(filePath, root) {
       const c = colStarts[k];
       const end = k + 1 < colStarts.length ? colStarts[k + 1].idx : lines.length;
       const chain = lines.slice(c.idx, end).join('\n');
+      drizzleNullability.push({
+        table: tableName,
+        column: c.sqlName,
+        notNull: chainIsNotNull(chain, builderOf.get(c.jsKey)) || compositePk.has(c.jsKey),
+        file: relPath,
+        line: c.line,
+      });
       const fk = parseReferences(chain);
       if (fk) {
         drizzleForeignKeys.push({
@@ -247,6 +269,71 @@ function parseSchemaFile(filePath, root) {
 
     drizzleTables.set(tableName, existing);
   }
+}
+
+/** @type {Array<{table: string, column: string, notNull: boolean, file: string, line: number}>} */
+const drizzleNullability = [];
+
+function nextPgTableIndex(src, from) {
+  PGTABLE_NEXT_RE.lastIndex = from;
+  const m = PGTABLE_NEXT_RE.exec(src);
+  return m ? m.index : src.length;
+}
+const PGTABLE_NEXT_RE = /pgTable\s*\(/g;
+
+/**
+ * True when one Drizzle column builder chain declares NOT NULL. Exported for
+ * scripts/lib/db-check-nullability.test.mjs.
+ * @param {string} chain
+ * @param {string} [builder]
+ */
+export function chainIsNotNull(chain, builder) {
+  if (builder === 'serial' || builder === 'bigserial' || builder === 'smallserial') return true;
+  // Strip line comments so a comment that mentions .notNull() does not count.
+  const code = chain.replace(/\/\/[^\n]*/g, '');
+  return /\.notNull\(\s*\)/.test(code) || /\.primaryKey\(\s*\)/.test(code);
+}
+
+/**
+ * JS keys of the columns in a composite primaryKey(...) in a table's extra
+ * config: `primaryKey({ columns: [t.a, t.b] })` or the older `primaryKey(t.a, t.b)`.
+ * Exported for scripts/lib/db-check-nullability.test.mjs.
+ * @param {string} extra  source text after the columns object
+ */
+export function compositePrimaryKeyKeys(extra) {
+  const keys = new Set();
+  for (const m of extra.matchAll(/\bprimaryKey\(\s*(\{[^}]*\}|[^)]*)\)/g)) {
+    const body = m[1].startsWith('{') ? (/columns\s*:\s*\[([^\]]*)\]/.exec(m[1])?.[1] ?? '') : m[1];
+    for (const k of body.matchAll(/[A-Za-z_$][\w$]*\.([A-Za-z_$][\w$]*)/g)) keys.add(k[1]);
+  }
+  return keys;
+}
+
+/**
+ * Compare every Drizzle declaration's nullability with the database (issue
+ * #359). A table can be declared in several schema roots (the owner plus
+ * reference stubs); each declaration is checked, because a stub that claims
+ * NOT NULL types its app's reads wrong just as much as the owner would. Pure;
+ * exported for scripts/lib/db-check-nullability.test.mjs.
+ * @param {Array<{table: string, column: string, notNull: boolean, file: string, line: number}>} decls
+ * @param {Map<string, Map<string, {nullable: boolean}>>} dbTables
+ * @returns {string[]} one message per mismatch
+ */
+export function diffNullability(decls, dbTables) {
+  const out = [];
+  for (const d of decls) {
+    const col = dbTables.get(d.table)?.get(d.column);
+    if (!col || typeof col.nullable !== 'boolean') continue; // missing column/table is reported elsewhere
+    if (d.notNull === !col.nullable) continue;
+    out.push(
+      `NULLABILITY MISMATCH: ${d.table}.${d.column}: Drizzle ${d.notNull ? 'NOT NULL' : 'nullable'}, DB ${
+        col.nullable ? 'nullable' : 'NOT NULL'
+      }\n  declared at: ${d.file}:${d.line}\n  fix: ${
+        col.nullable ? 'drop .notNull() from the declaration' : 'add .notNull() to the declaration'
+      } (or change the column in a new migration if the database is the one that is wrong).`,
+    );
+  }
+  return out;
 }
 
 /**
@@ -547,7 +634,7 @@ try {
   //   - partitioned parents (relkind = 'p')
   //   - non-partition children of those parents (relispartition = false)
   const rows = await sql`
-    SELECT c.table_name, c.column_name, c.data_type, c.udt_name
+    SELECT c.table_name, c.column_name, c.data_type, c.udt_name, c.is_nullable
     FROM information_schema.columns c
     JOIN pg_class pc ON pc.relname = c.table_name
     JOIN pg_namespace pn ON pn.oid = pc.relnamespace
@@ -568,6 +655,7 @@ try {
       name: r.column_name,
       dataType: r.data_type,
       udtName: r.udt_name,
+      nullable: r.is_nullable === 'YES',
     });
   }
   // Single-column foreign keys (issue #160). conparentid = 0 keeps the FK
@@ -715,6 +803,11 @@ for (const [tableName, dbCols] of dbTables) {
 // Foreign keys (issue #160). A Drizzle `.references()` the database does not
 // enforce is drift: code relying on its ON DELETE (e.g. a cascade) silently
 // leaves orphans. Both directions are reported.
+// Nullability (issue #359): an error, like a missing column. Drizzle's types
+// are what the code trusts, so a nullable column typed NOT NULL hides null
+// handling bugs, and a NOT NULL column typed nullable lets inserts omit it.
+errors.push(...diffNullability(drizzleNullability, dbTables));
+
 const fkDecls = resolveDrizzleForeignKeys();
 errors.push(...fkDecls.conflicts);
 const fkDiff = diffForeignKeys(fkDecls.declared, dbForeignKeys, drizzleTables, UNDECLARED_FK_ALLOWLIST);

@@ -19,7 +19,7 @@ import { sql } from 'drizzle-orm';
 
 export const users = pgTable('users', {
   id: uuid('id').primaryKey().defaultRandom(),
-  org_id: uuid('org_id').references(() => organizations.id, { onDelete: 'cascade' }),
+  org_id: uuid('org_id').references(() => organizations.id, { onDelete: 'cascade' }).notNull(),
   email: varchar('email', { length: 320 }).notNull(),
   display_name: varchar('display_name', { length: 100 }).notNull(),
   is_active: boolean('is_active').default(true).notNull(),
@@ -43,7 +43,7 @@ export const projects = pgTable('projects', {
     .references(() => organizations.id, { onDelete: 'cascade' }),
   name: varchar('name', { length: 255 }).notNull(),
   slug: varchar('slug', { length: 100 }).notNull(),
-  task_id_prefix: varchar('task_id_prefix', { length: 6 }).notNull(),
+  task_id_prefix: varchar('task_id_prefix', { length: 6 }),
   task_id_sequence: integer('task_id_sequence').default(0).notNull(),
   is_archived: boolean('is_archived').default(false).notNull(),
   created_at: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),

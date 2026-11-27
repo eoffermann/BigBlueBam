@@ -14,7 +14,9 @@ export const projects = pgTable(
     description: text('description'),
     icon: varchar('icon', { length: 10 }),
     color: varchar('color', { length: 7 }),
-    task_id_prefix: varchar('task_id_prefix', { length: 6 }).notNull(),
+    // Nullable in the database (0000_init); the create route always sets it, but
+    // imports and raw-SQL inserts may not, so reads must handle null (#359).
+    task_id_prefix: varchar('task_id_prefix', { length: 6 }),
     task_id_sequence: integer('task_id_sequence').default(0).notNull(),
     default_sprint_duration_days: integer('default_sprint_duration_days').default(14).notNull(),
     settings: jsonb('settings').default({}).notNull(),

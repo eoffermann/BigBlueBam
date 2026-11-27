@@ -155,9 +155,7 @@ export const organizationMemberships = pgTable(
 // Stub for tasks table (from Bam) — referenced by brief_task_links
 export const tasks = pgTable('tasks', {
   id: uuid('id').primaryKey().defaultRandom(),
-  org_id: uuid('org_id')
-    .notNull()
-    .references(() => organizations.id, { onDelete: 'cascade' }),
+  org_id: uuid('org_id').references(() => organizations.id, { onDelete: 'cascade' }),
   project_id: uuid('project_id')
     .notNull()
     .references(() => projects.id),
@@ -205,7 +203,7 @@ export const accountGroupMemberships = pgTable('account_group_memberships', {
     .notNull()
     .references(() => permissionGroups.id, { onDelete: 'restrict' }),
   scope_type: text('scope_type').notNull(),
-  scope_id: uuid('scope_id'),
+  scope_id: uuid('scope_id').notNull(),
   detached_at: timestamp('detached_at', { withTimezone: true }),
   granted_at: timestamp('granted_at', { withTimezone: true }).defaultNow().notNull(),
 });
