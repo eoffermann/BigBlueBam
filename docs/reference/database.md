@@ -779,8 +779,10 @@ Files must match `^[0-9]{4}_[a-z][a-z0-9_]*\.sql$` — a zero-padded 4-digit seq
 - Required header lines (filename, `Why:`, `Client impact:`)
 - Idempotency (`IF NOT EXISTS` / `IF EXISTS` / guarded triggers)
 - Warning on unguarded `CREATE TYPE ... AS ENUM` (no `IF NOT EXISTS` syntax exists; wrap in a `DO $$` block)
+- No top-level `BEGIN` / `COMMIT` (`no-transaction-control`, #131); the runner wraps each file in its own transaction
+- `org-guc-nullif` (#381): every uuid cast of the org GUC is written `NULLIF(current_setting('app.current_org_id', true), '')::uuid`. A pooled connection that ran a transaction-local `set_config` keeps the GUC as an empty string, and the bare `current_setting(...)::uuid` then fails with `22P02` instead of matching no rows (#363). The bare form appears in about 70 historical lines; those are suppressed off-file, and 0355 rewrote the live policies, so copy the NULLIF form, not the old one.
 
-Rule escape hatch: append `-- noqa: <rule-name>` (or `-- noqa: all`) on a line to silence a single rule. Use sparingly.
+Rule escape hatch: append `-- noqa: <rule-name>` (or `-- noqa: all`) on a line to silence a single rule, but only while the migration has never been applied anywhere. For an applied migration, register the suppression in `OFF_FILE_SUPPRESSIONS` in `scripts/lint-migrations.mjs` instead; an inline tag changes the body checksum.
 
 ### Drift guard — `pnpm db:check`
 
