@@ -2,7 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { requireAuth } from '../plugins/auth.js';
 import * as llmService from '../services/llm-provider.service.js';
-import { validateExternalUrl } from '../lib/url-validator.js';
+import { checkUrl } from '@bigbluebam/egress-guard';
 
 const createSchema = z.object({
   scope: z.enum(['system', 'organization', 'project']),
@@ -115,7 +115,7 @@ export default async function llmProviderRoutes(fastify: FastifyInstance) {
 
       // SSRF protection: validate api_endpoint if provided (BAM-021)
       if (body.api_endpoint) {
-        const urlCheck = validateExternalUrl(body.api_endpoint);
+        const urlCheck = await checkUrl(body.api_endpoint);
         if (!urlCheck.safe) {
           return reply.status(400).send({
             error: {
@@ -220,7 +220,7 @@ export default async function llmProviderRoutes(fastify: FastifyInstance) {
 
       // SSRF protection: validate api_endpoint if provided (BAM-021)
       if (body.api_endpoint) {
-        const urlCheck = validateExternalUrl(body.api_endpoint);
+        const urlCheck = await checkUrl(body.api_endpoint);
         if (!urlCheck.safe) {
           return reply.status(400).send({
             error: {

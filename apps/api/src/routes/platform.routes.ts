@@ -235,6 +235,9 @@ export default async function platformRoutes(fastify: FastifyInstance) {
           .delete(organizationMemberships)
           .where(eq(organizationMemberships.org_id, id));
 
+        // Keys bound to the deleted org must not keep authenticating (#336).
+        await tx.execute(sql`DELETE FROM api_keys WHERE org_id = ${id}`);
+
         await tx
           .update(organizations)
           .set({ deleted_at: new Date(), deleted_by: user.id, updated_at: new Date() })

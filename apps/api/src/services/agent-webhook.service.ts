@@ -6,7 +6,32 @@ import { db } from '../db/index.js';
 import { agentRunners } from '../db/schema/agent-runners.js';
 import { agentWebhookDeliveries } from '../db/schema/agent-webhook-deliveries.js';
 import { agentPolicies } from '../db/schema/agent-policies.js';
-import { validateWebhookUrl } from '../lib/webhook-url-validator.js';
+import { checkUrl, type EgressCheckOptions, type UrlCheckResult } from '@bigbluebam/egress-guard';
+
+/**
+ * Registration-time check for an agent webhook URL. Uses the same
+ * @bigbluebam/egress-guard rules the worker's safeFetch applies at dispatch,
+ * so registration and dispatch can no longer disagree about a URL (#328).
+ * The only extra rule is policy, not a range table: https is required in
+ * production. Stack-internal receivers (test harnesses) are allowed through
+ * EGRESS_ALLOW_PRIVATE_HOSTS, exactly as dispatch allows them.
+ */
+export async function checkWebhookUrl(
+  rawUrl: string,
+  nodeEnv: string = process.env.NODE_ENV ?? 'development',
+  opts: EgressCheckOptions = {},
+): Promise<UrlCheckResult> {
+  if (nodeEnv === 'production') {
+    try {
+      if (new URL(rawUrl).protocol !== 'https:') {
+        return { safe: false, reason: 'https:// is required in production' };
+      }
+    } catch {
+      return { safe: false, reason: 'Invalid URL' };
+    }
+  }
+  return checkUrl(rawUrl, opts);
+}
 
 // The dispatcher worker signs outbound deliveries with the runner's
 // plaintext secret. We stash it in Redis at configure/rotate time so the
@@ -80,7 +105,7 @@ export async function configureWebhook(
   input: ConfigureInput,
   redis: Redis | null,
 ): Promise<ConfigureResult> {
-  const urlCheck = validateWebhookUrl(input.webhook_url);
+  const urlCheck = await checkWebhookUrl(input.webhook_url);
   if (!urlCheck.safe) {
     return { ok: false, code: 'UNSAFE_URL', reason: urlCheck.reason };
   }

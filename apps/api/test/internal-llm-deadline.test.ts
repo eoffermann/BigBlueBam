@@ -29,6 +29,10 @@ vi.mock('../src/db/index.js', () => ({
 }));
 vi.mock('../src/services/llm-provider.service.js', () => ({ decryptApiKey: () => 'key' }));
 vi.mock('../src/lib/internal-secret.js', () => ({ requireInternalSecretOrHelpdeskToken: async () => {} }));
+// The upstream call goes through the SSRF-guarded llmFetch (#328); route it to the stubbed fetch.
+vi.mock('../src/lib/llm-fetch.js', () => ({
+  llmFetch: (url: string, init: RequestInit) => (globalThis.fetch as typeof fetch)(url, init),
+}));
 
 const { default: internalLlmRoutes, admitLlmCall, drainInternalLlmCalls, resetInternalLlmDrainForTests } = await import(
   '../src/routes/internal-llm.routes.js'

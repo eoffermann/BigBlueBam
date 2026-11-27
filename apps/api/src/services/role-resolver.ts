@@ -17,6 +17,7 @@ import { and, eq, inArray, sql } from 'drizzle-orm';
 import type { PgTransaction } from 'drizzle-orm/pg-core';
 import { db as defaultDb } from '../db/index.js';
 import { accountGroupMemberships, permissionGroups } from '../db/schema/permissions.js';
+import { apiKeys } from '../db/schema/api-keys.js';
 
 // Fixed UUIDs of the five built-in permission groups (seeded by migration
 // 0146). Used to translate a legacy role string into a group_id when
@@ -28,6 +29,60 @@ export const BUILTIN_GROUP_IDS = {
   viewer: '44444444-4444-4444-8444-444444444444',
   guest: '55555555-5555-4555-8555-555555555555',
 } as const satisfies Record<string, string>;
+
+/**
+ * Org roles that may hold org-admin privilege. This is the one place the
+ * fact lives: requireScope('admin') checks it for sessions AND API keys
+ * (an admin-scope key is only as strong as its holder's current role), and
+ * reconcileOrgApiKeys() uses it to downgrade a demoted user's admin keys.
+ */
+export const ORG_ADMIN_ROLES: ReadonlySet<string> = new Set(['admin', 'owner']);
+
+/**
+ * Bring a user's API keys for one org in line with their role there.
+ * - role === null (membership removed): delete every key bound to the org.
+ * - role below admin: downgrade admin-scope keys to read_write.
+ * Defense in depth behind the requireScope('admin') role check (#336).
+ * Idempotent.
+ */
+export async function reconcileOrgApiKeys(
+  userId: string,
+  orgId: string,
+  role: string | null,
+  dbInstance: DbLike = defaultDb,
+): Promise<void> {
+  if (role === null) {
+    await dbInstance
+      .delete(apiKeys)
+      .where(and(eq(apiKeys.user_id, userId), eq(apiKeys.org_id, orgId)));
+    return;
+  }
+  if (ORG_ADMIN_ROLES.has(role)) return;
+  // Service/agent accounts hold role 'member' by design; an owner delegated
+  // their admin scope directly (service-account.routes.ts), so only human
+  // holders are downgraded. Mirrors keyRoleCapApplies() in requireScope.
+  await dbInstance
+    .update(apiKeys)
+    .set({ scope: 'read_write' })
+    .where(
+      and(
+        eq(apiKeys.user_id, userId),
+        eq(apiKeys.org_id, orgId),
+        eq(apiKeys.scope, 'admin'),
+        sql`EXISTS (SELECT 1 FROM users u WHERE u.id = ${apiKeys.user_id} AND u.kind = 'human')`,
+      ),
+    );
+}
+
+/**
+ * Whether an API key's org-admin power is capped by its holder's org role.
+ * True for human holders. Service/agent accounts are minted with role
+ * 'member' and an owner-delegated scope, and are governed by
+ * agent_policies instead, so their key scope stands on its own.
+ */
+export function keyRoleCapApplies(kind: string | undefined): boolean {
+  return kind !== 'service' && kind !== 'agent';
+}
 
 export type BuiltinRole = keyof typeof BUILTIN_GROUP_IDS;
 
@@ -168,6 +223,8 @@ export async function setUserOrgRole(
         detached_by: null,
       },
     });
+  // A role change below admin must not leave an admin-scope key behind.
+  await reconcileOrgApiKeys(userId, orgId, role, dbInstance);
 }
 
 /**
@@ -189,6 +246,7 @@ export async function clearUserOrgRole(
         eq(accountGroupMemberships.scope_id, orgId),
       ),
     );
+  await reconcileOrgApiKeys(userId, orgId, null, dbInstance);
 }
 
 /**

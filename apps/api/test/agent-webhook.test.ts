@@ -48,7 +48,7 @@ import {
   CIRCUIT_BREAKER_THRESHOLD,
   PAYLOAD_CAP_BYTES,
 } from '../src/lib/webhook-signature.js';
-import { validateWebhookUrl } from '../src/lib/webhook-url-validator.js';
+import { checkWebhookUrl } from '../src/services/agent-webhook.service.js';
 import { eventMatchesFilter } from '../src/services/agent-webhook.service.js';
 
 describe('webhook HMAC signing', () => {
@@ -170,55 +170,55 @@ describe('payload truncation', () => {
   });
 });
 
-describe('webhook URL SSRF guard', () => {
-  it('rejects localhost', () => {
-    const r = validateWebhookUrl('https://localhost/hook', 'development');
-    expect(r.safe).toBe(false);
+describe('webhook URL SSRF guard (registration uses @bigbluebam/egress-guard, #328)', () => {
+  it('rejects localhost', async () => {
+    expect((await checkWebhookUrl('https://localhost/hook', 'development')).safe).toBe(false);
   });
 
-  it('rejects 127.0.0.1', () => {
-    const r = validateWebhookUrl('https://127.0.0.1/hook', 'development');
-    expect(r.safe).toBe(false);
+  it('rejects 127.0.0.1', async () => {
+    expect((await checkWebhookUrl('https://127.0.0.1/hook', 'development')).safe).toBe(false);
   });
 
-  it('rejects 169.254.169.254 (cloud metadata)', () => {
-    const r = validateWebhookUrl('https://169.254.169.254/hook', 'development');
-    expect(r.safe).toBe(false);
+  it('rejects 169.254.169.254 (cloud metadata)', async () => {
+    expect((await checkWebhookUrl('https://169.254.169.254/hook', 'development')).safe).toBe(false);
   });
 
-  it('rejects 10.x in non-test envs', () => {
-    const r = validateWebhookUrl('https://10.0.0.5/hook', 'development');
-    expect(r.safe).toBe(false);
+  it('rejects 10.x in every env, test included (dispatch refuses it too)', async () => {
+    expect((await checkWebhookUrl('https://10.0.0.5/hook', 'development')).safe).toBe(false);
+    expect((await checkWebhookUrl('http://10.0.0.5:4000/hook', 'test')).safe).toBe(false);
   });
 
-  it('allows 10.x when NODE_ENV=test', () => {
-    const r = validateWebhookUrl('http://10.0.0.5:4000/hook', 'test');
-    expect(r.safe).toBe(true);
+  it('rejects CGNAT and v4-mapped v6, which the old per-app table missed', async () => {
+    expect((await checkWebhookUrl('https://100.100.100.200/hook', 'development')).safe).toBe(false);
+    expect((await checkWebhookUrl('https://[::ffff:a9fe:a9fe]/hook', 'development')).safe).toBe(false);
   });
 
-  it('rejects *.internal', () => {
-    const r = validateWebhookUrl('https://receiver.internal/hook', 'development');
-    expect(r.safe).toBe(false);
+  it('allows a stack-internal receiver only through EGRESS_ALLOW_PRIVATE_HOSTS', async () => {
+    const env = { EGRESS_ALLOW_PRIVATE_HOSTS: '10.0.0.5:4000' };
+    expect((await checkWebhookUrl('http://10.0.0.5:4000/hook', 'test', { env })).safe).toBe(true);
   });
 
-  it('requires https in production', () => {
-    const r = validateWebhookUrl('http://example.com/hook', 'production');
+  it('rejects *.internal', async () => {
+    expect((await checkWebhookUrl('https://receiver.internal/hook', 'development')).safe).toBe(false);
+  });
+
+  it('requires https in production', async () => {
+    const r = await checkWebhookUrl('http://93.184.215.14/hook', 'production');
     expect(r.safe).toBe(false);
     expect(r.reason).toMatch(/https/i);
   });
 
-  it('accepts https in production', () => {
-    const r = validateWebhookUrl('https://example.com/hook', 'production');
-    expect(r.safe).toBe(true);
+  it('accepts a public https URL in production', async () => {
+    expect((await checkWebhookUrl('https://93.184.215.14/hook', 'production')).safe).toBe(true);
   });
 
-  it('rejects file:// and javascript:', () => {
-    expect(validateWebhookUrl('file:///etc/passwd', 'development').safe).toBe(false);
-    expect(validateWebhookUrl('javascript:alert(1)', 'development').safe).toBe(false);
+  it('rejects file:// and javascript:', async () => {
+    expect((await checkWebhookUrl('file:///etc/passwd', 'development')).safe).toBe(false);
+    expect((await checkWebhookUrl('javascript:alert(1)', 'development')).safe).toBe(false);
   });
 
-  it('rejects invalid URL', () => {
-    expect(validateWebhookUrl('not-a-url', 'development').safe).toBe(false);
+  it('rejects invalid URL', async () => {
+    expect((await checkWebhookUrl('not-a-url', 'development')).safe).toBe(false);
   });
 });
 

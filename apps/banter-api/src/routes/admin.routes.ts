@@ -1,3 +1,4 @@
+import { checkUrl, safeFetch } from '@bigbluebam/egress-guard';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { eq, and, sql } from 'drizzle-orm';
@@ -68,68 +69,8 @@ const reorderGroupsSchema = z.object({
   ),
 });
 
-// ── SSRF protection ─────────────────────────────────────────────
-
-/**
- * Validate that a URL is safe for server-side requests (no private/internal IPs).
- * Rejects private IPv4 ranges (10.x, 172.16-31.x, 192.168.x, 127.x, 169.254.x, 0.x),
- * IPv6 loopback/link-local, and non-http(s) schemes.
- */
-function validateExternalUrl(url: string): { valid: boolean; reason?: string } {
-  let parsed: URL;
-  try {
-    parsed = new URL(url);
-  } catch {
-    return { valid: false, reason: 'Invalid URL' };
-  }
-
-  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
-    return { valid: false, reason: 'Only http and https URLs are allowed' };
-  }
-
-  const hostname = parsed.hostname.toLowerCase();
-
-  // Block localhost variants
-  if (hostname === 'localhost' || hostname === '[::1]') {
-    return { valid: false, reason: 'Localhost URLs are not allowed' };
-  }
-
-  // Block private/reserved IPv4 ranges
-  const ipv4Match = hostname.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
-  if (ipv4Match) {
-    const [, a, b] = ipv4Match.map(Number);
-    if (
-      a === 10 ||
-      a === 127 ||
-      a === 0 ||
-      (a === 172 && b! >= 16 && b! <= 31) ||
-      (a === 192 && b === 168) ||
-      (a === 169 && b === 254)
-    ) {
-      return { valid: false, reason: 'Private/internal IP addresses are not allowed' };
-    }
-  }
-
-  // Block common internal hostnames
-  const internalPatterns = [
-    /^.*\.local$/,
-    /^.*\.internal$/,
-    /^.*\.svc\.cluster\.local$/,
-    /^metadata\.google\.internal$/,
-  ];
-  for (const pattern of internalPatterns) {
-    if (pattern.test(hostname)) {
-      return { valid: false, reason: 'Internal hostnames are not allowed' };
-    }
-  }
-
-  // Block cloud metadata endpoints (AWS, GCP, Azure)
-  if (hostname === '169.254.169.254' || hostname === 'metadata.google.internal') {
-    return { valid: false, reason: 'Cloud metadata endpoints are not allowed' };
-  }
-
-  return { valid: true };
-}
+// SSRF protection: provider probe URLs go through @bigbluebam/egress-guard
+// (checkUrl for the 400, safeFetch for the request), never a local copy (#328).
 
 // ── Helpers ─────────────────────────────────────────────────────
 
@@ -424,8 +365,8 @@ export default async function adminRoutes(fastify: FastifyInstance) {
           // Unknown provider — attempt a generic health check if url is configured
           const url = config.url as string | undefined;
           if (url) {
-            const urlCheck = validateExternalUrl(url);
-            if (!urlCheck.valid) {
+            const urlCheck = await checkUrl(url);
+            if (!urlCheck.safe) {
               return reply.status(400).send({
                 error: {
                   code: 'SSRF_BLOCKED',
@@ -435,7 +376,7 @@ export default async function adminRoutes(fastify: FastifyInstance) {
                 },
               });
             }
-            const res = await fetch(url);
+            const res = await safeFetch(url);
             if (!res.ok) throw new Error(`Provider responded with status ${res.status}`);
           } else {
             return reply.send({
@@ -513,8 +454,8 @@ export default async function adminRoutes(fastify: FastifyInstance) {
         } else {
           const url = config.url as string | undefined;
           if (url) {
-            const urlCheck = validateExternalUrl(url);
-            if (!urlCheck.valid) {
+            const urlCheck = await checkUrl(url);
+            if (!urlCheck.safe) {
               return reply.status(400).send({
                 error: {
                   code: 'SSRF_BLOCKED',
@@ -524,7 +465,7 @@ export default async function adminRoutes(fastify: FastifyInstance) {
                 },
               });
             }
-            const res = await fetch(url);
+            const res = await safeFetch(url);
             if (!res.ok) throw new Error(`Provider responded with status ${res.status}`);
           } else {
             return reply.send({
