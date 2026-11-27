@@ -997,7 +997,7 @@ All routes are registered under the `/v1` prefix, so external paths are `/brief/
 | `POST /folders` | `brief_folder_create` | Create a folder | `apps/brief/src/hooks/use-folders.ts` |
 | `PATCH /folders/:id` | `brief_folder_update` | Update a folder | `apps/brief/src/hooks/use-folders.ts` |
 | `DELETE /folders/:id` | `brief_folder_delete` | Delete a folder | `apps/brief/src/hooks/use-folders.ts` |
-| `POST /internal/can-read` | — _(skip: internal service-to-service route)_ | Cross-app read preflight (Bureau summon) | — *(internal service-to-service)* |
+| `POST /internal/can-read` | — _(skip: internal service-to-service route)_ | Cross-app read preflight for Bureau presence and summons, for every suite URL except Board/Brief. Maps the URL to a can_access entity (`lib/suite-url-entity.ts`) and denies what it cannot map (fail closed, #300). Callers go through `@bigbluebam/shared/cross-app-access` | — *(internal service-to-service)* |
 | `POST /internal/visibility/can-access` | — _(skip: internal service-to-service route)_ | General (entity_type, entity_id) preflight for service callers (Banter Feed fan-in worker) | — *(internal service-to-service)* |
 
 
@@ -1672,7 +1672,7 @@ or `/helpdesk/agents`) segment in-code.
 | `GET /bureau/api/v1/presence` | `bureau_get_presence` | Org-wide live presence snapshot | — |
 | `GET /bureau/api/v1/presence/here` | `bureau_who_is_here` | Co-presence by URL chip | `apps/bureau/src/hooks/use-bureau-ws.ts` |
 | `GET /bureau/api/v1/presence/locate` | `bureau_locate_user` | Locate a user's current room/floor | — |
-| `GET /bureau/api/v1/presence/where/:userId` | `bureau_where_is_user` | Locate a user ("Hunt") | `apps/bureau/src/hooks/use-bureau-ws.ts` |
+| `GET /bureau/api/v1/presence/where/:userId` | `bureau_where_is_user` | Locate a user ("Hunt"); `located: false` unless the caller passes the fail-closed cross-app preflight for the URL | `apps/bureau/src/hooks/use-bureau-ws.ts` |
 | `PATCH /bureau/api/v1/me/status` | `bureau_set_status` | Set + persist caller's presence status | — |
 | `POST /bureau/api/v1/ring` | — _(skip: realtime ring signal — not wrapped)_ | Ring a user on a surface | `apps/bureau/src/hooks/use-bureau-ws.ts` |
 | `GET /bureau/api/v1/rooms` | `bureau_list_rooms` | List org rooms (bookable filter) + floor name | `apps/bureau/src/hooks/use-rooms.ts` |

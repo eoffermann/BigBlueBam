@@ -16,6 +16,8 @@ export default defineConfig({
     'src/bulwark-arm-key.ts',
     'src/burn-precheck-key.ts',
     'src/visibility-client.ts',
+    // Bureau's fail-closed cross-app access preflight (#300); sends the internal secret.
+    'src/cross-app-access.ts',
   ],
   format: ['esm', 'cjs'],
   dts: true,

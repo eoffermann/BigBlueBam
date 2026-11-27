@@ -1811,7 +1811,7 @@ bureauChatExpiryQueue
 const bureauSummonFanoutWorker = new Worker<BureauSummonFanoutJobData>(
   'bureau-summon-fanout',
   async (job: Job<BureauSummonFanoutJobData>) => {
-    await processBureauSummonFanoutJob(job, redis, logger);
+    await processBureauSummonFanoutJob(job, redis, env, logger);
   },
   { ...connection, concurrency: env.WORKER_CONCURRENCY },
 );

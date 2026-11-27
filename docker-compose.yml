@@ -271,6 +271,9 @@ services:
       BOLT_API_INTERNAL_URL: http://bolt-api:4006
       # banter-api's private base (call-transcription callback, #303).
       BANTER_API_URL: http://banter-api:4002
+      # Bureau summon fan-out can-read preflights (fail closed, #300).
+      BOARD_INTERNAL_URL: http://board-api:4008
+      BRIEF_INTERNAL_URL: http://brief-api:4005
       # Book task #63: the book-calendar-sync sweep calls the Book API's
       # internal sync-due route to run the external-calendar sync engine.
       BOOK_API_INTERNAL_URL: http://book-api:4012

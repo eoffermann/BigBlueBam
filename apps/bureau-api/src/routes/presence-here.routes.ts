@@ -52,8 +52,8 @@ const querySchema = z.object({
  * the cross-app-access preflight. We look at the first path segment of the
  * URL after the host — `/board/...` → `board`, `/brief/...` → `brief`, etc.
  *
- * Returns null for URLs we can't classify; the caller treats null as "no
- * preflight available, allow" so the chip still renders.
+ * Returns null for URLs we can't classify. Informational only: the shared
+ * resolver classifies the URL itself and denies what it cannot (#300).
  */
 function classifyUrlApp(rawUrl: string): string | null {
   // Issue #158: one shared app list, so every Launchpad app classifies (a
@@ -154,22 +154,20 @@ export default async function presenceHereRoutes(fastify: FastifyInstance) {
       //    allowed to see this URL. The check depends solely on the caller
       //    + URL (it is the same for every candidate), so it runs ONCE —
       //    the previous per-candidate Promise.all issued N identical HTTP
-      //    preflights for nothing. classifyUrlApp returns null for unknown
-      //    URLs; in that case we skip the preflight and let the rows
-      //    through (the chip degrades open rather than going silent on
-      //    unmapped surfaces). ──
-      const app = classifyUrlApp(targetUrl);
-      let callerAllowed = true;
-      if (app) {
-        callerAllowed = await resolveAccess({
+      //    preflights for nothing. ──
+      // Fail CLOSED (#300): an unclassifiable URL, an app the api cannot
+      // map, a peer error and a thrown error all return no occupants.
+      const callerAllowed = await resolveAccess(
+        {
           orgId: user.org_id,
           userId: user.id,
-          app,
+          app: classifyUrlApp(targetUrl) ?? undefined,
           targetUrl,
-        })
-          .then((d) => d.allowed)
-          .catch(() => true);
-      }
+        },
+        { log: request.log },
+      )
+        .then((d) => d.allowed)
+        .catch(() => false);
       if (!callerAllowed) {
         return reply.status(200).send({ data: [] });
       }
