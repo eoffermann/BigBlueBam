@@ -4887,6 +4887,22 @@ importers:
         specifier: ^5.4.0
         version: 5.9.3
 
+  packages/egress-guard:
+    dependencies:
+      undici:
+        specifier: ^8.4.1
+        version: 8.4.1
+    devDependencies:
+      tsup:
+        specifier: ^8.0.0
+        version: 8.5.1(jiti@2.6.1)(postcss@8.5.8)(tsx@4.21.0)(typescript@5.9.3)(yaml@2.8.3)
+      typescript:
+        specifier: ^5.4.0
+        version: 5.9.3
+      vitest:
+        specifier: ^2.0.0
+        version: 2.1.9(@types/node@22.19.15)(jsdom@29.0.2)(lightningcss@1.32.0)(sass@1.51.0)
+
   packages/livekit-tokens:
     dependencies:
       livekit-server-sdk:
