@@ -64,14 +64,17 @@ export default async function publicReviewRoutes(fastify: FastifyInstance) {
     { config: { rateLimit } },
     async (request, reply) => {
       try {
-        const binAssetId = await reviewLinkService.resolveTokenBinAsset(request.params.token);
-        if (!binAssetId) throw new NotFoundError('No media for this review');
+        // The link's own org scopes every bin_assets read below; the path
+        // token is the only credential on this anonymous surface.
+        const resolved = await reviewLinkService.resolveTokenBinAsset(request.params.token);
+        if (!resolved) throw new NotFoundError('No media for this review');
+        const { binAssetId, orgId } = resolved;
         const variant = variantOf(request.query);
 
         const rangeHeader = (request.headers.range as string | undefined) ?? '';
         const m = /^bytes=(\d*)-(\d*)$/.exec(rangeHeader.trim());
         if (m && binMedia.hasRangeSupport()) {
-          const info = await binMedia.statBinMedia(binAssetId, variant);
+          const info = await binMedia.statBinMedia(binAssetId, orgId, variant);
           if (!info) throw new NotFoundError('Media not available');
           const total = info.total;
           let start = m[1] ? Number(m[1]) : 0;
@@ -82,7 +85,7 @@ export default async function publicReviewRoutes(fastify: FastifyInstance) {
             reply.header('Content-Range', `bytes */${total}`);
             return reply.status(416).send();
           }
-          const r = await binMedia.rangeBinMedia(binAssetId, variant, start, end);
+          const r = await binMedia.rangeBinMedia(binAssetId, orgId, variant, start, end);
           if (!r) throw new NotFoundError('Media not available');
           reply.header('Content-Type', r.contentType);
           reply.header('Content-Length', r.size);
@@ -91,7 +94,7 @@ export default async function publicReviewRoutes(fastify: FastifyInstance) {
           return reply.status(206).send(r.stream);
         }
 
-        const r = await binMedia.streamBinMedia(binAssetId, variant);
+        const r = await binMedia.streamBinMedia(binAssetId, orgId, variant);
         if (!r) throw new NotFoundError('Media not available');
         reply.header('Content-Type', r.contentType);
         reply.header('Content-Length', r.size);

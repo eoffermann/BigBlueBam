@@ -2,6 +2,7 @@ import { and, eq, desc, isNull, sql } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import { bayAssets } from '../db/schema/index.js';
 import * as versionService from './version.service.js';
+import { binAssetBelongsToOrg } from '../lib/bin-ownership.js';
 import { NotFoundError, ConflictError } from './errors.js';
 
 export { NotFoundError, ConflictError } from './errors.js';
@@ -69,6 +70,11 @@ export async function getAsset(id: string, orgId: string) {
 export async function createAsset(input: CreateAssetInput, orgId: string, userId: string) {
   if (!MEDIA_KINDS.has(input.media_kind)) {
     throw new ConflictError(`Unsupported media_kind: ${input.media_kind}`);
+  }
+  // bin_asset_id is client-supplied; it must name a Bin asset in this org or a
+  // public review link could stream another org's bytes.
+  if (input.bin_asset_id && !(await binAssetBelongsToOrg(input.bin_asset_id, orgId))) {
+    throw new NotFoundError('Bin asset not found');
   }
   // A Bay asset is created with no version yet; the first POST
   // /assets/:id/versions mints version 1 and advances current_version_id.
