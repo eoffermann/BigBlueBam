@@ -20,7 +20,7 @@
  */
 import { createHash, randomUUID } from 'node:crypto';
 import { PassThrough, Readable } from 'node:stream';
-import type { Job } from 'bullmq';
+import { DelayedError, type Job } from 'bullmq';
 import type { Logger } from 'pino';
 import JSZip from 'jszip';
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
@@ -61,6 +61,14 @@ export function createBastionPacketStorage(env: PacketStorageEnv): StorageDriver
     S3_SECRET_KEY: env.S3_SECRET_KEY,
   });
 }
+
+/**
+ * How many times one job waits out another attempt's live claim before giving up (#326). Each wait
+ * is the rest of that attempt's 10-minute lease, so this covers about an hour of a live builder.
+ */
+export const MAX_HELD_DEFERRALS = 6;
+/** Wait used when bastion-api does not say how long the lease has left (lease plus slack). */
+export const HELD_FALLBACK_WAIT_MS = 10 * 60_000 + 30_000;
 
 export interface PacketJobDeps {
   post: typeof postBastion;
@@ -306,7 +314,12 @@ export async function renderSummaryPdf(c: BastionPacketContents): Promise<Buffer
   return Buffer.from(await pdf.save());
 }
 
-export async function processBastionExportPacketJob(job: Job<BastionExportPacketJobData>, logger: Logger, deps: PacketJobDeps): Promise<'succeeded' | 'failed' | 'skipped'> {
+export async function processBastionExportPacketJob(
+  job: Job<BastionExportPacketJobData>,
+  logger: Logger,
+  deps: PacketJobDeps,
+  token?: string,
+): Promise<'succeeded' | 'failed' | 'skipped'> {
   const started = Date.now();
   const { organization_id, packet_id } = job.data;
   // Unique per attempt (#312): a stalled re-run of the same BullMQ job (same job id) is a
@@ -322,6 +335,21 @@ export async function processBastionExportPacketJob(job: Job<BastionExportPacket
   if (!claimRes.ok) throw new Error(`bastion-export-packet: claim returned ${claimRes.status}`);
   const claim = parseContract(bastionPacketClaimSchema, bodyData(claimRes), 'export-packet claim');
   if (!claim.claimed || !claim.contents) {
+    // Held by another attempt with a fresh heartbeat (#326). After a worker restart that is this
+    // job's own dead attempt, so completing here would leave the packet to the reaper. Wait until
+    // the lease goes stale and claim again; a live builder finishes first and the retry sees that.
+    if (claim.status === 'running') {
+      const deferrals = job.data.held_deferrals ?? 0;
+      if (deferrals < MAX_HELD_DEFERRALS && typeof job.moveToDelayed === 'function') {
+        const waitMs = claim.retry_after_ms ?? HELD_FALLBACK_WAIT_MS;
+        log('another attempt holds this packet; waiting for its lease to lapse, then claiming again', { waitMs, deferral: deferrals + 1, of: MAX_HELD_DEFERRALS });
+        await job.updateData({ ...job.data, held_deferrals: deferrals + 1 });
+        await job.moveToDelayed(Date.now() + waitMs, token);
+        throw new DelayedError();
+      }
+      logger.warn({ packet_id, deferrals }, 'bastion-export-packet: still held by another attempt after every wait; leaving it to that attempt');
+      return 'skipped';
+    }
     logger.info({ packet_id, status: claim.status, error: claim.error }, 'bastion-export-packet: not built (already done, taken, or refused)');
     return claim.status === 'failed' ? 'failed' : 'skipped';
   }

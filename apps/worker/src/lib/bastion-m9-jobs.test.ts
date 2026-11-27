@@ -2,12 +2,17 @@ import { EventEmitter } from 'node:events';
 import { promises as fs } from 'node:fs';
 import { PassThrough, Readable } from 'node:stream';
 import { describe, expect, it, vi } from 'vitest';
-import type { Job } from 'bullmq';
+import { DelayedError, type Job } from 'bullmq';
 import JSZip from 'jszip';
 import type { StorageDriver } from '@bigbluebam/storage';
 import type { BastionPacketContents } from '@bigbluebam/shared';
 import { processBastionObjectBackupJob } from '../jobs/bastion-object-backup.job.js';
-import { createBastionPacketStorage, processBastionExportPacketJob, renderSummaryPdf } from '../jobs/bastion-export-packet.job.js';
+import {
+  createBastionPacketStorage,
+  MAX_HELD_DEFERRALS,
+  processBastionExportPacketJob,
+  renderSummaryPdf,
+} from '../jobs/bastion-export-packet.job.js';
 
 // M9 worker jobs (Bastion spec 7, 7.2, 9.7): the off-site mirror after each backup, the audit
 // packet, and the backup job's enqueue (a failing mirror or enqueue never fails the backup).
@@ -275,6 +280,26 @@ describe('bastion-export-packet', () => {
     expect(await processBastionExportPacketJob(job({ organization_id: ORG, packet_id: PACKET }), silent, { post, storage: driver })).toBe('failed');
     expect(objects.size).toBe(0);
     expect(post).toHaveBeenCalledTimes(1);
+  });
+
+  it('a claim held by another attempt with a fresh heartbeat waits out the lease instead of completing (#326)', async () => {
+    const post = vi.fn().mockResolvedValue(ok({ claimed: false, status: 'running', error: null, contents: null, retry_after_ms: 570_000 }));
+    const { driver, objects } = memoryStorage({});
+    const moveToDelayed = vi.fn(async () => {});
+    const updateData = vi.fn(async () => {});
+    const held = { id: 'j1', data: { organization_id: ORG, packet_id: PACKET }, moveToDelayed, updateData } as unknown as Job<{ organization_id: string; packet_id: string }>;
+    const before = Date.now();
+    await expect(processBastionExportPacketJob(held, silent, { post, storage: driver }, 'lock-token')).rejects.toBeInstanceOf(DelayedError);
+    expect(updateData).toHaveBeenCalledWith({ organization_id: ORG, packet_id: PACKET, held_deferrals: 1 });
+    const [[at, token]] = moveToDelayed.mock.calls as unknown as Array<[number, string]>;
+    expect(at).toBeGreaterThanOrEqual(before + 570_000);
+    expect(token).toBe('lock-token');
+    expect(objects.size).toBe(0);
+
+    // After every allowed wait the job gives up and leaves the packet to the attempt holding it.
+    const spent = { ...held, data: { organization_id: ORG, packet_id: PACKET, held_deferrals: MAX_HELD_DEFERRALS } } as unknown as Job<{ organization_id: string; packet_id: string }>;
+    expect(await processBastionExportPacketJob(spent, silent, { post, storage: driver }, 'lock-token')).toBe('skipped');
+    expect(moveToDelayed).toHaveBeenCalledTimes(1);
   });
 
   const fastLimits = { readLimits: { openTimeoutMs: 50, idleTimeoutMs: 50 }, progressEveryMs: 0, heartbeatEveryMs: 1_000 };

@@ -411,6 +411,10 @@ describe.skipIf(!DATABASE_URL)('M9 sharing, packets, sweep and mirror (live data
     // Fenced on the claimant: another worker cannot claim a fresh running packet, report progress or finish it.
     const second = await packet.exportPacketEngine(engine, { action: 'claim', organization_id: s.org, packet_id: created.data.id as string, claimant: 'w2' });
     expect('claimed' in second && second.claimed).toBe(false);
+    // ...but it is told how long until that lease goes stale, so it waits instead of dropping the job (#326).
+    const wait = 'retry_after_ms' in second ? second.retry_after_ms! : -1;
+    expect(wait).toBeGreaterThan(packet.PACKET_LEASE_MS - 60_000);
+    expect(wait).toBeLessThanOrEqual(packet.PACKET_LEASE_MS + packet.PACKET_TAKEOVER_SLACK_MS);
     expect(await packet.exportPacketEngine(engine, { action: 'progress', organization_id: s.org, packet_id: created.data.id as string, claimant: 'w2', stage: 'zipping', progress: 1 })).toEqual({ ok: false });
     // finish is fenced on the attempt's key as well as the claimant.
     expect(await packet.exportPacketEngine(engine, { action: 'finish', organization_id: s.org, packet_id: created.data.id as string, claimant: 'w1', object_key: `packets/${s.org}/${created.data.id as string}/other.zip`, content_sha256: 'e'.repeat(64), size_bytes: 10 })).toEqual({ ok: false });
@@ -422,8 +426,18 @@ describe.skipIf(!DATABASE_URL)('M9 sharing, packets, sweep and mirror (live data
     const listed = await sharing.listExports(d.sharing, viewerOf(s), { limit: 25 });
     expect(listed.data[0]).toMatchObject({ status: 'succeeded', stage_words: 'Ready to download' });
 
+    // A worker restart mid-build (#326): the dead attempt's heartbeat is past the lease but inside the
+    // reap grace. The reaper leaves it alone and the stalled re-run (a new claimant) takes it over.
+    const restarted = await sharing.createExport(d.sharing, viewerOf(s), { framework_id: s.framework, period_start: '2026-01-01', period_end: today, include_restricted: false }, false);
+    await packet.exportPacketEngine(engine, { action: 'claim', organization_id: s.org, packet_id: restarted.data.id as string, claimant: 'dead-attempt' });
+    await sql`UPDATE bastion_export_packets SET heartbeat_at = now() - interval '11 minutes' WHERE id = ${restarted.data.id as string}`;
+    expect((await packet.reapPackets(engine, { organization_id: s.org })).failed).toBe(0);
+    const rerun = await packet.exportPacketEngine(engine, { action: 'claim', organization_id: s.org, packet_id: restarted.data.id as string, claimant: 'rerun-attempt' });
+    expect('claimed' in rerun && rerun.claimed).toBe(true);
+    expect((await sql`SELECT status, claimed_by FROM bastion_export_packets WHERE id = ${restarted.data.id as string}`)[0]).toMatchObject({ status: 'running', claimed_by: 'rerun-attempt' });
+
     // A stalled packet is failed by the reaper with "build it again".
-    const stalled = await sharing.createExport(d.sharing, viewerOf(s), { framework_id: s.framework, period_start: '2026-01-01', period_end: today, include_restricted: false }, false);
+    const stalled =await sharing.createExport(d.sharing, viewerOf(s), { framework_id: s.framework, period_start: '2026-01-01', period_end: today, include_restricted: false }, false);
     await packet.exportPacketEngine(engine, { action: 'claim', organization_id: s.org, packet_id: stalled.data.id as string, claimant: 'w3' });
     await sql`UPDATE bastion_export_packets SET heartbeat_at = now() - interval '1 hour' WHERE id = ${stalled.data.id as string}`;
     expect((await packet.reapPackets(engine, { organization_id: s.org })).failed).toBe(1);

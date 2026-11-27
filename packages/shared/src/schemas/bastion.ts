@@ -2103,6 +2103,8 @@ export interface BastionObjectBackupJobData {
 export interface BastionExportPacketJobData {
   organization_id: string;
   packet_id: string;
+  /** How many times this job has waited out another attempt's live claim (#326). */
+  held_deferrals?: number;
 }
 
 /** The jobId of a packet build (BullMQ forbids ':'). */
@@ -2284,8 +2286,14 @@ export const bastionPacketClaimSchema = z.object({
   status: BastionExportStatus,
   error: z.string().nullable().optional(),
   contents: bastionPacketContentsSchema.nullable(),
+  /**
+   * Set when the packet is `running` under another attempt whose heartbeat is still fresh
+   * (#326): milliseconds until that lease goes stale and this attempt may take it over. The
+   * worker waits that long and claims again instead of dropping the job.
+   */
+  retry_after_ms: z.number().int().min(0).optional(),
 });
-export type BastionPacketClaim = z.infer<typeof bastionPacketClaimSchema>;
+export type BastionPacketClaim =z.infer<typeof bastionPacketClaimSchema>;
 
 /* ------------------------------------------------------------------ */
 /*  M10: search (spec 5.1 row 95, 8.5)                                 */

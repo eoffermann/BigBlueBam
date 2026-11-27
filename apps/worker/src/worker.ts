@@ -2838,8 +2838,9 @@ bastionObjectBackupWorker.on('failed', (job, err) => {
 const bastionPacketStorage = createBastionPacketStorage(env);
 const bastionExportPacketWorker = new Worker<BastionExportPacketJobData>(
   BASTION_EXPORT_PACKET_QUEUE,
-  async (job) => {
-    await processBastionExportPacketJob(job, logger, { post: postBastion, storage: bastionPacketStorage });
+  async (job, token) => {
+    // A packet held by another live attempt moves this job to delayed (DelayedError), #326.
+    await processBastionExportPacketJob(job, logger, { post: postBastion, storage: bastionPacketStorage }, token);
   },
   { ...connection, concurrency: 1 },
 );

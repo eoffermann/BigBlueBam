@@ -23,8 +23,16 @@ import { auditControls, loadAuditFramework, restoreNotices, sealHistory, soaFor 
 import { soaLinks } from './frameworks.service.js';
 import { packetObjectKey } from './sharing.service.js';
 
-/** A running packet whose heartbeat is older than this may be re-claimed (and is reaped). */
+/** A running packet whose heartbeat is older than this may be re-claimed by another attempt. */
 export const PACKET_LEASE_MS = 10 * 60_000;
+/**
+ * A running packet whose heartbeat is older than this is failed by the reaper (#326). It is the
+ * lease plus a grace longer than the 5-minute reaper cadence, so a re-run that was told to wait
+ * out the lease (`retry_after_ms`) takes the packet over before the reaper can fail it.
+ */
+export const PACKET_REAP_AFTER_MS = PACKET_LEASE_MS + 10 * 60_000;
+/** Slack added to `retry_after_ms` so the retry lands after the lease has gone stale. */
+export const PACKET_TAKEOVER_SLACK_MS = 30_000;
 /** A packet nobody claimed within this time is failed by the reaper ("build it again"). */
 export const PACKET_START_TIMEOUT_MS = 30 * 60_000;
 
@@ -242,15 +250,29 @@ export async function exportPacketEngine(deps: EngineDeps, body: BastionExportPa
                   p.include_restricted, p.object_key,
                   (SELECT s.max_packet_bytes FROM bastion_org_settings s WHERE s.organization_id = p.organization_id) AS max_packet_bytes`;
       if (!p) {
-        const cur = (await tx`SELECT status FROM bastion_export_packets WHERE organization_id = ${orgId} AND id = ${body.packet_id}`)[0];
-        return { row: null, status: (cur?.status as string | undefined) ?? null };
+        const cur = (
+          await tx`SELECT status, heartbeat_at FROM bastion_export_packets WHERE organization_id = ${orgId} AND id = ${body.packet_id}`
+        )[0];
+        // Held by another attempt with a fresh heartbeat (#326): say how long until it may be taken over.
+        const heldFor =
+          cur?.status === 'running' && cur.heartbeat_at
+            ? Math.max(0, new Date(cur.heartbeat_at as Date).getTime() + PACKET_LEASE_MS - now.getTime()) + PACKET_TAKEOVER_SLACK_MS
+            : undefined;
+        return { row: null, status: (cur?.status as string | undefined) ?? null, retryAfterMs: heldFor };
       }
       await tx`INSERT INTO bastion_object_intents (organization_id, object_key) VALUES (${orgId}, ${String(p.object_key)})
                ON CONFLICT (object_key) DO UPDATE SET created_at = now()`;
       return { row: p as Record<string, unknown>, status: 'running' };
     });
     if (!claimed.row) {
-      return { claimed: false, status: (claimed.status ?? 'failed') as BastionPacketClaim['status'], error: claimed.status ? null : 'We could not find that packet.', contents: null };
+      const refused: BastionPacketClaim = {
+        claimed: false,
+        status: (claimed.status ?? 'failed') as BastionPacketClaim['status'],
+        error: claimed.status ? null : 'We could not find that packet.',
+        contents: null,
+      };
+      if ('retryAfterMs' in claimed && claimed.retryAfterMs !== undefined) refused.retry_after_ms = claimed.retryAfterMs;
+      return refused;
     }
     const p = claimed.row;
     try {
@@ -322,7 +344,7 @@ export async function reapPackets(deps: EngineDeps, opts: { organization_id?: st
   const now = deps.now().getTime();
   const rows = await deps.sql`
     SELECT organization_id, id, status FROM bastion_export_packets
-     WHERE ((status = 'running' AND heartbeat_at < ${new Date(now - PACKET_LEASE_MS)})
+     WHERE ((status = 'running' AND heartbeat_at < ${new Date(now - PACKET_REAP_AFTER_MS)})
         OR (status = 'queued' AND created_at < ${new Date(now - PACKET_START_TIMEOUT_MS)}))
        ${opts.organization_id ? deps.sql`AND organization_id = ${opts.organization_id}` : deps.sql``}
      LIMIT 200`;
