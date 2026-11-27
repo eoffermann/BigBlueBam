@@ -606,7 +606,12 @@ On a mismatch or a missing entry:
 
 1. A `bastion_ledger_restores` row is opened with the lost range, and the range is also written as
    an object `restores/<org>/<id>.json` in the Bastion bucket, so it survives a further database
-   rewrite. `ledger.restore_detected` is published; the object sweep pauses for the org.
+   rewrite. The object is signed like a seal (same key, key id and canonical form, with
+   `record: 'ledger_restore'` in the signed fields so it can never pass for a seal), and every
+   reader (the restores list, the auditor room, the packet) uses only records whose signature
+   verifies against a published key; any other object under `restores/<org>/` is ignored, counted
+   (`bucket_rejected` on `GET /ledger/restores`) and logged. `ledger.restore_detected` is
+   published; the object sweep pauses for the org.
 2. **A provisional epoch opens immediately**, whatever the eventual status: the next entry uses
    `epoch = highest_sealed_epoch + 1` and `seq = highest bucket-sealed head_seq + 1`, so no sealed
    `(epoch, seq)` is ever reused, even while waiting for acknowledgement and even if the gap is

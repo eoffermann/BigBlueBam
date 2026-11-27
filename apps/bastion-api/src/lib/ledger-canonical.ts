@@ -212,16 +212,14 @@ function publicKeyFromHex(publicKeyHex: string): KeyObject {
   });
 }
 
-export function signSeal(payload: SealPayload, signer: SealSigner): string {
-  if (payload.signing_key_id !== signer.keyId) throw new Error('signSeal: payload names a different key');
+/** Ed25519 over the canonical JSON of a payload that names its own signing key. */
+function signCanonical(payload: { signing_key_id: string }, signer: SealSigner, what: string): string {
+  if (payload.signing_key_id !== signer.keyId) throw new Error(`${what}: payload names a different key`);
   return edSign(null, Buffer.from(canonicalJson(payload)), signer.privateKey).toString('base64');
 }
 
-/**
- * Verify a seal against the published keys (current and retired), looked up by the seal's own
- * signing_key_id, so seals signed before a key change stay verifiable.
- */
-export function verifySeal(payload: SealPayload, signatureB64: string, publicKeysById: Map<string, string>): boolean {
+/** Verify against the published keys (current and retired), by the payload's own signing_key_id. */
+function verifyCanonical(payload: { signing_key_id: string }, signatureB64: string, publicKeysById: Map<string, string>): boolean {
   const pub = publicKeysById.get(payload.signing_key_id);
   if (!pub) return false;
   try {
@@ -229,6 +227,54 @@ export function verifySeal(payload: SealPayload, signatureB64: string, publicKey
   } catch {
     return false;
   }
+}
+
+export function signSeal(payload: SealPayload, signer: SealSigner): string {
+  return signCanonical(payload, signer, 'signSeal');
+}
+
+/**
+ * Verify a seal against the published keys (current and retired), looked up by the seal's own
+ * signing_key_id, so seals signed before a key change stay verifiable.
+ */
+export function verifySeal(payload: SealPayload, signatureB64: string, publicKeysById: Map<string, string>): boolean {
+  return verifyCanonical(payload, signatureB64, publicKeysById);
+}
+
+// ── Restore records (#208) ──────────────────────────────────────────────────────────────
+
+/**
+ * The fields a restore record signs: the body of `restores/<org>/<id>.json`, which describes
+ * history lost to a restore and survives a database rewind. Same key, key id and canonical form
+ * as a seal; `record` names the kind, so a record's signature can never stand for a seal's (their
+ * canonical bytes differ) and the other way round.
+ */
+export interface RestoreRecordPayload {
+  record: 'ledger_restore';
+  id: string;
+  organization_id: string;
+  detected_at: string;
+  db_head_seq: number | null;
+  bucket_seal_date: string | null;
+  bucket_epoch: number | null;
+  bucket_head_seq: number | null;
+  bucket_head_hash: string | null;
+  lost_from_seq: number | null;
+  lost_to_seq: number | null;
+  provisional_epoch: number;
+  platform_restore_id: string | null;
+  status: string;
+  resolution: string | null;
+  resolved_at: string | null;
+  signing_key_id: string;
+}
+
+export function signRestoreRecord(payload: RestoreRecordPayload, signer: SealSigner): string {
+  return signCanonical(payload, signer, 'signRestoreRecord');
+}
+
+export function verifyRestoreRecord(payload: RestoreRecordPayload, signatureB64: string, publicKeysById: Map<string, string>): boolean {
+  return verifyCanonical(payload, signatureB64, publicKeysById);
 }
 
 /** Compare (epoch, seq) identities: negative when a < b. */
