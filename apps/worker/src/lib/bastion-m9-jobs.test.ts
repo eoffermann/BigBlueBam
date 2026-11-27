@@ -424,6 +424,12 @@ describe('bastion-export-packet', () => {
     // S3Driver keeps its bucket in a private field; read it the way a debugger would.
     expect((d as unknown as { bucket: string }).bucket).toBe('bigbluebam-bastion');
   });
+
+  it('without S3 credentials there is no packet driver (issue #176: no default credentials)', () => {
+    expect(
+      createBastionPacketStorage({ S3_ENDPOINT: 'http://minio:9000', S3_REGION: 'us-east-1', BASTION_S3_BUCKET: 'bigbluebam-bastion' }),
+    ).toBeNull();
+  });
 });
 
 // Packet smoke on REAL object storage with differing buckets (M9 gate): the shared uploads
@@ -438,7 +444,7 @@ describe.skipIf(!MINIO)('bastion-export-packet on real MinIO with differing buck
     const env = { ...creds, S3_BUCKET: `m9-uploads-${stamp}`, BASTION_S3_BUCKET: `m9-bastion-${stamp}` };
     const uploads = createBootstrapDriver({ ...creds, S3_BUCKET: env.S3_BUCKET });
     await uploads.put('sentinel.txt', Buffer.from('shared bucket'));
-    const storage = createBastionPacketStorage(env);
+    const storage = createBastionPacketStorage(env)!;
     const c = contents();
     await storage.put(c.evidence[0]!.object_key!, evidenceDoc, { contentType: 'application/json' });
     await storage.put(c.files[0]!.object_key!, Buffer.from('%PDF-1.4 report'), { contentType: 'application/pdf' });

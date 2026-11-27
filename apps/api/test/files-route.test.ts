@@ -106,7 +106,26 @@ describe('GET /files/*', () => {
     const res = await app.inject({ method: 'GET', url: '/files/avatars/u-1.png' });
     expect(res.statusCode).toBe(200);
     expect(res.headers['cache-control']).toBe('public, max-age=86400');
-    expect(getFileStream).toHaveBeenCalledWith('bigbluebam-uploads', 'avatars/u-1.png');
+    // The storage driver is bound to S3_BUCKET (issue #176); only the key is passed.
+    expect(getFileStream).toHaveBeenCalledWith('avatars/u-1.png');
+    await app.close();
+  });
+
+  it('answers 503 STORAGE_NOT_CONFIGURED, not 404, when storage has no credentials (issue #176)', async () => {
+    const { StorageNotConfiguredError } = await import('@bigbluebam/storage');
+    const { createErrorHandler } = await import('@bigbluebam/logging');
+    getFileStream.mockRejectedValueOnce(new StorageNotConfiguredError());
+    const app = Fastify({ logger: false });
+    app.setErrorHandler(createErrorHandler({ serviceName: 'api' }));
+    app.decorate('requireCan', () => async () => {});
+    app.decorateRequest('user', null);
+    app.addHook('preHandler', async (req: any) => {
+      req.user = { id: '22222222-2222-2222-2222-222222222222', org_id: ORG, active_org_id: ORG };
+    });
+    await app.register(uploadRoutes);
+    const res = await app.inject({ method: 'GET', url: '/files/avatars/u-1.png' });
+    expect(res.statusCode).toBe(503);
+    expect(res.json().error.code).toBe('STORAGE_NOT_CONFIGURED');
     await app.close();
   });
 

@@ -56,6 +56,9 @@ importers:
       '@bigbluebam/smtp-resolver':
         specifier: workspace:*
         version: link:../../packages/smtp-resolver
+      '@bigbluebam/storage':
+        specifier: workspace:*
+        version: link:../../packages/storage
       '@fastify/cookie':
         specifier: ^11.0.0
         version: 11.0.2
@@ -972,6 +975,9 @@ importers:
       '@bigbluebam/shared':
         specifier: workspace:*
         version: link:../../packages/shared
+      '@bigbluebam/storage':
+        specifier: workspace:*
+        version: link:../../packages/storage
       '@fastify/cookie':
         specifier: ^11.0.0
         version: 11.0.2
@@ -1921,6 +1927,9 @@ importers:
       '@bigbluebam/shared':
         specifier: workspace:*
         version: link:../../packages/shared
+      '@bigbluebam/storage':
+        specifier: workspace:*
+        version: link:../../packages/storage
       '@fastify/cookie':
         specifier: ^11.0.0
         version: 11.0.2
@@ -4662,6 +4671,9 @@ importers:
       '@bigbluebam/shared':
         specifier: workspace:*
         version: link:../../packages/shared
+      '@bigbluebam/storage':
+        specifier: workspace:*
+        version: link:../../packages/storage
       '@fastify/cookie':
         specifier: ^11.0.0
         version: 11.0.2

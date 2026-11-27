@@ -1,54 +1,28 @@
-import * as Minio from 'minio';
-import { env } from '../env.js';
+// Task attachments and uploads in the platform bucket (env.S3_BUCKET), through the
+// shared @bigbluebam/storage driver (issue #176). The driver is bound to the bucket
+// and creates it on first write, so there is no bucket argument and no ensureBucket.
+// Every function throws StorageNotConfiguredError (503) when storage is not configured.
+import { requireApiStorageDriver } from '../lib/storage-driver.js';
 
-const endpoint = new URL(env.S3_ENDPOINT);
+/** Presigned download URLs live for 24 hours. */
+const DOWNLOAD_URL_TTL_SECONDS = 24 * 60 * 60;
 
-const minioClient = new Minio.Client({
-  endPoint: endpoint.hostname,
-  port: Number(endpoint.port) || (endpoint.protocol === 'https:' ? 443 : 9000),
-  useSSL: endpoint.protocol === 'https:',
-  accessKey: env.S3_ACCESS_KEY,
-  secretKey: env.S3_SECRET_KEY,
-  region: env.S3_REGION,
-});
-
-const ensuredBuckets = new Set<string>();
-
-export async function ensureBucket(bucketName: string): Promise<void> {
-  if (ensuredBuckets.has(bucketName)) return;
-
-  const exists = await minioClient.bucketExists(bucketName);
-  if (!exists) {
-    await minioClient.makeBucket(bucketName, env.S3_REGION);
-  }
-  ensuredBuckets.add(bucketName);
+export async function uploadFile(key: string, buffer: Buffer, contentType: string): Promise<void> {
+  await requireApiStorageDriver().put(key, buffer, { contentType, size: buffer.length });
 }
 
-export async function uploadFile(
-  bucket: string,
-  key: string,
-  buffer: Buffer,
-  contentType: string,
-): Promise<void> {
-  await ensureBucket(bucket);
-  await minioClient.putObject(bucket, key, buffer, buffer.length, {
-    'Content-Type': contentType,
-  });
+export async function getFileUrl(key: string): Promise<string> {
+  const driver = requireApiStorageDriver();
+  if (!driver.presignGet) throw new Error('The storage driver cannot presign downloads');
+  return driver.presignGet(key, DOWNLOAD_URL_TTL_SECONDS);
 }
 
-export async function getFileUrl(bucket: string, key: string): Promise<string> {
-  // 24-hour expiry (in seconds)
-  return minioClient.presignedGetObject(bucket, key, 24 * 60 * 60);
+export async function getFileStream(key: string) {
+  return requireApiStorageDriver().getStream(key);
 }
 
-export async function getFileStream(bucket: string, key: string) {
-  const stat = await minioClient.statObject(bucket, key);
-  const stream = await minioClient.getObject(bucket, key);
-  return { stream, contentType: stat.metaData?.['content-type'] ?? 'application/octet-stream', size: stat.size };
-}
-
-export async function deleteFile(bucket: string, key: string): Promise<void> {
-  await minioClient.removeObject(bucket, key);
+export async function deleteFile(key: string): Promise<void> {
+  await requireApiStorageDriver().delete(key);
 }
 
 export function buildStorageKey(

@@ -210,6 +210,23 @@ export function createErrorHandler(options: CreateErrorHandlerOptions) {
         // swallow synchronous throws too
       }
     }
+    // A deliberate unavailability (502/503/504) with an explicit machine code,
+    // e.g. @bigbluebam/storage's StorageNotConfiguredError (503
+    // STORAGE_NOT_CONFIGURED) or StorageTimeoutError (504 STORAGE_TIMEOUT), is
+    // answered with its own status and code (issue #176). It is still logged and
+    // recorded above, so an operator sees it. Any other 5xx stays an opaque 500.
+    const explicit = explicitUnavailableError(error, statusCode);
+    if (explicit) {
+      return reply.status(statusCode).send({
+        error: {
+          code: explicit.code,
+          message: explicit.message,
+          details: [],
+          request_id: String(requestId),
+          internal_error_id: internalErrorId,
+        },
+      } satisfies ErrorEnvelope);
+    }
     const envelope: ErrorEnvelope = {
       error: {
         code: 'INTERNAL_ERROR',
@@ -223,6 +240,18 @@ export function createErrorHandler(options: CreateErrorHandlerOptions) {
     };
     return reply.status(500).send(envelope);
   };
+}
+
+/** A 502/503/504 error that names itself with an UPPER_SNAKE code, else null. */
+export function explicitUnavailableError(
+  error: unknown,
+  statusCode: number,
+): { code: string; message: string } | null {
+  if (statusCode !== 502 && statusCode !== 503 && statusCode !== 504) return null;
+  const code = (error as { code?: unknown } | null)?.code;
+  if (typeof code !== 'string' || !/^[A-Z][A-Z0-9_]+$/.test(code)) return null;
+  const message = (error as { message?: unknown }).message;
+  return { code, message: typeof message === 'string' && message ? message : 'Service unavailable' };
 }
 
 /**

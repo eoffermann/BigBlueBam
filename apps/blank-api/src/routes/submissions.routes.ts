@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { requireAuth } from '../plugins/auth.js';
 import * as submissionService from '../services/submission.service.js';
-import { getFileStream } from '../lib/storage.js';
+import { getFileStream, StorageNotConfiguredError } from '../lib/storage.js';
 
 interface ProcessedFileEntry {
   filename?: string;
@@ -83,7 +83,9 @@ export default async function submissionRoutes(fastify: FastifyInstance) {
         );
         reply.header('Cache-Control', 'private, max-age=3600');
         return reply.send(stream);
-      } catch {
+      } catch (err) {
+        // Storage not configured is a 503 (issue #176), not a missing file.
+        if (err instanceof StorageNotConfiguredError) throw err;
         return reply.status(404).send({
           error: {
             code: 'NOT_FOUND',

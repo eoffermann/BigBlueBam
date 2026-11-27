@@ -5,7 +5,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { Job } from 'bullmq';
 import type { Logger } from 'pino';
-import { Readable } from 'node:stream';
+import { createInMemoryStorageDriver } from '@bigbluebam/storage';
 
 vi.mock('../src/utils/db.js', () => ({
   getDb: vi.fn(),
@@ -105,10 +105,8 @@ describe('processSlackImportJob — cancellation', () => {
     };
     vi.mocked(getDb).mockReturnValue(db as any);
 
-    const minio = {
-      getObject: vi.fn(async () => Readable.from(fixture.zip)),
-      putObject: vi.fn(async () => ({ etag: 'm', versionId: null })),
-    };
+    const storage = createInMemoryStorageDriver();
+    storage.objects.set('k', { body: fixture.zip, contentType: 'application/zip', modifiedAt: new Date() });
 
     // cancelChecker flips to true on the 6th call so the worker enters at
     // least a couple of phases before being cancelled.
@@ -119,8 +117,7 @@ describe('processSlackImportJob — cancellation', () => {
 
     await expect(
       processSlackImportJob(makeJob('import-3'), mockLogger, {
-        minio: minio as any,
-        bucket: 'b',
+        storage,
         redis: { publish: vi.fn(async () => 1) } as any,
         emailQueue: { add: vi.fn(async () => undefined) } as any,
         cancelChecker,
