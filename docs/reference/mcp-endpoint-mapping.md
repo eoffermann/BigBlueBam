@@ -40,7 +40,7 @@ A tool/command "corresponds" to the endpoint(s) its handler calls. Sections are 
 | Surface | REST endpoints | …with an MCP tool | …without a tool | MCP-only tools (no endpoint) |
 |---|--:|--:|--:|--:|
 | Bam — Work management | 93 | 86 | 7 | 2 |
-| Bam — Org, auth, admin & integrations | 157 | 37 | 120 | 0 |
+| Bam — Org, auth, admin & integrations | 158 | 37 | 121 | 0 |
 | Banter | 114 | 75 | 39 | 0 |
 | Beacon | 40 | 38 | 2 | 0 |
 | Brief | 54 | 48 | 6 | 0 |
@@ -66,7 +66,7 @@ A tool/command "corresponds" to the endpoint(s) its handler calls. Sections are 
 | Bursar | 79 | 22 | 57 | 0 |
 | Bastion (tools pending registration at M11) | 92 | 70 | 22 | 2 |
 | Cross-app platform | 46 | 32 | 14 | 6 |
-| **Total** | **1360** | **944** | **416** | **19** |
+| **Total** | **1361** | **944** | **417** | **19** |
 
 _Counts are summed from the per-section tables (each row's REST endpoint counted once even when several MCP tools share it). After the `feat/mcp-endpoint-parity` build the "with an MCP tool" total roughly doubled (≈334 → ≈690). Of the ~247 endpoints still tool-less, the large majority are now annotated `— _(skip: …)_` with a reason — auth/OAuth/session, public-inbound (forms/booking/portal/tracking), multipart/binary upload, binary export (PDF/SVG/CSV/.ics), raw credential/API-key admin, SuperUser/permission/account admin (Bam org/admin held to a deliberately conservative scope this pass), Yjs/scene/WebSocket realtime sync, internal/service-to-service routes, and slug/name resolvers done internally — plus the deferred Helpdesk `X-Agent-Key` agent routes. Some endpoints are shared by multiple MCP tools and many are internal / webhook / public-inbound (not user-facing), so treat the totals as close approximations of the surface size, not an exact public-API inventory. The remaining intentional gaps cluster in **Bam org/admin** (SuperUser & permissions admin, integrations, credentials — UI/CLI-only) and a few per-app binary/upload/realtime tails._
 
@@ -538,6 +538,9 @@ Covers `platform.routes.ts` (`/v1/platform/*`) and `superuser.routes.ts` (`/supe
 | `GET /superuser/deploy/settings` | — _(skip: SuperUser deploy settings — UI/CLI-only)_ | Read deploy branch/repo/token/auto-update | `apps/frontend/src/lib/api/superuser-deploy.ts` |
 | `PUT /superuser/deploy/settings` | — _(skip: SuperUser deploy settings — UI/CLI-only)_ | Write deploy settings (token tri-state) | `apps/frontend/src/components/superuser/deploy-settings-card.tsx` |
 | `POST /superuser/deploy/verify-repo` | — _(skip: SuperUser deploy settings — UI/CLI-only)_ | Verify repo URL+token vs GitHub API | `apps/frontend/src/components/superuser/deploy-settings-card.tsx` |
+| `GET /superuser/config-health` | — _(skip: SuperUser deployment config — UI-only by design)_ | Deployment config health: whether boot secrets are set (never their values) and the permission/RLS enforcement posture | `apps/frontend/src/components/deployment-health-banner.tsx` |
+
+`GET /superuser/config-health` is read-only and makes no service-to-service call, so it answers on a stack whose `INTERNAL_SERVICE_SECRET` is unset. The fix it points to is an environment change and restart, which an agent tool could not perform anyway.
 
 
 ## Bam — Permissions admin (SuperUser)

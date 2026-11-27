@@ -1,9 +1,9 @@
 {
   "counts": {
-    "total": 1570,
+    "total": 1571,
     "mcp_tools_scanned": 885,
-    "rest_routes_scanned": 889,
-    "read_permissions": 607,
+    "rest_routes_scanned": 890,
+    "read_permissions": 608,
     "destructive_permissions": 148
   },
   "permissions": [
@@ -4176,6 +4176,23 @@
           "source": "rest",
           "ref": "GET /superuser/calling-credentials",
           "file": "superuser.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "bam.superuser_config_health.list",
+      "app": "bam",
+      "resource": "superuser_config_health",
+      "verb": "list",
+      "is_destructive": false,
+      "is_read": true,
+      "requires_confirmation": false,
+      "requires_superuser": true,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "GET /superuser/config-health",
+          "file": "config-health.routes.ts"
         }
       ]
     },

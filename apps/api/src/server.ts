@@ -93,6 +93,7 @@ import internalPermissionsRoutes from './routes/internal-permissions.routes.js';
 import internalCanReadRoutes from './routes/internal-can-read.routes.js';
 import internalSystemErrorsRoutes from './routes/internal-system-errors.routes.js';
 import deploySettingsRoutes from './routes/deploy-settings.routes.js';
+import configHealthRoutes from './routes/config-health.routes.js';
 import superuserLogsRoutes from './routes/superuser-logs.routes.js';
 import superuserBackupsRoutes from './routes/superuser-backups.routes.js';
 import { sql } from 'drizzle-orm';
@@ -319,6 +320,7 @@ await fastify.register(internalPermissionsRoutes);
 await fastify.register(internalCanReadRoutes);
 await fastify.register(internalSystemErrorsRoutes, { prefix: '/internal' });
 await fastify.register(deploySettingsRoutes);
+await fastify.register(configHealthRoutes);
 await fastify.register(superuserLogsRoutes);
 await fastify.register(superuserBackupsRoutes);
 

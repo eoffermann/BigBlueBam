@@ -63,6 +63,7 @@ import permissionsAdminRoutes from '../src/routes/permissions-admin.routes.js';
 import permissionsDivergencesRoutes from '../src/routes/permissions-divergences.routes.js';
 import deploySettingsRoutes from '../src/routes/deploy-settings.routes.js';
 import systemSettingsRoutes from '../src/routes/system-settings.routes.js';
+import configHealthRoutes from '../src/routes/config-health.routes.js';
 
 type Caller = 'none' | 'member' | 'superuser-session' | 'superuser-apikey' | 'impersonating';
 
@@ -169,6 +170,7 @@ describe('SuperUser route files are guarded with requireCan as a no-op (prod pos
     await app.register(permissionsAdminRoutes);
     await app.register(permissionsDivergencesRoutes);
     await app.register(deploySettingsRoutes);
+    await app.register(configHealthRoutes);
     await app.ready();
   });
   afterAll(() => app.close());
@@ -177,8 +179,9 @@ describe('SuperUser route files are guarded with requireCan as a no-op (prod pos
   const concrete = (url: string) => url.replace(/:[A-Za-z_]+/g, '11111111-1111-4111-8111-111111111111');
 
   it('registers the expected SuperUser routes', () => {
-    // 11 platform + 24 superuser + 13 permissions admin + 2 divergences + 3 deploy.
-    expect(routes.length).toBeGreaterThanOrEqual(50);
+    // 11 platform + 24 superuser + 13 permissions admin + 2 divergences + 3 deploy + 1 config-health.
+    expect(routes.length).toBeGreaterThanOrEqual(51);
+    expect(routes).toContainEqual({ method: 'GET', url: '/superuser/config-health' });
   });
 
   it('returns 403 to a non-SuperUser on every route except stop-impersonation', async () => {
