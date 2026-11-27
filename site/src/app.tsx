@@ -14,6 +14,7 @@ const SalesPage = lazy(() => import('@/pages/sales').then((m) => ({ default: m.S
 const OperationsPage = lazy(() => import('@/pages/operations').then((m) => ({ default: m.OperationsPage })));
 const DeployGuidePage = lazy(() => import('@/pages/deploy-guide').then((m) => ({ default: m.DeployGuidePage })));
 const ManualPage = lazy(() => import('@/pages/manual').then((m) => ({ default: m.ManualPage })));
+const DocsPage = lazy(() => import('@/pages/docs').then((m) => ({ default: m.DocsPage })));
 const TechnicalPage = lazy(() => import('@/pages/technical').then((m) => ({ default: m.TechnicalPage })));
 const MediaPage = lazy(() => import('@/pages/media'));
 const TelemetryPage = lazy(() => import('@/pages/telemetry'));
@@ -87,6 +88,16 @@ export function App() {
     return (
       <PageShell>
         <DeployGuidePage />
+      </PageShell>
+    );
+  }
+
+  // The MCP tool catalog and reference (rendered from the generated
+  // docs-catalog.generated.json). Must precede the broader '/docs' branch.
+  if (path.startsWith('/docs/reference')) {
+    return (
+      <PageShell>
+        <DocsPage />
       </PageShell>
     );
   }

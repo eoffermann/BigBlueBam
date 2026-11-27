@@ -1,0 +1,105 @@
+{
+  "_comment": "Curated rows for the README 'Suite at a Glance' table, keyed by LAUNCHPAD_CATALOG id. scripts/docs/publish.mjs renders the table inside the AUTODOCS:SUITE_GLANCE region from LAUNCHPAD_CATALOG and refuses to run when a Launchpad app has no row here (or a row names an app that is not on the Launchpad), so pnpm docs:readme:check fails until a new app gets one.",
+  "apps": {
+    "b3": {
+      "what": "Project management - Kanban board, sprints, five views (board/list/timeline/calendar/workload)",
+      "comparable": "Trello, Linear, Jira, Asana"
+    },
+    "banter": {
+      "what": "Team chat with LiveKit voice/video, transcripts, and AI agents as spoken call participants",
+      "comparable": "Slack or Microsoft Teams, with Zoom-style voice/video built in"
+    },
+    "basis": {
+      "what": "Governed metric layer - one certified definition per number, immutable version lineage, and an AI \"why did it change\" decomposition",
+      "comparable": "dbt Semantic Layer, Cube, Looker's LookML"
+    },
+    "bastion": {
+      "what": "Continuous compliance readiness for SOC 2 and ISO 27001 - nightly control checks against what really happened in the suite, tamper-evident evidence, a drafted fix for every unproven control, and an expiring auditor room",
+      "comparable": "Vanta, Drata, Secureframe"
+    },
+    "bay": {
+      "what": "Media review and approval - frame/timecode/region annotations, per-reviewer decisions, token-gated guest links, and 3D/FBX model review",
+      "comparable": "Frame.io, Ziflow"
+    },
+    "beacon": {
+      "what": "AI knowledge base with semantic search (Qdrant) and a graph explorer",
+      "comparable": "Notion or Confluence, with an Obsidian-style graph view"
+    },
+    "bearing": {
+      "what": "Goals and OKRs with key results linked to Bam tasks for automatic progress",
+      "comparable": "Lattice, 15Five, Quantive"
+    },
+    "bench": {
+      "what": "Analytics dashboards, widgets, ad-hoc queries, scheduled reports, anomaly detection",
+      "comparable": "Metabase, Tableau, Looker"
+    },
+    "bill": {
+      "what": "Invoicing, expenses, recurring billing, PDF generation, profitability reports",
+      "comparable": "FreshBooks, QuickBooks, Wave"
+    },
+    "bin": {
+      "what": "Digital asset management - object-storage backbone plus a structured-data (CSV/JSON/YAML) grid/tree editor with live co-editing",
+      "comparable": "Dropbox/Box, plus an Airtable-style data grid"
+    },
+    "blank": {
+      "what": "Forms with conditional logic routing, submissions export, AI-generated form definitions",
+      "comparable": "Typeform, Google Forms, Tally"
+    },
+    "blast": {
+      "what": "Email campaigns with templates, segments, tracking pixel, click redirect, engagement analytics",
+      "comparable": "Mailchimp, ConvertKit, ActiveCampaign"
+    },
+    "blip": {
+      "what": "App telemetry - log ingest, live viewer, saved views, watches/alerts, transforms, retention, and scheduled reports",
+      "comparable": "Datadog Logs, Grafana Loki, Papertrail"
+    },
+    "blueprint": {
+      "what": "Structured diagrams - typed graph nodes and edges (flowcharts, org charts, ERDs, mindmaps) with ELK auto-layout and Mermaid import/export",
+      "comparable": "Lucidchart, draw.io"
+    },
+    "board": {
+      "what": "Infinite-canvas whiteboard with shapes, stickies, and audio conferencing",
+      "comparable": "Miro, Mural, FigJam"
+    },
+    "bolt": {
+      "what": "Workflow automation - both a form-based trigger/condition/action builder and a visual node-graph editor",
+      "comparable": "Zapier or Make (form side); n8n or Node-RED (graph side)"
+    },
+    "bond": {
+      "what": "CRM - contacts, companies, deals, pipeline stages, activity log, dedupe",
+      "comparable": "HubSpot, Pipedrive, Attio"
+    },
+    "book": {
+      "what": "Scheduling with public booking pages and mixed human-plus-agent availability",
+      "comparable": "Calendly, Cal.com"
+    },
+    "braid": {
+      "what": "Identity resolution - clusters each app's copy of a person or company into one confidence-scored golden profile with human-in-the-loop merge review",
+      "comparable": "Amperity, LiveRamp"
+    },
+    "brief": {
+      "what": "Real-time collaborative documents with versioning and inline comments",
+      "comparable": "Google Docs, Notion, Dropbox Paper"
+    },
+    "bulwark": {
+      "what": "AI contract-obligation monitor - clause-cited obligation ledger, deadline radar, and drafted (never auto-sent) notices and vendor-compliance chases",
+      "comparable": "Ironclad, ContractWorks"
+    },
+    "bureau": {
+      "what": "Virtual office - a spatial floor map with rooms, live presence, knock-to-enter, teleport/summons, and LiveKit conferencing",
+      "comparable": "Gather, Teamflow"
+    },
+    "burn": {
+      "what": "Contract scope and margin monitor - reads a signed SOW into a priced deliverable ledger and attributes every unit of work against it in dollars",
+      "comparable": "(SOW burn-down / margin tracking)"
+    },
+    "bursar": {
+      "what": "Procurement leveling - reads a request into a scope tree, levels every vendor offer against it to show what each one leaves out, then watches spend against the awarded baseline",
+      "comparable": "Coupa Sourcing, Fairmarkit"
+    },
+    "helpdesk": {
+      "what": "Customer support portal with ticket tracking, similar-ticket dedupe, and auto task creation",
+      "comparable": "Zendesk, Intercom, Help Scout"
+    }
+  }
+}

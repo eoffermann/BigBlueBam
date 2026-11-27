@@ -3,11 +3,11 @@
   "nginx_path": "/bay/",
   "api_port": 4017,
   "api_dir": "bay-api",
-  "route_files": 6,
+  "route_files": 7,
   "schema_modules": 8,
   "has_seeder": false,
   "has_frontend": true,
-  "src_hash": "aedfc19635ccd73e67e7d33d529b5edaeb29c9e880f54af71f29f25965c20c43",
-  "generated_at": "2026-07-20T11:04:19.413Z",
+  "src_hash": "680bf9b8bac2258e3d2ed95057f78870a1630850f06b22e6dc440e64c4dcd234",
+  "generated_at": "2026-11-27T15:56:36.850Z",
   "mcp_tool_count": 14
 }

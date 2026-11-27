@@ -3,11 +3,11 @@
   "nginx_path": "/b3/",
   "api_port": 4000,
   "api_dir": "api",
-  "route_files": 66,
-  "schema_modules": 54,
+  "route_files": 70,
+  "schema_modules": 56,
   "has_seeder": false,
   "has_frontend": false,
-  "src_hash": "c184f9db198bc205f0690ecec17d4e2852539c7846d97f2819225499b0631d91",
-  "generated_at": "2026-07-20T11:04:19.142Z",
+  "src_hash": "6a0dfa4d99895e9f7449b58db2fcff71182a7056dc2e025a1835167ebe1112d9",
+  "generated_at": "2026-11-27T15:56:35.898Z",
   "mcp_tool_count": 128
 }

@@ -143,7 +143,17 @@ function main() {
     // Stage 2b: Bridge the shared tree into the docs layout (light/dark + meta.json)
     // for every capture that opted in via its recipe `doc:` field. Idempotent;
     // runs even with --skip-capture so docs reflect the current manifest.
-    runCommand('Stage 2b: Bridge -> docs', `node scripts/docs/bridge.mjs${appsVal ? ` --apps=${appsVal}` : ''}`);
+    // The capture manifest (screenshots/manifest.json) is gitignored and only
+    // the capture stage writes it, so with --skip-capture on a checkout that
+    // never captured there is nothing to bridge: the committed docs screenshots
+    // stand. Skip rather than fail, so --skip-capture runs end to end (#398).
+    if (skipCapture && !fs.existsSync(path.join(ROOT, 'screenshots', 'manifest.json'))) {
+      console.log('\n--- Stage 2b: Bridge -> docs ---\n');
+      console.log('  Skipped: no screenshots/manifest.json (nothing captured on this checkout);');
+      console.log('  the committed docs/apps/<app>/screenshots are used as is.');
+    } else {
+      runCommand('Stage 2b: Bridge -> docs', `node scripts/docs/bridge.mjs${appsVal ? ` --apps=${appsVal}` : ''}`);
+    }
 
     // Stage 3: Extract
     runCommand('Stage 3: Extract', `node scripts/docs/extract.mjs${fwdStr}`);
