@@ -11,6 +11,7 @@
       "package.json",
       "tsconfig.base.json",
       "apps/bastion-api/Dockerfile",
+      "packages/auth-core/**",
       "packages/logging/**",
       "packages/service-health/**",
       "packages/db-stubs/**",

@@ -1,17 +1,31 @@
 import fp from 'fastify-plugin';
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
-import { and, eq, gt, isNull } from 'drizzle-orm';
+import { and, eq, gt, isNull, sql } from 'drizzle-orm';
 import argon2 from 'argon2';
+import {
+  applyKeyOrgPin,
+  bearerToken,
+  isApiKeyOrgPinned,
+  resolveKeyOrgPin,
+  sqlApiKeyStore,
+  verifyApiKeyToken,
+} from '@bigbluebam/auth-core';
 import { db } from '../db/index.js';
 import {
   sessions,
   users,
-  apiKeys,
   organizationMemberships,
   accountGroupMemberships,
   permissionGroups,
   impersonationSessions,
 } from '../db/schema/index.js';
+
+/** This service's binding of the shared bbam_ key store: its own db.execute and argon2. */
+const apiKeyStore = sqlApiKeyStore({
+  sql,
+  execute: (query) => db.execute(query),
+  verifyHash: (hash, token) => argon2.verify(hash, token),
+});
 
 // Session + API-key + impersonation authentication for bursar-api. Ported verbatim from
 // burn-api/src/plugins/auth.ts: it is generic platform auth with no burn-specific logic. The
@@ -42,6 +56,8 @@ export interface AuthUser {
   timezone: string;
   is_active: boolean;
   is_superuser: boolean;
+  /** users.kind; set for API-key auth (requireScope's #336 role cap exempts service/agent). */
+  kind?: 'human' | 'agent' | 'service';
   api_key_scope: string | null;
   org_memberships: OrgMembership[];
   active_org_id: string;
@@ -143,15 +159,9 @@ function getRequestedOrgId(request: FastifyRequest): string | undefined {
   return value;
 }
 
-/**
- * True when API-key auth must pin the request's org context to the key's own org. A key
- * minted in org A must not be able to read org B by setting X-Org-Id. SuperUser keys are
- * exempt (they legitimately operate across orgs); a NULL-org key is not pinned. Ported from
- * apps/api/src/plugins/auth.ts:200-231.
- */
-export function isApiKeyOrgPinned(apiKeyOrgId: string | null, isSuperuser: boolean): boolean {
-  return Boolean(apiKeyOrgId) && !isSuperuser;
-}
+// P2-8: whether a key is pinned to its own org, and the org/role it then acts with, are
+// @bigbluebam/auth-core's (isApiKeyOrgPinned, resolveKeyOrgPin), shared by every service (#340).
+export { isApiKeyOrgPinned };
 
 export async function buildAuthUser(
   row: BaseUserRow,
@@ -167,12 +177,11 @@ export async function buildAuthUser(
     requestedOrgId,
   );
 
-  let effectiveOrgId = activeOrgId;
-  let effectiveRole = activeRole;
-  if (pinned && apiKeyOrgId) {
-    effectiveOrgId = apiKeyOrgId;
-    effectiveRole = memberships.find((m) => m.org_id === apiKeyOrgId)?.role ?? 'viewer';
-  }
+  // The key's org and the holder's CURRENT role there ('viewer' once they left it), so losing
+  // membership strips role-derived privilege. Memberships stay resolved in full above.
+  const pin = pinned ? resolveKeyOrgPin(apiKeyOrgId, row.is_superuser, memberships) : null;
+  const effectiveOrgId = pin?.orgId ?? activeOrgId;
+  const effectiveRole = pin?.role ?? activeRole;
 
   return {
     id: row.id,
@@ -236,59 +245,24 @@ async function authPlugin(fastify: FastifyInstance) {
         }
       }
 
-      const authHeader = request.headers.authorization;
-      if (authHeader?.startsWith('Bearer ')) {
-        const token = authHeader.slice(7);
-        const prefix = token.slice(0, 8);
-
-        const candidates = await db
-          .select({
-            apiKey: apiKeys,
-            user: {
-              id: users.id,
-              org_id: users.org_id,
-              email: users.email,
-              display_name: users.display_name,
-              avatar_url: users.avatar_url,
-              timezone: users.timezone,
-              is_active: users.is_active,
-              is_superuser: users.is_superuser,
-            },
-          })
-          .from(apiKeys)
-          .innerJoin(users, eq(apiKeys.user_id, users.id))
-          .where(eq(apiKeys.key_prefix, prefix))
-          .limit(10);
-
-        const verifyCandidates = candidates.length > 3 ? candidates.slice(0, 1) : candidates;
-
-        for (const candidate of verifyCandidates) {
-          let valid = false;
-          try {
-            valid = await argon2.verify(candidate.apiKey.key_hash, token);
-          } catch (err) {
-            request.log.warn(
-              { err, api_key_id: candidate.apiKey.id },
-              'argon2.verify threw on api key candidate; treating as invalid',
-            );
-          }
-          if (candidate.apiKey.expires_at && new Date(candidate.apiKey.expires_at) < new Date()) {
-            continue;
-          }
-          if (valid && candidate.user.is_active) {
-            request.user = await buildAuthUser(
-              candidate.user,
-              candidate.apiKey.scope,
-              request,
-              candidate.apiKey.org_id,
-            );
-            db.update(apiKeys)
-              .set({ last_used_at: new Date() })
-              .where(eq(apiKeys.id, candidate.apiKey.id))
-              .catch(() => {});
-            return;
-          }
+      // Bearer API key. Verification (expiry, rotation grace, DoS caps, owner state), the
+      // org pin and requireScope are @bigbluebam/auth-core's, shared by every service (#340).
+      const token = bearerToken(request.headers.authorization);
+      const verified = token ? await verifyApiKeyToken(token, apiKeyStore, request.log) : null;
+      if (verified) {
+        // P2-8: a non-SuperUser key acts only in its own org, whatever X-Org-Id says, so the
+        // header is dropped rather than resolved (or probed) against the user's memberships.
+        if (isApiKeyOrgPinned(verified.apiKey.org_id, verified.user.is_superuser)) {
+          delete request.headers['x-org-id'];
         }
+        const user = await buildAuthUser(verified.user, verified.apiKey.scope, request, verified.apiKey.org_id);
+        applyKeyOrgPin(user, verified.apiKey.org_id);
+        user.kind = verified.user.kind;
+        request.user = user;
+        apiKeyStore.touch(verified.apiKey.id).catch((err: unknown) => {
+          request.log.warn({ err }, 'Failed to update api_keys.last_used_at');
+        });
+        return;
       }
     } catch (err) {
       if (err instanceof OrgMembershipError) {

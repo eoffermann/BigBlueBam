@@ -12,7 +12,7 @@ import {
   touchApiKey,
   verifyApiKeyToken,
 } from '../services/auth-identity.service.js';
-import { ORG_ADMIN_ROLES, keyRoleCapApplies } from '../services/role-resolver.js';
+import { resolveKeyOrgPin } from '@bigbluebam/auth-core';
 import { resolveEffectiveOrg } from './org-context.js';
 
 const UUID_REGEX_HEADER = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -208,18 +208,13 @@ export async function buildAuthUser(
   // P2-8: Pin the effective org to the key's org_id for non-SuperUser
   // API-key auth. We still resolve memberships above so downstream code
   // has the full membership list; we just override the "active" org.
-  let keyScopedOrgId: string | null = null;
-  let keyScopedRole: string | null = null;
-  if (apiKeyOrgId && !row.is_superuser) {
-    const keyMembership = memberships.find((m) => m.org_id === apiKeyOrgId);
-    // Use the user's role within the key's org. If the user is no longer
-    // a member of the key's org (revoked), fall back to 'viewer'. The key's
-    // scope gates write access and requireScope('admin') ALSO requires this
-    // role to be admin/owner, so a removed holder's admin key opens nothing
-    // org-admin (#336).
-    keyScopedOrgId = apiKeyOrgId;
-    keyScopedRole = keyMembership?.role ?? 'viewer';
-  }
+  // The user's role within the key's org; 'viewer' once they left it. The
+  // key's scope gates write access and requireScope('admin') ALSO requires
+  // this role to be admin/owner, so a removed holder's admin key opens
+  // nothing org-admin (#336). The rule is @bigbluebam/auth-core's (#340).
+  const pin = resolveKeyOrgPin(apiKeyOrgId, row.is_superuser, memberships);
+  const keyScopedOrgId = pin?.orgId ?? null;
+  const keyScopedRole = pin?.role ?? null;
 
   // Resolve the effective org/role + SuperUser-viewing banner. The precedence
   // (API-key pin > explicit X-Org-Id header > sticky session active_org_id >
@@ -484,90 +479,9 @@ export async function requireAuth(request: FastifyRequest, reply: FastifyReply) 
   }
 }
 
-/** Org roles that satisfy an `admin`-scoped gate under session auth. */
-
-/** Requires the API key scope to allow the given operation type.
- *  Hierarchy: admin > read_write > read
- *  SuperUsers always pass.
- *  Session auth (no API key): `read` / `read_write` pass, but an `admin` gate
- *  requires the caller's active-org role to be admin or owner. */
-export function requireScope(minScope: 'read' | 'read_write' | 'admin') {
-  const scopeHierarchy = ['read', 'read_write', 'admin'];
-  const minLevel = scopeHierarchy.indexOf(minScope);
-
-  // Known limitation (P1-23): Scope is cached at auth time; revoked keys
-  // remain valid until request completes. Re-querying on every scope check
-  // would add a DB round-trip to every authorized call — the window is
-  // bounded by request duration so we accept this trade-off.
-  return async function checkScope(request: FastifyRequest, reply: FastifyReply) {
-    if (!request.user) {
-      return reply.status(401).send({
-        error: {
-          code: 'UNAUTHORIZED',
-          message: 'Authentication required',
-          details: [],
-          request_id: request.id,
-        },
-      });
-    }
-    if (request.user.is_superuser) return;
-    // requireScope('admin') is the org-admin gate on ~40 routes (org settings
-    // and SMTP override, member invites/removal, password resets, minting API
-    // keys for other members, guests, priorities). A session carries no key
-    // scope, and requireCan blocks nothing unless BBB_PERMISSIONS_ENFORCE=on,
-    // so before this check any member, viewer or guest passed every one of
-    // them. Enforced in every posture; read / read_write have no role analog.
-    if (request.user.api_key_scope === null) {
-      if (minScope === 'admin' && !ORG_ADMIN_ROLES.has(request.user.role)) {
-        request.log.warn(
-          { userId: request.user.id, role: request.user.role, path: request.url, method: request.method },
-          'requireScope(admin): denied a non-admin session on an org-admin route',
-        );
-        return reply.status(403).send({
-          error: {
-            code: 'FORBIDDEN',
-            message: 'Organization admin privileges required',
-            details: [],
-            request_id: request.id,
-          },
-        });
-      }
-      return;
-    }
-
-    const userScopeLevel = scopeHierarchy.indexOf(request.user.api_key_scope);
-    if (userScopeLevel < minLevel) {
-      return reply.status(403).send({
-        error: {
-          code: 'FORBIDDEN',
-          message: `API key requires '${minScope}' scope or higher`,
-          details: [],
-          request_id: request.id,
-        },
-      });
-    }
-    // #336: a key's effective privilege is the intersection of its scope and
-    // the holder's CURRENT org role. An admin-scope key minted while its
-    // holder was an owner must stop opening org-admin routes once they are
-    // demoted (role member) or removed (buildAuthUser falls back to viewer).
-    if (
-      minScope === 'admin' &&
-      keyRoleCapApplies(request.user.kind) &&
-      !ORG_ADMIN_ROLES.has(request.user.role)
-    ) {
-      request.log.warn(
-        { userId: request.user.id, role: request.user.role, path: request.url, method: request.method },
-        'requireScope(admin): denied an admin-scope API key whose holder is no longer an org admin',
-      );
-      return reply.status(403).send({
-        error: {
-          code: 'FORBIDDEN',
-          message: 'Organization admin privileges required',
-          details: [],
-          request_id: request.id,
-        },
-      });
-    }
-  };
-}
-
+/**
+ * requireScope is @bigbluebam/auth-core's, the one gate every service in the
+ * suite uses (#340): sessions need an org-admin role for 'admin', keys need the
+ * scope AND (for human holders) a current org-admin role (#336).
+ */
+export { requireScope } from '@bigbluebam/auth-core';

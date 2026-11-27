@@ -15,6 +15,7 @@
  */
 import { and, eq, inArray, sql } from 'drizzle-orm';
 import type { PgTransaction } from 'drizzle-orm/pg-core';
+import { ORG_ADMIN_ROLES, keyRoleCapApplies } from '@bigbluebam/auth-core';
 import { db as defaultDb } from '../db/index.js';
 import { accountGroupMemberships, permissionGroups } from '../db/schema/permissions.js';
 import { apiKeys } from '../db/schema/api-keys.js';
@@ -30,13 +31,10 @@ export const BUILTIN_GROUP_IDS = {
   guest: '55555555-5555-4555-8555-555555555555',
 } as const satisfies Record<string, string>;
 
-/**
- * Org roles that may hold org-admin privilege. This is the one place the
- * fact lives: requireScope('admin') checks it for sessions AND API keys
- * (an admin-scope key is only as strong as its holder's current role), and
- * reconcileOrgApiKeys() uses it to downgrade a demoted user's admin keys.
- */
-export const ORG_ADMIN_ROLES: ReadonlySet<string> = new Set(['admin', 'owner']);
+// ORG_ADMIN_ROLES (which org roles hold org-admin privilege) and
+// keyRoleCapApplies (whose keys that caps) live in @bigbluebam/auth-core,
+// shared with requireScope in every service (#340). Re-exported for callers.
+export { ORG_ADMIN_ROLES, keyRoleCapApplies };
 
 /**
  * Bring a user's API keys for one org in line with their role there.
@@ -72,16 +70,6 @@ export async function reconcileOrgApiKeys(
         sql`EXISTS (SELECT 1 FROM users u WHERE u.id = ${apiKeys.user_id} AND u.kind = 'human')`,
       ),
     );
-}
-
-/**
- * Whether an API key's org-admin power is capped by its holder's org role.
- * True for human holders. Service/agent accounts are minted with role
- * 'member' and an owner-delegated scope, and are governed by
- * agent_policies instead, so their key scope stands on its own.
- */
-export function keyRoleCapApplies(kind: string | undefined): boolean {
-  return kind !== 'service' && kind !== 'agent';
 }
 
 export type BuiltinRole = keyof typeof BUILTIN_GROUP_IDS;

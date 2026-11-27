@@ -17,8 +17,23 @@ vi.mock('../src/db/index.js', () => ({
     execute: async (query: SQL) => {
       const { sql, params } = dialect.sqlToQuery(query);
       executed.push(sql);
-      if (sql.includes('FROM api_keys')) return rows.filter((r) => r.key_prefix === params[0]);
-      if (sql.startsWith('UPDATE api_keys')) return [];
+      // The shared @bigbluebam/auth-core candidate query: auth_api_key_candidates joined to users.
+      if (sql.includes('FROM auth_api_key_candidates(')) {
+        return rows
+          .filter((r) => r.key_prefix === params[0])
+          .map((r) => ({
+            ...r,
+            owner_org_id: r.org_id,
+            owner_email: 'skipper@gilligantravel.example',
+            owner_display_name: 'Skipper',
+            owner_avatar_url: null,
+            owner_timezone: 'UTC',
+            owner_is_active: r.is_active,
+            owner_is_superuser: r.is_superuser,
+            owner_kind: r.kind ?? 'human',
+          }));
+      }
+      if (sql.includes('auth_touch_api_key(')) return [];
       throw new Error(`unexpected query: ${sql}`);
     },
   },
@@ -59,7 +74,13 @@ describe('verifyBamApiKey', () => {
 
   it('accepts a valid key and returns its pinned org and scope', async () => {
     rows.splice(0, rows.length, key());
-    expect(await verifyBamApiKey(req, TOKEN)).toEqual({ userId: 'u1', keyOrgId: ORG_A, scope: 'admin', isSuperuser: false });
+    expect(await verifyBamApiKey(req, TOKEN)).toEqual({
+      userId: 'u1',
+      keyOrgId: ORG_A,
+      scope: 'admin',
+      isSuperuser: false,
+      kind: 'human',
+    });
   });
 
   it('rejects a wrong secret with the right prefix', async () => {

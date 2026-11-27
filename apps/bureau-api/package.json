@@ -12,6 +12,7 @@
     "lint": "biome check ./src"
   },
   "dependencies": {
+    "@bigbluebam/auth-core": "workspace:*",
     "@bigbluebam/db-stubs": "workspace:*",
     "@bigbluebam/livekit-tokens": "workspace:*",
     "@bigbluebam/logging": "workspace:*",

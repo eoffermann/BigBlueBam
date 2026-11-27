@@ -3,6 +3,7 @@ import { eq, asc, and } from 'drizzle-orm';
 import { z } from 'zod';
 import { randomBytes } from 'crypto';
 import argon2 from 'argon2';
+import { API_KEY_SCOPES, scopeAtLeast } from '@bigbluebam/auth-core';
 import { db } from '../db/index.js';
 import { apiKeys } from '../db/schema/api-keys.js';
 import { requireAuth } from '../plugins/auth.js';
@@ -46,7 +47,7 @@ export default async function apiKeyRoutes(fastify: FastifyInstance) {
     async (request, reply) => {
       const schema = z.object({
         name: z.string().max(255),
-        scope: z.enum(['read', 'read_write', 'admin']).default('read'),
+        scope: z.enum(API_KEY_SCOPES).default('read'),
         project_ids: z.array(z.string().uuid()).optional(),
         expires_at: z.string().datetime().optional(),
       });
@@ -73,10 +74,7 @@ export default async function apiKeyRoutes(fastify: FastifyInstance) {
 
       // If using API key auth, the caller's API key scope must be >= the requested scope
       if (request.user!.api_key_scope !== null) {
-        const scopeHierarchy = ['read', 'read_write', 'admin'];
-        const callerLevel = scopeHierarchy.indexOf(request.user!.api_key_scope);
-        const requestedLevel = scopeHierarchy.indexOf(body.scope);
-        if (requestedLevel > callerLevel) {
+        if (!scopeAtLeast(request.user!.api_key_scope, body.scope)) {
           return reply.status(403).send({
             error: {
               code: 'FORBIDDEN',

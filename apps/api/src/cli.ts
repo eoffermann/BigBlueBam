@@ -1,6 +1,7 @@
 import 'dotenv/config';
 import { randomBytes } from 'node:crypto';
 import argon2 from 'argon2';
+import { API_KEY_SCOPES } from '@bigbluebam/auth-core';
 import { drizzle } from 'drizzle-orm/postgres-js';
 import { eq, and, sql } from 'drizzle-orm';
 import postgres from 'postgres';
@@ -49,7 +50,7 @@ const helpdeskAgentApiKeys = pgTable('helpdesk_agent_api_keys', {
 });
 
 const VALID_ROLES = ['owner', 'admin', 'member', 'viewer', 'guest'] as const;
-const VALID_SCOPES = ['read', 'read_write', 'admin'] as const;
+const VALID_SCOPES = API_KEY_SCOPES;
 
 function slugify(text: string): string {
   return text

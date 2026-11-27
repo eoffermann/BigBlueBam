@@ -9,6 +9,7 @@ COPY package.json pnpm-workspace.yaml ./
 COPY pnpm-lock.yaml* ./
 COPY apps/bolt-api/package.json ./apps/bolt-api/
 COPY packages/shared/package.json ./packages/shared/
+COPY packages/auth-core/package.json ./packages/auth-core/
 COPY packages/logging/package.json ./packages/logging/
 COPY packages/service-health/package.json ./packages/service-health/
 COPY packages/db-stubs/package.json ./packages/db-stubs/
@@ -23,6 +24,7 @@ FROM deps AS build
 COPY tsconfig.base.json ./
 COPY packages/shared/src ./packages/shared/src
 COPY packages/shared/tsconfig.json packages/shared/tsup.config.ts ./packages/shared/
+COPY packages/auth-core/ ./packages/auth-core/
 COPY packages/logging/ ./packages/logging/
 COPY packages/service-health/ ./packages/service-health/
 COPY packages/db-stubs/ ./packages/db-stubs/
@@ -32,6 +34,7 @@ COPY apps/bolt-api/src ./apps/bolt-api/src
 COPY apps/bolt-api/tsconfig.json apps/bolt-api/tsup.config.ts ./apps/bolt-api/
 
 RUN pnpm --filter @bigbluebam/shared build \
+ && pnpm --filter @bigbluebam/auth-core build \
  && pnpm --filter @bigbluebam/logging build \
  && pnpm --filter @bigbluebam/service-health build \
  && pnpm --filter @bigbluebam/db-stubs build \
@@ -48,6 +51,7 @@ FROM deps AS dev
 
 COPY tsconfig.base.json ./
 COPY packages/shared/ ./packages/shared/
+COPY packages/auth-core/ ./packages/auth-core/
 COPY packages/logging/ ./packages/logging/
 COPY packages/service-health/ ./packages/service-health/
 COPY packages/db-stubs/ ./packages/db-stubs/

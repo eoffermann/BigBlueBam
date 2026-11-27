@@ -3,6 +3,7 @@ import { eq, and, inArray, isNull, desc } from 'drizzle-orm';
 import { z } from 'zod';
 import { randomBytes } from 'crypto';
 import argon2 from 'argon2';
+import { API_KEY_SCOPES, scopeAtLeast } from '@bigbluebam/auth-core';
 import { db } from '../db/index.js';
 import { users } from '../db/schema/users.js';
 import { apiKeys } from '../db/schema/api-keys.js';
@@ -36,11 +37,9 @@ import { env } from '../env.js';
  * couldn't have called themselves. The UI field is advisory.
  */
 
-const SCOPE_HIERARCHY = ['read', 'read_write', 'admin'] as const;
-
 const createSchema = z.object({
   name: z.string().min(1).max(100),
-  scope: z.enum(['read', 'read_write', 'admin']).default('read_write'),
+  scope: z.enum(API_KEY_SCOPES).default('read_write'),
   allowed_tools: z.array(z.string().min(1).max(200)).max(512).optional(),
   project_ids: z.array(z.string().uuid()).max(100).optional(),
 });
@@ -200,11 +199,7 @@ export default async function serviceAccountRoutes(fastify: FastifyInstance) {
       }
 
       if (caller.api_key_scope !== null) {
-        const callerLevel = SCOPE_HIERARCHY.indexOf(
-          caller.api_key_scope as (typeof SCOPE_HIERARCHY)[number],
-        );
-        const requestedLevel = SCOPE_HIERARCHY.indexOf(body.scope);
-        if (callerLevel < 0 || requestedLevel > callerLevel) {
+        if (!scopeAtLeast(caller.api_key_scope, body.scope)) {
           return reply.status(403).send({
             error: {
               code: 'FORBIDDEN',

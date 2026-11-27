@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { requireAuth } from '../plugins/auth.js';
 import * as llmService from '../services/llm-provider.service.js';
 import { checkUrl } from '@bigbluebam/egress-guard';
+import { ORG_ADMIN_ROLES } from '@bigbluebam/auth-core';
 
 const createSchema = z.object({
   scope: z.enum(['system', 'organization', 'project']),
@@ -78,7 +79,7 @@ export default async function llmProviderRoutes(fastify: FastifyInstance) {
       }
 
       if (body.scope === 'organization') {
-        if (!request.user!.is_superuser && !['admin', 'owner'].includes(request.user!.role)) {
+        if (!request.user!.is_superuser && !ORG_ADMIN_ROLES.has(request.user!.role)) {
           return reply.status(403).send({
             error: {
               code: 'FORBIDDEN',
@@ -101,7 +102,7 @@ export default async function llmProviderRoutes(fastify: FastifyInstance) {
             },
           });
         }
-        if (!request.user!.is_superuser && !['admin', 'owner'].includes(request.user!.role)) {
+        if (!request.user!.is_superuser && !ORG_ADMIN_ROLES.has(request.user!.role)) {
           return reply.status(403).send({
             error: {
               code: 'FORBIDDEN',

@@ -52,7 +52,10 @@ vi.mock('../src/lib/agent-auth.js', () => ({
 }));
 
 // Bam API keys (Bearer bbam_...), the credential the MCP server forwards (#325).
-const bamKeys: Record<string, { userId: string; keyOrgId: string; scope: string; isSuperuser: boolean }> = {};
+const bamKeys: Record<
+  string,
+  { userId: string; keyOrgId: string; scope: string; isSuperuser: boolean; kind?: string }
+> = {};
 vi.mock('../src/lib/bam-api-key.js', async (orig) => {
   const real = await orig<typeof import('../src/lib/bam-api-key.js')>();
   return {
@@ -159,6 +162,16 @@ describe('helpdesk requireAdminAuth', () => {
 
     it('lets a SuperUser key administer any org', async () => {
       expect((await get({ ...bearer('bbam_superuser'), 'x-org-slug': 'org-b' })).statusCode).toBe(200);
+    });
+
+    // #340: the same rule as requireScope('admin') everywhere: a service account's admin-scope
+    // key stands on its scope (role member by design); its read key does not.
+    it("lets a service account's admin-scope key through, not its read key", async () => {
+      people.svcA = { activeOrg: null, homeOrg: ORG_A, roles: { [ORG_A]: 'member' } };
+      bamKeys.bbam_svc_admin = { userId: 'svcA', keyOrgId: ORG_A, scope: 'admin', isSuperuser: false, kind: 'service' };
+      bamKeys.bbam_svc_read = { userId: 'svcA', keyOrgId: ORG_A, scope: 'read', isSuperuser: false, kind: 'service' };
+      expect((await get(bearer('bbam_svc_admin'))).statusCode).toBe(200);
+      expect((await get(bearer('bbam_svc_read'))).statusCode).toBe(403);
     });
   });
 

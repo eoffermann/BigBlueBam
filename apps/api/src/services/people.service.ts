@@ -25,14 +25,15 @@
  */
 
 import { eq, isNull, inArray } from 'drizzle-orm';
+import { ORG_ADMIN_ROLES } from '@bigbluebam/auth-core';
 import { db } from '../db/index.js';
 import { organizations } from '../db/schema/organizations.js';
 import { users } from '../db/schema/users.js';
 import { listOrgMembers, checkRankAbove } from './org.service.js';
 import { listOrgsAdministeredBy, listOrgsUserBelongsTo } from './user-deletion.service.js';
 
-/** Roles that confer org-admin authority (rank ≥ admin). */
-const ADMIN_ROLES = new Set(['admin', 'owner']);
+/** Roles that confer org-admin authority (rank ≥ admin): the suite-wide set (#340). */
+const ADMIN_ROLES = ORG_ADMIN_ROLES;
 
 export interface PeopleCaller {
   id: string;
