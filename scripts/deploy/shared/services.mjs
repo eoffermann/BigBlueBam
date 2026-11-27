@@ -44,6 +44,9 @@ export const APP_SERVICES = [
         // The assignment notification's Banter DM (notification-fanout.service.ts, #278). Without
         // it the api falls back to http://banter-api:4002, the wrong host and port on Railway.
         'BANTER_API_URL',
+        // helpdesk-api's private base: the Bam agent queue proxy (internal-helpdesk.routes.ts).
+        // Same name mcp-server and blank-api read (#305).
+        'HELPDESK_API_URL',
         'S3_ENDPOINT', 'S3_ACCESS_KEY', 'S3_SECRET_KEY', 'S3_BUCKET', 'S3_REGION',
         'OAUTH_GITHUB_CLIENT_ID', 'OAUTH_GITHUB_CLIENT_SECRET',
         'OAUTH_GOOGLE_CLIENT_ID', 'OAUTH_GOOGLE_CLIENT_SECRET',
@@ -51,6 +54,8 @@ export const APP_SERVICES = [
         // shared @bigbluebam/smtp-resolver key). The DB system_settings.smtp_from
         // (set in the UI) takes precedence over it.
         'SMTP_HOST', 'SMTP_PORT', 'SMTP_USER', 'SMTP_PASS', 'EMAIL_FROM',
+        // The stop grace that sizes the internal LLM proxy's shutdown drain (#294).
+        'RAILWAY_DEPLOYMENT_DRAINING_SECONDS',
       ],
     },
   },
@@ -437,6 +442,8 @@ export const APP_SERVICES = [
         'BASTION_TRUST_PROXY_HOPS',
         'BASTION_LLM_TIMEOUT_MS',
         'BASTION_LLM_MAX_TOKENS',
+        'BASTION_QUESTIONNAIRE_MAX_TOKENS',
+        'BASTION_REWORD_MAX_TOKENS',
         'BASTION_ENGINE_TIMEOUT_MS',
         'BASTION_PROBE_TIMEOUT_MS',
         'BASTION_PUT_TIMEOUT_MS',
@@ -463,6 +470,8 @@ export const APP_SERVICES = [
       optional: [
         'CORS_ORIGIN', 'LOG_LEVEL',
         'INTERNAL_SERVICE_SECRET',
+        // bond-api's private base: booking pages that auto-create a Bond contact (#305).
+        'BOND_API_INTERNAL_URL',
         'GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET',
         'MICROSOFT_CLIENT_ID', 'MICROSOFT_CLIENT_SECRET',
       ],
@@ -480,7 +489,12 @@ export const APP_SERVICES = [
     public_paths: ['/blank/api/', '/forms/'],
     env: {
       required: ['DATABASE_URL', 'REDIS_URL', 'SESSION_SECRET', 'BBB_API_INTERNAL_URL'],
-      optional: ['CORS_ORIGIN', 'LOG_LEVEL', 'INTERNAL_SERVICE_SECRET', 'PUBLIC_FORM_RATE_LIMIT', 'PUBLIC_FORM_RATE_WINDOW_MS', 'PUBLIC_URL'],
+      optional: [
+        'CORS_ORIGIN', 'LOG_LEVEL', 'INTERNAL_SERVICE_SECRET', 'PUBLIC_FORM_RATE_LIMIT', 'PUBLIC_FORM_RATE_WINDOW_MS', 'PUBLIC_URL',
+        // Form routing actions (routing.service.ts, #305): bond-api's internal contact upsert and
+        // helpdesk-api's internal ticket create, over the private network.
+        'BOND_API_INTERNAL_URL', 'HELPDESK_API_URL',
+      ],
     },
   },
   {
@@ -559,6 +573,9 @@ export const APP_SERVICES = [
         'LIVEKIT_URL',
         'BOLT_API_INTERNAL_URL',
         'BOOK_INTERNAL_URL', 'BOARD_INTERNAL_URL', 'BRIEF_INTERNAL_URL',
+        // banter-api's private base for the leave-a-note DM (knocks.routes.ts, #303). Without it
+        // bureau-api falls back to http://banter-api:4002, the wrong host and port on Railway.
+        'BANTER_API_URL',
         'RATE_LIMIT_MAX', 'RATE_LIMIT_WINDOW_MS',
       ],
     },
@@ -661,7 +678,7 @@ export const APP_SERVICES = [
         // BASIS_API_URL + BRAID_API_URL are present in docker-compose.yml but were
         // missing here (pre-existing gap, spec 9.5/IK2); BULWARK_API_URL is the new one.
         'BASIS_API_URL', 'BRAID_API_URL', 'BULWARK_API_URL', 'BURN_API_URL', 'BURSAR_API_URL',
-        // Bastion's client base (tools register at M11; the URL exists from M1).
+        // Bastion's client base: bastion-tools.ts and the search_everything Bastion arm.
         'BASTION_API_URL',
         'MCP_AUTH_REQUIRED', 'LOG_LEVEL', 'INTERNAL_SERVICE_SECRET',
         'MCP_INTERNAL_API_TOKEN',
@@ -690,6 +707,13 @@ export const APP_SERVICES = [
         // http://mcp-server:3001 — wrong host AND port on Railway — so Bolt
         // automations with MCP-tool actions silently fail. env-hints computes it.
         'MCP_INTERNAL_URL',
+        // banter-api's private base: the call-transcription callback URL handed to the voice
+        // agent (banter-transcription.job.ts, #303). Same name as api / bureau-api / mcp-server.
+        'BANTER_API_URL',
+        // Bureau summon fan-out's can-read preflights (bureau-summon-fanout.ts, #300). It fails
+        // closed, so without these every Board/Brief summon recipient is denied on Railway. The
+        // api preflight uses BBB_API_INTERNAL_URL (listed below).
+        'BOARD_INTERNAL_URL', 'BRIEF_INTERNAL_URL',
         'S3_ENDPOINT', 'S3_ACCESS_KEY', 'S3_SECRET_KEY', 'S3_BUCKET', 'S3_REGION',
         // worker reads EMAIL_FROM (apps/worker/src/env.ts:10) — the single
         // canonical SMTP from-address fallback (the shared @bigbluebam/smtp-

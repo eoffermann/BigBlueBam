@@ -1,11 +1,22 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import type { z } from 'zod';
 import type {
+  BastionAnswerLibraryUpdate,
   BastionBulkApplicability,
   BastionCompanyProfile,
   BastionExceptionPropose,
   BastionManualEvidenceCreate,
   BastionNotApplicableSuggestions,
+  BastionQuestionnaireAutofill,
+  BastionQuestionnaireItemReview,
   BastionTemplateKey,
+  BastionAuditorRequestUpdate,
+  BastionAuditorRoomCreate,
+  BastionExportCreate,
+  BastionRestoreResolution,
+  BastionSettingsUpdate,
+  bastionQuestionnaireCreateSchema,
+  bastionQuestionnaireUpdateSchema,
 } from '@bigbluebam/shared';
 import {
   api,
@@ -33,11 +44,18 @@ import {
   type QuestionnaireApproval,
   type QuestionnaireItemRow,
   type QuestionnaireRow,
-  type QuestionnaireSheetMap,
   type SummaryResponse,
   type RequirementsResponse,
   type SetupState,
   type TemplateRow,
+  type AccessLogRow,
+  type AuditorRequestRow,
+  type AuditorRoomRow,
+  type CreatedRoom,
+  type DeliveryProblemRow,
+  type ExportRow,
+  type RoomOverview,
+  type SettingsView,
 } from '@/lib/api';
 
 const key = (...parts: unknown[]) => ['bastion', ...parts];
@@ -183,6 +201,17 @@ export function useBamProjects(enabled: boolean) {
   return useQuery({ queryKey: key('bam-projects'), queryFn: () => bamApi.listProjects(), enabled, retry: false });
 }
 
+/** The organization's active members, by name (#268): the one source for every Bastion person picker. */
+export function useMembers(enabled = true) {
+  return useQuery({
+    queryKey: key('org-members'),
+    queryFn: async () => (await bamApi.listMembers()).data.filter((m) => m.is_active !== false).sort((a, b) => a.display_name.localeCompare(b.display_name)),
+    enabled,
+    staleTime: 5 * 60_000,
+    retry: false,
+  });
+}
+
 /* -------------------------------- Mutations -------------------------------- */
 
 export function useAdoptFramework() {
@@ -234,11 +263,8 @@ export function useQuestionnaireItems(id: string, drafting: boolean) {
 export function useCreateQuestionnaire() {
   const invalidate = useInvalidate();
   return useMutation({
-    mutationFn: (body: {
-      title: string;
-      requester_label?: string | null;
-      source: { kind: 'bin_asset'; bin_asset_id: string } | { kind: 'pasted'; text: string; format: 'tsv' | 'csv' };
-    }) => api.post<{ data: QuestionnaireRow }>('/questionnaires', body),
+    // #272: the shared request body (z.input, so defaults may be left out).
+    mutationFn: (body: z.input<typeof bastionQuestionnaireCreateSchema>) => api.post<{ data: QuestionnaireRow }>('/questionnaires', body),
     onSuccess: invalidate,
   });
 }
@@ -246,8 +272,7 @@ export function useCreateQuestionnaire() {
 export function useUpdateQuestionnaire() {
   const invalidate = useInvalidate();
   return useMutation({
-    mutationFn: (args: { id: string; body: { column_map?: { sheets: QuestionnaireSheetMap[] }; title?: string } }) =>
-      api.patch<{ data: QuestionnaireRow }>(`/questionnaires/${args.id}`, args.body),
+    mutationFn: (args: { id: string; body: z.input<typeof bastionQuestionnaireUpdateSchema> }) => api.patch<{ data: QuestionnaireRow }>(`/questionnaires/${args.id}`, args.body),
     onSuccess: invalidate,
   });
 }
@@ -255,7 +280,8 @@ export function useUpdateQuestionnaire() {
 export function useAutofill() {
   const invalidate = useInvalidate();
   return useMutation({
-    mutationFn: (args: { id: string; redraft?: boolean }) => api.post<{ data: QuestionnaireRow }>(`/questionnaires/${args.id}/autofill`, { redraft: args.redraft ?? false }),
+    mutationFn: (args: { id: string } & Partial<BastionQuestionnaireAutofill>) =>
+      api.post<{ data: QuestionnaireRow }>(`/questionnaires/${args.id}/autofill`, { redraft: args.redraft ?? false }),
     onSuccess: invalidate,
   });
 }
@@ -265,7 +291,7 @@ export function useReviewItem(questionnaireId: string) {
   const qc = useQueryClient();
   const itemsKey = key('questionnaire-items', questionnaireId);
   return useMutation({
-    mutationFn: (args: { id: string; review_status: 'accepted' | 'edited' | 'needs_owner' | 'pending'; final_answer?: string | null; final_yes_no?: boolean | null; assigned_to?: string | null }) => {
+    mutationFn: (args: { id: string } & BastionQuestionnaireItemReview) => {
       const { id, ...body } = args;
       return api.patch<{ data: QuestionnaireItemRow; approval: QuestionnaireApproval }>(`/questionnaire-items/${id}`, body);
     },
@@ -296,17 +322,17 @@ export function useApproveQuestionnaire() {
   });
 }
 
-export function useAnswerLibrary(q: string) {
+export function useAnswerLibrary(q: string, includeRetired = false) {
   return useQuery({
-    queryKey: key('answer-library', q),
-    queryFn: () => api.get<{ data: AnswerLibraryRow[] }>('/answer-library', { q: q || undefined }),
+    queryKey: key('answer-library', q, includeRetired),
+    queryFn: () => api.get<{ data: AnswerLibraryRow[] }>('/answer-library', { q: q || undefined, include_retired: includeRetired ? 'true' : undefined }),
   });
 }
 
 export function useUpdateAnswerLibrary() {
   const invalidate = useInvalidate();
   return useMutation({
-    mutationFn: (args: { id: string; body: { stale?: false; retired?: boolean } }) => api.patch(`/answer-library/${args.id}`, args.body),
+    mutationFn: (args: { id: string; body: BastionAnswerLibraryUpdate }) => api.patch(`/answer-library/${args.id}`, args.body),
     onSuccess: invalidate,
   });
 }
@@ -560,6 +586,116 @@ export function useAcknowledgeDrift() {
   const invalidate = useInvalidate();
   return useMutation({
     mutationFn: (id: string) => api.post(`/drift/${id}/acknowledge`, {}),
+    onSuccess: invalidate,
+  });
+}
+
+/* ------------------------------ M9: sharing and settings ------------------------------ */
+
+export function useAuditorRooms(enabled = true) {
+  return useQuery({ queryKey: key('auditor-rooms'), queryFn: () => api.get<{ data: AuditorRoomRow[] }>('/auditor-rooms'), enabled, retry: false });
+}
+
+export function useRoomAccessLog(id: string | null) {
+  return useQuery({
+    queryKey: key('auditor-room-access-log', id),
+    queryFn: () => api.get<{ data: AccessLogRow[] }>(`/auditor-rooms/${id}/access-log`),
+    enabled: !!id,
+  });
+}
+
+export function useRoomPreview(id: string | null) {
+  return useQuery({
+    queryKey: key('auditor-room-preview', id),
+    queryFn: () => api.get<{ data: RoomOverview }>(`/auditor-rooms/${id}/preview`),
+    enabled: !!id,
+  });
+}
+
+export function useCreateRoom() {
+  const invalidate = useInvalidate();
+  return useMutation({
+    mutationFn: (body: Omit<BastionAuditorRoomCreate, 'confirm'>) => api.post<{ data: CreatedRoom }>('/auditor-rooms', { ...body, confirm: true }),
+    onSuccess: invalidate,
+  });
+}
+
+export function useRevokeRoom() {
+  const invalidate = useInvalidate();
+  return useMutation({
+    mutationFn: (id: string) => api.post<{ data: AuditorRoomRow }>(`/auditor-rooms/${id}/revoke`, { confirm: true }),
+    onSuccess: invalidate,
+  });
+}
+
+export function useUnlockRoom() {
+  const invalidate = useInvalidate();
+  return useMutation({
+    mutationFn: (id: string) => api.post<{ data: AuditorRoomRow }>(`/auditor-rooms/${id}/unlock`, {}),
+    onSuccess: invalidate,
+  });
+}
+
+export function useAuditorRequests(enabled = true) {
+  return useQuery({ queryKey: key('auditor-requests'), queryFn: () => api.get<{ data: AuditorRequestRow[] }>('/auditor-requests'), enabled, retry: false });
+}
+
+export function useUpdateAuditorRequest() {
+  const invalidate = useInvalidate();
+  return useMutation({
+    mutationFn: (args: { id: string; body: BastionAuditorRequestUpdate }) => api.patch(`/auditor-requests/${args.id}`, args.body),
+    onSuccess: invalidate,
+  });
+}
+
+export function useExports(enabled = true) {
+  return useQuery({
+    queryKey: key('exports'),
+    queryFn: () => api.get<{ data: ExportRow[] }>('/exports'),
+    enabled,
+    retry: false,
+    // Poll only while a packet is being built (spec 6.3).
+    refetchInterval: (q) => ((q.state.data?.data ?? []).some((p) => p.status === 'queued' || p.status === 'running') ? 5000 : false),
+  });
+}
+
+export function useCreateExport() {
+  const invalidate = useInvalidate();
+  return useMutation({
+    mutationFn: (body: BastionExportCreate) => api.post<{ data: ExportRow }>('/exports', body),
+    onSuccess: invalidate,
+  });
+}
+
+export function useSettings() {
+  return useQuery({ queryKey: key('settings'), queryFn: () => api.get<{ data: SettingsView }>('/settings'), retry: false });
+}
+
+export function useUpdateSettings() {
+  const invalidate = useInvalidate();
+  return useMutation({
+    mutationFn: (body: BastionSettingsUpdate) => api.patch<{ data: SettingsView }>('/settings', body),
+    onSuccess: invalidate,
+  });
+}
+
+export function useDeliveryProblems(enabled = true) {
+  return useQuery({ queryKey: key('delivery-problems'), queryFn: () => api.get<{ data: DeliveryProblemRow[] }>('/delivery-problems'), enabled, retry: false });
+}
+
+export function useRetryDelivery() {
+  const invalidate = useInvalidate();
+  return useMutation({
+    mutationFn: (id: string) => api.post<{ data: { id: string; result: string; message: string } }>(`/delivery-problems/${id}/retry`, {}),
+    onSuccess: invalidate,
+  });
+}
+
+export function useAcknowledgeRestore() {
+  const invalidate = useInvalidate();
+  return useMutation({
+    mutationFn: (args: { id: string; resolution: BastionRestoreResolution }) =>
+      api.post(`/ledger/restores/${args.id}/acknowledge`, { resolution: args.resolution, confirm: true }),
     onSuccess: invalidate,
   });
 }

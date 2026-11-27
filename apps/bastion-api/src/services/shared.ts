@@ -14,9 +14,13 @@ export function evaluationMinuteOffset(orgId: string): number {
 
 /** The org's settings row, created on first use. */
 export async function ensureSettings(tx: DbTx, orgId: string) {
+  // Loaded lazily: evidence-runtime reads the validated env, which pure unit tests never load.
+  const { offsiteBackupConfigured } = await import('./evidence-runtime.js');
   await tx
     .insert(bastionOrgSettings)
-    .values({ organization_id: orgId, evaluation_minute_offset: evaluationMinuteOffset(orgId) })
+    // offsite_backup_configured is "computed at boot" for existing rows (main.ts); a row created
+    // later takes the same answer at creation, so ops.backup_fresh never reads a stale false.
+    .values({ organization_id: orgId, evaluation_minute_offset: evaluationMinuteOffset(orgId), offsite_backup_configured: offsiteBackupConfigured() })
     .onConflictDoNothing();
   return one(
     await tx.select().from(bastionOrgSettings).where(eq(bastionOrgSettings.organization_id, orgId)).limit(1),

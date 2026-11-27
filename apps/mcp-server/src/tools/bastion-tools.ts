@@ -9,7 +9,7 @@ import {
   bastionRunEvaluationSchema,
 } from '@bigbluebam/shared';
 // M6 decision tools (registerBastionDecisionTools at the very end).
-// Every M6 tool input is taken from the route's own shared schema (#231): the tool advertises
+// Every M6 tool input is taken from the shared schema of its route (#231): the tool advertises
 // exactly what the route enforces, and a bound changed in shared changes both.
 import {
   bastionDriftAcknowledgeSchema,
@@ -49,6 +49,14 @@ import {
 } from '@bigbluebam/shared';
 // M7 policy tools (registerBastionPolicyTools at the very end).
 import { bastionPolicyAudienceSchema, bastionPolicyCreateFields, bastionPolicyCreateSchema, bastionPolicyUpdateSchema } from '@bigbluebam/shared';
+// M9 sharing, settings and audit tools (registerBastionSharingTools at the very end).
+import {
+  BastionExportStatus,
+  bastionAuditorRequestUpdateSchema,
+  bastionExportCreateSchema,
+  bastionSettingsUpdateFields,
+  bastionSettingsUpdateSchema,
+} from '@bigbluebam/shared';
 import {
   BastionAuditorRequestStatus,
   bastionAdoptFrameworkSchema,
@@ -62,14 +70,12 @@ import {
 } from '@bigbluebam/shared';
 
 /**
- * Bastion MCP tool handlers, PENDING registration (spec 5.4).
+ * Bastion MCP tool handlers (spec 5.4), registered by server.ts.
  *
- * This file deliberately lives outside src/tools/ and is not named *-tools.ts, and server.ts does
- * not import it: scripts/check-tool-return-coverage.mjs and the docs catalog
- * (scripts/docs/lib/tool-source.mjs listAllToolModules) both read the tools directory, so Bastion's
- * tools stay out of the published counts until the M11 merge unit moves this file to
- * src/tools/bastion-tools.ts and registers it with the Launchpad row. Each milestone adds the
- * handlers for the routes it ships, typed off the shared Zod in @bigbluebam/shared, with tests.
+ * Built from M2 to M10 under src/tools-pending/bastion.ts, outside the counted tool surface, and
+ * moved here and registered in the M11 merge unit, so scripts/check-tool-return-coverage.mjs and
+ * the docs catalog (scripts/docs/lib/tool-source.mjs) count them from M11 on. Each milestone added
+ * the handlers for the routes it shipped, typed off the shared Zod in @bigbluebam/shared, with tests.
  *
  * M3 (this file's first content): frameworks, controls, assertions, probes and setup status.
  * M4: run an evaluation, evaluation runs, evidence, verification, seals and restores. Resolving
@@ -136,6 +142,7 @@ export function registerBastionTools(
   registerBastionDecisionTools(server, client);
   registerBastionPolicyTools(server, client);
   registerBastionQuestionnaireTools(server, client);
+  registerBastionSharingTools(server, client);
 
   // ── 1. bastion_list_frameworks (rows 1, 2, 4, 7) ───────────────────────────
   registerTool(server, {
@@ -231,10 +238,17 @@ export function registerBastionTools(
   registerTool(server, {
     name: 'bastion_control_status',
     description:
-      'One control: its stored status and reason, setup state, derived applicability, every framework requirement it satisfies, and its checks (assertions) with their review state and, for population checks, the listed systems and whether a person confirmed the list (GET /controls/:id). Read-only.',
-    input: { control_id: z.string().uuid() },
+      'One control: its stored status and reason, setup state, derived applicability, every framework requirement it satisfies, and its checks (assertions) with their review state and, for population checks, the listed systems and whether a person confirmed the list (GET /controls/:id). With checks_only, just the checks, newest first (GET /controls/:id/assertions). Read-only.',
+    input: {
+      control_id: z.string().uuid(),
+      checks_only: z.boolean().optional().describe('Return only the control\'s checks (GET /controls/:id/assertions).'),
+    },
     returns: z.record(z.unknown()),
-    handler: async ({ control_id }) => {
+    handler: async ({ control_id, checks_only }) => {
+      if (checks_only) {
+        const r = await client.listControlAssertions(control_id);
+        return r.ok ? ok(r.data) : err('reading checks', r.data);
+      }
       const r = await client.getControl(control_id);
       return r.ok ? ok(r.data) : err('reading control', r.data);
     },
@@ -703,7 +717,7 @@ export function registerBastionEvidenceTools(server: McpServer, client: BastionC
     input: {
       asker_user_id: askerUserId,
       manual_evidence_id: z.string().uuid().optional(),
-      // The route's own filters (#215): the tool and GET /manual-evidence validate alike.
+      // Filters of the route itself (#215): the tool and GET /manual-evidence validate alike.
       ...bastionManualEvidenceListQuerySchema.shape,
       limit: bastionManualEvidenceListQuerySchema.shape.limit.optional(),
     },
@@ -784,7 +798,7 @@ export function registerBastionEvidenceTools(server: McpServer, client: BastionC
     input: {
       asker_user_id: askerUserId,
       feed_id: z.string().uuid(),
-      // The route's own paging (#215).
+      // Paging of the route itself (#215).
       limit: bastionFeedRecordListQuerySchema.shape.limit.optional(),
       before: bastionFeedRecordListQuerySchema.shape.before,
     },
@@ -1046,7 +1060,7 @@ export function registerBastionPolicyTools(server: McpServer, client: BastionCli
     name: 'bastion_create_policy',
     description:
       'Link a Beacon article as a policy people must read and acknowledge (POST /policies). Name the article by beacon_entry_id, or by beacon_slug (the last part of its Beacon link, /beacon/<slug>). The article must be shared with everyone (Beacon visibility Organization or Public; else 409 POLICY_NOT_SHARED). audience is everyone (default) or a list of members; cadence_days is how often it must be re-read (default 365). With control_id, Bastion proposes that control\'s two policy checks (read and acknowledged; kept current) pinned to this policy, for a person to confirm. 409 POLICY_ALREADY_LINKED. Needs bastion.policy.write (owners and admins).',
-    // The route's own fields (#239: beacon_entry_id, or the beacon_slug from an article link);
+    // Fields of the route itself (#239: beacon_entry_id, or the beacon_slug from an article link);
     // the handler re-parses with the full schema for "exactly one of the two".
     input: { ...bastionPolicyCreateFields.shape },
     returns: z.record(z.unknown()),
@@ -1127,10 +1141,12 @@ export function registerBastionQuestionnaireTools(server: McpServer, client: Bas
     input: {
       status: BastionQuestionnaireStatus.optional(),
       limit: z.number().int().min(1).max(200).optional(),
+      // #274: questionnaires carry customer names and deal links; the same rule as the evidence reads (#217).
+      asker_user_id: askerUserId,
     },
     returns: z.record(z.unknown()),
-    handler: async ({ status, limit }) => {
-      const r = await client.listQuestionnaires({ status, limit });
+    handler: async ({ status, limit, asker_user_id }) => {
+      const r = await client.listQuestionnaires({ status, limit, asker_user_id });
       return r.ok ? ok(r.data) : err('listing questionnaires', r.data);
     },
   });
@@ -1145,7 +1161,7 @@ export function registerBastionQuestionnaireTools(server: McpServer, client: Bas
       include_items: z.boolean().optional(),
       band: BastionConfidenceBand.optional(),
       needs_review: z.boolean().optional().describe('Only "Needs an expert" rows nobody reviewed yet.'),
-      asker_user_id: z.string().uuid().optional().describe('The person you are acting for; narrows, never widens.'),
+      asker_user_id: askerUserId,
     },
     returns: z.record(z.unknown()),
     handler: async ({ questionnaire_id, include_items, band, needs_review, asker_user_id }) => {
@@ -1198,6 +1214,10 @@ export function registerBastionQuestionnaireTools(server: McpServer, client: Bas
       owner_user_id: z.string().uuid().nullable().optional(),
       bond_deal_id: z.string().uuid().nullable().optional(),
       column_map: bastionQuestionnaireColumnMapSchema.optional(),
+      drop_unmapped_sheets: z
+        .boolean()
+        .optional()
+        .describe('A column_map must list every sheet that holds questions (409 SHEETS_DROPPED); true confirms dropping the questions on the sheets it leaves out.'),
     },
     returns: z.record(z.unknown()),
     handler: async ({ questionnaire_id, ...rest }) => {
@@ -1216,10 +1236,11 @@ export function registerBastionQuestionnaireTools(server: McpServer, client: Bas
     input: {
       questionnaire_id: z.string().uuid(),
       redraft: z.boolean().optional(),
+      use_ai: z.boolean().optional().describe('false drafts without the AI: approved library answers (with the hard rules) or left for a person.'),
     },
     returns: z.record(z.unknown()),
-    handler: async ({ questionnaire_id, redraft }) => {
-      const r = await client.autofillQuestionnaire(questionnaire_id, { redraft: redraft ?? false });
+    handler: async ({ questionnaire_id, redraft, use_ai }) => {
+      const r = await client.autofillQuestionnaire(questionnaire_id, { redraft: redraft ?? false, use_ai: use_ai ?? true });
       return r.ok ? ok(r.data) : err('starting the drafting', r.data);
     },
   });
@@ -1254,12 +1275,13 @@ export function registerBastionQuestionnaireTools(server: McpServer, client: Bas
     input: {
       question: z.string().min(3).max(4000),
       answer_kind: BastionAnswerKind.optional(),
+      asker_user_id: askerUserId,
     },
     returns: z.record(z.unknown()),
-    handler: async ({ question, answer_kind }) => {
+    handler: async ({ question, answer_kind, asker_user_id }) => {
       const parsed = bastionDraftAnswerSchema.safeParse(strip({ question, answer_kind }));
       if (!parsed.success) return err('drafting the answer', { code: 'VALIDATION_ERROR', message: parsed.error.errors[0]?.message });
-      const r = await client.draftAnswer(parsed.data);
+      const r = await client.draftAnswer(parsed.data, { asker_user_id });
       return r.ok ? ok(r.data) : err('drafting the answer', r.data);
     },
   });
@@ -1274,7 +1296,7 @@ export function registerBastionQuestionnaireTools(server: McpServer, client: Bas
       include_stale: z.boolean().optional(),
       include_retired: z.boolean().optional(),
       limit: z.number().int().min(1).max(100).optional(),
-      asker_user_id: z.string().uuid().optional(),
+      asker_user_id: askerUserId,
     },
     returns: z.record(z.unknown()),
     handler: async (q) => {
@@ -1301,6 +1323,171 @@ export function registerBastionQuestionnaireTools(server: McpServer, client: Bas
       if (!parsed.success) return err('changing the answer', { code: 'VALIDATION_ERROR', message: parsed.error.errors[0]?.message });
       const r = await client.updateAnswerLibrary(answer_id, parsed.data);
       return r.ok ? ok(r.data) : err('changing the answer', r.data);
+    },
+  });
+}
+
+/* ══════════════════════════════════════════════════════════════════════════════
+ * M9 sharing, settings and audit-log tools (spec 5.1 rows 84-100, plus the room Preview).
+ *
+ * Deliberately NO tool for rows 85-87 (create, revoke and unlock an auditor room): category "auth:
+ * session required (spec 2.8, #136)". Opening a room discloses evidence to an outsider; only a
+ * person signed in to Bastion, not impersonated, may do it. None for row 93 (the packet zip,
+ * multipart/binary) or rows 101-104 (the public room, public-inbound, its own token credential).
+ * Rows 84, 88 and 89 are bastion_list_auditor_rooms and bastion_list_auditor_requests (above).
+ * ════════════════════════════════════════════════════════════════════════════ */
+export const BASTION_SHARING_TOOL_NAMES = [
+  'bastion_auditor_room_view',
+  'bastion_respond_auditor_request',
+  'bastion_create_export',
+  'bastion_list_exports',
+  'bastion_get_settings',
+  'bastion_update_settings',
+  'bastion_list_delivery_problems',
+  'bastion_retry_delivery',
+  'bastion_audit_log',
+] as const;
+
+export function registerBastionSharingTools(server: McpServer, client: BastionClient): void {
+  const strip = (o: Record<string, unknown>) => Object.fromEntries(Object.entries(o).filter(([, v]) => v !== undefined));
+
+  // S1. bastion_auditor_room_view (GET /auditor-rooms/:id/preview)
+  registerTool(server, {
+    name: 'bastion_auditor_room_view',
+    description:
+      'Exactly what an auditor sees in one auditor room (GET /auditor-rooms/:id/preview), without logging a visit: the controls in the room with their state words (Met, Not met, Not met risk accepted, Can\'t prove yet, Not assessed), the restricted items the room shares, accepted risks, the Statement of Applicability for ISO, the signed seal history with public keys, and any restore or missing-file notices. Read-only; floored: needs bastion.auditor_room.read.',
+    input: { room_id: z.string().uuid() },
+    returns: z.record(z.unknown()),
+    handler: async ({ room_id }) => {
+      const r = await client.previewAuditorRoom(room_id);
+      return r.ok ? ok(r.data) : err('previewing the auditor room', r.data);
+    },
+  });
+
+  // S2. bastion_respond_auditor_request (row 90)
+  registerTool(server, {
+    name: 'bastion_respond_auditor_request',
+    description:
+      'Answer or close a question an auditor sent from an auditor room (PATCH /auditor-requests/:id). status "answered" needs answer_note (the reply the team keeps); "closed" just closes it. 409 REQUEST_CLOSED if it was closed already. Needs bastion.auditor_room.respond (owners and admins).',
+    input: {
+      request_id: z.string().uuid(),
+      status: z.enum(['answered', 'closed']),
+      answer_note: z.string().min(1).max(5000).optional(),
+    },
+    returns: z.record(z.unknown()),
+    handler: async ({ request_id, ...rest }) => {
+      const parsed = bastionAuditorRequestUpdateSchema.safeParse(strip(rest));
+      if (!parsed.success) return err('answering the question', { code: 'VALIDATION_ERROR', message: parsed.error.errors[0]?.message });
+      const r = await client.respondAuditorRequest(request_id, parsed.data);
+      return r.ok ? ok(r.data) : err('answering the question', r.data);
+    },
+  });
+
+  // S3. bastion_create_export (row 91: a JSON request; the worker builds the zip)
+  registerTool(server, {
+    name: 'bastion_create_export',
+    description:
+      'Start building an audit packet (POST /exports, 202): a zip of the framework\'s controls and state words, the evidence and uploaded files in the period (at most 400 days), attestations, exceptions, drift, the Statement of Applicability for ISO, a summary PDF and a manifest with every signed seal and public key. include_restricted needs bastion.evidence.read_restricted (403 RESTRICTED_NOT_ALLOWED). An ISO packet is refused until every Annex A requirement has an applicability decision (409 SOA_INCOMPLETE). Follow progress with bastion_list_exports; a person downloads the zip in Bastion. Needs bastion.export.create.',
+    input: {
+      framework_id: z.string().uuid(),
+      period_start: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+      period_end: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+      include_restricted: z.boolean().optional(),
+    },
+    returns: z.record(z.unknown()),
+    handler: async (args) => {
+      const parsed = bastionExportCreateSchema.safeParse(strip(args));
+      if (!parsed.success) return err('starting the packet', { code: 'VALIDATION_ERROR', message: parsed.error.errors[0]?.message });
+      const r = await client.createExport(parsed.data);
+      return r.ok ? ok(r.data) : err('starting the packet', r.data);
+    },
+  });
+
+  // S4. bastion_list_exports (row 92)
+  registerTool(server, {
+    name: 'bastion_list_exports',
+    description:
+      'Audit packets, newest first (GET /exports): framework, period, whether restricted evidence is included, status (queued, running, succeeded, failed, expired), the current stage in words ("Writing evidence", "Zipping", "Ready to download") and any failure reason. Read-only; floored: needs bastion.export.read.',
+    input: {
+      status: BastionExportStatus.optional(),
+      limit: z.number().int().min(1).max(100).optional(),
+    },
+    returns: z.record(z.unknown()),
+    handler: async (q) => {
+      const r = await client.listExports(strip(q));
+      return r.ok ? ok(r.data) : err('listing audit packets', r.data);
+    },
+  });
+
+  // S5. bastion_get_settings (row 96)
+  registerTool(server, {
+    name: 'bastion_get_settings',
+    description:
+      "Bastion's settings for the organization (GET /settings): remediation mode, check time and timezone, AI provider and the providers available, expiry warnings, staleness, auditor-link and packet limits, questionnaire floors and limits; plus evidence integrity (seal and personal-data key fingerprints, restores awaiting an owner's acknowledgement), the off-site evidence backup status and how many deliveries failed. Read-only; needs bastion.settings.read.",
+    input: {},
+    returns: z.record(z.unknown()),
+    handler: async () => {
+      const r = await client.getSettings();
+      return r.ok ? ok(r.data) : err('reading settings', r.data);
+    },
+  });
+
+  // S6. bastion_update_settings (row 97)
+  registerTool(server, {
+    name: 'bastion_update_settings',
+    description:
+      'Change Bastion settings (PATCH /settings); send only the fields to change. Each change is audited with its old and new value. 400 BAD_TIMEZONE for an unknown zone, FLOORS_OUT_OF_ORDER when the "Check this" floor is not below the "Sure" floor; 404 for an AI provider the organization cannot use. Needs bastion.settings.write (owners and admins).',
+    input: { settings: bastionSettingsUpdateFields },
+    returns: z.record(z.unknown()),
+    handler: async ({ settings }) => {
+      const parsed = bastionSettingsUpdateSchema.safeParse(strip(settings as Record<string, unknown>));
+      if (!parsed.success) return err('changing settings', { code: 'VALIDATION_ERROR', message: parsed.error.errors[0]?.message });
+      const r = await client.updateSettings(parsed.data);
+      return r.ok ? ok(r.data) : err('changing settings', r.data);
+    },
+  });
+
+  // S7. bastion_list_delivery_problems (row 98)
+  registerTool(server, {
+    name: 'bastion_list_delivery_problems',
+    description:
+      'Updates Bastion could not deliver to other apps after every retry (GET /delivery-problems): what it was (a Bolt event, a Compliance task, a comment, a seal copy), how many attempts, when, and the last error. Retry one with bastion_retry_delivery. Needs bastion.settings.write (owners and admins).',
+    input: { limit: z.number().int().min(1).max(200).optional() },
+    returns: z.record(z.unknown()),
+    handler: async (q) => {
+      const r = await client.listDeliveryProblems(strip(q));
+      return r.ok ? ok(r.data) : err('listing delivery problems', r.data);
+    },
+  });
+
+  // S8. bastion_retry_delivery (row 99)
+  registerTool(server, {
+    name: 'bastion_retry_delivery',
+    description:
+      'Try one failed delivery again (POST /delivery-problems/:id/retry). If a newer update of the same kind for the same thing was already delivered, the old one is marked no longer needed (result "superseded") instead of being replayed. 409 NOT_DEAD when it is not a failed delivery. Needs bastion.settings.write.',
+    input: { delivery_id: z.string().uuid() },
+    returns: z.record(z.unknown()),
+    handler: async ({ delivery_id }) => {
+      const r = await client.retryDelivery(delivery_id);
+      return r.ok ? ok(r.data) : err('retrying the delivery', r.data);
+    },
+  });
+
+  // S9. bastion_audit_log (row 100)
+  registerTool(server, {
+    name: 'bastion_audit_log',
+    description:
+      "Bastion's audit log, newest first (GET /audit): every change made in Bastion with who did it (person or agent), whether they were impersonated, how they signed in, and the details. Filter by action (e.g. auditor_room.create, settings.update) or subject_type; page with cursor. Read-only; floored: needs bastion.audit.read.",
+    input: {
+      action: z.string().min(1).max(64).optional(),
+      subject_type: z.string().min(1).max(48).optional(),
+      cursor: z.string().min(1).max(200).optional(),
+      limit: z.number().int().min(1).max(200).optional(),
+    },
+    returns: z.record(z.unknown()),
+    handler: async (q) => {
+      const r = await client.auditLog(strip(q));
+      return r.ok ? ok(r.data) : err('reading the audit log', r.data);
     },
   });
 }

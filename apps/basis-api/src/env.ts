@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { envBool } from '@bigbluebam/shared';
+import { envBool, llmTimeoutEnvSchema } from '@bigbluebam/shared';
 
 const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
@@ -31,10 +31,15 @@ const envSchema = z.object({
 
   COOKIE_DOMAIN: z.string().optional(),
   COOKIE_SECURE: envBool(false),
+  // Platform RLS posture (#302): envBool, so 'true' enforces and an unknown value fails boot.
+  BBB_RLS_ENFORCE: envBool(false),
 
   // Query + explanation execution settings.
   QUERY_TIMEOUT_MS: z.coerce.number().int().positive().default(10000),
-  LLM_TIMEOUT_MS: z.coerce.number().int().positive().default(15000),
+  // The narrative call's deadline (#283). basis-api makes no LLM call itself (the worker's
+  // basis-explain job does, reading BASIS_LLM_TIMEOUT_MS); bounded the same way so a value the
+  // proxy would cut is refused here too.
+  LLM_TIMEOUT_MS: llmTimeoutEnvSchema(),
   EXPLANATION_CACHE_TTL_SECONDS: z.coerce.number().int().positive().default(3600),
 
   // Per-action permission enforcement (mirrors bench-api). 'warn' records

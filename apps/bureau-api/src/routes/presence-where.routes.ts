@@ -49,7 +49,8 @@ const paramsSchema = z.object({
 });
 
 /** Mirrors presence-here.routes.ts::classifyUrlApp — first path segment
- *  → cross-app-access app name; null = no preflight available (allow). */
+ *  → cross-app-access app name. Informational: the shared resolver denies
+ *  a URL it cannot classify (#300). */
 function classifyUrlApp(rawUrl: string): string | null {
   // Issue #158: the shared Launchpad app list, same as presence-here.
   return launchpadAppFromUrl(rawUrl);
@@ -144,20 +145,22 @@ export default async function presenceWhereRoutes(fastify: FastifyInstance) {
       }
 
       // Destination-access preflight: if the CALLER can't see the URL the
-      // target is on, answer exactly as if the target weren't located.
-      const app = classifyUrlApp(found.url);
-      if (app) {
-        const allowed = await resolveAccess({
+      // target is on, answer exactly as if the target weren't located. Fail
+      // CLOSED (#300): an unclassifiable URL, an app the api cannot map, a
+      // peer error and a thrown error all mean "not located".
+      const allowed = await resolveAccess(
+        {
           orgId: user.org_id,
           userId: user.id,
-          app: app as CrossAppName,
+          app: (classifyUrlApp(found.url) ?? undefined) as CrossAppName | undefined,
           targetUrl: found.url,
-        })
-          .then((d) => d.allowed)
-          .catch(() => true);
-        if (!allowed) {
-          return reply.status(200).send({ data: { located: false } });
-        }
+        },
+        { log: request.log },
+      )
+        .then((d) => d.allowed)
+        .catch(() => false);
+      if (!allowed) {
+        return reply.status(200).send({ data: { located: false } });
       }
 
       return reply.status(200).send({

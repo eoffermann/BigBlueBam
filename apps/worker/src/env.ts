@@ -10,12 +10,23 @@ const envSchema = z.object({
   EMAIL_FROM: z.string().email().default('noreply@bigbluebam.com'),
   TRACKING_BASE_URL: z.string().default('http://localhost'),
   WORKER_CONCURRENCY: z.coerce.number().int().positive().default(5),
+  // #315: how long SIGTERM waits for active jobs before force-closing every worker and only then
+  // closing the DB pool and Redis. Keep it below the container's stop grace period (compose's
+  // default is 10 s).
+  WORKER_SHUTDOWN_DEADLINE_MS: z.coerce.number().int().positive().default(8_000),
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).default('info'),
   BOLT_API_INTERNAL_URL: z.string().url().default('http://bolt-api:4006'),
   // §1 Wave 5 banter subs - pattern-match consumer posts can_access preflights
   // against the Bam api on this URL. Default mirrors docker-compose.
   API_INTERNAL_URL: z.string().url().default('http://api:4000'),
   INTERNAL_SERVICE_SECRET: z.string().default(''),
+  // banter-api on the private network (#303): the transcription callback the voice agent posts
+  // to. One name (BANTER_API_URL) across api, bureau-api, worker and mcp-server.
+  BANTER_API_URL: z.string().url().default('http://banter-api:4002'),
+  // Board / Brief can-read preflights for the Bureau summon fan-out (#300), the same names
+  // bureau-api reads. The preflight fails closed, so an unprovisioned URL denies recipients.
+  BOARD_INTERNAL_URL: z.string().url().default('http://board-api:4008'),
+  BRIEF_INTERNAL_URL: z.string().url().default('http://brief-api:4005'),
 
   // Braid engine (spec §9.2). BBB_API_INTERNAL_URL is the platform llm-provider + can_access
   // preflight base; QDRANT_URL is the soft embedding-recall dependency (blocking degrades to
@@ -45,6 +56,9 @@ const envSchema = z.object({
   S3_SECRET_KEY: z.string().default('minioadmin'),
   S3_BUCKET: z.string().default('bigbluebam-uploads'),
   S3_REGION: z.string().default('us-east-1'),
+  // Bastion's own bucket (Bastion spec 7, 9.1). Only bastion-export-packet touches it, with the
+  // shared S3_* credentials above and THIS bucket name, never S3_BUCKET.
+  BASTION_S3_BUCKET: z.string().min(3).default('bigbluebam-bastion'),
 
   // Database backup (Backup app, Platform scope).
   //  - BACKUP_SCHEDULE_CRON: when the nightly automatic backup runs (UTC).

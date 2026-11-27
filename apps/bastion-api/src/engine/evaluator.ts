@@ -394,10 +394,12 @@ async function putEvidence(deps: EngineDeps, orgId: string, sha: string, body: B
   if (!storage) throw new StorageUnavailableError();
   const key = `evidence/${orgId}/${sha}.json`;
   // The intent row is committed before the put, so the object sweep can reconcile a put whose
-  // object row never landed.
+  // object row never landed. The key is content-addressed, so a leftover intent for the same key
+  // may already exist: refreshing its created_at keeps the sweep (24 h age, row-locked) from
+  // deleting the bytes this write is about to record.
   await orgTx(deps.sql, orgId, (tx) => tx`
     INSERT INTO bastion_object_intents (organization_id, object_key) VALUES (${orgId}, ${key})
-    ON CONFLICT (object_key) DO NOTHING`);
+    ON CONFLICT (object_key) DO UPDATE SET created_at = now()`);
   try {
     await withStorageTimeout('put', storage.put(key, body, { contentType: 'application/json', size: body.length }), deps.putTimeoutMs);
   } catch (err) {

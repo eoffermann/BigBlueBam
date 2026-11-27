@@ -33,8 +33,10 @@ interface BastionSeedExpectations {
       fileName: string;
       sheet: string;
       rows: number;
-      encryption: { question: string; band: 'low' | 'medium' | 'high'; words: string; answerStartsWith: string };
-      radioRelay: { question: string; band: 'low' | 'medium' | 'high'; words: string; mentions: string };
+      /** #271: the seed drafts without the AI, so the story rows are deterministic. */
+      useAi: boolean;
+      encryption: { question: string; band: 'low' | 'medium' | 'high'; words: string; answerStartsWith: string; controlKey: string; libraryAnswer: string; reasons: string[] };
+      radioRelay: { question: string; band: 'low' | 'medium' | 'high'; words: string; mentions: string; controlKey: string; libraryAnswer: string; reasons: string[] };
     };
   };
   org: { slug: string };

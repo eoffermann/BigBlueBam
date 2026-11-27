@@ -1,6 +1,7 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
-import { BOLT_SOURCES } from '@bigbluebam/shared';
+import { BOLT_SOURCES, type InternalLlmMessage } from '@bigbluebam/shared';
+import { callInternalLlm, LlmTimeoutError } from '@bigbluebam/shared/internal-llm-client';
 import { requireAuth } from '../plugins/auth.js';
 import { shadowOnly } from '../middleware/dual-read.js';
 import { env } from '../env.js';
@@ -78,36 +79,28 @@ async function resolveProvider(
  * Returns the raw LLM response text, or null if the endpoint is not
  * available (in which case we fall back to the local stub response).
  */
-async function callLlmProxy(
+export async function callLlmProxy(
   request: FastifyRequest,
-  messages: Array<{ role: string; content: string }>,
+  messages: InternalLlmMessage[],
   providerId: string,
 ): Promise<string | null> {
+  // The shared client (#283): the body follows the shared contract and the deadline is the
+  // proxy's own default (LLM_CALL_TIMEOUT_DEFAULT_MS), sent as timeout_ms, instead of a literal
+  // 30 s that knew nothing about it. Any failure (including a 504 timeout) still falls back to the
+  // sample automation; a timeout is logged apart so it is not mistaken for a broken provider.
   try {
-    const url = new URL('/internal/llm/chat', env.BBB_API_INTERNAL_URL);
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-    };
-    if (env.INTERNAL_SERVICE_SECRET) {
-      headers['x-internal-secret'] = env.INTERNAL_SERVICE_SECRET;
-    }
-    // Also forward session cookie for auth fallback
-    if (request.headers.cookie) {
-      headers['cookie'] = request.headers.cookie;
-    }
-
-    const res = await fetch(url.toString(), {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({ provider_id: providerId, messages }),
-      signal: AbortSignal.timeout(30000),
+    const r = await callInternalLlm({
+      apiBaseUrl: env.BBB_API_INTERNAL_URL,
+      secret: env.INTERNAL_SERVICE_SECRET,
+      service: 'bolt',
+      providerId,
+      messages,
+      // Also forward the session cookie for the auth fallback.
+      headers: request.headers.cookie ? { cookie: request.headers.cookie } : undefined,
     });
-
-    if (!res.ok) return null;
-
-    const body = (await res.json()) as { data?: { content?: string } };
-    return body.data?.content ?? null;
-  } catch {
+    return r.content;
+  } catch (err) {
+    if (err instanceof LlmTimeoutError) request.log.warn({ timeout_ms: err.timeoutMs }, 'bolt-ai-assist: the AI call ran past its deadline');
     return null;
   }
 }

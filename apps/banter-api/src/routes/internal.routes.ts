@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { createInternalSecretGuard, internalSecretPreHandler } from '@bigbluebam/service-health';
+import { banterInternalDmRequestSchema } from '@bigbluebam/shared';
 import { env } from '../env.js';
 import { postActivityFeedMessage } from '../services/activity-feed.js';
 import { writeTranscriptSegment } from '../services/transcription.js';
@@ -54,15 +55,8 @@ export default async function internalRoutes(fastify: FastifyInstance) {
     '/v1/internal/dm',
     { preHandler: [requireInternalSecret] },
     async (request, reply) => {
-      const body = z
-        .object({
-          org_id: z.string().uuid(),
-          from_user_id: z.string().uuid(),
-          to_user_id: z.string().uuid(),
-          content: z.string().min(1).max(4000),
-          source: z.string().max(100).optional(),
-        })
-        .parse(request.body);
+      // The shared contract (#301): the api and bureau-api build their bodies from the same type.
+      const body = banterInternalDmRequestSchema.parse(request.body);
 
       try {
         const result = await sendInternalDm(body);

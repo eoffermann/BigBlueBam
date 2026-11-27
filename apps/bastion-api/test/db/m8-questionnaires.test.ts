@@ -3,11 +3,12 @@ import postgres from 'postgres';
 import { encodeXlsx, decodeXlsx } from '@bigbluebam/structured-data';
 import { aggregateControl, RunLeaseHeldError, type RunRow } from '../../src/engine/evaluator.js';
 import { orgTx, type EngineDeps } from '../../src/engine/context.js';
-import type { LlmChat } from '../../src/lib/llm-errors.js';
+import { LlmError, LlmThrottledError, type LlmChat } from '../../src/lib/llm-errors.js';
 import type { LlmPermits } from '../../src/lib/llm-permits.js';
 import type { BinAccessDeps } from '../../src/lib/bin-asset-access.js';
 import type { SliceLock } from '../../src/services/compile-ai.service.js';
 import {
+  AUTOFILL_MAX_AI_FAILURES,
   autofillSlice,
   draftOneAnswer,
   orphanedQuestionnaires,
@@ -18,11 +19,14 @@ import {
   approveQuestionnaire,
   createQuestionnaire,
   exportQuestionnaire,
+  getQuestionnaire,
   listAnswerLibrary,
   listItems,
+  listQuestionnaires,
   reviewItem,
   startAutofill,
   updateAnswerLibrary,
+  updateQuestionnaire,
   type QuestionnaireDeps,
 } from '../../src/services/questionnaires.service.js';
 import { rewordFixDraft } from '../../src/services/fixes.service.js';
@@ -290,6 +294,239 @@ describe.skipIf(!DATABASE_URL)('M8 questionnaires (live database)', () => {
     await expect(createQuestionnaire(pending, owner, { title: 'x', source: { kind: 'bin_asset', bin_asset_id: asset } })).rejects.toMatchObject({ code: 'FILE_NOT_SCANNED_YET' });
   });
 
+  it('keeps the source grid out of column_map; list never carries it, get carries only the preview (#265, #273)', async () => {
+    const s = await setUp('grid');
+    const owner = viewer(s.org, s.owner);
+    const d = qdeps(s.engine);
+    const q = (await createQuestionnaire(d, owner, { title: 'Grid storage', source: { kind: 'pasted', text: PASTED, format: 'tsv' } })).data as unknown as {
+      id: string;
+      sheet_preview: Array<{ rows: string[][] }>;
+    };
+    const [row] = await sql`SELECT column_map, source_grid, source_preview, source_truncated FROM bastion_questionnaires WHERE id = ${q.id}`;
+    expect(Object.keys(row!.column_map as object).sort()).toEqual(['guessed', 'sheets']);
+    expect((row!.source_grid as { sheets: unknown[] }).sheets).toHaveLength(1);
+    expect(row!.source_preview).not.toBeNull();
+    expect(row!.source_truncated).toBe(false);
+    expect(q.sheet_preview[0]!.rows[0]).toEqual(['Question', 'Answer']);
+
+    const listed = (await listQuestionnaires(d, owner, { limit: 50 })).data.find((x) => (x as { id: string }).id === q.id) as Record<string, unknown>;
+    expect(listed.sheet_preview).toBeUndefined();
+    expect(JSON.stringify(listed)).not.toContain('Do you require two-step sign-in');
+    expect(listed.column_map).toEqual({ sheets: expect.any(Array), guessed: true });
+
+    // A row from before 0290 has no stored preview: get computes it once from the grid and keeps it.
+    await sql`UPDATE bastion_questionnaires SET source_preview = NULL WHERE id = ${q.id}`;
+    const again = (await getQuestionnaire(d, owner, q.id)).data as unknown as { sheet_preview: Array<{ rows: string[][] }> };
+    expect(again.sheet_preview[0]!.rows[0]).toEqual(['Question', 'Answer']);
+    expect((await sql`SELECT source_preview IS NOT NULL AS kept FROM bastion_questionnaires WHERE id = ${q.id}`)[0]!.kept).toBe(true);
+
+    // Changing the mapping reads the grid from source_grid and keeps the requester recorded by autofill.
+    await sql`UPDATE bastion_questionnaires SET column_map = column_map || '{"autofill_requested_by":"someone"}'::jsonb WHERE id = ${q.id}`;
+    await updateQuestionnaire(d, owner, q.id, {
+      column_map: { sheets: [{ sheet_name: '', header_row: 0, first_row: 1, question_column: 0, answer_column: 1, yes_no_column: null, section_column: null, answer_kind: 'text' }] },
+    });
+    const [mapped] = await sql`SELECT column_map, row_count FROM bastion_questionnaires WHERE id = ${q.id}`;
+    expect(mapped!.row_count).toBe(5);
+    expect((mapped!.column_map as { autofill_requested_by: string; guessed: boolean }).autofill_requested_by).toBe('someone');
+    expect((mapped!.column_map as { guessed: boolean }).guessed).toBe(false);
+  });
+
+  type Row = { question_text: string; confidence_band: string | null; band_reasons: Array<{ code: string }> };
+  const rowsOf = async (qid: string) =>
+    (await sql`SELECT question_text, confidence_band, band_reasons FROM bastion_questionnaire_items WHERE questionnaire_id = ${qid} ORDER BY row_index`) as unknown as Row[];
+  const qState = async (qid: string) =>
+    (await sql`SELECT status, rows_done, llm_calls_used, ai_failure_streak, last_ai_failure FROM bastion_questionnaires WHERE id = ${qid}`)[0]!;
+
+  it('a transient AI failure leaves the row undrafted and retries it; it is never banded "Needs an expert" for it (#260)', async () => {
+    const s = await setUp('flaky');
+    await provider(s.org, s.owner);
+    const owner = viewer(s.org, s.owner);
+    const d = qdeps(s.engine);
+    const q = (await createQuestionnaire(d, owner, { title: 'Flaky AI', source: { kind: 'pasted', text: PASTED, format: 'tsv' } })).data as unknown as { id: string };
+    await startAutofill(d, owner, q.id, { redraft: false });
+    // The proxy is down for the first three calls (connection refused, 502, a timeout), then back.
+    let calls = 0;
+    const waits: number[] = [];
+    const flaky: LlmChat = async (opts) => {
+      calls += 1;
+      if (calls <= 3) throw new LlmError(calls === 2 ? 'internal LLM proxy returned 502' : 'fetch failed', calls === 2 ? 502 : null);
+      return yesModel(opts);
+    };
+    const deps = { ...adeps(s.engine, { llm: flaky }), sleep: async (ms: number) => void waits.push(ms) };
+    // One slice whose time budget is too short to wait out the back-off: the row waits, undrafted.
+    await autofillSlice({ ...deps, sliceCutoffMs: 1 }, { organization_id: s.org, questionnaire_id: q.id, claimant: 'w1' });
+    let st = await qState(q.id);
+    expect(st).toMatchObject({ status: 'answering', rows_done: 0, ai_failure_streak: 1 });
+    expect(String(st.last_ai_failure)).toContain('fetch failed');
+    expect((await rowsOf(q.id)).every((r) => r.confidence_band === null)).toBe(true);
+    // The next slice backs off (10 s after the second failure in a row, 20 s after the third),
+    // retries the same row and drafts everything once the AI is back.
+    await autofillSlice(deps, { organization_id: s.org, questionnaire_id: q.id, claimant: 'w1' });
+    st = await qState(q.id);
+    expect(st).toMatchObject({ status: 'in_review', rows_done: 5, ai_failure_streak: 0 });
+    expect(waits).toEqual([10_000, 20_000]);
+    const rows = await rowsOf(q.id);
+    expect(rows[0]!.confidence_band).toBe('high');
+    // The four real questions got AI drafts (the formula row finds nothing to cite, so it is never sent).
+    for (const r of rows.slice(0, 4)) expect(r.band_reasons.map((x) => x.code), r.question_text).not.toContain('no_draft');
+  });
+
+  it('an AI outage that does not end parks the rest as "the AI was unavailable", not "could not draft" (#260)', async () => {
+    const s = await setUp('outage');
+    await provider(s.org, s.owner);
+    const owner = viewer(s.org, s.owner);
+    const d = qdeps(s.engine);
+    const q = (await createQuestionnaire(d, owner, { title: 'Outage', source: { kind: 'pasted', text: PASTED, format: 'tsv' } })).data as unknown as { id: string };
+    await startAutofill(d, owner, q.id, { redraft: false });
+    const down: LlmChat = async () => {
+      throw new LlmError('internal LLM proxy returned 503', 503);
+    };
+    await autofillSlice(adeps(s.engine, { llm: down }), { organization_id: s.org, questionnaire_id: q.id, claimant: 'w1' });
+    expect(await qState(q.id)).toMatchObject({ status: 'in_review', ai_failure_streak: AUTOFILL_MAX_AI_FAILURES });
+    for (const r of await rowsOf(q.id)) {
+      expect(r.confidence_band).toBe('low');
+      expect(r.band_reasons.map((x) => x.code)).toEqual(['ai_unavailable']);
+    }
+    // A new start begins with a clean streak.
+    await startAutofill(d, owner, q.id, { redraft: true });
+    expect((await qState(q.id)).ai_failure_streak).toBe(0);
+  });
+
+  it('a cut-off answer is banded with its reason recorded (#260)', async () => {
+    const s = await setUp('cutoff');
+    await provider(s.org, s.owner);
+    const owner = viewer(s.org, s.owner);
+    const d = qdeps(s.engine);
+    const q = (await createQuestionnaire(d, owner, { title: 'Cut off', source: { kind: 'pasted', text: PASTED, format: 'tsv' } })).data as unknown as { id: string };
+    await startAutofill(d, owner, q.id, { redraft: false });
+    const cut: LlmChat = async () => ({ content: '', finish_reason: 'length' });
+    await autofillSlice(adeps(s.engine, { llm: cut }), { organization_id: s.org, questionnaire_id: q.id, claimant: 'w1' });
+    const rows = await rowsOf(q.id);
+    const withAi = rows.filter((r) => r.band_reasons.some((x) => x.code === 'ai_cut_off'));
+    expect(withAi.length).toBeGreaterThan(0);
+    for (const r of withAi) expect(r.band_reasons.map((x) => x.code)).not.toContain('no_draft');
+  });
+
+  it('every AI call is charged before it is made, retries included, and a redraft does not refill the allowance (#261)', async () => {
+    const s = await setUp('budget');
+    await provider(s.org, s.owner);
+    const owner = viewer(s.org, s.owner);
+    const d = qdeps(s.engine);
+    await sql`UPDATE bastion_org_settings SET max_llm_calls_per_questionnaire = 3 WHERE organization_id = ${s.org}`;
+    const q = (await createQuestionnaire(d, owner, { title: 'Budget', source: { kind: 'pasted', text: PASTED, format: 'tsv' } })).data as unknown as { id: string };
+    await startAutofill(d, owner, q.id, { redraft: false });
+    // The provider throttles the first call once: that retry is a second charged call.
+    let calls = 0;
+    const throttledOnce: LlmChat = async (opts) => {
+      calls += 1;
+      if (calls === 1) throw new LlmThrottledError(1);
+      return yesModel(opts);
+    };
+    await autofillSlice(adeps(s.engine, { llm: throttledOnce }), { organization_id: s.org, questionnaire_id: q.id, claimant: 'w1' });
+    expect(calls).toBe(3);
+    expect(await qState(q.id)).toMatchObject({ status: 'in_review', llm_calls_used: 3 });
+    const rows = await rowsOf(q.id);
+    const out = rows.filter((r) => r.band_reasons.some((x) => x.code === 'budget_exhausted'));
+    expect(out.length).toBeGreaterThanOrEqual(2);
+
+    // A redraft gets no fresh allowance: no AI call is made and the rows say why.
+    await startAutofill(d, owner, q.id, { redraft: true });
+    await autofillSlice(adeps(s.engine, { llm: throttledOnce }), { organization_id: s.org, questionnaire_id: q.id, claimant: 'w2' });
+    expect(calls).toBe(3);
+    expect(await qState(q.id)).toMatchObject({ status: 'in_review', llm_calls_used: 3 });
+    const again = await rowsOf(q.id);
+    expect(again.filter((r) => r.band_reasons.some((x) => x.code === 'budget_exhausted')).length).toBeGreaterThanOrEqual(4);
+  });
+
+  it('use_ai false drafts without the model: library reuse with the hard rules, deterministic (#271)', async () => {
+    const s = await setUp('no-ai');
+    await provider(s.org, s.owner);
+    const owner = viewer(s.org, s.owner);
+    const d = qdeps(s.engine);
+    // Answers approved before, citing the failing laptop control and the exception-covered key control.
+    const lib = [
+      ['Is laptop disk encryption in place?', 'Yes, every laptop is encrypted.', s.controls[1]!],
+      ['Are service keys rotated every year?', 'Yes, service keys are replaced yearly.', s.controls[2]!],
+    ] as const;
+    for (const [qt, at, c] of lib) {
+      await sql`INSERT INTO bastion_answer_library (organization_id, question_text, answer_text, yes_no, cited_refs, approved_by, approved_at)
+                VALUES (${s.org}, ${qt}, ${at}, true, ${sql.json([{ entity_type: 'bastion.control', entity_id: c }] as never)}, ${s.owner}, now())`;
+    }
+    const q = (await createQuestionnaire(d, owner, { title: 'No AI', source: { kind: 'pasted', text: PASTED, format: 'tsv' } })).data as unknown as { id: string };
+    await startAutofill(d, owner, q.id, { redraft: false, use_ai: false });
+    let calls = 0;
+    const counting: LlmChat = async (o) => {
+      calls += 1;
+      return yesModel(o);
+    };
+    await autofillSlice(adeps(s.engine, { llm: counting }), { organization_id: s.org, questionnaire_id: q.id, claimant: 'w1' });
+    expect(calls).toBe(0);
+    expect(await qState(q.id)).toMatchObject({ status: 'in_review', llm_calls_used: 0 });
+    const rows = await sql`SELECT question_text, confidence_band, draft_answer FROM bastion_questionnaire_items WHERE questionnaire_id = ${q.id}`;
+    const by = (n: string) => rows.find((r) => String(r.question_text).includes(n))!;
+    expect(by('laptop')).toMatchObject({ confidence_band: 'low' });
+    expect(String(by('laptop').draft_answer)).toMatch(/^We cannot currently prove this\./);
+    expect(by('service keys')).toMatchObject({ confidence_band: 'medium' });
+    expect(String(by('service keys').draft_answer)).toContain('Accepted exception');
+  });
+
+  it('each autofill run emits its own questionnaire.drafted, even with the same counts (#267)', async () => {
+    const s = await setUp('redraft-event');
+    await provider(s.org, s.owner);
+    const owner = viewer(s.org, s.owner);
+    const d = qdeps(s.engine);
+    const q = (await createQuestionnaire(d, owner, { title: 'Redraft event', source: { kind: 'pasted', text: PASTED, format: 'tsv' } })).data as unknown as { id: string };
+    const drafted = async () =>
+      (await sql`SELECT idempotency_key FROM bastion_outbox WHERE organization_id = ${s.org} AND payload->>'event_type' = 'questionnaire.drafted' ORDER BY id`).map((r) => String(r.idempotency_key));
+    await startAutofill(d, owner, q.id, { redraft: false });
+    await autofillSlice(adeps(s.engine), { organization_id: s.org, questionnaire_id: q.id, claimant: 'w1' });
+    expect(await drafted()).toHaveLength(1);
+    // Same model, same rows, same counts, no releases: the redraft is a new run and a new event.
+    await startAutofill(d, owner, q.id, { redraft: true });
+    await autofillSlice(adeps(s.engine), { organization_id: s.org, questionnaire_id: q.id, claimant: 'w1' });
+    const keys = await drafted();
+    expect(keys).toHaveLength(2);
+    expect(new Set(keys).size).toBe(2);
+  });
+
+  it('a mapping that leaves out a sheet with questions is refused unless dropping is confirmed (#266)', async () => {
+    const s = await setUp('two-sheets');
+    const owner = viewer(s.org, s.owner);
+    const bucket = fakeBucket();
+    const bytes = encodeXlsx([
+      { name: 'Access', rows: [['Question', 'Answer'], ['Do you require two-step sign-in for every account?', '']] },
+      { name: 'Devices', rows: [['Question', 'Answer'], ['Are company laptops encrypted?', ''], ['Do laptops lock when left alone?', '']] },
+    ]);
+    await bucket.put('uploads/two.xlsx', Buffer.from(bytes), { contentType: 'application/octet-stream' });
+    const asset = '00000000-0000-4000-8000-00000000c001';
+    const version = '00000000-0000-4000-8000-00000000c002';
+    const bin: BinAccessDeps = {
+      loadAsset: async () => ({ id: asset, org_id: s.org, scan_status: 'clean', current_version_id: version }),
+      loadVersion: async () => ({ id: version, asset_id: asset, object_key: 'uploads/two.xlsx', size: bytes.length, content_type: 'application/octet-stream' }),
+      canAccess: async () => true,
+    };
+    const d = qdeps(s.engine, { bin, bucket });
+    const q = (await createQuestionnaire(d, owner, { title: 'Two sheets', source: { kind: 'bin_asset', bin_asset_id: asset } })).data as unknown as {
+      id: string;
+      row_count: number;
+      column_map: { sheets: Array<{ sheet_name: string }> };
+      sheet_preview: Array<{ name: string }>;
+    };
+    expect(q.row_count).toBe(3);
+    expect(q.column_map.sheets.map((m) => m.sheet_name)).toEqual(['Access', 'Devices']);
+    expect(q.sheet_preview.map((p) => p.name)).toEqual(['Access', 'Devices']);
+    const access = { sheet_name: 'Access', header_row: 0, first_row: 1, question_column: 0, answer_column: 1, yes_no_column: null, section_column: null, answer_kind: 'text' as const };
+    // Fixing the first sheet alone would drop the Devices questions: refused, nothing changed.
+    await expect(updateQuestionnaire(d, owner, q.id, { column_map: { sheets: [access] } })).rejects.toMatchObject({ code: 'SHEETS_DROPPED' });
+    expect((await sql`SELECT row_count FROM bastion_questionnaires WHERE id = ${q.id}`)[0]!.row_count).toBe(3);
+    // Sending every sheet keeps them all; dropping is allowed only when confirmed.
+    const devices = { ...access, sheet_name: 'Devices' };
+    await updateQuestionnaire(d, owner, q.id, { column_map: { sheets: [access, devices] } });
+    expect((await sql`SELECT row_count FROM bastion_questionnaires WHERE id = ${q.id}`)[0]!.row_count).toBe(3);
+    await updateQuestionnaire(d, owner, q.id, { column_map: { sheets: [access] }, drop_unmapped_sheets: true });
+    expect((await sql`SELECT row_count FROM bastion_questionnaires WHERE id = ${q.id}`)[0]!.row_count).toBe(1);
+  });
+
   it('SIGTERM releases; the reaper releases stale claims and parks after three; the tick finds orphans', async () => {
     const s = await setUp('reaper');
     await provider(s.org, s.owner);
@@ -328,6 +565,17 @@ describe.skipIf(!DATABASE_URL)('M8 questionnaires (live database)', () => {
     expect(out.data.draft_answer).toMatch(/^We cannot currently prove this\./);
     expect(out.data.citations[0]?.label).toBe('Laptop disk encryption');
     expect((await sql`SELECT count(*)::int AS n FROM bastion_questionnaire_items WHERE organization_id = ${s.org}`)[0]!.n).toBe(0);
+  });
+
+  it('a draft for an asker cites only what both the caller and the asker may see (#274)', async () => {
+    const s = await setUp('one-asker');
+    await provider(s.org, s.owner);
+    const asker = s.agent;
+    const deps = { ...adeps(s.engine), canAccess: async (u: string, type: string, id: string) => !(u === asker && `${type}:${id}` === `bastion.control:${s.controls[1]}`) };
+    const forOwner = await draftOneAnswer(deps, { id: s.owner, org_id: s.org }, { question: 'Is laptop disk encryption in place?', answer_kind: 'yes_no_text' });
+    expect(forOwner.data.citations.map((c) => c.entity_id)).toContain(s.controls[1]);
+    const forAsker = await draftOneAnswer(deps, { id: s.owner, org_id: s.org }, { question: 'Is laptop disk encryption in place?', answer_kind: 'yes_no_text' }, 20_000, asker);
+    expect(forAsker.data.citations.map((c) => c.entity_id)).not.toContain(s.controls[1]);
   });
 
   it('the AI may reword a drafted fix; a Bolt rule keeps its shape and gains only a new name and description', async () => {

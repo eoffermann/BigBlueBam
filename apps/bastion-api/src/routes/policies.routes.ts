@@ -17,6 +17,8 @@ import * as policies from '../services/policies.service.js';
 export default async function policyRoutes(fastify: FastifyInstance) {
   const can = (p: string) => fastify.requireCan(p);
   const deps = () => policyDeps(fastify.log, fastify.redis);
+  // #296: a policy manager is told its article's state even when they cannot open the article.
+  const manage = async (request: Parameters<typeof fastify.bastionCan>[0]) => ({ policyWrite: await fastify.bastionCan(request, 'bastion.policy.write') });
   const query = (request: { query: unknown }) => {
     const raw = (request.query ?? {}) as Record<string, string | undefined>;
     return Object.fromEntries(Object.entries(raw).filter(([, v]) => v !== undefined && v !== ''));
@@ -26,7 +28,7 @@ export default async function policyRoutes(fastify: FastifyInstance) {
   fastify.get('/policies', { preHandler: [requireAuth, can('bastion.policy.read')] }, async (request, reply) => {
     const parsed = bastionPolicyListQuerySchema.safeParse(query(request));
     if (!parsed.success) return validationError(request, reply, parsed.error);
-    return handled(request, reply, () => policies.listPolicies(deps(), viewerOf(request), parsed.data));
+    return handled(request, reply, async () => policies.listPolicies(deps(), viewerOf(request), parsed.data, await manage(request)));
   });
 
   // Row 65.
@@ -60,7 +62,7 @@ export default async function policyRoutes(fastify: FastifyInstance) {
   fastify.get('/policies/:id/attestations', { preHandler: [requireAuth, can('bastion.attestation.read')] }, async (request, reply) => {
     const id = idParam(request);
     if (!id) return notFound(request, reply);
-    return handled(request, reply, () => policies.listPolicyAttestations(deps(), viewerOf(request), id));
+    return handled(request, reply, async () => policies.listPolicyAttestations(deps(), viewerOf(request), id, await manage(request)));
   });
 
   // Row 69.
@@ -91,6 +93,6 @@ export default async function policyRoutes(fastify: FastifyInstance) {
     if (!id) return notFound(request, reply);
     const parsed = bastionRequestAttestationsSchema.safeParse(request.body ?? {});
     if (!parsed.success) return validationError(request, reply, parsed.error);
-    return handled(request, reply, () => policies.requestAttestations(deps(), viewerOf(request), id, parsed.data));
+    return handled(request, reply, async () => policies.requestAttestations(deps(), viewerOf(request), id, parsed.data, await manage(request)));
   });
 }

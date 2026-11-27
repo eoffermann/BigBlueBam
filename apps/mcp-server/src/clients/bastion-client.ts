@@ -56,6 +56,15 @@ import type {
   BastionQuestionnaireListQuery,
   BastionQuestionnaireUpdate,
 } from '@bigbluebam/shared';
+import type {
+  BastionAuditLogQuery,
+  BastionAuditorRequestUpdate,
+  BastionDeliveryProblemListQuery,
+  BastionExportCreate,
+  BastionExportListQuery,
+  BastionSearchQuery,
+  BastionSettingsUpdate,
+} from '@bigbluebam/shared';
 import type { ApiClient } from '../middleware/api-client.js';
 
 /**
@@ -64,8 +73,11 @@ import type { ApiClient } from '../middleware/api-client.js';
  * the human UI does. BASTION_API_URL already ends in /v1 (apps/mcp-server/src/env.ts), so paths
  * here carry no /v1 prefix.
  *
- * Started at M3 with the routes M3 ships; later milestones add their routes here, and M10
- * completes it. It is not wired into server.ts until the M11 merge unit.
+ * Started at M3 with the routes M3 ships; later milestones added theirs, and M10 completed it:
+ * every bastion-api route an API key may call has a method here, and every route without one is
+ * a sanctioned skip (session-required vouching acts, byte downloads, feed-key credentials, the
+ * public room and the machine push, internal routes). test/bastion-parity.test.ts holds that
+ * cross-walk against the route files. It is not wired into server.ts until the M11 merge unit.
  */
 
 export interface BastionResult<T = unknown> {
@@ -257,8 +269,8 @@ export function createBastionClient(bastionApiUrl: string, api: ApiClient, fetch
     // ── M8: questionnaires and the answer library (spec 5.1 rows 72-83) ─────────────────
     // Row 79 (approve) has no client method: session required (spec 2.8, #136). Row 80 (export)
     // is a byte response: no method.
-    listQuestionnaires: (q: Partial<BastionQuestionnaireListQuery> = {}) =>
-      request('GET', `/questionnaires${qs({ status: q.status, limit: q.limit === undefined ? undefined : String(q.limit) })}`),
+    listQuestionnaires: (q: Partial<BastionQuestionnaireListQuery> & Partial<Asker> = {}) =>
+      request('GET', `/questionnaires${qs({ status: q.status, limit: q.limit === undefined ? undefined : String(q.limit), asker_user_id: q.asker_user_id })}`),
     createQuestionnaire: (body: BastionQuestionnaireCreate) => request('POST', '/questionnaires', body),
     getQuestionnaire: (id: string, a: Partial<Asker> = {}) => request('GET', `/questionnaires/${id}${qs({ asker_user_id: a.asker_user_id })}`),
     updateQuestionnaire: (id: string, body: BastionQuestionnaireUpdate) => request('PATCH', `/questionnaires/${id}`, body),
@@ -274,7 +286,7 @@ export function createBastionClient(bastionApiUrl: string, api: ApiClient, fetch
         })}`,
       ),
     reviewQuestionnaireItem: (itemId: string, body: BastionQuestionnaireItemReview) => request('PATCH', `/questionnaire-items/${itemId}`, body),
-    draftAnswer: (body: BastionDraftAnswer) => request('POST', '/answers/draft', body),
+    draftAnswer: (body: BastionDraftAnswer, a: Partial<Asker> = {}) => request('POST', `/answers/draft${qs({ asker_user_id: a.asker_user_id })}`, body),
     searchAnswerLibrary: (q: Partial<BastionAnswerLibraryQuery> & Partial<Asker> = {}) =>
       request(
         'GET',
@@ -289,6 +301,31 @@ export function createBastionClient(bastionApiUrl: string, api: ApiClient, fetch
     updateAnswerLibrary: (id: string, body: BastionAnswerLibraryUpdate) => request('PATCH', `/answer-library/${id}`, body),
     // Row 9 with the M7 option: use_ai false forces the library's suggestions.
     compileFrameworkWith: (id: string, body: BastionCompileFramework) => request('POST', `/frameworks/${id}/compile`, body),
+
+    // ── M9: sharing, settings and the audit log (spec 5.1 rows 84-100) ──────────
+    // Rows 85-87 (room create, revoke, unlock) have no client method: session required (spec
+    // 2.8, #136). Row 93 (packet download) is a byte response. Rows 101-104 are the public room.
+    previewAuditorRoom: (roomId: string) => request('GET', `/auditor-rooms/${roomId}/preview`),
+    respondAuditorRequest: (id: string, body: BastionAuditorRequestUpdate) => request('PATCH', `/auditor-requests/${id}`, body),
+    createExport: (body: BastionExportCreate) => request('POST', '/exports', body),
+    listExports: (q: Partial<BastionExportListQuery> = {}) =>
+      request('GET', `/exports${qs({ status: q.status, limit: q.limit === undefined ? undefined : String(q.limit) })}`),
+    getSettings: () => request('GET', '/settings'),
+    updateSettings: (body: BastionSettingsUpdate) => request('PATCH', '/settings', body),
+    listDeliveryProblems: (q: Partial<BastionDeliveryProblemListQuery> = {}) =>
+      request('GET', `/delivery-problems${qs({ limit: q.limit === undefined ? undefined : String(q.limit) })}`),
+    retryDelivery: (id: string) => request('POST', `/delivery-problems/${id}/retry`, {}),
+    auditLog: (q: Partial<BastionAuditLogQuery> = {}) =>
+      request(
+        'GET',
+        `/audit${qs({ action: q.action, subject_type: q.subject_type, cursor: q.cursor, limit: q.limit === undefined ? undefined : String(q.limit) })}`,
+      ),
+
+    // ── M10: search (spec 5.1 row 95). The platform search_everything reads this route
+    // directly (tools/search-tools.ts); the method is here so the client covers every
+    // agent-reachable route (test/bastion-parity.test.ts).
+    search: (q: Partial<BastionSearchQuery> & Pick<BastionSearchQuery, 'q'> & Partial<Asker>) =>
+      request('GET', `/search${qs({ q: q.q, limit: q.limit === undefined ? undefined : String(q.limit), asker_user_id: q.asker_user_id })}`),
   };
 }
 

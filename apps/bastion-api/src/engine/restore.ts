@@ -14,7 +14,7 @@
 // org stay blocked until an owner resolves the row.
 
 import { randomUUID } from 'node:crypto';
-import { withStorageTimeout } from '@bigbluebam/storage';
+import { type ObjectStat, type StorageDriver, withStorageTimeout } from '@bigbluebam/storage';
 import { compareEpochSeq, verifySeal } from '../lib/ledger-canonical.js';
 import { type EngineDeps, orgTx, type Tx } from './context.js';
 import { enqueueBastionEvent } from './outbox.js';
@@ -65,15 +65,30 @@ async function readJson(deps: EngineDeps, key: string): Promise<unknown> {
 async function listAll(deps: EngineDeps, prefix: string): Promise<string[]> {
   const storage = deps.storage;
   if (!storage) throw new StorageUnavailableError();
-  const keys: string[] = [];
-  let cursor: string | undefined;
-  for (let page = 0; page < 1000; page++) {
-    const res = await withStorageTimeout('list', storage.list(prefix, cursor), deps.putTimeoutMs);
-    for (const o of res.objects) keys.push(o.key);
-    if (!res.cursor) break;
+  return (await listObjects(storage, prefix, deps.putTimeoutMs)).map((o) => o.key);
+}
+
+/**
+ * The objects under a prefix one page at a time, starting after `startAfter`, until the listing
+ * says there are no more. No page cap: a listing is either complete or it throws (#313). A
+ * cursor that does not advance is an error, never a silent stop.
+ */
+export async function* listPages(storage: StorageDriver, prefix: string, timeoutMs: number, startAfter?: string): AsyncGenerator<ObjectStat[]> {
+  let cursor = startAfter;
+  for (;;) {
+    const res = await withStorageTimeout('list', storage.list(prefix, cursor), timeoutMs);
+    if (res.objects.length > 0) yield res.objects;
+    if (!res.cursor) return;
+    if (res.cursor === cursor) throw new Error(`Listing ${prefix} did not advance past ${cursor}.`);
     cursor = res.cursor;
   }
-  return keys;
+}
+
+/** Every object under a prefix (the seal check). */
+export async function listObjects(storage: StorageDriver, prefix: string, timeoutMs: number): Promise<ObjectStat[]> {
+  const out: ObjectStat[] = [];
+  for await (const page of listPages(storage, prefix, timeoutMs)) out.push(...page);
+  return out;
 }
 
 // Column ranges the identity is written into (0275_bastion_evidence.sql). bucket_epoch and

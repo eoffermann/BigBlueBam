@@ -57,6 +57,27 @@ export function envBool(defaultValue?: boolean) {
     : z.preprocess(parseEnvBool, z.boolean().default(defaultValue));
 }
 
+/**
+ * Reads one boolean environment flag through envBool, for code that runs outside a service's
+ * env.ts schema (boot hooks, the migrate runner) (#302). An unrecognized value throws, so a
+ * spelling like BBB_RLS_ENFORCE=enabled refuses to boot instead of silently choosing a side.
+ * Never compare an env flag to '1' / 'true' by hand: scripts/check-no-coerce-boolean.mjs fails
+ * CI on `env.X === '1'` style reads.
+ */
+export function envFlag(
+  name: string,
+  source: Record<string, string | undefined>,
+  defaultValue = false,
+): boolean {
+  const parsed = envBool(defaultValue).safeParse(source[name]);
+  if (!parsed.success) {
+    throw new Error(
+      `${name}=${JSON.stringify(source[name])} is not a boolean flag; use true/false, 1/0, yes/no or on/off`,
+    );
+  }
+  return parsed.data;
+}
+
 export const paginationSchema = z.object({
   cursor: z.string().optional(),
   limit: z

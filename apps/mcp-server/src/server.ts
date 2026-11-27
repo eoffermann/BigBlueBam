@@ -39,6 +39,7 @@ import { registerBraidTools } from './tools/braid-tools.js';
 import { registerBulwarkTools } from './tools/bulwark-tools.js';
 import { registerBurnTools } from './tools/burn-tools.js';
 import { registerBursarTools } from './tools/bursar-tools.js';
+import { registerBastionTools } from './tools/bastion-tools.js';
 import { registerBillTools } from './tools/bill-tools.js';
 import { registerBlankTools } from './tools/blank-tools.js';
 import { registerBlueprintTools } from './tools/blueprint-tools.js';
@@ -231,6 +232,7 @@ function createMcpServer(
   registerBulwarkTools(server, apiClient, env.BULWARK_API_URL, confirmTokenStore);
   registerBurnTools(server, apiClient, env.BURN_API_URL, confirmTokenStore);
   registerBursarTools(server, apiClient, env.BURSAR_API_URL, confirmTokenStore);
+  registerBastionTools(server, apiClient, env.BASTION_API_URL, undefined, confirmTokenStore);
   registerBillTools(server, apiClient, env.BILL_API_URL);
   registerBlankTools(server, apiClient, env.BLANK_API_URL);
   registerBlueprintTools(server, apiClient, env.BLUEPRINT_API_URL);
@@ -252,6 +254,7 @@ function createMcpServer(
     banterApiUrl: env.BANTER_API_URL,
     boardApiUrl: env.BOARD_API_URL,
     basisApiUrl: env.BASIS_API_URL,
+    bastionApiUrl: env.BASTION_API_URL,
   });
   registerResolveTools(server, apiClient, {
     bondApiUrl: env.BOND_API_URL,

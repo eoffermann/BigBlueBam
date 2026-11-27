@@ -28,21 +28,28 @@ export default async function questionnaireRoutes(fastify: FastifyInstance) {
   const can = (p: string) => fastify.requireCan(p);
   const deps = () => questionnaireDeps(fastify.log, fastify.redis);
   // asker_user_id (#217) is read by requireAskerCan and askerOf, never by the strict query schemas.
-  const query = (request: { query: unknown }) => {
+  // It is taken out of the query only on routes that honor it (#274); anywhere else it stays in and
+  // the strict schema refuses it, so a request to narrow can never silently come back wider.
+  const query = (request: { query: unknown }, honorsAsker: boolean) => {
     const raw = (request.query ?? {}) as Record<string, string | undefined>;
-    return Object.fromEntries(Object.entries(raw).filter(([k, v]) => k !== 'asker_user_id' && v !== undefined && v !== ''));
+    return Object.fromEntries(Object.entries(raw).filter(([k, v]) => !(honorsAsker && k === 'asker_user_id') && v !== undefined && v !== ''));
   };
   const askerOf = (request: { query: unknown }) => {
     const a = askerUserIdOf(request.query);
     return a === 'invalid' ? null : a;
   };
 
-  // Row 72.
-  fastify.get('/questionnaires', { preHandler: [requireAuth, can('bastion.questionnaire.read')] }, async (request, reply) => {
-    const parsed = bastionQuestionnaireListQuerySchema.safeParse(query(request));
-    if (!parsed.success) return validationError(request, reply, parsed.error);
-    return handled(request, reply, () => questionnaires.listQuestionnaires(deps(), viewerOf(request), parsed.data));
-  });
+  // Row 72. Titles, requesters (customer names) and deal links are customer data: with
+  // asker_user_id the asker must hold questionnaire.read too (#274, as rows 74 and 77).
+  fastify.get(
+    '/questionnaires',
+    { preHandler: [requireAuth, can('bastion.questionnaire.read'), fastify.requireAskerCan('bastion.questionnaire.read')] },
+    async (request, reply) => {
+      const parsed = bastionQuestionnaireListQuerySchema.safeParse(query(request, true));
+      if (!parsed.success) return validationError(request, reply, parsed.error);
+      return handled(request, reply, () => questionnaires.listQuestionnaires(deps(), viewerOf(request), parsed.data));
+    },
+  );
 
   // Row 73: from a Bin file (xlsx or csv) or pasted rows. The body is JSON (the file is already in Bin).
   fastify.post('/questionnaires', { preHandler: [requireAuth, can('bastion.questionnaire.write')], bodyLimit: 1024 * 1024 }, async (request, reply) => {
@@ -95,7 +102,7 @@ export default async function questionnaireRoutes(fastify: FastifyInstance) {
     async (request, reply) => {
       const id = idParam(request);
       if (!id) return notFound(request, reply);
-      const parsed = bastionQuestionnaireItemListQuerySchema.safeParse(query(request));
+      const parsed = bastionQuestionnaireItemListQuerySchema.safeParse(query(request, true));
       if (!parsed.success) return validationError(request, reply, parsed.error);
       return handled(request, reply, () => questionnaires.listItems(deps(), viewerOf(request), id, parsed.data, askerOf(request)));
     },
@@ -127,7 +134,7 @@ export default async function questionnaireRoutes(fastify: FastifyInstance) {
   fastify.get('/questionnaires/:id/export', { preHandler: [requireAuth, can('bastion.questionnaire.export')] }, async (request, reply) => {
     const id = idParam(request);
     if (!id) return notFound(request, reply);
-    const parsed = bastionQuestionnaireExportQuerySchema.safeParse(query(request));
+    const parsed = bastionQuestionnaireExportQuerySchema.safeParse(query(request, false));
     if (!parsed.success) return validationError(request, reply, parsed.error);
     return handled(request, reply, async () => {
       const out = await questionnaires.exportQuestionnaire(deps(), viewerOf(request), id, parsed.data.format);
@@ -136,19 +143,25 @@ export default async function questionnaireRoutes(fastify: FastifyInstance) {
     });
   });
 
-  // Row 81: draft one answer now (nothing saved).
-  fastify.post('/answers/draft', { preHandler: [requireAuth, can('bastion.questionnaire.write')] }, async (request, reply) => {
-    const parsed = bastionDraftAnswerSchema.safeParse(request.body ?? {});
-    if (!parsed.success) return validationError(request, reply, parsed.error);
-    return handled(request, reply, () => draftOneAnswer(autofillDeps(fastify.log, fastify.redis), viewerOf(request), parsed.data));
-  });
+  // Row 81: draft one answer now (nothing saved). The draft quotes the org's controls and approved
+  // answers, so with asker_user_id the asker must hold questionnaire.write and every citation must
+  // pass can_access for them too (#274).
+  fastify.post(
+    '/answers/draft',
+    { preHandler: [requireAuth, can('bastion.questionnaire.write'), fastify.requireAskerCan('bastion.questionnaire.write')] },
+    async (request, reply) => {
+      const parsed = bastionDraftAnswerSchema.safeParse(request.body ?? {});
+      if (!parsed.success) return validationError(request, reply, parsed.error);
+      return handled(request, reply, () => draftOneAnswer(autofillDeps(fastify.log, fastify.redis), viewerOf(request), parsed.data, undefined, askerOf(request)));
+    },
+  );
 
   // Row 82.
   fastify.get(
     '/answer-library',
     { preHandler: [requireAuth, can('bastion.answer_library.read'), fastify.requireAskerCan('bastion.answer_library.read')] },
     async (request, reply) => {
-      const parsed = bastionAnswerLibraryQuerySchema.safeParse(query(request));
+      const parsed = bastionAnswerLibraryQuerySchema.safeParse(query(request, true));
       if (!parsed.success) return validationError(request, reply, parsed.error);
       return handled(request, reply, () => questionnaires.listAnswerLibrary(deps(), viewerOf(request), parsed.data, askerOf(request)));
     },

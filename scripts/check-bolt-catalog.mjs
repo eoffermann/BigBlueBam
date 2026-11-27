@@ -12,6 +12,9 @@
  *      name is bare (no dotted source prefix).
  *   3. Treats every `enqueueBastionEvent('<event>', ...)` call as a `bastion`
  *      publisher (Bastion spec 8.1; scripts/lib/bolt-bastion-enqueues.mjs).
+ *   4. Issue #262: every object-literal payload key at those call sites must be
+ *      declared in the event's payload_schema (scripts/lib/bolt-payload-keys.mjs),
+ *      less the known drift in scripts/lib/bolt-payload-drift-baseline.json.
  *
  * Exits 1 on drift, 0 on clean. Intentionally minimal: this runs on every PR
  * and should never require a rebuild or a running database. All parsing is
@@ -27,11 +30,13 @@ import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
 import { BOLT_SOURCES_FILE, loadBoltSources } from './lib/bolt-sources.mjs';
 import { checkBastionEnqueues } from './lib/bolt-bastion-enqueues.mjs';
+import { applyDriftBaseline, checkPayloadCalls, parsePayloadSchemas } from './lib/bolt-payload-keys.mjs';
 import { checkPublishCalls } from './lib/bolt-publish-calls.mjs';
 
 const ROOT = resolve(new URL('..', import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, '$1'));
 const CATALOG_FILE = join(ROOT, 'apps', 'bolt-api', 'src', 'services', 'event-catalog.ts');
 const APPS_DIR = join(ROOT, 'apps');
+const DRIFT_BASELINE_FILE = join(ROOT, 'scripts', 'lib', 'bolt-payload-drift-baseline.json');
 const EVENT_TYPE_REGEX = /source:\s*['"]([a-z_]+)['"][\s\S]{0,300}?event_type:\s*['"]([a-z0-9_.]+)['"]/g;
 
 // Known legacy prefixed event names that predate the Wave 0.4 bare-name
@@ -70,7 +75,7 @@ function loadCatalog() {
     process.exit(2);
   }
 
-  return { pairs, sources };
+  return { pairs, sources, schemas: parsePayloadSchemas(text) };
 }
 
 // Recursively collect .ts files under apps/, skipping node_modules and dist/tests.
@@ -103,6 +108,7 @@ function checkCalls(catalog) {
   walkTsFiles(APPS_DIR, files);
 
   const violations = [];
+  const payloadViolations = [];
 
   for (const file of files) {
     let text;
@@ -117,7 +123,15 @@ function checkCalls(catalog) {
 
     // Every positional publisher (publishBoltEvent and publishBoltEventChecked, issue #200).
     violations.push(...checkPublishCalls(file, text, catalog, LEGACY_PREFIXED_ALLOWLIST));
+
+    // Issue #262: an object-literal payload may only send keys the event's payload_schema declares.
+    payloadViolations.push(...checkPayloadCalls(file, text, catalog.schemas));
   }
+
+  // Known drift outside the change that added the check is tracked in issues and baselined; the
+  // baseline may only shrink (an entry no longer sent is itself a violation).
+  const baseline = JSON.parse(readFileSync(DRIFT_BASELINE_FILE, 'utf8')).entries ?? {};
+  violations.push(...applyDriftBaseline(payloadViolations, baseline, DRIFT_BASELINE_FILE));
 
   return violations;
 }

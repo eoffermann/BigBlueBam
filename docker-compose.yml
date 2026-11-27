@@ -96,8 +96,12 @@ services:
         condition: service_healthy
       migrate:
         condition: service_completed_successfully
+    # The api proxies internal LLM calls of up to 180 s (#294): a stop lets them finish. The same
+    # value reaches the process as STOP_GRACE_SECONDS, which sizes its drain (shared stop-grace.ts).
+    stop_grace_period: ${API_STOP_GRACE_SECONDS:-190}s
     environment:
       NODE_ENV: production
+      STOP_GRACE_SECONDS: ${API_STOP_GRACE_SECONDS:-190}
       DATABASE_URL: postgresql://${POSTGRES_USER:?}:${POSTGRES_PASSWORD:?}@postgres:5432/bigbluebam
       REDIS_URL: redis://:${REDIS_PASSWORD:?REDIS_PASSWORD is required}@redis:6379
       S3_ENDPOINT: http://minio:9000
@@ -118,6 +122,11 @@ services:
       SMTP_PASS: ${SMTP_PASS:-}
       EMAIL_FROM: ${SMTP_FROM:-noreply@bigbluebam.com}
       PUBLIC_URL: ${PUBLIC_URL:-http://localhost}
+      # banter-api's private base (assignment DMs). One name across api, bureau-api, worker and
+      # mcp-server (#303).
+      BANTER_API_URL: http://banter-api:4002
+      # helpdesk-api's private base (agent queue proxy). Same name as mcp-server and blank-api.
+      HELPDESK_API_URL: http://helpdesk-api:4001
       # env.ts auto-promotes COOKIE_SECURE to true whenever NODE_ENV=production
       # (which it always is in this image). Browsers silently drop a Secure
       # cookie sent over plain HTTP, so the session cookie never comes back
@@ -266,6 +275,11 @@ services:
       TRACKING_BASE_URL: ${PUBLIC_URL:-http://localhost}
       INTERNAL_SERVICE_SECRET: ${INTERNAL_SERVICE_SECRET:-}
       BOLT_API_INTERNAL_URL: http://bolt-api:4006
+      # banter-api's private base (call-transcription callback, #303).
+      BANTER_API_URL: http://banter-api:4002
+      # Bureau summon fan-out can-read preflights (fail closed, #300).
+      BOARD_INTERNAL_URL: http://board-api:4008
+      BRIEF_INTERNAL_URL: http://brief-api:4005
       # Book task #63: the book-calendar-sync sweep calls the Book API's
       # internal sync-due route to run the external-calendar sync engine.
       BOOK_API_INTERNAL_URL: http://book-api:4012
@@ -273,6 +287,8 @@ services:
       # platform llm-provider (BBB_API_INTERNAL_URL) and recall/re-embed into
       # Qdrant. Both are degradable request-time deps (spec 9.2).
       BBB_API_INTERNAL_URL: http://api:4000
+      # The basis-explain narrative call's deadline, sent to the LLM proxy as timeout_ms (#283).
+      BASIS_LLM_TIMEOUT_MS: ${BASIS_LLM_TIMEOUT_MS:-60000}
       QDRANT_URL: ${QDRANT_URL:-http://qdrant:6333}
       # braid-proposal-reconcile drives approved/rejected proposals through braid-api's
       # single merge executor (POST /internal/proposal-decided). Backstop for lost Bolt
@@ -838,6 +854,8 @@ services:
       - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379
       - SESSION_SECRET=${SESSION_SECRET}
       - BBB_API_INTERNAL_URL=http://api:4000
+      # bond-api's private base (booking-page Bond contact, #305).
+      - BOND_API_INTERNAL_URL=http://bond-api:4009
       - NODE_ENV=production
       - PORT=4012
       - HOST=0.0.0.0
@@ -903,7 +921,7 @@ services:
       - RATE_LIMIT_MAX=100
       - RATE_LIMIT_WINDOW_MS=60000
       - QUERY_TIMEOUT_MS=${BASIS_QUERY_TIMEOUT_MS:-10000}
-      - LLM_TIMEOUT_MS=${BASIS_LLM_TIMEOUT_MS:-15000}
+      - LLM_TIMEOUT_MS=${BASIS_LLM_TIMEOUT_MS:-60000}
       - EXPLANATION_CACHE_TTL_SECONDS=${BASIS_EXPLANATION_CACHE_TTL:-3600}
       - BBB_PERMISSIONS_ENFORCE=${BBB_PERMISSIONS_ENFORCE:-warn}
       # Must be non-empty for the Bench internal query route + narrative path;
@@ -1177,7 +1195,10 @@ services:
       - BASTION_ROOM_IP_SALT=${BASTION_ROOM_IP_SALT:-}
       - BASTION_FEED_KEY_PEPPER=${BASTION_FEED_KEY_PEPPER:-}
       - BASTION_LLM_TIMEOUT_MS=${BASTION_LLM_TIMEOUT_MS:-60000}
+      - STOP_GRACE_SECONDS=${BASTION_STOP_GRACE_SECONDS:-75}
       - BASTION_LLM_MAX_TOKENS=${BASTION_LLM_MAX_TOKENS:-8192}
+      - BASTION_QUESTIONNAIRE_MAX_TOKENS=${BASTION_QUESTIONNAIRE_MAX_TOKENS:-2048}
+      - BASTION_REWORD_MAX_TOKENS=${BASTION_REWORD_MAX_TOKENS:-2048}
       - BASTION_ENGINE_TIMEOUT_MS=${BASTION_ENGINE_TIMEOUT_MS:-30000}
       - BASTION_PROBE_TIMEOUT_MS=${BASTION_PROBE_TIMEOUT_MS:-8000}
       - BASTION_PUT_TIMEOUT_MS=${BASTION_PUT_TIMEOUT_MS:-5000}
@@ -1193,8 +1214,10 @@ services:
         condition: service_healthy
       minio:
         condition: service_started
-    # SIGTERM drain long enough to finish an in-flight LLM call (spec 7.3).
-    stop_grace_period: 75s
+    # SIGTERM drain long enough to finish an in-flight LLM call (spec 7.3, #284). The same value
+    # reaches the process as STOP_GRACE_SECONDS; bastion-api refuses to boot when
+    # BASTION_LLM_TIMEOUT_MS needs more (raise BASTION_STOP_GRACE_SECONDS with it).
+    stop_grace_period: ${BASTION_STOP_GRACE_SECONDS:-75}s
     healthcheck:
       # /health, NOT /readyz (there is no /readyz anywhere in this platform).
       test: ["CMD", "curl", "-sf", "http://localhost:4024/health"]
@@ -1320,6 +1343,9 @@ services:
       - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379
       - SESSION_SECRET=${SESSION_SECRET}
       - BBB_API_INTERNAL_URL=http://api:4000
+      # Form routing actions (#305): bond-api contact upsert, helpdesk-api ticket create.
+      - BOND_API_INTERNAL_URL=http://bond-api:4009
+      - HELPDESK_API_URL=http://helpdesk-api:4001
       - NODE_ENV=production
       - PORT=4013
       - HOST=0.0.0.0
@@ -1590,6 +1616,8 @@ services:
       - BRIEF_INTERNAL_URL=http://brief-api:4005
       - BBB_API_INTERNAL_URL=http://api:4000
       - BOLT_API_INTERNAL_URL=http://bolt-api:4006
+      # banter-api's private base (leave-a-note DM, #303).
+      - BANTER_API_URL=http://banter-api:4002
       - NODE_ENV=production
       - PORT=4015
       - HOST=0.0.0.0

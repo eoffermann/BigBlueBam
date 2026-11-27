@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { envBool } from '@bigbluebam/shared';
+import { envBool, llmTimeoutEnvSchema } from '@bigbluebam/shared';
 
 const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
@@ -48,7 +48,9 @@ const envSchema = z.object({
   COOKIE_DOMAIN: z.string().optional(),
   COOKIE_SECURE: envBool(false),
 
-  LLM_TIMEOUT_MS: z.coerce.number().int().positive().default(15000),
+  // One LLM call's deadline, sent to the proxy as timeout_ms (#283). The spec names no value, so
+  // it is the proxy's own default; refused at boot outside the proxy's 1 s..180 s bounds.
+  LLM_TIMEOUT_MS: llmTimeoutEnvSchema(),
   UPSTREAM_TIMEOUT_MS: z.coerce.number().int().positive().default(10000),
 
   // Bounded, inert document parsing (spec 2.4 point 15).
@@ -61,7 +63,7 @@ const envSchema = z.object({
 
   // Platform RLS posture. Burn binds the app.current_org_id GUC per request regardless
   // (see plugins/rls.ts); this flag only controls whether a binding failure is fatal.
-  BBB_RLS_ENFORCE: z.string().optional(),
+  BBB_RLS_ENFORCE: envBool(false),
 });
 
 export type Env = z.infer<typeof envSchema>;

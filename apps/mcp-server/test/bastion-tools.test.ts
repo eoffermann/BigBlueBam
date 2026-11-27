@@ -1,11 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { existsSync, readFileSync, readdirSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-// Bastion's MCP handlers are written and tested from M2 on but stay OUT of the registered,
-// counted tool surface until the M11 merge unit (spec 5.4). This suite pins both halves: the
-// handlers call the right bastion-api routes with shared-Zod-typed input, and nothing reads
-// them as a registered tool module yet.
+// Bastion's MCP handlers were written and tested from M2 on under src/tools-pending and moved
+// into the registered, counted tool surface in the M11 merge unit (spec 5.4). This suite pins
+// both halves: the handlers call the right bastion-api routes with shared-Zod-typed input, and
+// server.ts registers the module exactly once.
 
 const captured: Array<{ name: string; input: Record<string, unknown>; handler: (a: never) => Promise<unknown> }> = [];
 vi.mock('../src/lib/register-tool.js', () => ({
@@ -15,7 +15,7 @@ vi.mock('../src/lib/register-tool.js', () => ({
 }));
 
 const SRC = join(__dirname, '..', 'src');
-const PENDING = readFileSync(join(SRC, 'tools-pending', 'bastion.ts'), 'utf8');
+const PENDING = readFileSync(join(SRC, 'tools', 'bastion-tools.ts'), 'utf8');
 const SERVER = readFileSync(join(SRC, 'server.ts'), 'utf8');
 
 const FW = '11111111-1111-4111-8111-111111111111';
@@ -46,7 +46,7 @@ function memoryTokenStore() {
 
 async function load(store: ReturnType<typeof memoryTokenStore> | null = memoryTokenStore()) {
   captured.length = 0;
-  const { registerBastionTools } = await import('../src/tools-pending/bastion.js');
+  const { registerBastionTools } = await import('../src/tools/bastion-tools.js');
   const api = { token: 'bbam_test' } as never;
   registerBastionTools({} as never, api, 'http://bastion-api:4024/v1/', fakeFetch, store ?? undefined);
   return (name: string) => {
@@ -60,22 +60,30 @@ beforeEach(() => {
   calls = [];
 });
 
-describe('Bastion pending tools stay out of the registered surface until M11', () => {
-  it('lives under src/tools-pending, not src/tools, and is not named *-tools.ts', () => {
-    expect(existsSync(join(SRC, 'tools', 'bastion-tools.ts'))).toBe(false);
-    expect(readdirSync(join(SRC, 'tools-pending')).filter((f) => f.endsWith('-tools.ts'))).toEqual([]);
+describe('Bastion tools are a registered tool module (M11)', () => {
+  it('lives at src/tools/bastion-tools.ts and the pending directory is gone', () => {
+    expect(existsSync(join(SRC, 'tools', 'bastion-tools.ts'))).toBe(true);
+    expect(existsSync(join(SRC, 'tools-pending', 'bastion.ts'))).toBe(false);
   });
 
-  it('is not imported or registered by server.ts', () => {
-    expect(SERVER).not.toMatch(/bastion/i);
+  it('is imported and registered exactly once by server.ts, with the confirm token store', () => {
+    expect(SERVER).toMatch(/^import \{ registerBastionTools \} from '\.\/tools\/bastion-tools\.js';$/m);
+    const calls = SERVER.match(/registerBastionTools\(/g) ?? [];
+    expect(calls.length).toBe(1);
+    expect(SERVER).toMatch(
+      /registerBastionTools\(server, apiClient, env\.BASTION_API_URL, undefined, confirmTokenStore\);/,
+    );
+    // The search_everything arm (M10, spec 8.5) keeps its URL.
+    expect(SERVER).toMatch(/^\s*bastionApiUrl: env\.BASTION_API_URL,\s*$/m);
   });
 
   it('every handler goes through registerTool (agent policies apply once registered)', () => {
     // 14 milestone handlers (M3 + M4) + 9 #196 parity handlers + M5 (7 evidence + 2 feed admin;
     // withdrawal has no tool, #217) + M6 (9 gap, fix, exception and drift handlers) + M7 (6 policy
     // handlers; attest has none) + the not-applicable suggestions read (#238) + M8 (9 questionnaire
-    // and answer-library handlers; approve and the export have none).
-    expect((PENDING.match(/registerTool\(server, \{/g) ?? []).length).toBe(57);
+    // and answer-library handlers; approve and the export have none) + M9 (9 sharing, settings and
+    // audit handlers; room create, revoke and unlock and the packet download have none).
+    expect((PENDING.match(/registerTool\(server, \{/g) ?? []).length).toBe(66);
     expect(PENDING).not.toMatch(/server\.tool\(/);
   });
 });
@@ -90,7 +98,8 @@ describe('Bastion M3 tool handlers', () => {
       BASTION_DECISION_TOOL_NAMES,
       BASTION_POLICY_TOOL_NAMES,
       BASTION_QUESTIONNAIRE_TOOL_NAMES,
-    } = await import('../src/tools-pending/bastion.js');
+      BASTION_SHARING_TOOL_NAMES,
+    } = await import('../src/tools/bastion-tools.js');
     expect(captured.map((c) => c.name).sort()).toEqual(
       [
         ...BASTION_PENDING_TOOL_NAMES,
@@ -99,6 +108,7 @@ describe('Bastion M3 tool handlers', () => {
         ...BASTION_DECISION_TOOL_NAMES,
         ...BASTION_POLICY_TOOL_NAMES,
         ...BASTION_QUESTIONNAIRE_TOOL_NAMES,
+        ...BASTION_SHARING_TOOL_NAMES,
       ].sort(),
     );
   });
@@ -262,7 +272,7 @@ describe('Bastion M3 tool handlers', () => {
 
   it('surfaces a bastion-api error as an MCP error result', async () => {
     captured.length = 0;
-    const { registerBastionTools } = await import('../src/tools-pending/bastion.js');
+    const { registerBastionTools } = await import('../src/tools/bastion-tools.js');
     registerBastionTools({} as never, {} as never, 'http://b/v1', async () =>
       new Response(JSON.stringify({ error: { code: 'COMPILE_RUNNING' } }), { status: 409 }),
     );
@@ -662,15 +672,28 @@ describe('Bastion M8 tools (questionnaires and the answer library)', () => {
 
   it('reads call the right routes and pass asker_user_id through', async () => {
     const tool = await load();
-    await tool('bastion_list_questionnaires').handler({ status: 'in_review' } as never);
+    await tool('bastion_list_questionnaires').handler({ status: 'in_review', asker_user_id: ASKER } as never);
     await tool('bastion_get_questionnaire').handler({ questionnaire_id: Q, needs_review: true, asker_user_id: ASKER } as never);
-    await tool('bastion_search_answer_library').handler({ q: 'mfa', include_stale: false } as never);
+    await tool('bastion_search_answer_library').handler({ q: 'mfa', include_stale: false, asker_user_id: ASKER } as never);
+    await tool('bastion_draft_answer').handler({ question: 'Do you use MFA?', asker_user_id: ASKER } as never);
     expect(calls.map((c) => `${c.method} ${c.url}`)).toEqual([
-      'GET http://bastion-api:4024/v1/questionnaires?status=in_review',
+      `GET http://bastion-api:4024/v1/questionnaires?status=in_review&asker_user_id=${ASKER}`,
       `GET http://bastion-api:4024/v1/questionnaires/${Q}?asker_user_id=${ASKER}`,
       `GET http://bastion-api:4024/v1/questionnaires/${Q}/items?needs_review=true&asker_user_id=${ASKER}`,
-      'GET http://bastion-api:4024/v1/answer-library?q=mfa&include_stale=false',
+      `GET http://bastion-api:4024/v1/answer-library?q=mfa&include_stale=false&asker_user_id=${ASKER}`,
+      `POST http://bastion-api:4024/v1/answers/draft?asker_user_id=${ASKER}`,
     ]);
+  });
+
+  it('the questionnaire and answer-library reads require asker_user_id, like the evidence reads (#274, #217)', async () => {
+    const tool = await load();
+    for (const name of ['bastion_list_questionnaires', 'bastion_get_questionnaire', 'bastion_search_answer_library', 'bastion_draft_answer']) {
+      const asker = tool(name).input.asker_user_id as { safeParse: (v: unknown) => { success: boolean } } | undefined;
+      expect(asker, name).toBeDefined();
+      expect(asker!.safeParse(undefined).success, name).toBe(false);
+      expect(asker!.safeParse('not-a-user').success, name).toBe(false);
+      expect(asker!.safeParse(ASKER).success, name).toBe(true);
+    }
   });
 
   it('writes are typed off the shared Zod', async () => {
@@ -679,7 +702,7 @@ describe('Bastion M8 tools (questionnaires and the answer library)', () => {
     await tool('bastion_create_questionnaire').handler({ title: 'Pasted', pasted_text: 'Question\nDo you use MFA?' } as never);
     await tool('bastion_questionnaire_autofill').handler({ questionnaire_id: Q } as never);
     await tool('bastion_answer_questionnaire_item').handler({ item_id: ITEM, review_status: 'edited', final_answer: 'Yes.' } as never);
-    await tool('bastion_draft_answer').handler({ question: 'Do you use MFA?' } as never);
+    await tool('bastion_draft_answer').handler({ question: 'Do you use MFA?', asker_user_id: ASKER } as never);
     await tool('bastion_update_answer_library').handler({ answer_id: ITEM, stale: false } as never);
     await tool('bastion_update_questionnaire').handler({ questionnaire_id: Q, title: 'Howell v2' } as never);
     expect(calls.map((c) => `${c.method} ${c.url}`)).toEqual([
@@ -687,13 +710,13 @@ describe('Bastion M8 tools (questionnaires and the answer library)', () => {
       'POST http://bastion-api:4024/v1/questionnaires',
       `POST http://bastion-api:4024/v1/questionnaires/${Q}/autofill`,
       `PATCH http://bastion-api:4024/v1/questionnaire-items/${ITEM}`,
-      'POST http://bastion-api:4024/v1/answers/draft',
+      `POST http://bastion-api:4024/v1/answers/draft?asker_user_id=${ASKER}`,
       `PATCH http://bastion-api:4024/v1/answer-library/${ITEM}`,
       `PATCH http://bastion-api:4024/v1/questionnaires/${Q}`,
     ]);
     expect(calls[0]!.body).toEqual({ title: 'Howell', source: { kind: 'bin_asset', bin_asset_id: ASSET } });
     expect(calls[1]!.body).toEqual({ title: 'Pasted', source: { kind: 'pasted', text: 'Question\nDo you use MFA?', format: 'tsv' } });
-    expect(calls[2]!.body).toEqual({ redraft: false });
+    expect(calls[2]!.body).toEqual({ redraft: false, use_ai: true });
     expect(calls[4]!.body).toEqual({ question: 'Do you use MFA?', answer_kind: 'yes_no_text' });
   });
 
@@ -710,5 +733,82 @@ describe('Bastion M8 tools (questionnaires and the answer library)', () => {
     await load();
     expect(PENDING).not.toMatch(/\/questionnaires\/\$\{[^}]+\}\/(approve|export)/);
     expect(captured.map((c) => c.name).join(' ')).not.toMatch(/approve_questionnaire|export_questionnaire/);
+  });
+});
+
+describe('Bastion M9 sharing, settings and audit tools', () => {
+  const ROOM = '99999999-9999-4999-8999-999999999991';
+  const REQ = '99999999-9999-4999-8999-999999999992';
+  const DEAD = '99999999-9999-4999-8999-999999999993';
+  const FWID = '99999999-9999-4999-8999-999999999994';
+
+  it('each tool calls its spec route with the shared-Zod body', async () => {
+    const tool = await load();
+    await tool('bastion_auditor_room_view').handler({ room_id: ROOM } as never);
+    await tool('bastion_respond_auditor_request').handler({ request_id: REQ, status: 'answered', answer_note: 'See the 2-Step report.' } as never);
+    await tool('bastion_create_export').handler({ framework_id: FWID, period_start: '2026-09-01', period_end: '2026-11-26', include_restricted: false } as never);
+    await tool('bastion_list_exports').handler({ status: 'succeeded' } as never);
+    await tool('bastion_get_settings').handler({} as never);
+    await tool('bastion_update_settings').handler({ settings: { auditor_room_max_days: 60 } } as never);
+    await tool('bastion_list_delivery_problems').handler({} as never);
+    await tool('bastion_retry_delivery').handler({ delivery_id: DEAD } as never);
+    await tool('bastion_audit_log').handler({ action: 'auditor_room.create', limit: 10 } as never);
+    expect(calls.map((c) => `${c.method} ${c.url}`)).toEqual([
+      `GET http://bastion-api:4024/v1/auditor-rooms/${ROOM}/preview`,
+      `PATCH http://bastion-api:4024/v1/auditor-requests/${REQ}`,
+      'POST http://bastion-api:4024/v1/exports',
+      'GET http://bastion-api:4024/v1/exports?status=succeeded',
+      'GET http://bastion-api:4024/v1/settings',
+      'PATCH http://bastion-api:4024/v1/settings',
+      'GET http://bastion-api:4024/v1/delivery-problems',
+      `POST http://bastion-api:4024/v1/delivery-problems/${DEAD}/retry`,
+      'GET http://bastion-api:4024/v1/audit?action=auditor_room.create&limit=10',
+    ]);
+    expect(calls[1]!.body).toEqual({ status: 'answered', answer_note: 'See the 2-Step report.' });
+    expect(calls[2]!.body).toEqual({ framework_id: FWID, period_start: '2026-09-01', period_end: '2026-11-26', include_restricted: false });
+    expect(calls[5]!.body).toEqual({ auditor_room_max_days: 60 });
+  });
+
+  it('refuses invalid input before calling bastion-api', async () => {
+    const tool = await load();
+    const noNote = (await tool('bastion_respond_auditor_request').handler({ request_id: REQ, status: 'answered' } as never)) as { isError?: boolean };
+    const tooLong = (await tool('bastion_create_export').handler({ framework_id: FWID, period_start: '2025-01-01', period_end: '2026-11-26' } as never)) as {
+      isError?: boolean;
+    };
+    const floors = (await tool('bastion_update_settings').handler({ settings: { questionnaire_high_floor: 0.6, questionnaire_medium_floor: 0.7 } } as never)) as {
+      isError?: boolean;
+    };
+    const empty = (await tool('bastion_update_settings').handler({ settings: {} } as never)) as { isError?: boolean };
+    expect([noNote.isError, tooLong.isError, floors.isError, empty.isError]).toEqual([true, true, true, true]);
+    expect(calls).toHaveLength(0);
+  });
+
+  it('has no tool that opens, closes or unlocks a room, or reads the public room or a packet zip', async () => {
+    await load();
+    const names = captured.map((c) => c.name).join(' ');
+    expect(names).not.toMatch(/create_auditor_room|revoke_auditor_room|unlock_auditor_room|download/);
+    const CLIENT = readFileSync(join(SRC, 'clients', 'bastion-client.ts'), 'utf8');
+    expect(CLIENT).not.toMatch(/'POST', '\/auditor-rooms'|auditor-rooms\/\$\{[^}]+\}\/(revoke|unlock)|\/public\/room|\/exports\/\$\{[^}]+\}\/download/);
+  });
+});
+
+describe('Bastion M10 client completion', () => {
+  it('bastion_control_status reads just the checks with checks_only (row 16)', async () => {
+    const tool = await load();
+    await tool('bastion_control_status').handler({ control_id: CTRL } as never);
+    await tool('bastion_control_status').handler({ control_id: CTRL, checks_only: true } as never);
+    expect(calls.map((c) => `${c.method} ${c.url}`)).toEqual([
+      `GET http://bastion-api:4024/v1/controls/${CTRL}`,
+      `GET http://bastion-api:4024/v1/controls/${CTRL}/assertions`,
+    ]);
+  });
+
+  it('the client reads GET /search (row 95) with the asker, for search_everything', async () => {
+    const { createBastionClient } = await import('../src/clients/bastion-client.js');
+    const client = createBastionClient('http://bastion-api:4024/v1/', { token: 'bbam_test' } as never, fakeFetch);
+    await client.search({ q: 'laptop encryption', limit: 5, asker_user_id: ASSERTION });
+    expect(calls.map((c) => `${c.method} ${c.url}`)).toEqual([
+      `GET http://bastion-api:4024/v1/search?q=laptop+encryption&limit=5&asker_user_id=${ASSERTION}`,
+    ]);
   });
 });

@@ -1,0 +1,238 @@
+# Bastion - continuous compliance readiness for SOC 2 and ISO 27001.
+#
+# Recipes drive the docs-capture engine. Every route is confirmed against
+# apps/bastion/src/app.tsx parseRoute: /bastion/ (Readiness), /bastion/setup,
+# /bastion/controls, /bastion/controls/:id (Control detail), /bastion/coverage
+# (Evidence map), /bastion/gaps (What to fix first), /bastion/evidence (Evidence
+# locker), /bastion/review (Review queue), /bastion/policies, /bastion/attest
+# (Policies to read), /bastion/questionnaires, /bastion/questionnaires/:id,
+# /bastion/sharing, /bastion/settings and /bastion/room (the public auditor room,
+# token in the URL fragment). None invented.
+#
+# Identity is `admin`, which the docs-capture environment resolves to the gilligan
+# cast (skipper@gilligantravel.example) - GILLIGAN data only, never the generic
+# e2e org. The stack is seeded by scripts/seed-gilligan/bastion.mjs before capture
+# (expectations in scripts/seed-gilligan/bastion.expectations.mjs), so there are
+# no `content` blocks: each view captures the seeded SOC 2 + ISO 27001 setup with
+# 4 checks left unconfirmed, the 2-Step Verification report and Mary Ann's
+# background-check statement, the Radio Relay key exception, the laptop-encryption
+# top gap, the Island Information Security Policy (5 of 7 read), the Howell
+# Industries Vendor Security Review, and the Lagoon & Reef CPAs auditor room.
+#
+# Recipe ids are global, so each carries the `bastion-` prefix, which the bridge
+# strips. The ids and `doc.order` values produce exactly the numbered files that
+# docs/apps/bastion/help.md and guide.md already reference (01-readiness.png ...
+# 14-auditor-room.png) through scripts/docs/bridge.mjs. Detail routes (:id) need a
+# runtime id, so they are reached by clicking a seeded row. The `-dark` siblings
+# share their light sibling's `doc.order` so the bridge pairs them into
+# screenshots/light and screenshots/dark; the marketing section
+# (site/src/components/sections/bastion-section.tsx) uses readiness,
+# what-to-fix-first and control-detail in light and readiness in dark.
+#
+# The auditor room (14) needs a live room token, which is shown once when a room
+# is created and is never stored. Before capturing, create a room on
+# /bastion/sharing as Skipper (no passcode, ISO 27001), copy the link, and export
+# the part after "#" as BASTION_ROOM_TOKEN. Without it the navigate step is
+# skipped and the recipe FAILS on its expect, so it never writes a misleading
+# image. Revoke the room afterwards.
+
+- id: bastion-readiness
+  app: bastion
+  demonstrates: "Readiness: the four numbers kept apart (Proven by the suite, Proven by evidence you provided, Not met with its risk-accepted count, Can't prove yet) with Not set up yet beside them, the denominator sentence, the top gaps and evidence expiring soon."
+  route: /bastion/
+  identity: admin
+  interactions:
+    - { action: waitFor, selector: main, optional: true }
+    - { action: waitFor, selector: "text=Not set up yet", optional: true }
+  expect: ["text=Readiness", "text=Not set up yet"]
+  expectNot: "text=Please log in"
+  capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  doc: { order: 1, label: "Readiness" }
+
+- id: bastion-readiness-dark
+  app: bastion
+  demonstrates: "Readiness in dark theme (marketing/retina)."
+  route: /bastion/
+  identity: admin
+  interactions:
+    - { action: waitFor, selector: main, optional: true }
+    - { action: waitFor, selector: "text=Not set up yet", optional: true }
+  expect: ["text=Readiness", "text=Not set up yet"]
+  expectNot: "text=Please log in"
+  capture: { target: fullPage, viewport: desktop-1440, theme: dark, deviceScaleFactor: 2 }
+  doc: { order: 1, label: "Readiness" }
+
+- id: bastion-setup
+  app: bastion
+  demonstrates: "Setup: the adopted frameworks, the company questions, the Compliance project and the proposed checks waiting to be confirmed (story: set up Bastion for a first SOC 2 review)."
+  route: /bastion/setup
+  identity: admin
+  interactions:
+    - { action: waitFor, selector: main, optional: true }
+  expect: "text=Set up Bastion"
+  expectNot: "text=Please log in"
+  capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  doc: { order: 2, label: "Setup" }
+
+- id: bastion-controls
+  app: bastion
+  demonstrates: "Controls: every control with its state in words and its SOC 2 and ISO 27001 requirement codes (CC6.1 and A.5.17 on two-step sign-in)."
+  route: /bastion/controls
+  identity: admin
+  interactions:
+    - { action: waitFor, selector: main, optional: true }
+    - { action: waitFor, selector: "text=Two-step sign-in is required", optional: true }
+  expect: ["text=Controls", "text=Two-step sign-in is required"]
+  expectNot: "text=Please log in"
+  capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  doc: { order: 3, label: "Controls" }
+
+- id: bastion-control-detail
+  app: bastion
+  demonstrates: "Control detail for the API key control: Not met, risk accepted, the Radio Relay key as the one failing item, the accepted risk with its reason and expiry, and the evidence history (story: accept the risk on the Radio Relay key)."
+  route: /bastion/controls
+  identity: admin
+  interactions:
+    - { action: waitFor, selector: "text=API keys are replaced and unused ones removed" }
+    - { action: click, selector: "button:has-text('API keys are replaced and unused ones removed')" }
+    - { action: waitFor, selector: "h1:has-text('API keys are replaced and unused ones removed')" }
+    - { action: wait, ms: 1500 }
+  expect: "h1:has-text('API keys are replaced and unused ones removed')"
+  expectNot: "text=Please log in"
+  capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  doc: { order: 4, label: "Control detail" }
+
+- id: bastion-evidence-map
+  app: bastion
+  demonstrates: "Evidence map: every control grouped by where its proof comes from (suite checks, feeds, uploaded files, self-attested statements), with not-applicable controls listed apart (story: read where you stand)."
+  route: /bastion/coverage
+  identity: admin
+  interactions:
+    - { action: waitFor, selector: main, optional: true }
+    - { action: wait, ms: 1000 }
+  expect: "text=Evidence map"
+  expectNot: "text=Please log in"
+  capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  doc: { order: 5, label: "Evidence map" }
+
+- id: bastion-what-to-fix-first
+  app: bastion
+  demonstrates: "What to fix first: the ranked gaps with Laptops are encrypted on top, each with its drafted fix, and the accepted risks (story: fix the top gap)."
+  route: /bastion/gaps
+  identity: admin
+  interactions:
+    - { action: waitFor, selector: main, optional: true }
+    - { action: waitFor, selector: "text=Laptops are encrypted", optional: true }
+  expect: ["text=What to fix first", "text=Laptops are encrypted"]
+  expectNot: "text=Please log in"
+  capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  doc: { order: 6, label: "What to fix first" }
+
+- id: bastion-evidence-locker
+  app: bastion
+  demonstrates: "Evidence locker: the Professor's Google Workspace 2-Step Verification report and Mary Ann's background-check statement with their review state and expiry, scan labels, and the Crew roster export feed (story: upload evidence and have it accepted)."
+  route: /bastion/evidence
+  identity: admin
+  interactions:
+    - { action: waitFor, selector: main, optional: true }
+    - { action: waitFor, selector: "text=Google Workspace 2-Step Verification report", optional: true }
+  expect: ["text=Evidence locker", "text=Google Workspace 2-Step Verification report"]
+  expectNot: "text=Please log in"
+  capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  doc: { order: 7, label: "Evidence locker" }
+
+- id: bastion-review-queue
+  app: bastion
+  demonstrates: "Review queue: drafted fixes and proposed accepted risks waiting for a person's decision."
+  route: /bastion/review
+  identity: admin
+  interactions:
+    - { action: waitFor, selector: main, optional: true }
+    - { action: wait, ms: 1000 }
+  expect: "text=Review queue"
+  expectNot: "text=Please log in"
+  capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  doc: { order: 8, label: "Review queue" }
+
+- id: bastion-policies
+  app: bastion
+  demonstrates: "Policies: the Island Information Security Policy linked from Beacon, with 5 of 7 castaways having read the current version (story: get everyone to read the security policy)."
+  route: /bastion/policies
+  identity: admin
+  interactions:
+    - { action: waitFor, selector: main, optional: true }
+    - { action: waitFor, selector: "text=Island Information Security Policy", optional: true }
+  expect: ["h1:has-text('Policies')", "text=Island Information Security Policy"]
+  expectNot: "text=Please log in"
+  capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  doc: { order: 9, label: "Policies" }
+
+- id: bastion-policies-to-read
+  app: bastion
+  demonstrates: "Policies to read: Skipper's own list, with the security policy he acknowledged and the version he read."
+  route: /bastion/attest
+  identity: admin
+  interactions:
+    - { action: waitFor, selector: main, optional: true }
+    - { action: waitFor, selector: "text=Island Information Security Policy", optional: true }
+  expect: ["text=Policies to read", "text=Island Information Security Policy"]
+  expectNot: "text=Please log in"
+  capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  doc: { order: 10, label: "Policies to read" }
+
+- id: bastion-questionnaires
+  app: bastion
+  demonstrates: "The Howell Industries Vendor Security Review: drafted answers with the confidence words (Sure, Check this, Needs an expert) and their citations; the laptop row says it cannot be proven and the key row names the accepted exception (story: answer the Howell questionnaire)."
+  route: /bastion/questionnaires
+  identity: admin
+  interactions:
+    - { action: waitFor, selector: "text=Howell Industries Vendor Security Review" }
+    - { action: click, selector: "button:has-text('Howell Industries Vendor Security Review')" }
+    - { action: waitFor, selector: "h1:has-text('Howell Industries Vendor Security Review')" }
+    - { action: waitFor, selector: "text=Needs an expert", optional: true }
+    - { action: wait, ms: 1000 }
+  expect: ["h1:has-text('Howell Industries Vendor Security Review')", "text=Needs an expert"]
+  expectNot: "text=Please log in"
+  capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  doc: { order: 11, label: "Questionnaires" }
+
+- id: bastion-sharing
+  app: bastion
+  demonstrates: "Sharing: the Lagoon & Reef CPAs auditor room with its access log, auditor questions, and the ISO 27001 audit packet with the Statement of Applicability (stories: share readiness with your auditor, build an audit packet)."
+  route: /bastion/sharing
+  identity: admin
+  interactions:
+    - { action: waitFor, selector: main, optional: true }
+    - { action: waitFor, selector: "text=Lagoon & Reef CPAs, Type I readiness", optional: true }
+  expect: ["h1:has-text('Sharing')", "text=Lagoon & Reef CPAs, Type I readiness"]
+  expectNot: "text=Please log in"
+  capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  doc: { order: 12, label: "Sharing" }
+
+- id: bastion-settings
+  app: bastion
+  demonstrates: "Settings: the nightly check time, limits, delivery problems with Try again, and evidence integrity (story: acknowledge a database restore)."
+  route: /bastion/settings
+  identity: admin
+  interactions:
+    - { action: waitFor, selector: main, optional: true }
+    - { action: waitFor, selector: "text=Evidence integrity", optional: true }
+  expect: ["h1:has-text('Settings')", "text=Evidence integrity"]
+  expectNot: "text=Please log in"
+  capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  doc: { order: 13, label: "Settings" }
+
+- id: bastion-auditor-room
+  app: bastion
+  demonstrates: "The auditor room as the auditor sees it, outside the suite: the period, the controls with their state and the evidence behind them (story: review a room as the auditor)."
+  route: /bastion/
+  identity: admin
+  interactions:
+    # A full navigation from another page: the room reads its token from the fragment once, on load.
+    - { action: navigate, url: "/bastion/room#${BASTION_ROOM_TOKEN}", skipIfEnvUnset: BASTION_ROOM_TOKEN }
+    - { action: waitFor, selector: "text=Auditor room" }
+    - { action: wait, ms: 1500 }
+  expect: "text=Auditor room"
+  expectNot: ["text=Please log in", "h1:has-text('Readiness')"]
+  capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  doc: { order: 14, label: "Auditor room" }

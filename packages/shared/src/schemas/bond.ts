@@ -97,6 +97,29 @@ export const createBondActivitySchema = z.object({
   company_id: z.string().uuid().optional(),
 });
 
+/**
+ * bond-api's POST /v1/internal/contacts body (#305): idempotent upsert-by-email of a contact on
+ * behalf of a named acting user, for sibling services with no session to forward (Book public
+ * bookings, Blank form routing). bond-api parses with it and every caller builds its body as
+ * this type.
+ */
+export const bondInternalContactUpsertSchema = z.object({
+  org_id: z.string().uuid(),
+  /** The user the contact is attributed to (created_by, and owner fallback). */
+  acting_user_id: z.string().uuid(),
+  email: z.string().email().max(255),
+  first_name: z.string().max(100).optional(),
+  last_name: z.string().max(100).optional(),
+  phone: z.string().max(50).optional(),
+  title: z.string().max(150).optional(),
+  lifecycle_stage: z
+    .enum(['subscriber', 'lead', 'marketing_qualified', 'sales_qualified', 'opportunity', 'customer', 'evangelist', 'other'])
+    .optional(),
+  lead_source: z.string().max(60).optional(),
+});
+
+export type BondInternalContactUpsert = z.infer<typeof bondInternalContactUpsertSchema>;
+
 export type CreateBondContactInput = z.infer<typeof createBondContactSchema>;
 export type CreateBondCompanyInput = z.infer<typeof createBondCompanySchema>;
 export type CreateBondDealInput = z.infer<typeof createBondDealSchema>;

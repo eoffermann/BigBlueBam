@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
+import type { BondInternalContactUpsert } from '@bigbluebam/shared';
 import * as bookingPageService from '../services/booking-page.service.js';
 import { publishBoltEvent } from '../lib/bolt-events.js';
 import { enrichBooking, loadOrg } from '../lib/bolt-enrich.js';
@@ -102,19 +103,21 @@ export default async function publicBookingRoutes(fastify: FastifyInstance) {
         // Create or find a Bond contact by email (idempotent upsert). The
         // booking-page owner is the acting user — they own the calendar the
         // booking lands on.
-        const bondBaseUrl = (env as unknown as Record<string, string | undefined>).BOND_API_INTERNAL_URL ?? 'http://bond-api:4009';
+        const bondBaseUrl = env.BOND_API_INTERNAL_URL;
+        // The shared contract bond-api parses (#305).
+        const contactBody: BondInternalContactUpsert = {
+          org_id: page.organization_id,
+          acting_user_id: page.owner_user_id,
+          email: body.email,
+          first_name: body.name.split(' ')[0] ?? body.name,
+          last_name: body.name.split(' ').slice(1).join(' ') || undefined,
+          lead_source: 'booking_page',
+          lifecycle_stage: 'lead',
+        };
         fetch(`${bondBaseUrl}/v1/internal/contacts`, {
           method: 'POST',
           headers: internalHeaders,
-          body: JSON.stringify({
-            org_id: page.organization_id,
-            acting_user_id: page.owner_user_id,
-            email: body.email,
-            first_name: body.name.split(' ')[0] ?? body.name,
-            last_name: body.name.split(' ').slice(1).join(' ') || undefined,
-            lead_source: 'booking_page',
-            lifecycle_stage: 'lead',
-          }),
+          body: JSON.stringify(contactBody),
           signal: AbortSignal.timeout(5000),
         }).catch(() => {
           // Best-effort: swallow errors

@@ -1,8 +1,18 @@
-import { LLM_CALL_TIMEOUT_DEFAULT_MS, LLM_CALL_TIMEOUT_MAX_MS, LLM_CALL_TIMEOUT_MIN_MS, LLM_HOLD_MARGIN_MS } from '@bigbluebam/shared';
+import {
+  LLM_CALL_TIMEOUT_DEFAULT_MS,
+  LLM_CALL_TIMEOUT_MAX_MS,
+  LLM_CALL_TIMEOUT_MIN_MS,
+  LLM_HOLD_MARGIN_MS,
+  envBool,
+} from '@bigbluebam/shared';
 import { z } from 'zod';
-import { envBool } from '@bigbluebam/shared';
+import { bastionStopGraceProblem } from './boot/stop-grace.js';
 import { checkStableSecrets, formatStableSecretRefusal } from './boot/stable-secrets.js';
-import { COMPILE_MAX_TOKENS_DEFAULT } from './library/compile-budget.js';
+import { BASTION_LLM_CALLS, LLM_MAX_TOKENS_MAX, LLM_MAX_TOKENS_MIN } from './library/llm-call-settings.js';
+
+/** One call kind's max_tokens override, with the bounds llm-call-settings.ts applies to recorders too. */
+const maxTokensVar = (kind: keyof typeof BASTION_LLM_CALLS) =>
+  z.coerce.number().int().min(LLM_MAX_TOKENS_MIN).max(LLM_MAX_TOKENS_MAX).default(BASTION_LLM_CALLS[kind].maxTokensDefault);
 
 const emptyToUndefined = (v: unknown) => (v === '' ? undefined : v);
 
@@ -78,18 +88,26 @@ const envSchema = z.object({
   // the proxy's LLM_CALL_TIMEOUT_MAX_MS: a larger value would be silently cut there, so it is
   // refused at boot instead. The permit hold window is derived from it (lib/llm-permits.ts).
   BASTION_LLM_TIMEOUT_MS: z.coerce.number().int().min(LLM_CALL_TIMEOUT_MIN_MS).max(LLM_CALL_TIMEOUT_MAX_MS).default(LLM_CALL_TIMEOUT_DEFAULT_MS),
-  // The compile call's output budget (#237). Reasoning models spend part of it before answering.
-  BASTION_LLM_MAX_TOKENS: z.coerce.number().int().min(256).max(100000).default(COMPILE_MAX_TOKENS_DEFAULT),
+  // Output budgets per call kind (#237, #263, #264; library/llm-call-settings.ts). Reasoning
+  // models spend part of the budget before answering.
+  BASTION_LLM_MAX_TOKENS: maxTokensVar('compile'),
+  BASTION_QUESTIONNAIRE_MAX_TOKENS: maxTokensVar('questionnaire_draft'),
+  BASTION_REWORD_MAX_TOKENS: maxTokensVar('fix_reword'),
   BASTION_ENGINE_TIMEOUT_MS: z.coerce.number().int().positive().default(30000),
   BASTION_PROBE_TIMEOUT_MS: z.coerce.number().int().positive().default(8000),
   BASTION_PUT_TIMEOUT_MS: z.coerce.number().int().positive().default(5000),
   BASTION_RUN_LEASE_MS: z.coerce.number().int().positive().default(300000),
+  // The platform's stop grace (#284): compose passes the same value as stop_grace_period
+  // (BASTION_STOP_GRACE_SECONDS, default 75); Railway reads RAILWAY_DEPLOYMENT_DRAINING_SECONDS.
+  // The shutdown drain is derived from BASTION_LLM_TIMEOUT_MS and must fit inside it (below).
+  STOP_GRACE_SECONDS: z.string().optional(),
+  RAILWAY_DEPLOYMENT_DRAINING_SECONDS: z.string().optional(),
 
   // NOTE: BBB_PERMISSIONS_ENFORCE is deliberately ABSENT. Bastion's per-action enforcement is a
   // hardcoded boot invariant (see boot/assert-permissions-enforce.ts), not an env setting.
 
   // Platform RLS posture; Bastion binds app.current_org_id per transaction regardless.
-  BBB_RLS_ENFORCE: z.string().optional(),
+  BBB_RLS_ENFORCE: envBool(false),
 }).superRefine((e, ctx) => {
   // A slice heartbeats between calls, not during one (#257): one call plus a permit wait must
   // fit inside the run lease, or a healthy slice's run is reaped mid-call.
@@ -100,6 +118,10 @@ const envSchema = z.object({
       message: `must be at least ${LLM_HOLD_MARGIN_MS} ms below BASTION_RUN_LEASE_MS (${e.BASTION_RUN_LEASE_MS})`,
     });
   }
+  // The shutdown drain must fit the platform's stop grace (#284), or a stop kills an AI call
+  // mid-flight: the paid-for answer is lost and the run waits out its lease.
+  const problem = bastionStopGraceProblem(e);
+  if (problem) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['BASTION_LLM_TIMEOUT_MS'], message: problem });
 });
 
 export type Env = z.infer<typeof envSchema>;

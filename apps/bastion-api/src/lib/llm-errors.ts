@@ -1,38 +1,8 @@
-// The typed LLM failure modes (copied from apps/bursar-api/src/lib/llm-errors.ts), in their own
-// module with NO env import so the compiler core and the unit tests can import them without
-// booting the service env.
-
-export class LlmThrottledError extends Error {
-  retryAfterSeconds: number;
-  constructor(retryAfterSeconds: number) {
-    super('internal LLM proxy returned 429 (concurrency cap)');
-    this.name = 'LlmThrottledError';
-    this.retryAfterSeconds = retryAfterSeconds;
-  }
-}
-
-export class LlmError extends Error {
-  status: number | null;
-  constructor(message: string, status: number | null) {
-    super(message);
-    this.name = 'LlmError';
-    this.status = status;
-  }
-}
-
-/**
- * The call ran past its deadline (#257): the proxy's 504 UPSTREAM_TIMEOUT, or the client's own
- * abort. Still an LlmError (every caller falls back the same way), but counted apart, because the
- * knob is BASTION_LLM_TIMEOUT_MS (or a smaller BASTION_LLM_MAX_TOKENS), not a broken provider.
- */
-export class LlmTimeoutError extends LlmError {
-  timeoutMs: number;
-  constructor(timeoutMs: number, status: number | null) {
-    super(`the AI call took longer than ${Math.round(timeoutMs / 1000)} s`, status);
-    this.name = 'LlmTimeoutError';
-    this.timeoutMs = timeoutMs;
-  }
-}
+// The typed LLM failure modes, in their own module with NO env import so the compiler core and
+// the unit tests can import them without booting the service env. They are the shared client's
+// own classes (#283), so what lib/llm-client.ts throws is what the compiler catches. The knob for
+// an LlmTimeoutError is BASTION_LLM_TIMEOUT_MS (or a smaller BASTION_LLM_MAX_TOKENS).
+export { LlmError, LlmThrottledError, LlmTimeoutError } from '@bigbluebam/shared/internal-llm-client';
 
 export interface LlmMessage {
   role: 'system' | 'user' | 'assistant';
@@ -44,5 +14,9 @@ export interface LlmChatResult {
   finish_reason: string | null;
 }
 
-/** One chat call through the platform's internal LLM proxy (injected so tests can record or fake it). */
-export type LlmChat = (opts: { providerId: string; messages: LlmMessage[]; maxTokens?: number }) => Promise<LlmChatResult>;
+/**
+ * One chat call through the platform's internal LLM proxy (injected so tests can record or fake it).
+ * maxTokens is required: every caller passes its kind's budget from library/llm-call-settings.ts,
+ * so a new caller cannot silently fall back to some other number (#263, #264).
+ */
+export type LlmChat = (opts: { providerId: string; messages: LlmMessage[]; maxTokens: number }) => Promise<LlmChatResult>;

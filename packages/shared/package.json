@@ -22,6 +22,16 @@
       "types": "./dist/visibility-client.d.ts",
       "import": "./dist/visibility-client.js",
       "require": "./dist/visibility-client.cjs"
+    },
+    "./cross-app-access": {
+      "types": "./dist/cross-app-access.d.ts",
+      "import": "./dist/cross-app-access.js",
+      "require": "./dist/cross-app-access.cjs"
+    },
+    "./internal-llm-client": {
+      "types": "./dist/internal-llm-client.d.ts",
+      "import": "./dist/internal-llm-client.js",
+      "require": "./dist/internal-llm-client.cjs"
     }
   },
   "main": "./dist/index.cjs",

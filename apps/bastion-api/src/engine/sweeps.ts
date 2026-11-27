@@ -3,7 +3,16 @@
 // (spec 7.3, #187). Every one logs a start line and per-org progress through deps.log.
 
 import { BASTION_DAY_MS, type BastionEvaluateTickResult, type BastionTickRun } from '@bigbluebam/shared';
-import { compareEpochSeq, signSeal, verifyChain, verifySeal, type LedgerRow, type SealPayload } from '../lib/ledger-canonical.js';
+import {
+  CHAIN_BREAK_MARKER_PREFIX,
+  chainBreakKey,
+  compareEpochSeq,
+  signSeal,
+  verifyChain,
+  verifySeal,
+  type LedgerRow,
+  type SealPayload,
+} from '../lib/ledger-canonical.js';
 import { MAX_RESUMES, ORPHAN_REQUEUE_AFTER_MS } from './budgets.js';
 import { type EngineDeps, localClock, orgTx, sqlstateOf, utcDate } from './context.js';
 import { claimNoticeOnce } from './notice-markers.js';
@@ -286,17 +295,33 @@ export async function ledgerVerify(deps: EngineDeps, keys: Map<string, string>, 
         );
         if (!ok) badSeals += 1;
       }
+      const bySeq = new Map(rows.map((r) => [Number(r.seq), r]));
       for (const p of problems) {
         // A chain break persists: re-verified every pass, and the outbox key alone was pruned after
-        // 30 days, re-raising the same break monthly (#243). Durable marker, once per break.
-        if (!(await claimNoticeOnce(tx, org.organization_id, `evidence.integrity_failed:chain:${p.seq}:${p.problem}`, deps.now()))) continue;
+        // 30 days, re-raising the same break monthly (#243). Durable marker, once per break: keyed
+        // on the break as observed (epoch, seq, problem, row digest), so a NEW tamper of a row that
+        // already alerted alerts again (#297). The marker is the dedupe; the outbox key carries the
+        // claim time too, so a break re-armed by a clean pass is not swallowed by the earlier alert's
+        // outbox row (kept until retention prunes it).
+        const row = bySeq.get(p.seq);
+        if (!row) continue;
+        const key = chainBreakKey(row, p);
+        const claimedAt = deps.now();
+        if (!(await claimNoticeOnce(tx, org.organization_id, key, claimedAt))) continue;
         await enqueueBastionEvent('evidence.integrity_failed', { seq: p.seq, cause: p.problem }, tx, {
           orgId: org.organization_id,
-          idempotencyKey: `evidence.integrity_failed:chain:${org.organization_id}:${p.seq}:${p.problem}`,
+          idempotencyKey: `${key}:${org.organization_id}:${claimedAt.getTime()}`,
         });
       }
+      const complete = rows.length < VERIFY_BUDGET_ROWS;
+      // A pass that walked the whole chain from the start and found it clean forgets every earlier
+      // break (#297): "repaired, then broken again" alerts again whatever the row now holds.
+      if (from === 0 && complete && problems.length === 0) {
+        await tx`DELETE FROM bastion_notice_markers
+                  WHERE organization_id = ${org.organization_id} AND marker_key LIKE ${`${CHAIN_BREAK_MARKER_PREFIX}%`}`;
+      }
       const last = rows.length > 0 ? Number(rows[rows.length - 1]?.seq) : from;
-      return { checked: rows.length, problems: problems.length, badSeals, last, complete: rows.length < VERIFY_BUDGET_ROWS };
+      return { checked: rows.length, problems: problems.length, badSeals, last, complete };
     });
     await deps.cursors.set(cursorKey, res.complete ? '0' : String(res.last));
     deps.log.info(

@@ -75,7 +75,15 @@ import guestRoutes from './routes/guest.routes.js';
 import superuserRoutes from './routes/superuser.routes.js';
 import emailVerifyRoutes from './routes/email-verify.routes.js';
 import internalHelpdeskRoutes from './routes/internal-helpdesk.routes.js';
-import internalLlmRoutes from './routes/internal-llm.routes.js';
+import internalLlmRoutes, { drainInternalLlmCalls } from './routes/internal-llm.routes.js';
+import {
+  LLM_CALL_TIMEOUT_MAX_MS,
+  SHUTDOWN_EXIT_MARGIN_MS,
+  llmCallDrainMs,
+  platformStopGrace,
+  stopGraceNeededMs,
+  stopGraceProblem,
+} from '@bigbluebam/shared';
 import internalBastionRoutes from './routes/internal-bastion.routes.js';
 import internalBlueprintSyncRoutes from './routes/internal-blueprint-sync.routes.js';
 import slackWebhookRoutes from './routes/slack-webhook.routes.js';
@@ -330,12 +338,28 @@ await fastify.register(superuserBackupsRoutes);
 // job). This is an operational concern — the auth plugin already rejects
 // expired sessions on each request, but the rows are never deleted.
 
-// Graceful shutdown
+// Graceful shutdown. In-flight internal LLM calls (up to LLM_CALL_TIMEOUT_MAX_MS each) drain for
+// as long as the platform stop grace allows (#284, #294; one fact in @bigbluebam/shared
+// stop-grace.ts): compose gives `stop_grace_period: ${API_STOP_GRACE_SECONDS:-190}s` and passes the
+// same value as STOP_GRACE_SECONDS; Railway reads RAILWAY_DEPLOYMENT_DRAINING_SECONDS. A call still
+// running when the drain ends is stopped and answered 503 SHUTTING_DOWN, so its caller retries and
+// its proxy slot is released, instead of a kill leaving both behind.
+const apiStopGrace = platformStopGrace(process.env);
+const apiLlmDrainMs = llmCallDrainMs(LLM_CALL_TIMEOUT_MAX_MS);
+const apiGraceProblem = stopGraceProblem(apiStopGrace, stopGraceNeededMs(apiLlmDrainMs), 'An internal LLM call at the longest allowed deadline');
+if (apiGraceProblem) {
+  fastify.log.warn(`${apiGraceProblem} Until then, a call still running at shutdown is stopped and its caller retries it.`);
+}
+let apiShuttingDown = false;
 const signals: NodeJS.Signals[] = ['SIGINT', 'SIGTERM'];
 for (const signal of signals) {
   process.on(signal, async () => {
-    fastify.log.info(`Received ${signal}, shutting down gracefully...`);
-    await fastify.close();
+    if (apiShuttingDown) return;
+    apiShuttingDown = true;
+    const budget = Math.min(apiLlmDrainMs, Math.max(0, apiStopGrace.ms - SHUTDOWN_EXIT_MARGIN_MS));
+    fastify.log.info(`Received ${signal}, shutting down gracefully (in-flight LLM calls get up to ${Math.round(budget / 1000)} s)...`);
+    const [stopped] = await Promise.all([drainInternalLlmCalls(budget), fastify.close()]);
+    if (stopped > 0) fastify.log.warn(`stopped ${stopped} internal LLM call(s) at the end of the shutdown drain; their callers retry them`);
     await connection.end();
     process.exit(0);
   });

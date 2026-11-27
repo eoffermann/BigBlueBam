@@ -81,7 +81,7 @@ declare module 'fastify' {
 
 const rlsPlugin = fp(
   async (fastify: FastifyInstance) => {
-    const enforce = env.BBB_RLS_ENFORCE === '1';
+    const enforce = env.BBB_RLS_ENFORCE;
 
     fastify.decorate('runInOrgScope', runInOrgScope);
 

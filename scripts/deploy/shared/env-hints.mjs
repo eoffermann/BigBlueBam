@@ -317,11 +317,27 @@ export const ENV_HINTS = {
   // prompted value win over this literal everywhere the hint is resolved, and keeps
   // reconcile from resetting it. MinIO installs keep the literal.
   BASTION_S3_BUCKET: { kind: 'literal', value: 'bigbluebam-bastion', propagate: true, operatorChosen: true },
-  // bastion-api SIGTERM drain, so an in-flight LLM call can finish (spec 7.3).
-  RAILWAY_DEPLOYMENT_DRAINING_SECONDS: { kind: 'literal', value: '75' },
-  BASTION_LLM_TIMEOUT_MS: { kind: 'literal', value: '60000' },
+  // SIGTERM drain, so an in-flight LLM call can finish (spec 7.3, #284, #294). The service reads
+  // this same variable at boot (shared stop-grace.ts): bastion-api refuses to start when its
+  // BASTION_LLM_TIMEOUT_MS needs more, and the api warns.
+  RAILWAY_DEPLOYMENT_DRAINING_SECONDS: {
+    kind: 'literal',
+    value: '75',
+    note: 'Seconds between stop signal and kill. bastion-api needs BASTION_LLM_TIMEOUT_MS/1000 + 10 (75 covers the default 60000) and refuses to start otherwise. On api, 190 lets the longest (180 s) proxied AI call finish; at 75, a call still running at a deploy is stopped and its caller retries it.',
+  },
+  // One AI call's deadline, at most 180000 (#257). Raising it past 65000 also needs
+  // RAILWAY_DEPLOYMENT_DRAINING_SECONDS raised on bastion-api (see that hint).
+  BASTION_LLM_TIMEOUT_MS: {
+    kind: 'literal',
+    value: '60000',
+    note: 'One AI call deadline in ms, at most 180000. Above 65000, raise RAILWAY_DEPLOYMENT_DRAINING_SECONDS on bastion-api to this/1000 + 10 or the service refuses to start.',
+  },
   // The compile call's output budget (#237); reasoning models need room to think before answering.
   BASTION_LLM_MAX_TOKENS: { kind: 'literal', value: '8192' },
+  // Output budgets for questionnaire answers and fix rewording (#263, #264). Each corpus was
+  // recorded at this value; apps/bastion-api/src/library/llm-call-settings.ts holds the defaults.
+  BASTION_QUESTIONNAIRE_MAX_TOKENS: { kind: 'literal', value: '2048' },
+  BASTION_REWORD_MAX_TOKENS: { kind: 'literal', value: '2048' },
   BASTION_ENGINE_TIMEOUT_MS: { kind: 'literal', value: '30000' },
   BASTION_PROBE_TIMEOUT_MS: { kind: 'literal', value: '8000' },
   BASTION_PUT_TIMEOUT_MS: { kind: 'literal', value: '5000' },
@@ -429,6 +445,13 @@ export const ENV_HINTS = {
   PUBLIC_FORM_RATE_LIMIT: { kind: 'literal', value: '10' },
   PUBLIC_FORM_RATE_WINDOW_MS: { kind: 'literal', value: '3600000' },
   QUERY_TIMEOUT_MS: { kind: 'literal', value: '10000' },
+  // One LLM call's deadline for burn, bulwark, basis and braid (#283), sent to the api's LLM
+  // proxy as timeout_ms. 1000..180000; each service refuses to boot outside that range.
+  LLM_TIMEOUT_MS: {
+    kind: 'literal',
+    value: '60000',
+    note: 'One AI call deadline in ms, sent to the api LLM proxy. At most 180000; the service refuses to start above it.',
+  },
   CACHE_TTL_SECONDS: { kind: 'literal', value: '60' },
   // Platform-wide default, matching `${BBB_PERMISSIONS_ENFORCE:-warn}` in docker-compose.yml
   // (:125 and ~19 other sites). 'warn' records resolver divergence without blocking.

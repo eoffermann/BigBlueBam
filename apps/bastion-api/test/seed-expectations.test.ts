@@ -1,4 +1,7 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { describe, it, expect } from 'vitest';
+import { bandAnswer, type DraftCandidate } from '../src/library/questionnaire-draft.js';
 import { crosswalk, LIBRARY_CONTROLS, requirementsForControl, templateControlKeys } from '../src/library/index.js';
 import { SOC2 } from '../src/library/soc2.js';
 import { ISO27001 } from '../src/library/iso27001.js';
@@ -157,5 +160,46 @@ describe('BASTION_SEED_EXPECTATIONS matches the library', () => {
     expect(p.attestedEmails.every((e: string) => p.audienceEmails.includes(e))).toBe(true);
     expect(p.attestedEmails).not.toContain('gilligan@gilligantravel.example');
     expect(p.label).toBe(`${p.attested} of ${p.required} have read the current version`);
+  });
+
+  // #271: the seeded story rows must not depend on a live model. The seed drafts with use_ai false;
+  // each story row reuses an approved library answer citing its control, and the bander's hard
+  // rules on that control's seeded state decide the row. This runs the real bander on exactly
+  // those inputs, so the expectations, the seed and the bander cannot drift apart.
+  it('M8: the story rows are decided by the hard rules on the seeded control states, without the AI', () => {
+    const q = EXP.m8.questionnaire;
+    expect(q.useAi).toBe(false);
+    expect(q.encryption.controlKey).toBe(EXP.m5.laptopEncryption.controlKey);
+    expect(q.radioRelay.controlKey).toBe(EXP.m6.radioRelay.controlKey);
+    const until = '2027-01-01T00:00:00.000Z';
+    const cases = [
+      { row: q.encryption, state: 'unprovable' as const, exception: null },
+      { row: q.radioRelay, state: 'pass_with_exception' as const, exception: { reason: EXP.m6.radioRelay.reason, expires_at: until } },
+    ];
+    for (const { row, state, exception } of cases) {
+      const control = '00000000-0000-4000-8000-0000000000c1';
+      const ref = { entity_type: 'bastion.control', entity_id: control };
+      const candidates: DraftCandidate[] = [
+        { handle: 'L1', kind: 'library', refs: [ref], title: row.question, text: '', rank: 0.5, library: { answer: row.libraryAnswer, yes_no: true } },
+        { handle: 'X1', kind: 'control', refs: [ref], title: 'a control this answer relies on', text: '', rank: 0, state, exception },
+      ];
+      const b = bandAnswer({ question: row.question, answer_kind: 'yes_no_text', candidates, response: null, visible: new Set([`bastion.control:${control}`]), floors: { high: 0.8, medium: 0.55 } });
+      expect(b.confidence_band, row.question).toBe(row.band);
+      if (row.answerStartsWith) expect(b.draft_answer).toMatch(new RegExp(`^${row.answerStartsWith.replace(/\./g, '\\.')}`));
+      if (row.mentions) expect(b.draft_answer).toContain(row.mentions);
+      for (const code of row.reasons) expect(b.band_reasons.map((r) => r.code), row.question).toContain(code);
+    }
+  });
+
+  // #269: one engine POST runs one slice and keeps the claim; the seed must keep POSTing as its
+  // claimant until drafting is done, or it stalls after the first slice.
+  it('M8 seed: drafts deterministically and keeps driving slices once it holds the claim', () => {
+    const src = readFileSync(join(__dirname, '../../../scripts/seed-gilligan/bastion.mjs'), 'utf8');
+    const drive = src.slice(src.indexOf('async function driveAutofill'), src.indexOf('async function seedAnswerLibrary'));
+    expect(drive).toMatch(/seedHoldsClaim \|\| \(/);
+    expect(drive).toMatch(/seedHoldsClaim = true/);
+    expect(drive).toMatch(/elapsed/);
+    expect(src).toMatch(/autofill`, \{ redraft: false, use_ai: useAi \}/);
+    expect(src).toMatch(/await seedAnswerLibrary\(orgId\);\s*\n\s*await verifyM8\(await seedQuestionnaire\(orgId\)\)/);
   });
 });

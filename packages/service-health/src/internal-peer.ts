@@ -86,6 +86,17 @@ export interface InternalVerdictOptions {
   secrets: ReadonlyArray<string | null | undefined>;
   /** Also read the x-internal-token header. */
   acceptTokenHeader?: boolean;
+  /**
+   * Read ONLY the x-internal-token header (the HB-7 helpdesk pair: the api's /internal/helpdesk/*
+   * routes and helpdesk-api's Bam-proxied agent calls, both keyed by INTERNAL_HELPDESK_SECRET).
+   */
+  tokenHeaderOnly?: boolean;
+}
+
+/** True when the request carries a non-empty x-internal-token header (#306: callers that branch on
+ * its presence ask here instead of reading the header themselves). */
+export function carriesInternalTokenOf(headers: HeaderBag): boolean {
+  return firstHeader(headers, [INTERNAL_TOKEN_HEADER]) !== undefined;
 }
 
 /**
@@ -103,9 +114,11 @@ export function internalRequestVerdict(
 ): InternalVerdict {
   const secrets = options.secrets.filter((s): s is string => typeof s === 'string' && s.length > 0);
   if (secrets.length === 0) return 'unconfigured';
-  const names: readonly string[] = options.acceptTokenHeader
-    ? [...INTERNAL_SECRET_HEADERS, INTERNAL_TOKEN_HEADER]
-    : INTERNAL_SECRET_HEADERS;
+  const names: readonly string[] = options.tokenHeaderOnly
+    ? [INTERNAL_TOKEN_HEADER]
+    : options.acceptTokenHeader
+      ? [...INTERNAL_SECRET_HEADERS, INTERNAL_TOKEN_HEADER]
+      : INTERNAL_SECRET_HEADERS;
   const provided = firstHeader(request.headers, names);
   // Compare against every secret so the timing does not reveal which one matched.
   const matched = provided !== undefined && secrets.map((s) => sameSecret(provided, s)).some(Boolean);

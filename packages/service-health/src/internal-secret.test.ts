@@ -1,6 +1,7 @@
 import Fastify from 'fastify';
 import { describe, expect, it } from 'vitest';
 import {
+  carriesInternalToken,
   createInternalSecretGuard,
   internalSecretPreHandler,
   isPrivateNetworkAddress,
@@ -11,7 +12,7 @@ import {
 
 const SECRET = 's'.repeat(40);
 
-function app(secret: string | undefined, opts: { acceptTokenHeader?: boolean } = {}) {
+function app(secret: string | undefined, opts: { acceptTokenHeader?: boolean; tokenHeaderOnly?: boolean } = {}) {
   const f = Fastify();
   const guard = createInternalSecretGuard({ secrets: () => [secret], ...opts });
   f.post('/internal/inline', async (request, reply) => {
@@ -70,6 +71,29 @@ describe('createInternalSecretGuard', () => {
       (await app(SECRET, { acceptTokenHeader: true }).inject({ method: 'POST', url: '/internal/inline', headers: { 'x-internal-token': SECRET } }))
         .statusCode,
     ).toBe(200);
+  });
+
+  // #306: the HB-7 helpdesk pair reads only x-internal-token, through this guard.
+  it('tokenHeaderOnly reads x-internal-token and ignores the secret headers', async () => {
+    const f = app(SECRET, { tokenHeaderOnly: true });
+    expect((await f.inject({ method: 'POST', url: '/internal/inline', headers: { 'x-internal-token': SECRET } })).statusCode).toBe(200);
+    expect((await f.inject({ method: 'POST', url: '/internal/inline', headers: { 'x-internal-secret': SECRET } })).statusCode).toBe(401);
+    const relayed = await f.inject({
+      method: 'POST',
+      url: '/internal/inline',
+      headers: { 'x-internal-token': SECRET, 'x-forwarded-for': '203.0.113.9' },
+    });
+    expect(relayed.statusCode).toBe(403);
+  });
+});
+
+describe('carriesInternalToken', () => {
+  it('reports only a non-empty x-internal-token header', async () => {
+    const f = Fastify();
+    f.get('/probe', async (request) => ({ carries: carriesInternalToken(request) }));
+    expect((await f.inject({ url: '/probe', headers: { 'x-internal-token': 't' } })).json().carries).toBe(true);
+    expect((await f.inject({ url: '/probe', headers: { 'x-internal-token': '' } })).json().carries).toBe(false);
+    expect((await f.inject({ url: '/probe', headers: { 'x-internal-secret': 't' } })).json().carries).toBe(false);
   });
 });
 

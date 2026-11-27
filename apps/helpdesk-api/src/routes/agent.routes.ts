@@ -2,7 +2,7 @@ import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import { eq, desc, and, or, sql, ilike } from 'drizzle-orm';
 import argon2 from 'argon2';
-import { INTERNAL_TOKEN_HEADER, refuseNonPrivatePeer, sameSecret } from '@bigbluebam/service-health';
+import { carriesInternalToken, createInternalSecretGuard } from '@bigbluebam/service-health';
 import { env } from '../env.js';
 import { db } from '../db/index.js';
 import { tickets } from '../db/schema/tickets.js';
@@ -73,6 +73,12 @@ declare module 'fastify' {
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+/** Bam-proxied agent calls: X-Internal-Token keyed by INTERNAL_HELPDESK_SECRET (HB-7). */
+const checkHelpdeskToken = createInternalSecretGuard({
+  secrets: () => [env.INTERNAL_HELPDESK_SECRET],
+  tokenHeaderOnly: true,
+});
+
 function headerValue(request: FastifyRequest, name: string): string | undefined {
   const raw = request.headers[name];
   return Array.isArray(raw) ? raw[0] : raw;
@@ -87,8 +93,7 @@ function headerValue(request: FastifyRequest, name: string): string | undefined 
  * fall through to X-Agent-Key verification.
  */
 async function tryInternalProxyAuth(request: FastifyRequest, reply: FastifyReply): Promise<boolean> {
-  const token = headerValue(request, INTERNAL_TOKEN_HEADER);
-  if (!token) return false;
+  if (!carriesInternalToken(request)) return false;
 
   const unauthorized = (message: string) => {
     reply.status(401).send({
@@ -97,13 +102,10 @@ async function tryInternalProxyAuth(request: FastifyRequest, reply: FastifyReply
     return true;
   };
 
-  // The suite-wide compare and private-peer rule (#252, @bigbluebam/service-health). Bam's api
-  // calls here directly at HELPDESK_API_INTERNAL_URL, never through the edge nginx.
-  const expected = env.INTERNAL_HELPDESK_SECRET;
-  if (!expected || !sameSecret(token, expected)) {
-    return unauthorized('Invalid internal service token');
-  }
-  if (refuseNonPrivatePeer(request, reply)) return true;
+  // The suite-wide guard (#252, #306, @bigbluebam/service-health): constant-time compare against
+  // INTERNAL_HELPDESK_SECRET, fail closed, direct private-network peer only. Bam's api calls here
+  // directly at HELPDESK_API_URL, never through the edge nginx.
+  if (!checkHelpdeskToken(request, reply)) return true;
 
   const actingUserId = headerValue(request, 'x-acting-user-id');
   const actingOrgId = headerValue(request, 'x-acting-org-id');
@@ -827,7 +829,9 @@ export default async function agentRoutes(fastify: FastifyInstance) {
         'ticket.message_posted',
         'helpdesk',
         {
+          ticket: { id: id },
           ticket_id: id,
+          message: { id: message.id, author_id: authorId, is_internal: message.is_internal },
           message_id: message.id,
           author_type: 'agent',
           author_id: authorId,
@@ -1006,6 +1010,7 @@ export default async function agentRoutes(fastify: FastifyInstance) {
           'ticket.status_changed',
           'helpdesk',
           {
+            ticket: { id: id },
             ticket_id: id,
             from: existing.status,
             to: data.status,
@@ -1019,9 +1024,8 @@ export default async function agentRoutes(fastify: FastifyInstance) {
             'ticket.closed',
             'helpdesk',
             {
+              ticket: { id: id, closed_by: agentActorId, closed_at: nowIso },
               ticket_id: id,
-              'ticket.closed_by': agentActorId,
-              'ticket.closed_at': nowIso,
               from: existing.status,
             },
             scopeOrgId,
@@ -1036,9 +1040,8 @@ export default async function agentRoutes(fastify: FastifyInstance) {
             'ticket.reopened',
             'helpdesk',
             {
+              ticket: { id: id, reopened_by: agentActorId, reopened_at: nowIso },
               ticket_id: id,
-              'ticket.reopened_by': agentActorId,
-              'ticket.reopened_at': nowIso,
               from: existing.status,
               to: data.status,
             },
@@ -1141,9 +1144,8 @@ export default async function agentRoutes(fastify: FastifyInstance) {
         'ticket.closed',
         'helpdesk',
         {
+          ticket: { id: id, closed_by: request.agentUserId, closed_at: new Date().toISOString() },
           ticket_id: id,
-          'ticket.closed_by': request.agentUserId,
-          'ticket.closed_at': new Date().toISOString(),
           from: ticket.status,
         },
         scopeOrgId,
@@ -1155,6 +1157,7 @@ export default async function agentRoutes(fastify: FastifyInstance) {
           'ticket.status_changed',
           'helpdesk',
           {
+            ticket: { id: id },
             ticket_id: id,
             from: ticket.status,
             to: 'closed',
