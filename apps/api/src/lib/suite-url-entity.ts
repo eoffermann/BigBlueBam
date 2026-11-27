@@ -86,7 +86,7 @@ export function suiteUrlEntity(targetUrl: string): SuiteUrlEntity {
   const rest = pathname.replace(/^\/[^/]+/, '') || '/';
   for (const rule of ENTITY_RULES[app] ?? []) {
     const m = rest.match(rule.re);
-    if (m && m[1] && UUID_RE.test(m[1])) return { kind: 'entity', app, type: rule.type, id: m[1] };
+    if (m?.[1] && UUID_RE.test(m[1])) return { kind: 'entity', app, type: rule.type, id: m[1] };
   }
   const segments = rest.split('/').filter(Boolean);
   if (segments.every((s) => STATIC_PAGE_SEGMENTS.has(s.toLowerCase()))) return { kind: 'no_resource', app };

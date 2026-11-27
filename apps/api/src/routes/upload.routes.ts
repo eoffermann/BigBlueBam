@@ -142,7 +142,8 @@ export default async function uploadRoutes(fastify: FastifyInstance) {
 
       await uploadFile(env.S3_BUCKET, key, buffer, contentType);
       // #142: bind the key to the uploader's active org; GET /files serves it to that org only.
-      await recordUploadOwner(key, request.user!.active_org_id, 'bam', request.user!.id);
+      const uploader = request.user;
+      if (uploader) await recordUploadOwner(key, uploader.active_org_id, 'bam', uploader.id);
 
       // Return a proxy URL through our API (not a direct MinIO URL)
       const url = `/files/${key}`;

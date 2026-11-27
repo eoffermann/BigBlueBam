@@ -554,6 +554,9 @@ function inferResourceFromPath(path, app) {
 // Decisions live in docs/wave-d-audit/phase1-triage.json.
 const EXCLUDED_PATH_PREFIXES = [
   '/internal/',
+  // helpdesk-api registers its routes with a literal /helpdesk segment, so its
+  // shared-secret internal routes (#305: POST /helpdesk/internal/tickets) sit here.
+  '/helpdesk/internal/',
   '/health',
   '/healthz',
   '/readyz',
