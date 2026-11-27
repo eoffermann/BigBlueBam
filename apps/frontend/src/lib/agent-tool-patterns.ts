@@ -1,3 +1,5 @@
+import { LAUNCHPAD_APP_IDS } from '@bigbluebam/shared';
+
 /**
  * A project-restricted agent key can only use Bam tools for its projects (#367): every other app
  * refuses a project-restricted key outright, because it has no Bam project to confine it to.
@@ -5,32 +7,9 @@
  * do (banter_*, bond_get_*, ...). This finds the allowlist patterns that name another app, so the
  * Settings > Agents form can warn before creating an agent that could never use them.
  */
-const OTHER_APP_PREFIXES = [
-  'banter',
-  'basis',
-  'bastion',
-  'bay',
-  'beacon',
-  'bearing',
-  'bench',
-  'bill',
-  'bin',
-  'blank',
-  'blast',
-  'blip',
-  'blueprint',
-  'board',
-  'bolt',
-  'bond',
-  'book',
-  'braid',
-  'brief',
-  'bulwark',
-  'bureau',
-  'burn',
-  'bursar',
-  'helpdesk',
-];
+// Derived from the one Launchpad roster in @bigbluebam/shared (issue #158: no hand-kept app
+// lists); 'b3' is Bam itself, whose tools carry no prefix.
+const OTHER_APP_PREFIXES: readonly string[] = LAUNCHPAD_APP_IDS.filter((id) => id !== 'b3');
 
 /** The patterns (trimmed, non-empty lines) that target an app other than Bam. */
 export function nonBamToolPatterns(patterns: string): string[] {
