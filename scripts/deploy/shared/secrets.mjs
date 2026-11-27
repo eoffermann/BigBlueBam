@@ -121,6 +121,36 @@ export function suggestedBastionBucket(uploadsBucket) {
 }
 
 /**
+ * The storage variables an operator chose at the prompt, for AWS S3 / Cloudflare R2
+ * (issue #175), or {} for MinIO and "skip", where the install's own defaults apply.
+ * The single mapping from storage answers to variables: buildEnvConfig writes these
+ * into .env for docker-compose and hands them to the Railway adapter as operator
+ * choices (each is an `operatorChosen` env hint, so it wins over the MinIO default).
+ *
+ * A blank AWS endpoint becomes the regional AWS endpoint: every service's storage
+ * driver needs an explicit endpoint and treats storage as unconfigured without one.
+ */
+export function operatorStorageValues(storage = {}) {
+  if (storage.storageProvider !== 's3' && storage.storageProvider !== 'r2') return {};
+  const region = String(storage.S3_REGION ?? '').trim() || (storage.storageProvider === 'r2' ? 'auto' : 'us-east-1');
+  const bucket = String(storage.S3_BUCKET ?? '').trim() || 'bigbluebam-uploads';
+  const endpoint =
+    String(storage.S3_ENDPOINT ?? '').trim() ||
+    (storage.storageProvider === 's3' ? `https://s3.${region}.amazonaws.com` : '');
+  const out = {
+    S3_ENDPOINT: endpoint,
+    S3_ACCESS_KEY: storage.S3_ACCESS_KEY ?? '',
+    S3_SECRET_KEY: storage.S3_SECRET_KEY ?? '',
+    S3_BUCKET: bucket,
+    S3_REGION: region,
+    BASTION_S3_BUCKET: String(storage.BASTION_S3_BUCKET ?? '').trim() || suggestedBastionBucket(bucket),
+  };
+  // Drop empty answers so the install default applies rather than an empty value.
+  for (const k of Object.keys(out)) if (out[k] === '') delete out[k];
+  return out;
+}
+
+/**
  * Prompt user for file storage choice. `io` is a test seam for the prompt functions.
  */
 export async function promptStorageChoice(io = { ask, askPassword, select }) {
@@ -353,16 +383,14 @@ export function buildEnvConfig(choices) {
     env.S3_BUCKET = 'bigbluebam-uploads';
     env.S3_REGION = 'us-east-1';
     env.S3_FORCE_PATH_STYLE = 'true';
-  } else if (storage.storageProvider === 's3' || storage.storageProvider === 'r2') {
-    if (storage.S3_ENDPOINT) env.S3_ENDPOINT = storage.S3_ENDPOINT;
-    env.S3_ACCESS_KEY = storage.S3_ACCESS_KEY;
-    env.S3_SECRET_KEY = storage.S3_SECRET_KEY;
-    env.S3_BUCKET = storage.S3_BUCKET;
-    env.S3_REGION = storage.S3_REGION;
-    // Issue #171: the prompted Bastion bucket. docker-compose writes it into .env;
-    // Railway resolves it over the env-hints literal (operatorChosen).
-    env.BASTION_S3_BUCKET = storage.BASTION_S3_BUCKET || suggestedBastionBucket(storage.S3_BUCKET);
   }
+  // Issues #171, #175: the operator's AWS S3 / R2 answers (S3_* and the Bastion bucket).
+  // docker-compose writes them into .env; the Railway adapter reads OPERATOR_CHOICES and
+  // resolves each over its env-hints MinIO default (operatorChosen hints). OPERATOR_CHOICES
+  // is not an environment variable and is never written to .env.
+  const operatorChoices = operatorStorageValues(storage);
+  Object.assign(env, operatorChoices);
+  env.OPERATOR_CHOICES = operatorChoices;
 
   // Vector DB
   if (vectorDb.vectorProvider === 'qdrant-local') {

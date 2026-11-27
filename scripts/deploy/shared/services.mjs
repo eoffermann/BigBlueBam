@@ -522,7 +522,8 @@ export const APP_SERVICES = [
         // Invoice PDF download (issue #134) reads the worker-stored PDF with the same
         // S3 settings the worker writes with; without them it renders from the DB.
         // Expense receipts (issue #145) are stored and served with them too.
-        'S3_ENDPOINT', 'S3_ACCESS_KEY', 'S3_SECRET_KEY', 'S3_BUCKET',
+        // S3_REGION too (issue #175): bill-api's env reads it, and R2 needs 'auto'.
+        'S3_ENDPOINT', 'S3_ACCESS_KEY', 'S3_SECRET_KEY', 'S3_BUCKET', 'S3_REGION',
       ],
     },
   },

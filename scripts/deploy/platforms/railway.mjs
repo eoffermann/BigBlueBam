@@ -16,6 +16,7 @@ import { bold, check, cross, dim, green, yellow, cyan, red, warn } from '../shar
 import { ask, confirm, select } from '../shared/prompt.mjs';
 import { RailwayClient, RailwayApiError } from '../shared/railway-api.mjs';
 import { RailwayOrchestrator } from '../shared/railway-orchestrator.mjs';
+import { operatorChosenVarNames } from '../shared/env-hints.mjs';
 import { pullRailwayLogs, printLogPullerSummary } from '../shared/railway-logs.mjs';
 
 const name = 'Railway';
@@ -288,7 +289,7 @@ function extractSecretsFromEnvConfig(envConfig = {}) {
  * envConfig. Empty strings are fine — the orchestrator silently skips
  * optional user integrations that aren't set.
  */
-function extractUserIntegrationsFromEnvConfig(envConfig = {}) {
+export function extractUserIntegrationsFromEnvConfig(envConfig = {}) {
   const keys = [
     'OAUTH_GITHUB_CLIENT_ID',
     'OAUTH_GITHUB_CLIENT_SECRET',
@@ -304,13 +305,24 @@ function extractUserIntegrationsFromEnvConfig(envConfig = {}) {
     'SMTP_PASS',
     'SMTP_FROM',
     'EMAIL_FROM',
-    // Issue #171: operator-chosen at the storage prompt on AWS S3 / R2. Resolved over
-    // its env-hints default by resolvedHintValue (operatorChosen hint).
-    'BASTION_S3_BUCKET',
   ];
   const out = {};
   for (const k of keys) {
     out[k] = envConfig[k] ?? '';
+  }
+  // Issues #171, #175: every answer the operator gave at the storage prompt on AWS S3 /
+  // R2 (S3_* and BASTION_S3_BUCKET), from the one mapping in secrets.mjs
+  // (operatorStorageValues). Each is an operatorChosen hint, resolved over its MinIO
+  // default by resolvedHintValue. On MinIO OPERATOR_CHOICES is empty, so the flat
+  // compose-style S3_* values in envConfig (http://minio:9000) never reach Railway.
+  // A state file saved before #175 has no OPERATOR_CHOICES; it still carries the
+  // Bastion bucket answer as a flat key.
+  const operatorChoices =
+    envConfig.OPERATOR_CHOICES && typeof envConfig.OPERATOR_CHOICES === 'object'
+      ? envConfig.OPERATOR_CHOICES
+      : { BASTION_S3_BUCKET: envConfig.BASTION_S3_BUCKET ?? '' };
+  for (const k of operatorChosenVarNames()) {
+    if (operatorChoices[k] !== undefined) out[k] = operatorChoices[k];
   }
   // The deploy prompt collects the from-address as SMTP_FROM, but every service
   // reads the single canonical name EMAIL_FROM (the shared smtp-resolver key;

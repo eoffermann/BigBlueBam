@@ -339,6 +339,9 @@ function writeEnvFile(envConfig) {
   // Catch any keys not in sections
   const allListed = new Set(Object.values(sections).flat());
   for (const [key, val] of Object.entries(envConfig)) {
+    // Structured entries (OPERATOR_CHOICES, issue #175) are deploy metadata, not variables;
+    // their values are already present as flat keys.
+    if (val !== null && typeof val === 'object') continue;
     if (!allListed.has(key) && val != null && val !== '') {
       lines.push(`${key}=${val}`);
     }

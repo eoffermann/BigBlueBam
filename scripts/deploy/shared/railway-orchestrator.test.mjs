@@ -695,8 +695,11 @@ describe('buildAuthoritativeVariables', () => {
     const api = getApiService();
     const auth = buildAuthoritativeVariables(api);
     // computed + literal stay (concrete strings that actually drift)
-    expect(auth.S3_ENDPOINT).toMatch(/railway\.internal/); // computed
-    expect(auth.S3_BUCKET).toBe('bigbluebam-uploads'); // literal
+    expect(auth.BANTER_API_URL).toMatch(/railway\.internal/); // computed
+    expect(auth.LOG_LEVEL).toBe('info'); // literal
+    // Operator-chosen storage (issue #175) is the operator's, never reset to MinIO.
+    expect(auth.S3_ENDPOINT).toBeUndefined();
+    expect(auth.S3_BUCKET).toBeUndefined();
     // plugin/reference are symbolic ${{...}} refs Railway resolves — excluded
     // from reconcile so the live-vs-template diff is never a false positive.
     expect(auth.DATABASE_URL).toBeUndefined(); // plugin

@@ -131,11 +131,14 @@ export const ENV_HINTS = {
     value: '<generate>',
     note: 'openssl rand -hex 24. Set on the minio service. Reference from app services as ${{minio.MINIO_ROOT_PASSWORD}}',
   },
-  S3_ENDPOINT: { kind: 'computed', value: internal('minio') },
-  S3_ACCESS_KEY: { kind: 'reference', value: '${{minio.MINIO_ROOT_USER}}' },
-  S3_SECRET_KEY: { kind: 'reference', value: '${{minio.MINIO_ROOT_PASSWORD}}' },
-  S3_BUCKET: { kind: 'literal', value: 'bigbluebam-uploads' },
-  S3_REGION: { kind: 'literal', value: 'us-east-1' },
+  // Issue #175: on AWS S3 / R2 the deploy prompt asks for every S3_* value; each is
+  // `operatorChosen`, so the answer wins over these MinIO defaults on first provision
+  // and reconcile never resets it. On MinIO the defaults below apply.
+  S3_ENDPOINT: { kind: 'computed', value: internal('minio'), operatorChosen: true },
+  S3_ACCESS_KEY: { kind: 'reference', value: '${{minio.MINIO_ROOT_USER}}', operatorChosen: true },
+  S3_SECRET_KEY: { kind: 'reference', value: '${{minio.MINIO_ROOT_PASSWORD}}', operatorChosen: true },
+  S3_BUCKET: { kind: 'literal', value: 'bigbluebam-uploads', operatorChosen: true },
+  S3_REGION: { kind: 'literal', value: 'us-east-1', operatorChosen: true },
 
   // ── Qdrant (vector search) ────────────────────────────────────────
   QDRANT_URL: { kind: 'computed', value: internal('qdrant') },
@@ -582,6 +585,15 @@ export function resolvedHintValue(varName, operatorValues = {}) {
 /** True when the operator may choose this variable's value at the deploy prompt. */
 export function isOperatorChosen(varName) {
   return hintFor(varName).operatorChosen === true;
+}
+
+/**
+ * Every variable the operator may choose at the deploy prompt (issue #175). The
+ * Railway adapter hands exactly these answers to the orchestrator, so marking a hint
+ * `operatorChosen` is the one step that makes its answer reach the services.
+ */
+export function operatorChosenVarNames() {
+  return Object.keys(ENV_HINTS).filter((k) => ENV_HINTS[k].operatorChosen === true).sort();
 }
 
 // ── Variable ownership ───────────────────────────────────────────────

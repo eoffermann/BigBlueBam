@@ -483,6 +483,7 @@ with **R**, optional with `o`.
 | o | `S3_ACCESS_KEY` | reference | `${{minio.MINIO_ROOT_USER}}` |  |
 | o | `S3_SECRET_KEY` | reference | `${{minio.MINIO_ROOT_PASSWORD}}` |  |
 | o | `S3_BUCKET` | literal | `bigbluebam-uploads` |  |
+| o | `S3_REGION` | literal | `us-east-1` |  |
 
 ### blueprint-api
 
