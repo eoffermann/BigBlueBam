@@ -1,15 +1,9 @@
 import { defineConfig } from 'vitest/config';
 
+// Root-level options only. The test projects (unit + db, with their timeouts) are defined in
+// vitest.workspace.ts through the workspace DB-test policy (#385).
 export default defineConfig({
   test: {
-    globals: true,
-    environment: 'node',
-    include: ['test/**/*.test.ts'],
-    // CI runners sometimes blow through a 10s ceiling on first-test-in-file
-    // module-graph load, especially since this suite pulls in the full
-    // Qdrant-adapter import chain.
-    testTimeout: 60_000,
-    hookTimeout: 60_000,
     coverage: {
       provider: 'v8',
       include: ['src/**/*.ts'],
