@@ -10,6 +10,10 @@ const envSchema = z.object({
   EMAIL_FROM: z.string().email().default('noreply@bigbluebam.com'),
   TRACKING_BASE_URL: z.string().default('http://localhost'),
   WORKER_CONCURRENCY: z.coerce.number().int().positive().default(5),
+  // #315: how long SIGTERM waits for active jobs before force-closing every worker and only then
+  // closing the DB pool and Redis. Keep it below the container's stop grace period (compose's
+  // default is 10 s).
+  WORKER_SHUTDOWN_DEADLINE_MS: z.coerce.number().int().positive().default(8_000),
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).default('info'),
   BOLT_API_INTERNAL_URL: z.string().url().default('http://bolt-api:4006'),
   // §1 Wave 5 banter subs - pattern-match consumer posts can_access preflights
