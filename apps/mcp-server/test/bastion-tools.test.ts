@@ -1,11 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { existsSync, readFileSync, readdirSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-// Bastion's MCP handlers are written and tested from M2 on but stay OUT of the registered,
-// counted tool surface until the M11 merge unit (spec 5.4). This suite pins both halves: the
-// handlers call the right bastion-api routes with shared-Zod-typed input, and nothing reads
-// them as a registered tool module yet.
+// Bastion's MCP handlers were written and tested from M2 on under src/tools-pending and moved
+// into the registered, counted tool surface in the M11 merge unit (spec 5.4). This suite pins
+// both halves: the handlers call the right bastion-api routes with shared-Zod-typed input, and
+// server.ts registers the module exactly once.
 
 const captured: Array<{ name: string; input: Record<string, unknown>; handler: (a: never) => Promise<unknown> }> = [];
 vi.mock('../src/lib/register-tool.js', () => ({
@@ -15,7 +15,7 @@ vi.mock('../src/lib/register-tool.js', () => ({
 }));
 
 const SRC = join(__dirname, '..', 'src');
-const PENDING = readFileSync(join(SRC, 'tools-pending', 'bastion.ts'), 'utf8');
+const PENDING = readFileSync(join(SRC, 'tools', 'bastion-tools.ts'), 'utf8');
 const SERVER = readFileSync(join(SRC, 'server.ts'), 'utf8');
 
 const FW = '11111111-1111-4111-8111-111111111111';
@@ -46,7 +46,7 @@ function memoryTokenStore() {
 
 async function load(store: ReturnType<typeof memoryTokenStore> | null = memoryTokenStore()) {
   captured.length = 0;
-  const { registerBastionTools } = await import('../src/tools-pending/bastion.js');
+  const { registerBastionTools } = await import('../src/tools/bastion-tools.js');
   const api = { token: 'bbam_test' } as never;
   registerBastionTools({} as never, api, 'http://bastion-api:4024/v1/', fakeFetch, store ?? undefined);
   return (name: string) => {
@@ -60,18 +60,21 @@ beforeEach(() => {
   calls = [];
 });
 
-describe('Bastion pending tools stay out of the registered surface until M11', () => {
-  it('lives under src/tools-pending, not src/tools, and is not named *-tools.ts', () => {
-    expect(existsSync(join(SRC, 'tools', 'bastion-tools.ts'))).toBe(false);
-    expect(readdirSync(join(SRC, 'tools-pending')).filter((f) => f.endsWith('-tools.ts'))).toEqual([]);
+describe('Bastion tools are a registered tool module (M11)', () => {
+  it('lives at src/tools/bastion-tools.ts and the pending directory is gone', () => {
+    expect(existsSync(join(SRC, 'tools', 'bastion-tools.ts'))).toBe(true);
+    expect(existsSync(join(SRC, 'tools-pending', 'bastion.ts'))).toBe(false);
   });
 
-  it('is not imported or registered by server.ts', () => {
-    // The one Bastion line server.ts may carry before M11 is the search_everything arm's URL
-    // (M10, spec 8.5): it registers no Bastion tool.
-    const searchUrl = /^\s*bastionApiUrl: env\.BASTION_API_URL,\s*$/m;
-    expect(SERVER).toMatch(searchUrl);
-    expect(SERVER.replace(searchUrl, '')).not.toMatch(/bastion/i);
+  it('is imported and registered exactly once by server.ts, with the confirm token store', () => {
+    expect(SERVER).toMatch(/^import \{ registerBastionTools \} from '\.\/tools\/bastion-tools\.js';$/m);
+    const calls = SERVER.match(/registerBastionTools\(/g) ?? [];
+    expect(calls.length).toBe(1);
+    expect(SERVER).toMatch(
+      /registerBastionTools\(server, apiClient, env\.BASTION_API_URL, undefined, confirmTokenStore\);/,
+    );
+    // The search_everything arm (M10, spec 8.5) keeps its URL.
+    expect(SERVER).toMatch(/^\s*bastionApiUrl: env\.BASTION_API_URL,\s*$/m);
   });
 
   it('every handler goes through registerTool (agent policies apply once registered)', () => {
@@ -96,7 +99,7 @@ describe('Bastion M3 tool handlers', () => {
       BASTION_POLICY_TOOL_NAMES,
       BASTION_QUESTIONNAIRE_TOOL_NAMES,
       BASTION_SHARING_TOOL_NAMES,
-    } = await import('../src/tools-pending/bastion.js');
+    } = await import('../src/tools/bastion-tools.js');
     expect(captured.map((c) => c.name).sort()).toEqual(
       [
         ...BASTION_PENDING_TOOL_NAMES,
@@ -269,7 +272,7 @@ describe('Bastion M3 tool handlers', () => {
 
   it('surfaces a bastion-api error as an MCP error result', async () => {
     captured.length = 0;
-    const { registerBastionTools } = await import('../src/tools-pending/bastion.js');
+    const { registerBastionTools } = await import('../src/tools/bastion-tools.js');
     registerBastionTools({} as never, {} as never, 'http://b/v1', async () =>
       new Response(JSON.stringify({ error: { code: 'COMPILE_RUNNING' } }), { status: 409 }),
     );

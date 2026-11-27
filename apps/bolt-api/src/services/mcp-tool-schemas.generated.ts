@@ -5968,6 +5968,1340 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
     ]
   },
   {
+    "mcp_tool": "bastion_acknowledge_drift",
+    "description": "Acknowledge that a control got worse (POST /drift/:id/acknowledge), with an optional note. It does not change the control or its task; it records who has seen it. 409 DRIFT_ALREADY_ACKNOWLEDGED. Needs bastion.drift.acknowledge.",
+    "source": "bastion",
+    "parameters": [
+      {
+        "name": "drift_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": ""
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bastion_adopt_framework",
+    "description": "Adopt a built-in framework (SOC 2 or ISO 27001) for the organization (POST /frameworks), optionally with an audit target date and period. Creates the framework's controls, reusing any control another adopted framework already has, and links them to its requirements. Next step: bastion_compile_framework to propose checks. Needs bastion.framework.write; 409 if the framework is already adopted.",
+    "source": "bastion",
+    "parameters": []
+  },
+  {
+    "mcp_tool": "bastion_answer_questionnaire_item",
+    "description": "Review one drafted answer (PATCH /questionnaire-items/:id): accepted (take the draft), edited (give final_answer and/or final_yes_no), needs_owner (assigned_to: the member who should answer it) or pending (undo). Reviewing is not approving: approval is a person's act in Bastion. Needs bastion.questionnaire.write.",
+    "source": "bastion",
+    "parameters": [
+      {
+        "name": "item_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "review_status",
+        "type": "enum",
+        "enum": [
+          "accepted",
+          "edited",
+          "needs_owner",
+          "pending"
+        ],
+        "required": true,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "final_answer",
+        "type": "string",
+        "required": false,
+        "nullable": true,
+        "description": ""
+      },
+      {
+        "name": "final_yes_no",
+        "type": "boolean",
+        "required": false,
+        "nullable": true,
+        "description": ""
+      },
+      {
+        "name": "assigned_to",
+        "type": "string",
+        "format": "uuid",
+        "required": false,
+        "nullable": true,
+        "description": ""
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bastion_archive_framework",
+    "description": "Archive a framework (POST /frameworks/:id/archive). DESTRUCTIVE: controls that serve only this framework are retired with it. Two-step confirm: call once WITHOUT confirm_token to stage a token, then again WITH the returned confirm_token (same framework_id) within 5 minutes to archive. Needs bastion.framework.write.",
+    "source": "bastion",
+    "parameters": [
+      {
+        "name": "framework_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "confirm_token",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "Token from the staging call. Required to archive."
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bastion_attestation_status",
+    "description": "Policy acknowledgements. Without policy_id: every linked policy (GET /policies) with its Beacon article, audience, how often it must be re-read, owner, whether it is still shared with everyone, Beacon's expiry, and \"X of Y have read the current version\". With policy_id: who has read the current version and when, who has not, and who cannot even open the article in Beacon (\"N people can't open this policy\", from can_access per person) (GET /policies/:id/attestations). Read-only; needs bastion.policy.read or bastion.attestation.read.",
+    "source": "bastion",
+    "parameters": [
+      {
+        "name": "policy_id",
+        "type": "string",
+        "format": "uuid",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "status",
+        "type": "enum",
+        "enum": [
+          "active",
+          "retired",
+          "all"
+        ],
+        "required": false,
+        "nullable": false,
+        "description": ""
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bastion_audit_log",
+    "description": "Bastion's audit log, newest first (GET /audit): every change made in Bastion with who did it (person or agent), whether they were impersonated, how they signed in, and the details. Filter by action (e.g. auditor_room.create, settings.update) or subject_type; page with cursor. Read-only; floored: needs bastion.audit.read.",
+    "source": "bastion",
+    "parameters": [
+      {
+        "name": "action",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "subject_type",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "cursor",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "limit",
+        "type": "number",
+        "format": "integer",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bastion_auditor_room_view",
+    "description": "Exactly what an auditor sees in one auditor room (GET /auditor-rooms/:id/preview), without logging a visit: the controls in the room with their state words (Met, Not met, Not met risk accepted, Can't prove yet, Not assessed), the restricted items the room shares, accepted risks, the Statement of Applicability for ISO, the signed seal history with public keys, and any restore or missing-file notices. Read-only; floored: needs bastion.auditor_room.read.",
+    "source": "bastion",
+    "parameters": [
+      {
+        "name": "room_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": ""
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bastion_check_evidence_scan_again",
+    "description": "For an upload still waiting on its virus scan, check Bin again right now instead of waiting for the next automatic retry (POST /manual-evidence/:id/check-again; the review queue's \"Check again\"). If the scan finished clean (or scanning is off) the file is copied into Bastion's evidence store; an infected or failed scan blocks it. check_result is copied, copy_started (a large file is still being saved), still_pending, blocked or skipped. 409 NOT_PENDING_SCAN when the item is not waiting. Needs bastion.evidence.upload.",
+    "source": "bastion",
+    "parameters": [
+      {
+        "name": "manual_evidence_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": ""
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bastion_compile_framework",
+    "description": "Propose checks for a framework's controls (POST /frameworks/:id/compile, 202 with the run). With an AI provider the run comes back `queued` and the worker tailors each control from the closed probe menu (the AI never writes queries; anything invalid is dropped with a reason, and a control the AI cannot help with gets the library suggestions); poll with action=\"list_runs\" until it is succeeded. Without a provider, or with use_ai=false, the library suggestions are proposed and the run is already finished. Or list its past runs with action=\"list_runs\" (GET /frameworks/:id/compile-runs, newest first; pass next_cursor back as cursor while has_more is true). The compile only PROPOSES: every check lands as proposed and a person must confirm it in Bastion (including \"This is the complete list\" for any list of systems). Re-running proposes nothing a control already has. A run already going returns 409 COMPILE_RUNNING.",
+    "source": "bastion",
+    "parameters": [
+      {
+        "name": "framework_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "action",
+        "type": "enum",
+        "enum": [
+          "start",
+          "list_runs"
+        ],
+        "required": false,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "use_ai",
+        "type": "boolean",
+        "required": false,
+        "nullable": false,
+        "description": "start: false proposes the library suggestions verbatim, finished at once. Default true: with an AI provider the run is queued and tailored on the worker (poll list_runs)."
+      },
+      {
+        "name": "cursor",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "list_runs: next_cursor from the previous page."
+      },
+      {
+        "name": "limit",
+        "type": "number",
+        "format": "integer",
+        "required": false,
+        "nullable": false,
+        "description": "list_runs: page size (default 50)."
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bastion_control_status",
+    "description": "One control: its stored status and reason, setup state, derived applicability, every framework requirement it satisfies, and its checks (assertions) with their review state and, for population checks, the listed systems and whether a person confirmed the list (GET /controls/:id). With checks_only, just the checks, newest first (GET /controls/:id/assertions). Read-only.",
+    "source": "bastion",
+    "parameters": [
+      {
+        "name": "control_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "checks_only",
+        "type": "boolean",
+        "required": false,
+        "nullable": false,
+        "description": "Return only the control's checks (GET /controls/:id/assertions)."
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bastion_coverage_gaps",
+    "description": "What to fix first (GET /gaps): stored gaps ranked by risk (control weight x severity x how close the audit is), or sort \"quick_wins\" for risk per unit of effort. Each gap names its control, owner, kind in plain words (Not met, Evidence not uploaded yet, Something new is not on the list, ...), its fix template and cost, and any drafted fix. Also returns the org-level \"checks are stale\" row (never stored per control) and \"Accepted risks\" (active exceptions with owner and expiry). status defaults to \"active\" (open plus waiting on a decided fix). Read-only.",
+    "source": "bastion",
+    "parameters": []
+  },
+  {
+    "mcp_tool": "bastion_coverage_summary",
+    "description": "Readiness in one framework view (or all adopted frameworks). mode \"summary\" (default, GET /summary): the four numbers kept separate (Proven by the suite, Proven by evidence you provided, Not met with its \"risk accepted\" sub-count, Can't prove yet) plus \"Not set up yet\" and the denominator sentence (\"41 of 64 controls checked; 23 not set up yet\"), days to the nearest audit, banners, the top open gaps and evidence expiring soon. mode \"map\" (GET /coverage): every control with where its proof comes from (suite checks, feeds, uploaded files, self-attested statements), its state in plain words and when uploaded proof expires. Not-applicable controls are listed separately. Read-only; both the caller and the asker need bastion.control.read.",
+    "source": "bastion",
+    "parameters": [
+      {
+        "name": "mode",
+        "type": "enum",
+        "enum": [
+          "summary",
+          "map"
+        ],
+        "required": false,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "framework_id",
+        "type": "string",
+        "format": "uuid",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bastion_create_export",
+    "description": "Start building an audit packet (POST /exports, 202): a zip of the framework's controls and state words, the evidence and uploaded files in the period (at most 400 days), attestations, exceptions, drift, the Statement of Applicability for ISO, a summary PDF and a manifest with every signed seal and public key. include_restricted needs bastion.evidence.read_restricted (403 RESTRICTED_NOT_ALLOWED). An ISO packet is refused until every Annex A requirement has an applicability decision (409 SOA_INCOMPLETE). Follow progress with bastion_list_exports; a person downloads the zip in Bastion. Needs bastion.export.create.",
+    "source": "bastion",
+    "parameters": [
+      {
+        "name": "framework_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "period_start",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "period_end",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "include_restricted",
+        "type": "boolean",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bastion_create_feed",
+    "description": "Set up a machine feed (POST /feeds): an API-push feed that an outside system sends records to with its own per-feed key, or a Bolt-event feed (source_kind \"bolt_event\" with bolt_source and bolt_event_type) that records matching suite events. Records are frozen as evidence. Minting the push key is a credential act a person does in Bastion (no tool). Needs bastion.feed.manage; 409 FEED_KEY_TAKEN if the key is in use.",
+    "source": "bastion",
+    "parameters": []
+  },
+  {
+    "mcp_tool": "bastion_create_policy",
+    "description": "Link a Beacon article as a policy people must read and acknowledge (POST /policies). Name the article by beacon_entry_id, or by beacon_slug (the last part of its Beacon link, /beacon/<slug>). The article must be shared with everyone (Beacon visibility Organization or Public; else 409 POLICY_NOT_SHARED). audience is everyone (default) or a list of members; cadence_days is how often it must be re-read (default 365). With control_id, Bastion proposes that control's two policy checks (read and acknowledged; kept current) pinned to this policy, for a person to confirm. 409 POLICY_ALREADY_LINKED. Needs bastion.policy.write (owners and admins).",
+    "source": "bastion",
+    "parameters": []
+  },
+  {
+    "mcp_tool": "bastion_create_questionnaire",
+    "description": "Add a security questionnaire (POST /questionnaires) from a Bin file (xlsx or csv; give bin_asset_id, the file must already be in Bin and virus-scanned) or from pasted rows (pasted_text; tab-separated as copied from a spreadsheet, or csv). Bastion guesses which column holds the questions; check it with bastion_get_questionnaire and fix it with bastion_update_questionnaire before drafting. Optionally link a Bond deal. 409 FILE_NOT_SCANNED_YET, 400 QUESTIONNAIRE_TOO_LARGE (over the per-questionnaire row limit). Needs bastion.questionnaire.write.",
+    "source": "bastion",
+    "parameters": [
+      {
+        "name": "title",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "bin_asset_id",
+        "type": "string",
+        "format": "uuid",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "pasted_text",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "pasted_format",
+        "type": "enum",
+        "enum": [
+          "tsv",
+          "csv"
+        ],
+        "required": false,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "requester_label",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "bond_deal_id",
+        "type": "string",
+        "format": "uuid",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "due_date",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "YYYY-MM-DD"
+      },
+      {
+        "name": "owner_user_id",
+        "type": "string",
+        "format": "uuid",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bastion_decide_applicability",
+    "description": "Record Statement of Applicability decisions. framework_id + decisions: decide several requirements by reference code at once, every control link of each code (POST /frameworks/:id/applicability). requirement_link_id + decision: decide one control-requirement link (PATCH /control-requirements/:id). \"not_applicable\" needs a plain reason. The decision is audited with who made it. Needs bastion.control.write.",
+    "source": "bastion",
+    "parameters": [
+      {
+        "name": "framework_id",
+        "type": "string",
+        "format": "uuid",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "requirement_link_id",
+        "type": "string",
+        "format": "uuid",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bastion_dismiss_gap",
+    "description": "Dismiss a gap with a reason (POST /gaps/:id/dismiss), for example when it does not apply to how the company works. Recorded in the Bastion audit log with who dismissed it; a dismissed gap stays dismissed when gaps are re-ranked. Needs bastion.gap.dismiss (owners and admins).",
+    "source": "bastion",
+    "parameters": [
+      {
+        "name": "gap_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": ""
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bastion_draft_answer",
+    "description": "Draft one answer now, nothing saved (POST /answers/draft): the drafted answer and yes/no, the confidence band (\"Sure\", \"Check this\", \"Needs an expert\") with the reasons, and the citations that passed can_access for the caller. Same hard rules as the autofill. Needs bastion.questionnaire.write.",
+    "source": "bastion",
+    "parameters": [
+      {
+        "name": "question",
+        "type": "string",
+        "required": true,
+        "nullable": false,
+        "description": ""
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bastion_evidence_for",
+    "description": "The evidence recorded for one control, newest first (GET /controls/:id/evidence): each snapshot's outcome (pass, fail, unprovable with a reason), the check that produced it, its window, counts, its hash and ledger position, and a plain explanation. Names and cited records are shown only to owners, admins and the control's owner; everyone else gets counts. Optional assertion_id narrows to one check. Pass next_cursor back as cursor while has_more is true. Read-only.",
+    "source": "bastion",
+    "parameters": [
+      {
+        "name": "control_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "assertion_id",
+        "type": "string",
+        "format": "uuid",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "cursor",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "next_cursor from the previous page."
+      },
+      {
+        "name": "limit",
+        "type": "number",
+        "format": "integer",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bastion_get_evidence",
+    "description": "One evidence snapshot by id (GET /evidence/:id), with the same counts-only rule as bastion_evidence_for. Read-only.",
+    "source": "bastion",
+    "parameters": [
+      {
+        "name": "evidence_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": ""
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bastion_get_policy_body",
+    "description": "The exact text of a policy's current version as Bastion serves it for acknowledgement (GET /policies/:id/body): title, Beacon version, the frozen body in Markdown, its SHA-256, Beacon's expiry, and whether the caller is asked to read it and is due. Refused with POLICY_NOT_SHARED when the article is no longer shared with everyone, and POLICY_NOT_READABLE when the caller cannot open it in Beacon. Reading it never acknowledges it: only the person can, signed in to Bastion. Read-only; needs bastion.attestation.read.",
+    "source": "bastion",
+    "parameters": [
+      {
+        "name": "policy_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": ""
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bastion_get_questionnaire",
+    "description": "One questionnaire (GET /questionnaires/:id) and, with include_items (default true), its answer grid (GET /questionnaires/:id/items): each question, the drafted answer and yes/no, the confidence band and why, the citations (controls and policies, re-checked with can_access for the caller and, with asker_user_id, for that person too), the review state, and what still blocks approval (\"N Needs an expert answers still to review\"). Read-only; needs bastion.questionnaire.read.",
+    "source": "bastion",
+    "parameters": [
+      {
+        "name": "questionnaire_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "include_items",
+        "type": "boolean",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "needs_review",
+        "type": "boolean",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bastion_get_settings",
+    "description": "Bastion's settings for the organization (GET /settings): remediation mode, check time and timezone, AI provider and the providers available, expiry warnings, staleness, auditor-link and packet limits, questionnaire floors and limits; plus evidence integrity (seal and personal-data key fingerprints, restores awaiting an owner's acknowledgement), the off-site evidence backup status and how many deliveries failed. Read-only; needs bastion.settings.read.",
+    "source": "bastion",
+    "parameters": []
+  },
+  {
+    "mcp_tool": "bastion_get_setup_status",
+    "description": "Where Bastion setup stands (GET /setup): adopted frameworks and their latest compile run, the company profile, the Compliance project, the proposed checks waiting for a person (with any lists of systems awaiting \"This is the complete list\"), ISO applicability progress, and which required steps are done. Read-only; the setup steps themselves are done by a person in Bastion.",
+    "source": "bastion",
+    "parameters": []
+  },
+  {
+    "mcp_tool": "bastion_link_manual_evidence",
+    "description": "Link uploaded evidence to a manual check it proves (POST /manual-evidence/:id/links). The link counts only after a second person reviews it in Bastion (there is no tool for the review). Re-linking an unlinked check starts a fresh review. Needs bastion.evidence.link.",
+    "source": "bastion",
+    "parameters": [
+      {
+        "name": "manual_evidence_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "assertion_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": ""
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bastion_list_auditor_requests",
+    "description": "Requests auditors raised in auditor rooms (GET /auditor-requests), optionally for one room or one status (open, answered, closed). Read-only; floored: needs bastion.auditor_room.read.",
+    "source": "bastion",
+    "parameters": [
+      {
+        "name": "room_id",
+        "type": "string",
+        "format": "uuid",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bastion_list_auditor_rooms",
+    "description": "Auditor rooms (read-only). Without room_id: every room with its scope, expiry and state (GET /auditor-rooms). With room_id: that room's access log, who opened what and when (GET /auditor-rooms/:id/access-log). Floored: needs bastion.auditor_room.read. Creating, revoking or unlocking a room is a disclosure act with no tool (a signed-in person does it in Bastion).",
+    "source": "bastion",
+    "parameters": [
+      {
+        "name": "room_id",
+        "type": "string",
+        "format": "uuid",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bastion_list_controls",
+    "description": "The organization's controls in one framework view (or all adopted frameworks), each with its requirement reference codes, its setup state (set_up, not_set_up, not_applicable) and assertion counts, plus the view's counts including \"Not set up yet\" (GET /controls). Filter by setup state, lifecycle (active or retired) or a text query. Read-only.",
+    "source": "bastion",
+    "parameters": [
+      {
+        "name": "framework_id",
+        "type": "string",
+        "format": "uuid",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "q",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bastion_list_delivery_problems",
+    "description": "Updates Bastion could not deliver to other apps after every retry (GET /delivery-problems): what it was (a Bolt event, a Compliance task, a comment, a seal copy), how many attempts, when, and the last error. Retry one with bastion_retry_delivery. Needs bastion.settings.write (owners and admins).",
+    "source": "bastion",
+    "parameters": [
+      {
+        "name": "limit",
+        "type": "number",
+        "format": "integer",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bastion_list_drift",
+    "description": "Controls that got worse (GET /drift), newest first: from and to state in plain words, why (the check failed, the accepted risk ran out, evidence expired, ...), what happened to the control's Bam task (created, reopened, no Compliance project), and whether someone acknowledged it. Filter by control or unacknowledged=true; page with before = next_cursor. Read-only; needs bastion.drift.read.",
+    "source": "bastion",
+    "parameters": []
+  },
+  {
+    "mcp_tool": "bastion_list_evaluations",
+    "description": "Evaluation runs, newest first (GET /evaluations, optional status filter and limit; pass next_cursor back as cursor while has_more is true), or one run with run_id (GET /evaluations/:id): trigger (nightly, manual, agent), scope, status (queued, running, succeeded, partial with a reason such as restore_pending, failed), and the counts checked so far. Read-only.",
+    "source": "bastion",
+    "parameters": [
+      {
+        "name": "run_id",
+        "type": "string",
+        "format": "uuid",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "cursor",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "next_cursor from the previous page."
+      },
+      {
+        "name": "limit",
+        "type": "number",
+        "format": "integer",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bastion_list_exceptions",
+    "description": "Accepted risks (exceptions). Without exception_id: newest first, filtered by status (proposed, active, expired, rejected) or control (GET /exceptions). With exception_id: one exception (GET /exceptions/:id). Each shows the control and its owner, scope (one item for up to 365 days, or a whole check for up to 90 days covering only the items failing when it was approved), reason, compensating note, who proposed and who approved it (\"approved by the proposer (small team)\" when a team of fewer than three self-approved), expiry and days left. An active exception makes the control read \"Not met, risk accepted\"; it still counts under Not met, never as proof. Read-only.",
+    "source": "bastion",
+    "parameters": [
+      {
+        "name": "exception_id",
+        "type": "string",
+        "format": "uuid",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bastion_list_exports",
+    "description": "Audit packets, newest first (GET /exports): framework, period, whether restricted evidence is included, status (queued, running, succeeded, failed, expired), the current stage in words (\"Writing evidence\", \"Zipping\", \"Ready to download\") and any failure reason. Read-only; floored: needs bastion.export.read.",
+    "source": "bastion",
+    "parameters": [
+      {
+        "name": "limit",
+        "type": "number",
+        "format": "integer",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bastion_list_feed_records",
+    "description": "Records one feed received, newest first (GET /feeds/:id/records): idempotency key, when it happened and was received, its payload hash and ledger position, and its subject unless redacted. Page with before = next_cursor while has_more is true. Read-only; both the caller and the asker need bastion.feed.read.",
+    "source": "bastion",
+    "parameters": [
+      {
+        "name": "feed_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": ""
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bastion_list_feeds",
+    "description": "Machine feeds (GET /feeds): each feed's key, label, kind (API push or Bolt event), expected cadence, whether it is up to date, records today against its daily limit, active key count and total records. Never returns key secrets. Read-only; needs bastion.feed.read.",
+    "source": "bastion",
+    "parameters": []
+  },
+  {
+    "mcp_tool": "bastion_list_fix_drafts",
+    "description": "Drafted fixes (the review queue). Without fix_draft_id: newest first, filtered by status (proposed, approved, rejected, expired, applied, decision_rejected), gap or control (GET /fix-drafts). With fix_draft_id: one draft (GET /fix-drafts/:id). Each draft has its title, plain body, template, control, who drafted it, the mirrored proposal and its expiry, and cited items the caller may see (others are counted, not shown). decision_rejected means the proposal was decided outside Bastion and that decision was ignored. Read-only; needs bastion.fix.read.",
+    "source": "bastion",
+    "parameters": [
+      {
+        "name": "fix_draft_id",
+        "type": "string",
+        "format": "uuid",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bastion_list_frameworks",
+    "description": "Compliance frameworks (SOC 2, ISO 27001). Without framework_id: the adopted frameworks with their setup counts and Statement of Applicability progress, plus the built-in templates and whether each is adopted (GET /frameworks, GET /library/templates). With framework_id: that framework (GET /frameworks/:id), and with include_requirements=true every requirement with its reference code, our plain summary, the linked controls and the applicability decision (GET /frameworks/:id/requirements). Read-only.",
+    "source": "bastion",
+    "parameters": [
+      {
+        "name": "framework_id",
+        "type": "string",
+        "format": "uuid",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "include_requirements",
+        "type": "boolean",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "include_archived",
+        "type": "boolean",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bastion_list_manual_evidence",
+    "description": "Uploaded evidence and written statements (the Evidence locker). Without manual_evidence_id: a list, newest first, filtered by status (pending_scan, active, superseded, withdrawn, blocked), kind (file or attestation_statement), a check (assertion_id), a control (control_id), or stuck=true for uploads waiting more than a day for a virus scan, plus counts (GET /manual-evidence). With manual_evidence_id: one item with its linked checks and their review state (GET /manual-evidence/:id). Each item shows its owner, who uploaded it, its period, when it expires (days_left), and whether it was virus-scanned. Restricted items are masked, or not found, unless both the caller and the asker may read restricted evidence. Read-only.",
+    "source": "bastion",
+    "parameters": [
+      {
+        "name": "manual_evidence_id",
+        "type": "string",
+        "format": "uuid",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bastion_list_probes",
+    "description": "The closed menu of automatic checks Bastion can run against suite data (GET /probes): key, version, a plain title and description, whether it checks a confirmed list of systems (population_kind), and whether it is provided by the hosting platform. Read-only.",
+    "source": "bastion",
+    "parameters": []
+  },
+  {
+    "mcp_tool": "bastion_list_questionnaires",
+    "description": "Security questionnaires in Bastion, newest first (GET /questionnaires): title, who asked, status (mapping, answering, in_review, approved, exported, failed), how many rows are drafted and how many are \"Sure\" (high), \"Check this\" (medium) and \"Needs an expert\" (low). Read-only; needs bastion.questionnaire.read (members and above).",
+    "source": "bastion",
+    "parameters": [
+      {
+        "name": "limit",
+        "type": "number",
+        "format": "integer",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bastion_list_restores",
+    "description": "Gaps in the evidence ledger found after a database restore (GET /ledger/restores): each lost range as \"History lost by restore, epoch E seq X-Y\" or \"Unexplained gap, epoch E seq X-Y\", whether recording is paused until an owner resolves it, and the ranges recorded in storage that the database no longer holds. Read-only; resolving a gap is a signed-in owner's act in Bastion and has no tool. Newest first; pass next_cursor back as cursor while has_more is true (the storage-only ranges come with the first page).",
+    "source": "bastion",
+    "parameters": [
+      {
+        "name": "cursor",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "next_cursor from the previous page."
+      },
+      {
+        "name": "limit",
+        "type": "number",
+        "format": "integer",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bastion_list_seals",
+    "description": "The signed daily seals of the evidence ledger (GET /ledger/seals): seal date, epoch, head position and hash, Ed25519 signature, signing key id, and when the seal object reached storage and was published; plus every signing key (current and retired) with its public key so anyone can check old seals. Newest first; pass next_cursor back as cursor while has_more is true. Read-only.",
+    "source": "bastion",
+    "parameters": [
+      {
+        "name": "cursor",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": "next_cursor from the previous page."
+      },
+      {
+        "name": "limit",
+        "type": "number",
+        "format": "integer",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bastion_mark_fix_applied",
+    "description": "Record that an approved fix was carried out elsewhere (POST /fix-drafts/:id/mark-applied), optionally naming what was made: the Beacon policy draft (beacon.entry) or the Bolt automation (bolt.rule), by applied_entity_id, or for a Beacon article by applied_entity_slug (the last part of its /beacon/<slug> link). The named item must be visible to the caller; a link from the fix to it is recorded. 409 FIX_NOT_APPROVED unless a person approved the fix first. Needs bastion.fix.mark_applied.",
+    "source": "bastion",
+    "parameters": [
+      {
+        "name": "fix_draft_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": ""
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bastion_my_attestations",
+    "description": "The caller's own policies to read (GET /me/attestations): each policy they are asked to read, whether they are due (\"Please read and acknowledge\", \"A new version or a new year: please read it again\", \"Read and acknowledged\"), the version they last acknowledged and when it is next due. Read-only; needs bastion.attestation.read.",
+    "source": "bastion",
+    "parameters": []
+  },
+  {
+    "mcp_tool": "bastion_not_applicable_suggestions",
+    "description": "The AI compile's \"this requirement may not apply\" suggestions for a framework (GET /frameworks/:id/not-applicable-suggestions): each undecided requirement the compiler thinks may not apply, with the controls that said so and their reasons. A suggestion is not a decision: the control still gets the library's checks until a person decides the requirement in Setup (or through POST /frameworks/:id/applicability). Decided requirements are not listed. Read-only; needs bastion.framework.read.",
+    "source": "bastion",
+    "parameters": [
+      {
+        "name": "framework_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": ""
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bastion_propose_assertion",
+    "description": "Propose a new check for a control (control_id + proposal: POST /controls/:id/assertions) or a revision of an existing one (revise_assertion_id + revision: POST /assertions/:id/revise, which files a superseding proposed check). Probe checks use the closed probe menu (see bastion_list_probes); parameters outside the probe's range are refused. Everything lands as proposed; only a signed-in person can confirm it in Bastion. Give exactly one of control_id or revise_assertion_id.",
+    "source": "bastion",
+    "parameters": [
+      {
+        "name": "control_id",
+        "type": "string",
+        "format": "uuid",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "revise_assertion_id",
+        "type": "string",
+        "format": "uuid",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bastion_propose_exception",
+    "description": "Propose accepting a risk on a control (POST /exceptions). scope \"entity\" covers one cited item (cited_entity_type + cited_entity_id, for example the long-lived \"Radio Relay\" key) for up to 365 days; scope \"assertion\" covers one whole check (assertion_id) for up to 90 days and, once approved, only the items failing at that moment. expires_on is a date in the organization's time zone. A PERSON other than the proposer decides it inside Bastion (fewer than three people: the proposer may, labelled); there is no tool to decide it. 400 EXPIRY_TOO_LONG, CITATION_NOT_VISIBLE, NOT_A_CONTROL_CHECK. Needs bastion.exception.propose.",
+    "source": "bastion",
+    "parameters": []
+  },
+  {
+    "mcp_tool": "bastion_propose_fix",
+    "description": "Draft the fix for one open gap (POST /gaps/:id/propose-fix). The template comes from the gap (nobody picks it): confirm a check, ask the owner for evidence, change a setting, connect a source, add a Bolt automation (created turned off, only create_task in the Compliance project or a Banter post), draft a policy, or start a short procedure. The draft is filed as a platform proposal that a PERSON decides inside Bastion (the generic proposal decide answers DECIDE_IN_APP); there is no tool to decide it. Cited items you cannot see are dropped. 409 FIX_ALREADY_PROPOSED, GAP_NOT_OPEN or NO_FIX_FOR_GAP. Needs bastion.fix.draft.",
+    "source": "bastion",
+    "parameters": [
+      {
+        "name": "gap_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": ""
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bastion_questionnaire_autofill",
+    "description": "Ask Bastion to draft every answer (POST /questionnaires/:id/autofill, 202). The worker drafts in the background from the organization's own controls, checks, policies and approved answers (about 10-20 s a question; a 96-row questionnaire takes roughly 16-32 minutes); poll bastion_get_questionnaire. A failing or unprovable control makes an answer \"Needs an expert\" with \"We cannot currently prove this\"; an accepted exception caps it at \"Check this\" and is named. redraft true drafts again every row nobody reviewed. Drafting never approves anything. Needs bastion.questionnaire.write.",
+    "source": "bastion",
+    "parameters": [
+      {
+        "name": "questionnaire_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "redraft",
+        "type": "boolean",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "use_ai",
+        "type": "boolean",
+        "required": false,
+        "nullable": false,
+        "description": "false drafts without the AI: approved library answers (with the hard rules) or left for a person."
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bastion_request_attestations",
+    "description": "Ask the people still due on a policy to read it (POST /policies/:id/request-attestations): one attestation.overdue Bolt event per person, at most once per person, version and day (a repeat the same day nudges nobody). Optionally only the named members. It does not acknowledge anything. Needs bastion.attestation.request (owners and admins).",
+    "source": "bastion",
+    "parameters": [
+      {
+        "name": "policy_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "user_ids",
+        "type": "array",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bastion_respond_auditor_request",
+    "description": "Answer or close a question an auditor sent from an auditor room (PATCH /auditor-requests/:id). status \"answered\" needs answer_note (the reply the team keeps); \"closed\" just closes it. 409 REQUEST_CLOSED if it was closed already. Needs bastion.auditor_room.respond (owners and admins).",
+    "source": "bastion",
+    "parameters": [
+      {
+        "name": "request_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "status",
+        "type": "enum",
+        "enum": [
+          "answered",
+          "closed"
+        ],
+        "required": true,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "answer_note",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bastion_retry_delivery",
+    "description": "Try one failed delivery again (POST /delivery-problems/:id/retry). If a newer update of the same kind for the same thing was already delivered, the old one is marked no longer needed (result \"superseded\") instead of being replayed. 409 NOT_DEAD when it is not a failed delivery. Needs bastion.settings.write.",
+    "source": "bastion",
+    "parameters": [
+      {
+        "name": "delivery_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": ""
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bastion_run_evaluation",
+    "description": "Check the controls now instead of waiting for the nightly run (POST /evaluations, 202 with the queued run). Without control_id every in-scope control is checked; with control_id only that one. Runs are recorded as started by an agent when the caller is one. Poll bastion_list_evaluations with run_id for progress. If an evaluation of the same scope is already going this returns 409 EVALUATION_RUNNING; it finishes on its own. Checks only read suite data; nothing is changed.",
+    "source": "bastion",
+    "parameters": []
+  },
+  {
+    "mcp_tool": "bastion_save_company_profile",
+    "description": "Save answers to the ten setup questions about the company (PATCH /setup/profile): size, where people work, own premises, builds software, uses GitHub, keeps customer personal data, takes card payments, runs in the cloud, has contractors, issues laptops. Answers given are merged into the saved profile. Needs bastion.framework.write.",
+    "source": "bastion",
+    "parameters": []
+  },
+  {
+    "mcp_tool": "bastion_search_answer_library",
+    "description": "Search the approved answers (GET /answer-library): full-text over question and answer, best first, with who approved each and its citations (re-checked with can_access, and for asker_user_id too). An answer is marked stale when a control it relies on changed its status since approval; include_stale false hides those, include_retired true shows retired ones. Read-only; needs bastion.answer_library.read.",
+    "source": "bastion",
+    "parameters": [
+      {
+        "name": "q",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "include_stale",
+        "type": "boolean",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "include_retired",
+        "type": "boolean",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "limit",
+        "type": "number",
+        "format": "integer",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bastion_set_compliance_project",
+    "description": "Record the Bam project Bastion files its remediation tasks in (POST /setup/compliance-project). The caller must be a member of that project (SuperUsers excepted); otherwise 404, the same as an unknown project. To create a new \"Compliance\" project first, use Bam's create_project, then pass its id here. Needs bastion.framework.write.",
+    "source": "bastion",
+    "parameters": []
+  },
+  {
+    "mcp_tool": "bastion_unlink_manual_evidence",
+    "description": "Remove the link between uploaded evidence and a check (DELETE /manual-evidence/:id/links/:assertion_id). If the link had been reviewed, the control is checked again so its status reflects the change. Needs bastion.evidence.link.",
+    "source": "bastion",
+    "parameters": [
+      {
+        "name": "manual_evidence_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "assertion_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": ""
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bastion_update_answer_library",
+    "description": "Curate one approved answer (PATCH /answer-library/:id): reword it, change its yes/no, mark it checked after its control changed (stale false), or retire it (retired true; false brings it back). Needs bastion.answer_library.write (owners and admins).",
+    "source": "bastion",
+    "parameters": [
+      {
+        "name": "answer_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "answer_text",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "yes_no",
+        "type": "boolean",
+        "required": false,
+        "nullable": true,
+        "description": ""
+      },
+      {
+        "name": "stale",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "retired",
+        "type": "boolean",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bastion_update_feed",
+    "description": "Change a feed's label, how often it should send records (cadence_days), its daily record limit, or its status (active, paused, retired) (PATCH /feeds/:id). Give only the fields to change. Needs bastion.feed.manage.",
+    "source": "bastion",
+    "parameters": [
+      {
+        "name": "feed_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": ""
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bastion_update_framework",
+    "description": "Rename a framework or change its audit target date or audit period (PATCH /frameworks/:id). Give only the fields to change. Needs bastion.framework.write.",
+    "source": "bastion",
+    "parameters": [
+      {
+        "name": "framework_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": ""
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bastion_update_policy",
+    "description": "Change a policy's audience, re-read cadence or owner, or retire it (status \"retired\") (PATCH /policies/:id). Retiring keeps every acknowledgement already recorded (they are immutable). Needs bastion.policy.write (owners and admins).",
+    "source": "bastion",
+    "parameters": [
+      {
+        "name": "policy_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "cadence_days",
+        "type": "number",
+        "format": "integer",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "owner_user_id",
+        "type": "string",
+        "format": "uuid",
+        "required": false,
+        "nullable": true,
+        "description": ""
+      },
+      {
+        "name": "status",
+        "type": "enum",
+        "enum": [
+          "active",
+          "retired"
+        ],
+        "required": false,
+        "nullable": false,
+        "description": ""
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bastion_update_questionnaire",
+    "description": "Change a questionnaire's title, requester, due date, owner or Bond deal, or its column mapping (PATCH /questionnaires/:id). The mapping can only change before answers are drafted (409 MAPPING_LOCKED); changing it rebuilds the question list. Needs bastion.questionnaire.write.",
+    "source": "bastion",
+    "parameters": [
+      {
+        "name": "questionnaire_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "title",
+        "type": "string",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      },
+      {
+        "name": "requester_label",
+        "type": "string",
+        "required": false,
+        "nullable": true,
+        "description": ""
+      },
+      {
+        "name": "due_date",
+        "type": "string",
+        "required": false,
+        "nullable": true,
+        "description": ""
+      },
+      {
+        "name": "owner_user_id",
+        "type": "string",
+        "format": "uuid",
+        "required": false,
+        "nullable": true,
+        "description": ""
+      },
+      {
+        "name": "bond_deal_id",
+        "type": "string",
+        "format": "uuid",
+        "required": false,
+        "nullable": true,
+        "description": ""
+      },
+      {
+        "name": "drop_unmapped_sheets",
+        "type": "boolean",
+        "required": false,
+        "nullable": false,
+        "description": "A column_map must list every sheet that holds questions (409 SHEETS_DROPPED); true confirms dropping the questions on the sheets it leaves out."
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bastion_update_settings",
+    "description": "Change Bastion settings (PATCH /settings); send only the fields to change. Each change is audited with its old and new value. 400 BAD_TIMEZONE for an unknown zone, FLOORS_OUT_OF_ORDER when the \"Check this\" floor is not below the \"Sure\" floor; 404 for an AI provider the organization cannot use. Needs bastion.settings.write (owners and admins).",
+    "source": "bastion",
+    "parameters": []
+  },
+  {
+    "mcp_tool": "bastion_upsert_control",
+    "description": "Create a custom control (create: POST /controls; its key becomes custom:<slug>, optionally linked to framework requirements) or edit an existing control's title, summary, category, owner or risk weight (control_id + changes: PATCH /controls/:id). Give exactly one of create, or control_id with changes. Needs bastion.control.write.",
+    "source": "bastion",
+    "parameters": [
+      {
+        "name": "control_id",
+        "type": "string",
+        "format": "uuid",
+        "required": false,
+        "nullable": false,
+        "description": ""
+      }
+    ]
+  },
+  {
+    "mcp_tool": "bastion_verify_evidence",
+    "description": "Verify one evidence snapshot (GET /evidence/:id/verify): re-hashes its ledger entry and stored file, checks the personal-data commitment, and walks the chain to the next signed daily seal. result is intact, hash_mismatch, object_missing (\"Evidence file missing\"), redacted, pd_mismatch or key_changed; recent evidence reads \"Not sealed yet\" until the nightly seal. Read-only.",
+    "source": "bastion",
+    "parameters": [
+      {
+        "name": "evidence_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": ""
+      }
+    ]
+  },
+  {
     "mcp_tool": "bay_annotation_create",
     "description": "Post a coordinate-anchored annotation on a Bay version. The anchor is structured + queryable: video → {type:\"frame\",frame} or {type:\"timerange\",start,end}; image → {type:\"region\",x,y,w,h}; 3D → {type:\"viewpoint\",camera}. This is how an agent posts automated-QC findings next to human notes.",
     "source": "bay",

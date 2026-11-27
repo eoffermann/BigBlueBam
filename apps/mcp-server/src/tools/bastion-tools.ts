@@ -9,7 +9,7 @@ import {
   bastionRunEvaluationSchema,
 } from '@bigbluebam/shared';
 // M6 decision tools (registerBastionDecisionTools at the very end).
-// Every M6 tool input is taken from the route's own shared schema (#231): the tool advertises
+// Every M6 tool input is taken from the shared schema of its route (#231): the tool advertises
 // exactly what the route enforces, and a bound changed in shared changes both.
 import {
   bastionDriftAcknowledgeSchema,
@@ -70,14 +70,12 @@ import {
 } from '@bigbluebam/shared';
 
 /**
- * Bastion MCP tool handlers, PENDING registration (spec 5.4).
+ * Bastion MCP tool handlers (spec 5.4), registered by server.ts.
  *
- * This file deliberately lives outside src/tools/ and is not named *-tools.ts, and server.ts does
- * not import it: scripts/check-tool-return-coverage.mjs and the docs catalog
- * (scripts/docs/lib/tool-source.mjs listAllToolModules) both read the tools directory, so Bastion's
- * tools stay out of the published counts until the M11 merge unit moves this file to
- * src/tools/bastion-tools.ts and registers it with the Launchpad row. Each milestone adds the
- * handlers for the routes it ships, typed off the shared Zod in @bigbluebam/shared, with tests.
+ * Built from M2 to M10 under src/tools-pending/bastion.ts, outside the counted tool surface, and
+ * moved here and registered in the M11 merge unit, so scripts/check-tool-return-coverage.mjs and
+ * the docs catalog (scripts/docs/lib/tool-source.mjs) count them from M11 on. Each milestone added
+ * the handlers for the routes it shipped, typed off the shared Zod in @bigbluebam/shared, with tests.
  *
  * M3 (this file's first content): frameworks, controls, assertions, probes and setup status.
  * M4: run an evaluation, evaluation runs, evidence, verification, seals and restores. Resolving
@@ -719,7 +717,7 @@ export function registerBastionEvidenceTools(server: McpServer, client: BastionC
     input: {
       asker_user_id: askerUserId,
       manual_evidence_id: z.string().uuid().optional(),
-      // The route's own filters (#215): the tool and GET /manual-evidence validate alike.
+      // Filters of the route itself (#215): the tool and GET /manual-evidence validate alike.
       ...bastionManualEvidenceListQuerySchema.shape,
       limit: bastionManualEvidenceListQuerySchema.shape.limit.optional(),
     },
@@ -800,7 +798,7 @@ export function registerBastionEvidenceTools(server: McpServer, client: BastionC
     input: {
       asker_user_id: askerUserId,
       feed_id: z.string().uuid(),
-      // The route's own paging (#215).
+      // Paging of the route itself (#215).
       limit: bastionFeedRecordListQuerySchema.shape.limit.optional(),
       before: bastionFeedRecordListQuerySchema.shape.before,
     },
@@ -1062,7 +1060,7 @@ export function registerBastionPolicyTools(server: McpServer, client: BastionCli
     name: 'bastion_create_policy',
     description:
       'Link a Beacon article as a policy people must read and acknowledge (POST /policies). Name the article by beacon_entry_id, or by beacon_slug (the last part of its Beacon link, /beacon/<slug>). The article must be shared with everyone (Beacon visibility Organization or Public; else 409 POLICY_NOT_SHARED). audience is everyone (default) or a list of members; cadence_days is how often it must be re-read (default 365). With control_id, Bastion proposes that control\'s two policy checks (read and acknowledged; kept current) pinned to this policy, for a person to confirm. 409 POLICY_ALREADY_LINKED. Needs bastion.policy.write (owners and admins).',
-    // The route's own fields (#239: beacon_entry_id, or the beacon_slug from an article link);
+    // Fields of the route itself (#239: beacon_entry_id, or the beacon_slug from an article link);
     // the handler re-parses with the full schema for "exactly one of the two".
     input: { ...bastionPolicyCreateFields.shape },
     returns: z.record(z.unknown()),

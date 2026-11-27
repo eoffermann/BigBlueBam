@@ -14,6 +14,7 @@ import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { readLaunchpadCatalog, docDirForAppId } from './lib/tool-source.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -570,16 +571,29 @@ function main() {
     }
   }
 
+  // The README app catalog is the Launchpad roster (plus the suite introduction):
+  // an app whose docs exist but which is not yet in LAUNCHPAD_CATALOG is still
+  // being built and is withheld from the README, exactly as it is withheld from
+  // the Launchpad, the /docs catalog and the published app count.
+  const launchpadDirs = new Set(readLaunchpadCatalog().map((e) => docDirForAppId(e.id)));
+  const readmeMetas = Object.fromEntries(
+    Object.entries(appMetas).filter(([name]) => name === 'introduction' || launchpadDirs.has(name)),
+  );
+  const withheld = Object.keys(appMetas).filter((name) => !(name in readmeMetas));
+  if (withheld.length) {
+    console.log(`  Withheld from the README (not in LAUNCHPAD_CATALOG yet): ${withheld.join(', ')}`);
+  }
+
   // --check: compare README AUTODOCS regions only; no writes, no side effects.
   if (checkMode) {
     console.log('[README check]');
-    checkReadme(appMetas);
+    checkReadme(readmeMetas);
     return;
   }
 
   // 1. README rewrite
   console.log('[README rewrite]');
-  rewriteReadme(appMetas);
+  rewriteReadme(readmeMetas);
   console.log('');
 
   // --readme-only stops here: no marketing sync, screenshot manifest, or regen

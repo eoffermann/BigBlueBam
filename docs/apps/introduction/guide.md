@@ -37,7 +37,7 @@ designed so AI agents can do real work on the same surfaces as the people.
   office carries your presence across every app, so voice and video feel like a
   hallway run-in rather than a scheduled meeting
 - **Agent parity, not a sidebar** - nearly every action a person can take is also
-  an MCP tool (885 across the suite), so an AI agent works the same
+  an MCP tool (951 across the suite), so an AI agent works the same
   boards with the same permissions and the same audit trail as a teammate
 - **Event-driven automation** - Bolt listens for events from any app and runs the
   next step, so the integrations extend without glue code
@@ -87,7 +87,7 @@ the same audit trail. Destructive actions require a two-step confirmation. This 
 not a chat sidebar bolted onto the product; it is the product, reachable by a tool
 call.
 
-The suite exposes 885 tools. They divide into per-app catalogs and a
+The suite exposes 951 tools. They divide into per-app catalogs and a
 shared cross-cutting platform layer (identity and audit, cross-app search, the
 unified activity stream, approval queues, visibility checks, entity links,
 attachments, agent policies and webhooks, and more) that any agent can use across
