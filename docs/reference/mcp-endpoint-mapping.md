@@ -108,7 +108,7 @@ stay terse:
   forward. Wrapping them requires threading that separate credential, so they
   are intentionally left `—` this pass and annotated accordingly in the Helpdesk
   table. The customer/agent read tools (search, by-number, similar) are
-  unaffected.
+  unaffected. The helpdesk admin routes do accept the Bearer Bam API key (#325).
 - **Bam org/admin held to a conservative scope.** Bam member/account-lifecycle,
   guest, OAuth/SSO, SuperUser, permissions-admin, integration (GitHub / Slack /
   webhooks), iCal, LLM-provider, and credential (API-key / service-account)
@@ -359,8 +359,8 @@ MCP tool modules in scope: `me-tools`, `member-tools`, `user-resolver-tools`, `p
 | `GET /org/launchpad-apps` | — _(skip: resolver; `set_org_launchpad_apps` covers the override)_ | Get org Launchpad override + platform default, plus `catalog_detail` (every app's name/description/path) that the Org Launchpad tab renders its rows from (#158) | `apps/frontend/src/pages/settings.tsx` |
 | `PUT /org/launchpad-apps` | `set_org_launchpad_apps` | Set/clear org Launchpad override | `apps/frontend/src/pages/settings.tsx` |
 | `GET /org/members` | `list_members` | List org members (guest-scoped subset) | `apps/frontend/src/pages/people/index.tsx` |
-| `PATCH /org/members/:userId` | `bam_update_member_role` | Update member org role | `apps/frontend/src/pages/people/detail.tsx` |
-| `DELETE /org/members/:userId` | `bam_remove_member_from_org` | Remove member from org | `apps/frontend/src/pages/people/detail.tsx` |
+| `PATCH /org/members/:userId` | `bam_update_member_role` | Update member org role (a demotion below admin downgrades the member's admin-scope API keys for the org to read_write) | `apps/frontend/src/pages/people/detail.tsx` |
+| `DELETE /org/members/:userId` | `bam_remove_member_from_org` | Remove member from org (deletes the member's API keys bound to the org) | `apps/frontend/src/pages/people/detail.tsx` |
 | `GET /org/members/:userId` | `bam_get_org_member` | Get member detail | `apps/frontend/src/pages/people/detail.tsx` |
 | `GET /org/members/:userId/activity` | `bam_get_member_activity` | Member activity feed (paginated) | `apps/frontend/src/pages/people/detail.tsx` |
 | `GET /org/members/:userId/api-keys` | — _(skip: raw credential/API-key admin)_ | List a member's API keys | `apps/frontend/src/pages/people/detail.tsx` |
@@ -596,7 +596,7 @@ Covers `permissions-admin.routes.ts` and `permissions-divergences.routes.ts`.
 | --- | --- | --- | --- |
 | `GET /projects/:id/slack-integration` | — _(skip: Slack integration config — UI-only)_ | Get project Slack integration config | `apps/frontend/src/pages/settings.tsx` |
 | `PUT /projects/:id/slack-integration` | — _(skip: Slack integration config — UI-only)_ | Upsert Slack integration (SSRF-guarded) | `apps/frontend/src/pages/settings.tsx` |
-| `POST /projects/:id/slack-integration/test` | — _(skip: Slack integration config — UI-only)_ | Send a Slack test message | `apps/frontend/src/pages/settings.tsx` |
+| `POST /projects/:id/slack-integration/test` | — _(skip: Slack integration config — UI-only)_ | Send a Slack test message (egress-guard safeFetch; a stored URL that now resolves private returns 400) | `apps/frontend/src/pages/settings.tsx` |
 | `DELETE /projects/:id/slack-integration` | — _(skip: Slack integration config — UI-only)_ | Disconnect Slack integration | `apps/frontend/src/pages/settings.tsx` |
 | `POST /webhooks/slack/command` | — _(skip: inbound webhook — public-inbound)_ | Public Slack slash-command handler | external (Slack) |
 
@@ -637,7 +637,7 @@ Covers `permissions-admin.routes.ts` and `permissions-divergences.routes.ts`.
 | REST endpoint | MCP tool | Description | UI call site |
 | --- | --- | --- | --- |
 | `GET /llm-providers` | — _(skip: LLM provider credentials admin — UI/CLI-only)_ | List LLM providers visible to caller | `apps/frontend/src/hooks/use-llm-providers.ts` |
-| `POST /llm-providers` | — _(skip: LLM provider credentials admin — UI/CLI-only)_ | Create scoped LLM provider (SSRF-guarded) | `apps/frontend/src/pages/settings-llm-providers.tsx` |
+| `POST /llm-providers` | — _(skip: LLM provider credentials admin — UI/CLI-only)_ | Create scoped LLM provider (SSRF-guarded by egress-guard incl. DNS; a self-hosted model on a private network needs EGRESS_ALLOW_PRIVATE_HOSTS) | `apps/frontend/src/pages/settings-llm-providers.tsx` |
 | `GET /llm-providers/resolve` | — _(skip: LLM provider credentials admin — UI/CLI-only)_ | Resolve effective provider for context | `apps/frontend/src/hooks/use-llm-providers.ts` |
 | `GET /llm-providers/:id` | — _(skip: LLM provider credentials admin — UI/CLI-only)_ | Get LLM provider detail | `apps/frontend/src/pages/settings-llm-providers.tsx` |
 | `PATCH /llm-providers/:id` | — _(skip: LLM provider credentials admin — UI/CLI-only)_ | Update LLM provider | `apps/frontend/src/pages/settings-llm-providers.tsx` |
@@ -1707,14 +1707,17 @@ The realtime hub at `/bureau/ws` (a `GET /bureau/ws` upgrade on bureau-api, driv
 the upstream registers, so external path = `/helpdesk/api/` + the part after `/helpdesk/`.)
 
 > **Helpdesk auth coupling (whole surface).** helpdesk-api authenticates against its OWN credential
-> system — a `helpdesk_session` cookie (customer/admin) or a per-agent `X-Agent-Key` (`hdag_`-prefixed)
+> system — a `helpdesk_session` cookie (customer) or a per-agent `X-Agent-Key` (`hdag_`-prefixed)
 > on `/helpdesk/api/agents/*` — NOT the Bam Bearer token + `X-Org-Id` that the MCP wrappers forward.
-> A Bam service-account Bearer is rejected by both `requireAdminAuth` and `requireAgentAuth` (verified
-> by local smoke: even `helpdesk_get_settings` returns `UNAUTHORIZED`). So the `/helpdesk/api/agents/*`
-> mutation routes are left `—`, and the helpdesk MCP tools are only reachable when the forwarded
-> credential maps to a valid helpdesk session/agent key. Giving the MCP service account first-class
-> helpdesk access (mint + thread an `X-Agent-Key`, or have helpdesk-api trust a Bam service token) is a
-> tracked cross-service auth follow-up. Fixed this pass: the `by-number` resolver path now targets the
+> **Exception, the admin routes (#325):** `requireAdminAuth` (settings, admin/projects, helpdesk-user
+> upsert, count-by-phrase) accepts the caller's Bam API key as `Authorization: Bearer bbam_...`,
+> verified the way apps/api verifies it, pinned to the key's org, and needing an `admin`-scope key
+> for writes. So `helpdesk_get_settings`, `helpdesk_update_settings`, `helpdesk_set_default_project`,
+> `helpdesk_upsert_user` and `helpdesk_ticket_count_by_phrase` work for an org admin's key.
+> `requireAgentAuth` still rejects Bearer, so the `/helpdesk/api/agents/*` mutation routes are left
+> `—`, and the ticket tools are only reachable when the forwarded credential maps to a valid
+> helpdesk session/agent key. Giving the agent routes the same Bearer acceptance is a tracked
+> cross-service auth follow-up. Fixed this pass: the `by-number` resolver path now targets the
 > real agent route (`/helpdesk/agents/tickets/by-number/:number`) — it reaches the route (then gates on
 > the agent key) instead of 404-ing on a path that never existed.
 
@@ -1755,7 +1758,7 @@ the upstream registers, so external path = `/helpdesk/api/` + the part after `/h
 | `POST /helpdesk/api/tickets/:id/update-priority` | — _(skip: customer-portal route — customer JWT, not Bearer)_ | Customer changes priority | `apps/helpdesk/src/pages/ticket-detail.tsx` |
 | `POST /helpdesk/api/tickets/:id/mark-duplicate` | — _(skip: customer-portal route — customer JWT, not Bearer)_ | Customer flags duplicate | `apps/helpdesk/src/pages/ticket-detail.tsx` |
 | `DELETE /helpdesk/api/tickets/:id/mark-duplicate` | — _(skip: customer-portal route — customer JWT, not Bearer)_ | Customer clears duplicate flag | `apps/helpdesk/src/pages/ticket-detail.tsx` |
-| `POST /helpdesk/api/upload` | — _(skip: multipart attachment upload/download)_ | Generic multipart file upload; records the customer's org as the key's owner, so Bam's `/files/helpdesk/...` serves it to that org only (#142) | `apps/helpdesk/src/pages/new-ticket.tsx` |
+| `POST /helpdesk/api/upload` | — _(skip: multipart attachment upload/download)_ | Generic multipart file upload; records the owning org (customer org, else portal tenant org, else the helpdesk_settings fallback org ticket creation uses) so Bam's `/files/helpdesk/...` serves it to that org only (#142); with no owning org it stores nothing and returns `422 NO_OWNING_ORG` (#334) | `apps/helpdesk/src/pages/new-ticket.tsx` |
 | `GET /helpdesk/api/v1/tickets/analytics/count-by-phrase` | `helpdesk_ticket_count_by_phrase` | Ticket counts bucketed by phrase | — |
 | `POST /helpdesk/api/v1/helpdesk-users/upsert` | `helpdesk_upsert_user` | Idempotent helpdesk-user upsert | — |
 | `POST /helpdesk/internal/tickets` | — _(skip: internal service-to-service route, INTERNAL_SERVICE_SECRET, refused through the edge)_ | Open a ticket for a requester (found or created by email in the org). Caller: blank-api form routing. Body is the shared `helpdeskInternalTicketCreateSchema` (#305) | — *(internal)* |

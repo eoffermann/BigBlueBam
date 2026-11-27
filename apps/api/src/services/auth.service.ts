@@ -1,4 +1,4 @@
-import { eq, and, sql, isNull } from 'drizzle-orm';
+import { eq, and, sql } from 'drizzle-orm';
 import argon2 from 'argon2';
 import { nanoid } from 'nanoid';
 import { db } from '../db/index.js';
@@ -7,6 +7,7 @@ import { users } from '../db/schema/users.js';
 import { sessions } from '../db/schema/sessions.js';
 import { organizationMemberships } from '../db/schema/organization-memberships.js';
 import { setUserOrgRole } from './role-resolver.js';
+import { isLiveOrg, loadLiveMemberships } from './auth-identity.service.js';
 import { seedDefaultPriorities } from './priorities.service.js';
 import { env } from '../env.js';
 import type { BootstrapInput, RegisterInput, UpdateProfileInput } from '@bigbluebam/shared';
@@ -255,21 +256,13 @@ export async function login(
   // "unauthenticated", bounced them straight back to login. Mirror the
   // resolver here so login and the session agree: reject up front with a clear
   // message instead of minting a session that can't do anything.
-  const [activeMembership] = await db
-    .select({ org_id: organizationMemberships.org_id })
-    .from(organizationMemberships)
-    .innerJoin(organizations, eq(organizations.id, organizationMemberships.org_id))
-    .where(and(eq(organizationMemberships.user_id, user.id), isNull(organizations.deleted_at)))
-    .limit(1);
+  // Login runs with no org bound, so it reads through the same identity
+  // functions the auth plugin uses (#105).
+  const [activeMembership] = await loadLiveMemberships(user.id);
   if (!activeMembership) {
     let hasActiveLegacyOrg = false;
     if (user.org_id) {
-      const [activeOrg] = await db
-        .select({ id: organizations.id })
-        .from(organizations)
-        .where(and(eq(organizations.id, user.org_id), isNull(organizations.deleted_at)))
-        .limit(1);
-      hasActiveLegacyOrg = !!activeOrg;
+      hasActiveLegacyOrg = await isLiveOrg(user.org_id);
     }
     if (!hasActiveLegacyOrg) {
       throw new AuthError(

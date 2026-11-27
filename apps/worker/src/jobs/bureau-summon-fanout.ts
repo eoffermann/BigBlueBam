@@ -21,6 +21,14 @@
  *      discovered no_access entries from `pending` → `no_access`.
  *   6. Emits the §14 Bolt `bureau.summon.issued` event exactly once.
  *
+ * Unavailable is not denied (#330). A check that could not get a real answer
+ * (peer down, timeout, non-2xx) leaves the recipient owed a check instead of
+ * recording a final no_access; the pass stops spending timeouts once the peer
+ * is known to be down and throws, so BullMQ retries with backoff (the queue is
+ * enqueued with attempts + exponential backoff). Checks run with bounded
+ * concurrency under a wall-clock budget. Only the last attempt records
+ * `access_check_unavailable` and completes.
+ *
  * NOTE on `lkRoomHint` (v2 unified-call model — Phase 3).
  *   We still ship `lkRoomHint` in the summon_incoming frame for audit
  *   parity with the audit row, but the recipient's bureau-client SDK no
@@ -40,6 +48,8 @@ import { sql } from 'drizzle-orm';
 import { getDb } from '../utils/db.js';
 import { publishBoltEvent } from '../utils/bolt-events.js';
 import {
+  isDegradedDecision,
+  isDegradedReason,
   resolveCrossAppAccess,
   type CrossAppAccessDecision,
 } from '@bigbluebam/shared/cross-app-access';
@@ -53,6 +63,8 @@ export interface BureauSummonFanoutJobData {
   summonId: string;
   orgId: string;
   summonerId: string;
+  /** Recipients already sent summon_incoming by an earlier attempt (#330). */
+  notifiedUserIds?: string[];
 }
 
 // ---------------------------------------------------------------------------
@@ -241,14 +253,56 @@ async function updateRecipients(
 // Job processor
 // ---------------------------------------------------------------------------
 
+/**
+ * Access checks run this many at a time. They used to run one after another
+ * with a 4 s timeout each, so an unreachable peer made a 50-person summon
+ * spend about 200 s denying everyone (#330).
+ */
+export const FANOUT_CHECK_CONCURRENCY = 8;
+/** Wall-clock budget for one pass of access checks; whatever is unchecked retries. */
+export const FANOUT_CHECK_BUDGET_MS = 20_000;
+
+/**
+ * Thrown when a pass could not get a real answer for some recipients (the
+ * owning app was unreachable, timed out or answered non-2xx). BullMQ retries
+ * the job with backoff; recipients already notified are remembered in
+ * job.data.notifiedUserIds so a retry never pings them twice.
+ */
+export class SummonFanoutDegradedError extends Error {
+  constructor(public readonly unavailable: number) {
+    super(`bureau-summon-fanout: access check unavailable for ${unavailable} recipient(s); retrying`);
+    this.name = 'SummonFanoutDegradedError';
+  }
+}
+
+export interface SummonFanoutOptions {
+  checkConcurrency?: number;
+  checkBudgetMs?: number;
+}
+
+/**
+ * A recipient the fan-out still owes an access check: `pending` (never
+ * checked by the worker, or degraded on an earlier attempt), or `no_access`
+ * whose reason is a DEGRADED deny recorded inline by planSummon during an
+ * outage. A real deny is final; an unavailable check is not (#330).
+ */
+function owesCheck(r: SummonRecipientRow): boolean {
+  return r.outcome === 'pending' || (r.outcome === 'no_access' && isDegradedReason(r.reason));
+}
+
 export async function processBureauSummonFanoutJob(
   job: Job<BureauSummonFanoutJobData>,
   redis: Redis,
   env: SummonFanoutEnv,
   logger: Logger,
+  options: SummonFanoutOptions = {},
 ): Promise<void> {
   const { summonId, orgId, summonerId } = job.data;
   const startedAt = Date.now();
+  const concurrency = Math.max(1, options.checkConcurrency ?? FANOUT_CHECK_CONCURRENCY);
+  const budgetMs = options.checkBudgetMs ?? FANOUT_CHECK_BUDGET_MS;
+  const maxAttempts = job.opts?.attempts ?? 1;
+  const isLastAttempt = (job.attemptsMade ?? 0) + 1 >= maxAttempts;
 
   const summon = await loadSummon(summonId);
   if (!summon) {
@@ -264,97 +318,152 @@ export async function processBureauSummonFanoutJob(
 
   const autoFollow = await shouldAutoFollow(summon.org_id);
 
-  // Only the recipients still marked as `pending` are candidates. Anything
-  // already in a terminal state (joined/declined/no_access/granted/timed_out)
-  // has already been processed and should not be re-pushed.
-  const pendingRecipients = summon.recipients.filter(
-    (r) => r.outcome === 'pending',
+  // Recipients notified by an earlier attempt of this job stay `pending` on
+  // the audit row (they have not answered yet), so the job remembers them.
+  const notified = new Set(job.data.notifiedUserIds ?? []);
+  const previouslyNotified = notified.size;
+  const candidates = summon.recipients.filter((r) => owesCheck(r) && !notified.has(r.userId));
+  const total = candidates.length + previouslyNotified;
+
+  logger.info(
+    { summonId, attempt: (job.attemptsMade ?? 0) + 1, maxAttempts, candidates: candidates.length, previouslyNotified },
+    'bureau-summon-fanout: checking access',
   );
 
-  let pushed = 0;
+  const deadline = Date.now() + budgetMs;
+  const unavailable: SummonRecipientRow[] = [];
+  let stopChecking = false;
+  let recipientsChanged = false;
   let newlyDenied = 0;
+  let next = 0;
 
-  for (let i = 0; i < pendingRecipients.length; i++) {
-    const recipient = pendingRecipients[i]!;
-    // Re-run the access check; permissions may have changed since planSummon.
-    const decision = await resolveAccess(env, logger, {
-      orgId: summon.org_id,
-      userId: recipient.userId,
-      targetUrl: summon.target_url,
-    });
-    if (!decision.allowed) {
-      recipient.outcome = 'no_access';
-      recipient.reason = decision.reason ?? 'denied_by_worker';
-      newlyDenied += 1;
-      continue;
-    }
-
-    const payload = frame('summon_incoming', {
-      summonId: summon.id,
-      summoner: {
-        id: summon.summoner_id,
-        name: summon.summoner_name,
-      },
-      targetUrl: summon.target_url,
-      app: summon.target_app,
-      label: summon.target_label,
-      lkRoomHint: summon.livekit_room_hint,
-      autoFollow,
-    });
+  const pushProgress = async () => {
     try {
-      await redis.publish(userChannel(recipient.userId), payload);
-      pushed += 1;
-    } catch (err) {
-      logger.warn(
-        { err, summonId, recipientId: recipient.userId },
-        'bureau-summon-fanout: publish failed (swallowed)',
+      await redis.publish(
+        userChannel(summon.summoner_id),
+        frame('summon_progress', { summonId: summon.id, joined: notified.size, total }),
       );
+    } catch {
+      /* swallow */
     }
+  };
 
-    // Progress nudge to the summoner every 5 recipients.
-    if ((i + 1) % 5 === 0) {
-      const progressPayload = frame('summon_progress', {
+  const setOutcome = (r: SummonRecipientRow, outcome: SummonRecipientOutcome, reason: string | null) => {
+    if (r.outcome !== outcome || (r.reason ?? null) !== reason) {
+      r.outcome = outcome;
+      r.reason = reason;
+      recipientsChanged = true;
+    }
+  };
+
+  const lane = async () => {
+    for (;;) {
+      const idx = next++;
+      if (idx >= candidates.length) return;
+      const recipient = candidates[idx]!;
+      // Once the owning app is known to be unavailable, or the pass is out of
+      // time, stop spending timeouts: the rest are retried with backoff.
+      if (stopChecking || Date.now() > deadline) {
+        unavailable.push(recipient);
+        continue;
+      }
+      // Re-run the access check; permissions may have changed since planSummon.
+      const decision = await resolveAccess(env, logger, {
+        orgId: summon.org_id,
+        userId: recipient.userId,
+        targetUrl: summon.target_url,
+      });
+      if (isDegradedDecision(decision)) {
+        stopChecking = true;
+        unavailable.push(recipient);
+        // Not a verdict: the recipient stays owed a check.
+        setOutcome(recipient, 'pending', decision.reason);
+        continue;
+      }
+      if (!decision.allowed) {
+        setOutcome(recipient, 'no_access', decision.reason ?? 'denied_by_worker');
+        newlyDenied += 1;
+        continue;
+      }
+
+      // Allowed. A recipient planSummon recorded as a degraded no_access is
+      // now summoned like any other.
+      setOutcome(recipient, 'pending', null);
+      const payload = frame('summon_incoming', {
         summonId: summon.id,
-        joined: pushed,
-        total: pendingRecipients.length,
+        summoner: {
+          id: summon.summoner_id,
+          name: summon.summoner_name,
+        },
+        targetUrl: summon.target_url,
+        app: summon.target_app,
+        label: summon.target_label,
+        lkRoomHint: summon.livekit_room_hint,
+        autoFollow,
       });
       try {
-        await redis.publish(userChannel(summon.summoner_id), progressPayload);
-      } catch {
-        /* swallow */
+        await redis.publish(userChannel(recipient.userId), payload);
+      } catch (err) {
+        logger.warn(
+          { err, summonId, recipientId: recipient.userId },
+          'bureau-summon-fanout: publish failed (swallowed)',
+        );
       }
+      notified.add(recipient.userId);
+
+      // Progress nudge to the summoner every 5 recipients.
+      if (notified.size % 5 === 0) await pushProgress();
+    }
+  };
+
+  await Promise.all(Array.from({ length: Math.min(concurrency, candidates.length) }, () => lane()));
+
+  // Remember who was notified BEFORE anything can throw, so a retry skips them.
+  if (notified.size > previouslyNotified) {
+    try {
+      await job.updateData({ ...job.data, notifiedUserIds: [...notified] });
+    } catch (err) {
+      logger.warn({ err, summonId }, 'bureau-summon-fanout: failed to record notified recipients');
     }
   }
 
-  // Final progress push so the dialog can transition to "delivery complete".
-  try {
-    await redis.publish(
-      userChannel(summon.summoner_id),
-      frame('summon_progress', {
-        summonId: summon.id,
-        joined: pushed,
-        total: pendingRecipients.length,
-      }),
+  if (unavailable.length > 0 && isLastAttempt) {
+    // Out of retries: record the truth rather than leave the row pending forever.
+    for (const r of unavailable) setOutcome(r, 'no_access', 'access_check_unavailable');
+    logger.error(
+      { summonId, unavailable: unavailable.length, attempts: maxAttempts },
+      'bureau-summon-fanout: access check still unavailable after the last attempt; recipients not summoned',
     );
-  } catch {
-    /* swallow */
   }
 
-  // Persist any newly-flipped no_access transitions on the audit row.
-  if (newlyDenied > 0) {
-    // Rebuild the full recipient list (we mutated entries in pendingRecipients,
-    // but they're references into the audit row's recipients[] array).
+  if (recipientsChanged) {
+    // The entries in candidates are references into summon.recipients.
     await updateRecipients(summonId, summon.recipients).catch((err) => {
-      logger.warn(
-        { err, summonId },
-        'bureau-summon-fanout: failed to persist newly-denied transitions',
-      );
+      logger.warn({ err, summonId }, 'bureau-summon-fanout: failed to persist recipient outcomes');
     });
   }
 
-  // §14 Bolt event: emitted exactly once from the offload path. The inline
-  // bureau-api path emits its own copy; we never double-fire because
-  // bureau-api only enqueues this job when it has NOT done the inline push.
+  await pushProgress();
+
+  if (unavailable.length > 0 && !isLastAttempt) {
+    logger.warn(
+      {
+        summonId,
+        unavailable: unavailable.length,
+        notified: notified.size,
+        attempt: (job.attemptsMade ?? 0) + 1,
+        maxAttempts,
+        durationMs: Date.now() - startedAt,
+      },
+      'bureau-summon-fanout: access check unavailable; job will retry',
+    );
+    throw new SummonFanoutDegradedError(unavailable.length);
+  }
+
+  // §14 Bolt event: emitted exactly once, when the fan-out is complete (a
+  // degraded pass throws above and does not emit). The inline bureau-api
+  // path emits its own copy; we never double-fire because bureau-api only
+  // enqueues this job when it has NOT done the inline push.
   await publishBoltEvent(
     'summon.issued',
     'bureau',
@@ -366,7 +475,7 @@ export async function processBureauSummonFanoutJob(
       target_app: summon.target_app,
       target_label: summon.target_label,
       livekit_room_hint: summon.livekit_room_hint,
-      recipient_count: pendingRecipients.length,
+      recipient_count: total,
       actor: { id: summon.summoner_id },
       org: { id: summon.org_id },
     },
@@ -377,15 +486,14 @@ export async function processBureauSummonFanoutJob(
     logger.warn({ err, summonId }, 'bureau-summon-fanout: bolt emit failed (swallowed)');
   });
 
-  const durationMs = Date.now() - startedAt;
   logger.info(
     {
       jobId: job.id,
       summonId,
-      candidates: pendingRecipients.length,
-      pushed,
+      candidates: candidates.length,
+      pushed: notified.size - previouslyNotified,
       newlyDenied,
-      durationMs,
+      durationMs: Date.now() - startedAt,
     },
     'bureau-summon-fanout: tick complete',
   );

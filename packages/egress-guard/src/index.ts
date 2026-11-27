@@ -297,6 +297,27 @@ export async function assertSafeHost(hostname: string, port?: number, env?: Node
   if (!dns.safe) throw new EgressBlockedError(dns.reason ?? 'Blocked by egress policy');
 }
 
+/** Shape of a resolved SMTP config (structural, matches @bigbluebam/smtp-resolver). */
+export interface SmtpEgressTarget {
+  host: string;
+  port?: number;
+  /** Which layer supplied the host: 'org' | 'platform' | 'env'. */
+  layer?: string;
+}
+
+/**
+ * The single SMTP egress policy, used by every path that connects to an SMTP
+ * relay (the api org SMTP test route and the worker's org-scoped send paths).
+ * Only a host supplied by an org's own override is checked: the platform
+ * relay and the env relay are operator-configured and may legitimately be
+ * internal (mailhog, a corporate relay). An org admin pointing smtp_host at an
+ * internal address is the SSRF this closes. EGRESS_ALLOW_PRIVATE_HOSTS applies.
+ */
+export async function assertSafeSmtpTarget(cfg: SmtpEgressTarget, env?: NodeJS.ProcessEnv): Promise<void> {
+  if (cfg.layer !== 'org') return;
+  await assertSafeHost(cfg.host, cfg.port, env);
+}
+
 // ── Pinned dispatcher (closes DNS rebind) ─────────────────────────────────
 
 /**
@@ -327,6 +348,72 @@ export const safeDispatcher = new Agent({
     },
   },
 });
+
+// ── Bounded body reads ────────────────────────────────────────────────────
+
+export class BodyTooLargeError extends Error {
+  readonly code = 'BODY_TOO_LARGE';
+  constructor(readonly maxBytes: number) {
+    super(`Response body too large (> ${maxBytes} bytes)`);
+    this.name = 'BodyTooLargeError';
+  }
+}
+
+export interface ReadCappedOptions {
+  /**
+   * 'throw' (default): reject with BodyTooLargeError as soon as the stream
+   * crosses maxBytes. 'truncate': return the first maxBytes and stop reading.
+   */
+  onOverflow?: 'throw' | 'truncate';
+}
+
+/**
+ * Read a fetched body with a byte cap, streaming. res.text()/arrayBuffer()
+ * buffer the whole body before a caller can check its size, so a huge or
+ * endless response from an external host exhausts memory first. This stops
+ * reading (and cancels the stream) the moment the cap is crossed, and also
+ * rejects early on a Content-Length that already exceeds it.
+ */
+export async function readBodyCapped(
+  res: Response,
+  maxBytes: number,
+  opts: ReadCappedOptions = {},
+): Promise<Buffer> {
+  const mode = opts.onOverflow ?? 'throw';
+  const declared = Number(res.headers.get('content-length'));
+  if (mode === 'throw' && Number.isFinite(declared) && declared > maxBytes) {
+    await res.body?.cancel().catch(() => {});
+    throw new BodyTooLargeError(maxBytes);
+  }
+  if (!res.body) return Buffer.alloc(0);
+
+  const reader = res.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (!value) continue;
+      total += value.byteLength;
+      if (total > maxBytes) {
+        if (mode === 'throw') throw new BodyTooLargeError(maxBytes);
+        chunks.push(value.subarray(0, value.byteLength - (total - maxBytes)));
+        break;
+      }
+      chunks.push(value);
+    }
+  } finally {
+    await reader.cancel().catch(() => {});
+  }
+  return Buffer.concat(chunks);
+}
+
+/** readBodyCapped, decoded as UTF-8 (lenient). */
+export async function readTextCapped(res: Response, maxBytes: number, opts: ReadCappedOptions = {}): Promise<string> {
+  const buf = await readBodyCapped(res, maxBytes, opts);
+  return new TextDecoder('utf-8', { fatal: false }).decode(buf);
+}
 
 /** Unpinned dispatcher, used only for EGRESS_ALLOW_PRIVATE_HOSTS matches. */
 const allowlistDispatcher = new Agent();

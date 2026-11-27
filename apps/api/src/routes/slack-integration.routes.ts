@@ -5,7 +5,7 @@ import { db } from '../db/index.js';
 import { slackIntegrations } from '../db/schema/slack-integrations.js';
 import { requireAuth, requireScope } from '../plugins/auth.js';
 import { requireProjectAccess } from '../middleware/authorize.js';
-import { validateExternalUrl } from '../lib/url-validator.js';
+import { checkUrl, EgressBlockedError, safeFetch } from '@bigbluebam/egress-guard';
 import { shadowOnly } from '../middleware/dual-read.js';
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -57,7 +57,7 @@ export default async function slackIntegrationRoutes(fastify: FastifyInstance) {
       const userId = request.user!.id;
 
       // SSRF protection: reject private/internal URLs (BAM-020)
-      const urlCheck = validateExternalUrl(data.webhook_url);
+      const urlCheck = await checkUrl(data.webhook_url);
       if (!urlCheck.safe) {
         return reply.status(400).send({
           error: {
@@ -141,21 +141,10 @@ export default async function slackIntegrationRoutes(fastify: FastifyInstance) {
         });
       }
 
-      // SSRF protection: re-validate stored URL before making request (BAM-020)
-      const urlCheck = validateExternalUrl(row.webhook_url);
-      if (!urlCheck.safe) {
-        return reply.status(400).send({
-          error: {
-            code: 'VALIDATION_ERROR',
-            message: `Stored webhook URL is unsafe: ${urlCheck.reason}`,
-            details: [{ field: 'webhook_url', issue: urlCheck.reason }],
-            request_id: request.id,
-          },
-        });
-      }
-
+      // SSRF protection (BAM-020, #328): safeFetch re-vets the stored URL,
+      // resolves DNS, pins the dialed address and revalidates redirects.
       try {
-        const res = await fetch(row.webhook_url, {
+        const res = await safeFetch(row.webhook_url, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -164,6 +153,16 @@ export default async function slackIntegrationRoutes(fastify: FastifyInstance) {
         });
         return reply.send({ data: { ok: res.ok, status: res.status } });
       } catch (err) {
+        if (err instanceof EgressBlockedError) {
+          return reply.status(400).send({
+            error: {
+              code: 'VALIDATION_ERROR',
+              message: `Stored webhook URL is unsafe: ${err.message}`,
+              details: [{ field: 'webhook_url', issue: err.message }],
+              request_id: request.id,
+            },
+          });
+        }
         return reply.status(502).send({
           error: {
             code: 'SLACK_WEBHOOK_FAILED',

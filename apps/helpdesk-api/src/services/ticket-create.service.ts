@@ -102,7 +102,13 @@ export async function createHelpdeskTicket(input: CreateTicketInput, log: Logger
     const rows = await db.select().from(helpdeskSettings).where(eq(helpdeskSettings.org_id, input.orgId)).limit(1);
     settings = rows[0];
   } else {
-    const rows = await db.select().from(helpdeskSettings).limit(1);
+    // "The first settings row" means the oldest; upload.routes.ts resolves a no-org customer's
+    // attachment owner to this same row's org (#334), so both must order the same way.
+    const rows = await db
+      .select()
+      .from(helpdeskSettings)
+      .orderBy(asc(helpdeskSettings.created_at), asc(helpdeskSettings.id))
+      .limit(1);
     settings = rows[0];
   }
 

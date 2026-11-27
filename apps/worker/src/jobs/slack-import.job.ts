@@ -29,7 +29,7 @@ import { sql } from 'drizzle-orm';
 import StreamZip from 'node-stream-zip';
 import { Client as MinioClient } from 'minio';
 import crypto from 'node:crypto';
-import { safeFetch } from '@bigbluebam/egress-guard';
+import { readBodyCapped, safeFetch } from '@bigbluebam/egress-guard';
 import { getDb } from '../utils/db.js';
 
 // ---------------------------------------------------------------------------
@@ -1446,9 +1446,22 @@ export async function downloadSlackUrl(
     return null;
   }
   if (!resp.ok) return null;
-  const arr = await resp.arrayBuffer();
-  return Buffer.from(arr);
+  // Streamed with a hard ceiling (#322): arrayBuffer() would buffer an
+  // arbitrarily large (or endless) response in the worker before anything
+  // could bound it. Oversized files are stubbed like any other refusal.
+  try {
+    return await readBodyCapped(resp, SLACK_FILE_MAX_BYTES);
+  } catch (err) {
+    ctx.logger.warn(
+      { err: err instanceof Error ? err.message : String(err), host: parsed.hostname },
+      'slack-import: file download too large or interrupted; stubbing the file',
+    );
+    return null;
+  }
 }
+
+/** Same 500MB hard ceiling Banter applies to any uploaded file. */
+export const SLACK_FILE_MAX_BYTES = 500 * 1024 * 1024;
 
 // ---------------------------------------------------------------------------
 // Phase 7 — reactions

@@ -102,6 +102,13 @@ jobs:
         if: ${{ !cancelled() && steps.install.outcome == 'success' }}
         run: pnpm check:nginx-spa
 
+      # Issue #323: every inline <script> nginx serves must match a sha256 hash in that
+      # location's Content-Security-Policy, in all three nginx configs, and no policy
+      # may use 'unsafe-inline' or 'unsafe-eval'.
+      - name: Check CSP inline-script hashes
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: pnpm check:csp-hashes
+
       # Issue #198: a recursive chown in an app Dockerfile duplicates node_modules
       # into a second layer and takes over an hour on slow Docker disks.
       - name: Check Dockerfiles use COPY --chown

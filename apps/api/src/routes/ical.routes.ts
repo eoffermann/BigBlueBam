@@ -5,8 +5,7 @@ import { z } from 'zod';
 import { db } from '../db/index.js';
 import { tasks } from '../db/schema/tasks.js';
 import { projects } from '../db/schema/projects.js';
-import { apiKeys } from '../db/schema/api-keys.js';
-import { users } from '../db/schema/users.js';
+import { findApiKeyCandidates, touchApiKey } from '../services/auth-identity.service.js';
 import { projectCalendarTokens } from '../db/schema/project-calendar-tokens.js';
 import { requireAuth, requireScope } from '../plugins/auth.js';
 import { requireProjectAccess } from '../middleware/authorize.js';
@@ -185,29 +184,18 @@ export default async function icalRoutes(fastify: FastifyInstance) {
         // SVC_BUCKET_MAX in plugins/auth.ts; svc tokens as iCal feed tokens are
         // rare, but the root cause is shared.)
         const SVC_KEY_PREFIX = 'bbam_svc';
-        const candidates = await db
-          .select({
-            apiKey: apiKeys,
-            user: { id: users.id },
-          })
-          .from(apiKeys)
-          .innerJoin(users, eq(apiKeys.user_id, users.id))
-          .where(eq(apiKeys.key_prefix, prefix))
-          .limit(prefix === SVC_KEY_PREFIX ? 64 : 10);
+        // Pre-auth read of org-gated api_keys: through the identity function (#105).
+        const candidates = await findApiKeyCandidates(prefix, prefix === SVC_KEY_PREFIX ? 64 : 10);
 
-        for (const candidate of candidates) {
-          if (candidate.apiKey.expires_at && new Date(candidate.apiKey.expires_at) < new Date()) {
+        for (const apiKey of candidates) {
+          if (apiKey.expires_at && new Date(apiKey.expires_at) < new Date()) {
             continue;
           }
           try {
-            const valid = await argon2.verify(candidate.apiKey.key_hash, token);
+            const valid = await argon2.verify(apiKey.key_hash, token);
             if (valid) {
-              userId = candidate.user.id;
-              // Update last_used_at
-              await db
-                .update(apiKeys)
-                .set({ last_used_at: new Date() })
-                .where(eq(apiKeys.id, candidate.apiKey.id));
+              userId = apiKey.user_id;
+              await touchApiKey(apiKey.id);
               break;
             }
           } catch {

@@ -3,10 +3,18 @@ name: Typecheck
 # Closes Platform_Plan.md (2026-04-13-revised) gap 2.2.2.
 #
 # Runs `tsc --noEmit` across every workspace package on every push and PR.
-# Uses `pnpm -r --parallel typecheck --if-present` so a package without a
-# typecheck script (e.g. packages/ui has no own tsconfig and is consumed
-# via Vite alias) does not break the run. Every package that has a
-# tsconfig is expected to have a typecheck script.
+# scripts/ci/typecheck-all.mjs runs each package's `typecheck` script; a
+# package without one (e.g. packages/ui has no own tsconfig and is consumed
+# via Vite alias) is skipped. Every package that has a tsconfig is expected
+# to have a typecheck script.
+#
+# #335 (third hang after #235): `pnpm -r --parallel` started a tsc for all
+# ~66 packages at once, which plausibly exhausted the runner's memory and
+# starved the runner agent (step timeout ignored, job reaped late, no log).
+# The list is now split across two shards, each running at most 3 tsc at a
+# time, with a per-package START/OK/FAIL line, a 30 s heartbeat naming every
+# still-running package plus free memory, and a per-package timeout that
+# kills and names a stalled package.
 
 on:
   pull_request:
@@ -19,10 +27,14 @@ concurrency:
 
 jobs:
   tsc:
-    name: tsc --noEmit (all packages)
+    name: tsc --noEmit (shard ${{ matrix.shard }})
     runs-on: ubuntu-latest
-    # Normally 3 to 4 min; one run hung 27 min in Run typecheck (#235).
+    # Normally 3 to 4 min unsharded; runs hung 25 to 27 min in Run typecheck (#235, #335).
     timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: ['1/2', '2/2']
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -44,12 +56,15 @@ jobs:
       - name: Run typecheck
         # Step-level too, so a hang is attributed to this step in the UI (#235).
         timeout-minutes: 15
-        run: pnpm -r --parallel --if-present typecheck
+        # Also typechecks test code: a package whose tsconfig leaves test/ out gets a second step
+        # in the same pool slot, src + test via scripts/typecheck-tests.mjs (#337).
+        env:
+          TYPECHECK_SHARD: ${{ matrix.shard }}
+          TYPECHECK_CONCURRENCY: '3'
+          TYPECHECK_PACKAGE_TIMEOUT_MIN: '8'
+        run: node scripts/ci/typecheck-all.mjs
 
-      - name: Typecheck test code
-        # Package tsconfigs exclude test/ so builds ship only src; this checks src + test for every
-        # package whose test/ directory its tsconfig leaves out, auto-discovered (#337).
-        timeout-minutes: 15
-        run: |
-          node scripts/typecheck-tests.coverage.test.mjs
-          pnpm typecheck:tests
+      - name: Test-code typecheck covers every package (regression test)
+        # A file scan, no tsc: every package with test/ is covered by its tsconfig or discovered (#337).
+        if: ${{ !cancelled() }}
+        run: node scripts/typecheck-tests.coverage.test.mjs

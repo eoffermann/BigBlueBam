@@ -432,6 +432,8 @@ Every toggle surfaced in the **Settings → Permissions** UI is enforced server-
 
 **Additional admin-scope API key rule (P2-3):** regardless of `allowed_api_key_scopes`, requests for `scope='admin'` are rejected with `403 ADMIN_SCOPE_OWNER_ONLY` unless the caller is an **org owner or SuperUser**. Org admins cannot grant admin-scope keys — not even on-behalf-of another member via `/org/members/:userId/api-keys`. The frontend hides the "Admin" option for non-owners in both the settings Create API Key form and the people detail Access tab dialog.
 
+**Admin-scope keys follow the holder's current role (#336):** a key's effective privilege is the intersection of its scope and its holder's CURRENT org role. `requireScope('admin')` refuses an admin-scope key with `403 FORBIDDEN` ("Organization admin privileges required") when the human holder is no longer an org admin or owner (demoted, or removed and so resolved as `viewer`). As defense in depth, a role change below admin downgrades the holder's admin-scope keys for that org to `read_write`, and removing a member deletes their keys for that org. Service and agent accounts are exempt from the role cap: they hold role `member` by design and their admin scope was delegated by an owner (`agent_policies` governs them).
+
 ---
 
 ## 9. Known Gaps

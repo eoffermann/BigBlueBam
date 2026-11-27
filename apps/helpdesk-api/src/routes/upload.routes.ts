@@ -73,21 +73,44 @@ export default async function helpdeskUploadRoutes(fastify: FastifyInstance) {
         });
       }
 
+      // #142 / #334: GET /files serves a helpdesk/ key only to the org in its file_upload_owners
+      // row, so the owner must be known BEFORE the object is stored. Precedence: the customer's
+      // own org, then the portal's tenant org, then the org a ticket from this customer would
+      // land in (the first helpdesk_settings row, the same fallback ticket-create.service.ts
+      // uses for a request with no org). With none of those the upload is refused rather than
+      // returning a URL that 404s for everyone.
+      const tenantOrgId = request.tenantContext?.orgId ?? null;
+      const ownerRows = (await db.execute(sql`
+        SELECT COALESCE(
+                 hu.org_id,
+                 ${tenantOrgId}::uuid,
+                 (SELECT hs.org_id FROM helpdesk_settings hs ORDER BY hs.created_at ASC, hs.id ASC LIMIT 1)
+               ) AS org_id
+        FROM helpdesk_users hu
+        WHERE hu.id = ${request.helpdeskUser!.id}
+      `)) as unknown as Array<{ org_id: string | null }>;
+      const ownerOrgId = ownerRows[0]?.org_id ?? null;
+      if (!ownerOrgId) {
+        request.log.warn({ helpdeskUserId: request.helpdeskUser!.id }, 'helpdesk upload refused: no owning org');
+        return reply.status(422).send({
+          error: {
+            code: 'NO_OWNING_ORG',
+            message: 'This helpdesk is not linked to an organization yet, so attachments cannot be stored.',
+            details: [],
+            request_id: request.id,
+          },
+        });
+      }
+
       const uuid = randomUUID();
       const safeFilename = file.filename.replace(/[^a-zA-Z0-9._-]/g, '_');
       const key = `helpdesk/${uuid}-${safeFilename}`;
 
       await uploadFile(env.S3_BUCKET, key, buffer, contentType);
 
-      // #142: bind the key to the customer's org (their helpdesk_users.org_id, else the portal's
-      // tenant org). The Bam api's GET /files serves a helpdesk/ key only to that org.
-      const tenantOrgId = request.tenantContext?.orgId ?? null;
       await db.execute(sql`
         INSERT INTO file_upload_owners (storage_key, org_id, source, uploaded_by)
-        SELECT ${key}, COALESCE(hu.org_id, ${tenantOrgId}::uuid), 'helpdesk', hu.id
-        FROM helpdesk_users hu
-        WHERE hu.id = ${request.helpdeskUser!.id}
-          AND COALESCE(hu.org_id, ${tenantOrgId}::uuid) IS NOT NULL
+        VALUES (${key}, ${ownerOrgId}::uuid, 'helpdesk', ${request.helpdeskUser!.id})
         ON CONFLICT (storage_key) DO NOTHING
       `);
 

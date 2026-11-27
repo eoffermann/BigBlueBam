@@ -16,6 +16,7 @@ import {
   type ResolvedSmtpConfig,
   type ResolvedSmtpConfigWithLayer,
 } from '@bigbluebam/smtp-resolver';
+import { assertSafeSmtpTarget } from '@bigbluebam/egress-guard';
 import type { Env } from '../env.js';
 
 export { clearSmtpConfigCache, clearOrgSmtpConfigCache } from '@bigbluebam/smtp-resolver';
@@ -113,5 +114,12 @@ export async function getSmtpConfigForOrg(
   orgId: string,
   env: Env,
 ): Promise<ResolvedSmtpConfigWithLayer | null> {
-  return _getSmtpConfigForOrg(orgId, makeOrgLoader(db), makeLoader(db), toSmtpEnv(env));
+  const cfg = await _getSmtpConfigForOrg(orgId, makeOrgLoader(db), makeLoader(db), toSmtpEnv(env));
+  // Every org-scoped send path resolves its relay here, so the SMTP egress
+  // policy (an org-supplied host must not be private/internal) is applied
+  // once for all of them, the same check the api SMTP test route runs (#321).
+  // Run on every call, after the resolver's cache, so a DNS change is seen.
+  // Throws EgressBlockedError; the job fails and nothing is sent.
+  if (cfg) await assertSafeSmtpTarget(cfg);
+  return cfg;
 }

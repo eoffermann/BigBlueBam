@@ -8,7 +8,7 @@ import { logSuperuserAction } from '../services/superuser-audit.service.js';
 import { isBootstrapRequired } from '../services/bootstrap-status.service.js';
 import { shadowOnly } from '../middleware/dual-read.js';
 import { requirePlatformSuperuser } from '../middleware/require-platform-superuser.js';
-import { validateExternalUrl } from '../lib/url-validator.js';
+import { checkUrlSync } from '@bigbluebam/egress-guard';
 import nodemailer from 'nodemailer';
 import { inArray } from 'drizzle-orm';
 import {
@@ -121,9 +121,12 @@ const externalUrlSchema = (max = 2048) =>
     .min(1)
     .max(max)
     .refine(
-      (val) => validateExternalUrl(val).safe === true,
+      // Sync rules only: a Zod refine cannot await DNS, and these SuperUser-set
+      // keys (livekit host, voice-agent URL) name services by their compose
+      // hostname, which a DNS check would resolve to a private address.
+      (val) => checkUrlSync(val).safe === true,
       (val) => {
-        const r = validateExternalUrl(val);
+        const r = checkUrlSync(val);
         return {
           message: r.safe ? 'OK' : `Unsafe URL: ${r.reason}`,
         };

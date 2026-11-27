@@ -32,7 +32,7 @@ import type { Job } from 'bullmq';
 import type { Logger } from 'pino';
 import type Redis from 'ioredis';
 import { createHmac } from 'node:crypto';
-import { safeFetch } from '@bigbluebam/egress-guard';
+import { readTextCapped, safeFetch } from '@bigbluebam/egress-guard';
 import { eq, sql } from 'drizzle-orm';
 import { pgTable, uuid, text, jsonb, integer, timestamp, boolean } from 'drizzle-orm/pg-core';
 import { getDb } from '../utils/db.js';
@@ -289,7 +289,9 @@ export async function processAgentWebhookDispatchJob(
     statusCode = res.status;
     if (!res.ok) {
       try {
-        responseText = (await res.text()).slice(0, 1000);
+        // Bounded read (#322): only the first 1000 chars are kept, so never
+        // buffer a receiver's arbitrarily large error body to get them.
+        responseText = (await readTextCapped(res, 4096, { onOverflow: 'truncate' })).slice(0, 1000);
       } catch {
         responseText = null;
       }

@@ -13,7 +13,7 @@ vi.mock('../src/db/index.js', () => ({ db: {}, connection: { end: vi.fn() } }));
 
 import { requireScope } from '../src/plugins/auth.js';
 
-type Identity = { role: string; api_key_scope: string | null; is_superuser?: boolean };
+type Identity = { role: string; api_key_scope: string | null; is_superuser?: boolean; kind?: string };
 
 describe("requireScope('admin')", () => {
   let app: FastifyInstance;
@@ -51,9 +51,27 @@ describe("requireScope('admin')", () => {
     expect((await call('/org', { role: 'member', api_key_scope: null, is_superuser: true })).statusCode).toBe(200);
   });
 
-  it('still decides API-key callers by key scope', async () => {
-    expect((await call('/org', { role: 'member', api_key_scope: 'admin' })).statusCode).toBe(200);
+  it('refuses an API key whose scope is below admin, whatever the role', async () => {
     expect((await call('/org', { role: 'owner', api_key_scope: 'read_write' })).statusCode).toBe(403);
+  });
+
+  // #336: an admin-scope key is only as strong as its holder's CURRENT role.
+  it('refuses an admin-scope key whose holder was demoted to member', async () => {
+    const res = await call('/org', { role: 'member', api_key_scope: 'admin', kind: 'human' });
+    expect(res.statusCode).toBe(403);
+    expect(res.json().error.message).toBe('Organization admin privileges required');
+  });
+
+  it('refuses an admin-scope key whose holder was removed from the org (viewer fallback)', async () => {
+    expect((await call('/org', { role: 'viewer', api_key_scope: 'admin', kind: 'human' })).statusCode).toBe(403);
+  });
+
+  it.each(['owner', 'admin'])('allows an admin-scope key held by an %s', async (role) => {
+    expect((await call('/org', { role, api_key_scope: 'admin', kind: 'human' })).statusCode).toBe(200);
+  });
+
+  it('keeps owner-delegated admin scope for service accounts (role member by design)', async () => {
+    expect((await call('/org', { role: 'member', api_key_scope: 'admin', kind: 'service' })).statusCode).toBe(200);
   });
 
   it('leaves read_write gates open to member sessions', async () => {

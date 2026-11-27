@@ -4,6 +4,7 @@ import { db } from '../db/index.js';
 import { llmProviders } from '../db/schema/llm-providers.js';
 import type { LlmProvider, NewLlmProvider } from '../db/schema/llm-providers.js';
 import { env } from '../env.js';
+import { llmFetch } from '../lib/llm-fetch.js';
 
 // ---------------------------------------------------------------------------
 // Encryption helpers
@@ -417,7 +418,7 @@ export async function testProvider(
   try {
     if (existing.provider_type === 'anthropic') {
       const endpoint = existing.api_endpoint || 'https://api.anthropic.com';
-      const response = await fetch(`${endpoint}/v1/messages`, {
+      const response = await llmFetch(`${endpoint}/v1/messages`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -447,7 +448,7 @@ export async function testProvider(
     } else {
       // OpenAI or OpenAI-compatible
       const endpoint = existing.api_endpoint || 'https://api.openai.com';
-      const response = await fetch(`${endpoint}/v1/chat/completions`, {
+      const response = await llmFetch(`${endpoint}/v1/chat/completions`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

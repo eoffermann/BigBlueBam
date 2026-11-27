@@ -28,7 +28,25 @@ export interface CrossAppAccessDecision {
   canShare: boolean;
   /** Why; never shown to a summoner verbatim (spec section 10, "denial is private"). */
   reason: string;
+  /**
+   * true when this deny is a fail-closed DEGRADED answer (peer unreachable, timeout, non-2xx,
+   * malformed body, missing secret), not a real "no". A single read may treat it as a deny, but
+   * a caller that RECORDS the outcome (summon fan-out) must not store it as final (#330).
+   */
+  degraded?: boolean;
 }
+
+/** Whether a decision is a degraded (unavailable) deny rather than a real answer. */
+export function isDegradedDecision(decision: Pick<CrossAppAccessDecision, 'reason' | 'degraded'>): boolean {
+  return decision.degraded === true || isDegradedReason(decision.reason);
+}
+
+/** Whether a stored deny reason came from a degraded check (`degraded_<reason>`). */
+export function isDegradedReason(reason: string | null | undefined): boolean {
+  return typeof reason === 'string' && reason.startsWith(DEGRADED_REASON_PREFIX);
+}
+
+const DEGRADED_REASON_PREFIX = 'degraded_';
 
 export interface CrossAppAccessArgs {
   orgId: string;
@@ -67,7 +85,7 @@ function degraded(
   } catch {
     // An observability hook must never turn a deny into a throw.
   }
-  return deny(`degraded_${reason}`);
+  return { ...deny(`${DEGRADED_REASON_PREFIX}${reason}`), degraded: true };
 }
 
 async function askPeer(

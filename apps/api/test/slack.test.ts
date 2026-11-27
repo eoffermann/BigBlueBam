@@ -30,9 +30,14 @@ vi.mock('../src/env.js', () => ({
   },
 }));
 
-// Patch global fetch for slack webhook posts
-const fetchMock = vi.fn();
-vi.stubGlobal('fetch', fetchMock);
+// Slack posts go through egress-guard's safeFetch (#328); the mock records the
+// calls so a regression back to a bare fetch() fails these tests.
+const { fetchMock } = vi.hoisted(() => ({ fetchMock: vi.fn() }));
+vi.mock('@bigbluebam/egress-guard', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@bigbluebam/egress-guard')>()),
+  safeFetch: fetchMock,
+}));
+vi.stubGlobal('fetch', vi.fn(async () => { throw new Error('bare fetch() used instead of safeFetch'); }));
 
 import { postToSlack } from '../src/services/slack-notify.service.js';
 

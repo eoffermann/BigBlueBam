@@ -42,6 +42,15 @@ vi.mock('../src/env.js', () => ({
 
 vi.mock('argon2', () => ({ default: mockArgon2 }));
 
+// login()'s active-org check reads through the pre-auth identity functions (#105).
+const { mockIdentity } = vi.hoisted(() => ({
+  mockIdentity: {
+    loadLiveMemberships: vi.fn(),
+    isLiveOrg: vi.fn(),
+  },
+}));
+vi.mock('../src/services/auth-identity.service.js', () => mockIdentity);
+
 vi.mock('nanoid', () => ({
   nanoid: vi.fn().mockReturnValue('test-session-id-123456789012345678901234567890'),
 }));
@@ -86,6 +95,8 @@ const fakeSession = {
 describe('Auth Service', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockIdentity.loadLiveMemberships.mockResolvedValue([{ org_id: 'org-1', is_default: true, joined_at: new Date() }]);
+    mockIdentity.isLiveOrg.mockResolvedValue(true);
   });
 
   describe('register', () => {
@@ -255,10 +266,9 @@ describe('Auth Service', () => {
       mockArgon2.verify.mockResolvedValue(true);
       // 1) user found  2) no membership in any active org  3) legacy
       // users.org_id resolves to no active (non-deleted) org.
-      mockDb.select
-        .mockReturnValueOnce(selectChainOnce([fakeUser]))
-        .mockReturnValueOnce(selectChainOnce([]))
-        .mockReturnValueOnce(selectChainOnce([]));
+      mockDb.select.mockReturnValueOnce(selectChainOnce([fakeUser]));
+      mockIdentity.loadLiveMemberships.mockResolvedValue([]);
+      mockIdentity.isLiveOrg.mockResolvedValue(false);
 
       await expect(
         login('test@example.com', 'securePassword123!'),
@@ -269,10 +279,9 @@ describe('Auth Service', () => {
       mockArgon2.verify.mockResolvedValue(true);
       // 1) user found  2) no membership rows  3) legacy users.org_id IS an
       // active org → login proceeds.
-      mockDb.select
-        .mockReturnValueOnce(selectChainOnce([fakeUser]))
-        .mockReturnValueOnce(selectChainOnce([]))
-        .mockReturnValueOnce(selectChainOnce([fakeOrg]));
+      mockDb.select.mockReturnValueOnce(selectChainOnce([fakeUser]));
+      mockIdentity.loadLiveMemberships.mockResolvedValue([]);
+      mockIdentity.isLiveOrg.mockResolvedValue(true);
 
       const insertReturning = vi.fn().mockResolvedValue([fakeSession]);
       mockDb.insert.mockReturnValue({ values: vi.fn().mockReturnValue({ returning: insertReturning }) });

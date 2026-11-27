@@ -26,6 +26,7 @@ import { db } from '../db/index.js';
 import { llmProviders } from '../db/schema/llm-providers.js';
 import { decryptApiKey } from '../services/llm-provider.service.js';
 import { env } from '../env.js';
+import { llmFetch } from '../lib/llm-fetch.js';
 import { requireInternalSecretOrHelpdeskToken } from '../lib/internal-secret.js';
 
 // ---------------------------------------------------------------------------
@@ -319,7 +320,7 @@ export default async function internalLlmRoutes(fastify: FastifyInstance) {
       try {
         if (provider.provider_type === 'anthropic') {
           const endpoint = provider.api_endpoint || 'https://api.anthropic.com';
-          const response = await fetch(`${endpoint}/v1/messages`, {
+          const response = await llmFetch(`${endpoint}/v1/messages`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
@@ -370,7 +371,7 @@ export default async function internalLlmRoutes(fastify: FastifyInstance) {
         } else {
           // OpenAI or OpenAI-compatible
           const endpoint = provider.api_endpoint || 'https://api.openai.com';
-          const response = await fetch(`${endpoint}/v1/chat/completions`, {
+          const response = await llmFetch(`${endpoint}/v1/chat/completions`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
