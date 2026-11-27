@@ -39,7 +39,7 @@ publishes lifecycle events to Bolt (source `beacon`: created, updated,
 published, verified, challenged, the upsert event, comment and attachment
 events, and the retire event) so automations can react when knowledge changes.
 
-Beacon is fully agent-operable through the MCP server. Its 30 tools let agents
+Beacon is fully agent-operable through the MCP server. Its 38 tools let agents
 create, update, publish, verify, challenge, and retire articles; run grounding
 retrieval (`beacon_search`, `beacon_search_context`); idempotently ingest
 knowledge by slug (`beacon_upsert_by_slug`); and build or query the graph and

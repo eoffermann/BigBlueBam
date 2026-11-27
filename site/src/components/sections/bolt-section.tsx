@@ -13,6 +13,7 @@ import { FloatingFrame } from '@/components/ui/floating-frame';
 import { AnimatedReveal } from '@/components/ui/animated-reveal';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { APP_TOOL_COUNTS } from '@/lib/facts';
 
 const features = [
   {
@@ -54,7 +55,7 @@ const features = [
     icon: Bot,
     title: 'AI Automation',
     description:
-      '24 MCP tools let an AI agent author, test, operate, and observe automations (bolt_create to build a rule, bolt_test to dry-run it, bolt_event_trace to explain a match) with the same policy guardrails and approvals as everything else.',
+      `${APP_TOOL_COUNTS.bolt} MCP tools let an AI agent author, test, operate, and observe automations (bolt_create to build a rule, bolt_test to dry-run it, bolt_event_trace to explain a match) with the same policy guardrails and approvals as everything else.`,
     color: 'bg-indigo-100 text-indigo-600',
   },
 ];
@@ -76,7 +77,7 @@ export function BoltSection() {
             Bolt is a visual trigger-condition-action engine that already lives inside the suite:
             events from Bam, Bond, Banter, and the rest are right there, no connectors to buy. WHEN an
             event fires, IF your conditions hold, THEN run an ordered chain of actions across any app,
-            with execution logs you can actually read, and 24 MCP tools so agents can build and inspect
+            with execution logs you can actually read, and {APP_TOOL_COUNTS.bolt} MCP tools so agents can build and inspect
             rules too.
           </p>
         </div>

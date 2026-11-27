@@ -13,6 +13,7 @@ import { FloatingFrame } from '@/components/ui/floating-frame';
 import { AnimatedReveal } from '@/components/ui/animated-reveal';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { APP_TOOL_COUNTS } from '@/lib/facts';
 
 const features = [
   {
@@ -54,7 +55,7 @@ const features = [
     icon: Bot,
     title: 'AI Canvas Reading',
     description:
-      '40 MCP tools let AI agents read and summarize the canvas, drop stickies and text, arrange shapes, and run the sticky-to-task pipeline, including board_add_sticky, board_promote_to_tasks, board_read_elements, and more.',
+      `${APP_TOOL_COUNTS.board} MCP tools let AI agents read and summarize the canvas, drop stickies and text, arrange shapes, and run the sticky-to-task pipeline, including board_add_sticky, board_promote_to_tasks, board_read_elements, and more.`,
     color: 'bg-emerald-100 text-emerald-600',
   },
 ];
@@ -76,7 +77,7 @@ export function BoardSection() {
             actually happens. Board is an infinite canvas with real-time editing and a voice huddle
             right on the board, where any sticky promotes into a tracked Bam task in the project and
             phase you name, so the workshop turns into work instead of a snapshot. It shares your login
-            and projects with the rest of the suite, and 40 MCP tools let an AI agent read and summarize
+            and projects with the rest of the suite, and {APP_TOOL_COUNTS.board} MCP tools let an AI agent read and summarize
             the canvas, drop stickies, and promote them to tasks alongside you.
           </p>
         </div>

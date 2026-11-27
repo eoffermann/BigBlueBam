@@ -13,6 +13,7 @@ import { FloatingFrame } from '@/components/ui/floating-frame';
 import { AnimatedReveal } from '@/components/ui/animated-reveal';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { APP_TOOL_COUNTS } from '@/lib/facts';
 
 const features = [
   {
@@ -54,7 +55,7 @@ const features = [
     icon: Bot,
     title: 'AI Occupants',
     description:
-      '37 MCP tools make agents first-class occupants: they read live presence, set status, locate people, knock, summon, and book rooms (bureau_set_status, bureau_book_room, bureau_locate_user) under the same permission checks as everyone else.',
+      `${APP_TOOL_COUNTS.bureau} MCP tools make agents first-class occupants: they read live presence, set status, locate people, knock, summon, and book rooms (bureau_set_status, bureau_book_room, bureau_locate_user) under the same permission checks as everyone else.`,
     color: 'bg-indigo-100 text-indigo-600',
   },
 ];
@@ -76,7 +77,7 @@ export function BureauSection() {
             back: floors laid out on a map, rooms you walk into, a live dot for everyone who is
             around, and knock-to-enter on a closed door. Where chat tells you what was said, Bureau
             tells you who is here and whether you can interrupt them, and a presence widget follows
-            you into every other app in the suite. 37 MCP tools mean an AI agent can occupy the
+            you into every other app in the suite. {APP_TOOL_COUNTS.bureau} MCP tools mean an AI agent can occupy the
             floor, locate a teammate, or book a room as naturally as you can.
           </p>
         </div>

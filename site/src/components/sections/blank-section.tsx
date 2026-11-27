@@ -12,6 +12,7 @@ import { FloatingFrame } from '@/components/ui/floating-frame';
 import { AnimatedReveal } from '@/components/ui/animated-reveal';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { APP_TOOL_COUNTS } from '@/lib/facts';
 
 const features = [
   {
@@ -53,7 +54,7 @@ const features = [
     icon: Bot,
     title: 'AI Form Operations',
     description:
-      '20 MCP tools let AI agents generate a form from a plain-language brief, add and reorder fields, publish it, export submissions, and summarize the free-text answers for you.',
+      `${APP_TOOL_COUNTS.blank} MCP tools let AI agents generate a form from a plain-language brief, add and reorder fields, publish it, export submissions, and summarize the free-text answers for you.`,
     color: 'bg-fuchsia-100 text-fuchsia-600',
   },
 ];

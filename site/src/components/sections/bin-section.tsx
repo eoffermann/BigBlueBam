@@ -13,6 +13,7 @@ import { FloatingFrame } from '@/components/ui/floating-frame';
 import { AnimatedReveal } from '@/components/ui/animated-reveal';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { APP_TOOL_COUNTS } from '@/lib/facts';
 
 const features = [
   {
@@ -54,7 +55,7 @@ const features = [
     icon: Bot,
     title: 'Agent-native storage',
     description:
-      '19 MCP tools let agents upload, version, tag, move, and fetch assets, and read or edit structured datasets, so an AI can manage your files with the same authority as a human, gated by a visibility preflight.',
+      `${APP_TOOL_COUNTS.bin} MCP tools let agents upload, version, tag, move, and fetch assets, and read or edit structured datasets, so an AI can manage your files with the same authority as a human, gated by a visibility preflight.`,
     color: 'bg-purple-100 text-purple-600',
   },
 ];
@@ -77,7 +78,7 @@ export function BinSection() {
             place. Media and 3D models jump straight to Bay for review; datasets open in a live
             grid/tree editor you can co-edit in real time. Bin is also the plumbing the rest of the
             suite stands on, storing the media bytes behind Bay and the capture/export bytes behind
-            Blip. 19 MCP tools let an AI agent manage assets and edit datasets as naturally as it
+            Blip. {APP_TOOL_COUNTS.bin} MCP tools let an AI agent manage assets and edit datasets as naturally as it
             files a task.
           </p>
         </div>

@@ -6,9 +6,12 @@ import { join } from 'node:path';
 import {
   faqAnswer,
   findStaleAppCounts,
+  findStaleToolCounts,
   missingFaqNames,
+  moduleToolCounts,
   parseCount,
   PUBLISHED,
+  toolCountFiles,
 } from '../check-app-counts.mjs';
 import { REPO_ROOT } from './bolt-sources.mjs';
 
@@ -54,6 +57,70 @@ test('the suite introduction files are checked, including the meta.json app_coun
 test('missingFaqNames finds catalog apps the FAQ prose forgot', () => {
   const tsx = "  {\n    question: 'How many apps are included?',\n    answer: `Bam (x), Banter (y)`,\n  },\n";
   assert.deepEqual(missingFaqNames(faqAnswer(tsx), ['Bam', 'Banter', 'Bursar']), ['Bursar']);
+});
+
+const APPS = [
+  { id: 'b3', name: 'Bam', toolCount: 128 },
+  { id: 'bastion', name: 'Bastion', toolCount: 67 },
+  { id: 'burn', name: 'Burn', toolCount: 18 },
+];
+const MODULES = { 'bastion-tools': 67, 'task-tools': 19 };
+
+test('findStaleToolCounts flags every published form of a stale per-app count (issue #405)', () => {
+  const text = [
+    '- **Bastion (66 tools), compliance readiness.**',
+    "'66 bastion_* MCP tools let an AI agent read readiness'",
+    'Agents drive it through over 30 `burn_*` MCP tools.',
+    'MCP module(s): `apps/mcp-server/src/tools/bastion-tools.ts` (66 tools, registered at M11)',
+    '952 tools across 55 modules (128 Bam core + 66 Bastion + 18 Burn)',
+    'Burn exposes 17 MCP tools plus one deprecated alias.',
+  ].join('\n');
+  const stale = findStaleToolCounts(text, { apps: APPS, modules: MODULES, label: 'x' });
+  assert.equal(stale.length, 6, stale.join('\n'));
+});
+
+test('findStaleToolCounts accepts current counts and ignores small and suite-wide numbers', () => {
+  const text = [
+    '- **Bastion (67 tools), compliance readiness.** It works across 2 tools.',
+    '`${APP_TOOL_COUNTS.bastion} bastion_* MCP tools`',
+    '`bastion-tools.ts` (67 tools), `task-tools.ts` (19)',
+    'The suite has 952 tools (128 Bam core + 67 Bastion + 18 Burn).',
+  ].join('\n');
+  assert.deepEqual(findStaleToolCounts(text, { apps: APPS, modules: MODULES, label: 'x' }), []);
+});
+
+test('a per-app file, or a heading that names an app, scopes bare "N MCP tools" to that app', () => {
+  const scoped = findStaleToolCounts('Its 30 tools let agents act.\n"mcp_tool_count": 66', {
+    apps: APPS, modules: MODULES, scopeApp: APPS[1], label: 'x',
+  });
+  assert.equal(scoped.length, 2, scoped.join('\n'));
+  const sectioned = ['### Burn', '**AI agent surface:** 17 MCP tools.', '### Bastion', '67 MCP tools.'].join('\n');
+  const stale = findStaleToolCounts(sectioned, { apps: APPS, modules: MODULES, label: 'x' });
+  assert.deepEqual(stale, ['x:2 says "17 MCP tools" (expected 18)']);
+});
+
+test('every per-app doc folder and per-app site section is scanned', () => {
+  const catalog = JSON.parse(
+    readFileSync(join(REPO_ROOT, 'site/src/content/docs-catalog.generated.json'), 'utf8'),
+  );
+  const apps = catalog.filter((p) => p.id !== 'platform');
+  const files = toolCountFiles(apps, REPO_ROOT);
+  const byRel = new Map(files.map((f) => [f.rel, f.scopeApp?.id ?? null]));
+  assert.equal(byRel.get('docs/apps/bastion/help.md'), 'bastion');
+  assert.equal(byRel.get('docs/apps/bam/help.md'), 'b3');
+  assert.equal(byRel.get('site/src/components/sections/bastion-section.tsx'), 'bastion');
+  assert.equal(byRel.get('site/src/components/sections/banter-stub.tsx'), 'banter');
+  assert.equal(byRel.get('CLAUDE.md'), null);
+  assert.equal(byRel.get('docs/reference/mcp-endpoint-mapping.md'), null);
+  const modules = moduleToolCounts(REPO_ROOT);
+  for (const f of files) {
+    const text = readFileSync(join(REPO_ROOT, f.rel), 'utf8');
+    assert.deepEqual(
+      findStaleToolCounts(text, { apps, modules, scopeApp: f.scopeApp, label: f.rel }),
+      [],
+      f.rel,
+    );
+  }
 });
 
 test('the committed published files agree with the committed catalog', () => {

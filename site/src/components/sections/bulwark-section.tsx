@@ -12,6 +12,7 @@ import { FloatingFrame } from '@/components/ui/floating-frame';
 import { AnimatedReveal } from '@/components/ui/animated-reveal';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { APP_TOOL_COUNTS } from '@/lib/facts';
 
 const features = [
   {
@@ -51,9 +52,9 @@ const features = [
   },
   {
     icon: Bot,
-    title: 'Built for agents (16 MCP tools)',
+    title: `Built for agents (${APP_TOOL_COUNTS.bulwark} MCP tools)`,
     description:
-      '16 MCP tools let an AI agent read the obligation ledger, trace a deadline back to its clause, and draft a notice with the same identity and audit trail as a human - while every send stays behind the human approval queue and a confirm token.',
+      `${APP_TOOL_COUNTS.bulwark} MCP tools let an AI agent read the obligation ledger, trace a deadline back to its clause, and draft a notice with the same identity and audit trail as a human - while every send stays behind the human approval queue and a confirm token.`,
     color: 'bg-rose-100 text-rose-600',
   },
 ];

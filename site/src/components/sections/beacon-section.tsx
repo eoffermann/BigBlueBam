@@ -13,6 +13,7 @@ import { FloatingFrame } from '@/components/ui/floating-frame';
 import { AnimatedReveal } from '@/components/ui/animated-reveal';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { APP_TOOL_COUNTS } from '@/lib/facts';
 
 const features = [
   {
@@ -54,7 +55,7 @@ const features = [
     icon: Bot,
     title: 'Agent-native knowledge',
     description:
-      '38 MCP tools let AI agents author, verify, challenge, and idempotently upsert entries by slug, plus run grounding retrieval and traverse the graph. Among them are beacon_search_context, beacon_verify, and beacon_upsert_by_slug, all gated by a visibility preflight.',
+      `${APP_TOOL_COUNTS.beacon} MCP tools let AI agents author, verify, challenge, and idempotently upsert entries by slug, plus run grounding retrieval and traverse the graph. Among them are beacon_search_context, beacon_verify, and beacon_upsert_by_slug, all gated by a visibility preflight.`,
     color: 'bg-purple-100 text-purple-600',
   },
 ];
@@ -76,7 +77,7 @@ export function BeaconSection() {
             actually working. Beacon is a knowledge base with real full-text and semantic search, a
             typed Knowledge Graph, access policies, and built-in freshness governance, so the answer
             lives next to the work and stops rotting when the facts change. It shares your platform
-            login and pulls projects from Bam, and 38 MCP tools let an AI agent read and write
+            login and pulls projects from Bam, and {APP_TOOL_COUNTS.beacon} MCP tools let an AI agent read and write
             knowledge as naturally as it files a task.
           </p>
         </div>

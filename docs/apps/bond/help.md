@@ -338,7 +338,7 @@ Deleted deals are restored through the REST API or the `bond_restore_deal` MCP t
 
 ### Working with AI agents
 
-Bond exposes a large MCP catalog (over 70 tools across `bond-tools.ts`, plus the cross-cutting `bond_find_duplicates`), so an AI agent can do everything a salesperson does in the app, plus the admin configuration the current UI does not expose. Most write tools accept a name or a UUID (a pipeline or stage name, a contact email or name, a company name or domain, a deal title fragment, an owner email); an ambiguous or missing match returns a clean error instead of mutating data.
+Bond exposes a large MCP catalog (69 tools in `bond-tools.ts`, plus the cross-cutting `bond_find_duplicates`), so an AI agent can do everything a salesperson does in the app, plus the admin configuration the current UI does not expose. Most write tools accept a name or a UUID (a pipeline or stage name, a contact email or name, a company name or domain, a deal title fragment, an owner email); an ambiguous or missing match returns a clean error instead of mutating data.
 
 What agents commonly drive:
 

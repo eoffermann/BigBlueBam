@@ -12,6 +12,7 @@ import { FloatingFrame } from '@/components/ui/floating-frame';
 import { AnimatedReveal } from '@/components/ui/animated-reveal';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { APP_TOOL_COUNTS } from '@/lib/facts';
 
 const features = [
   {
@@ -51,9 +52,9 @@ const features = [
   },
   {
     icon: Bot,
-    title: 'Built for agents (17 MCP tools)',
+    title: `Built for agents (${APP_TOOL_COUNTS.burn} MCP tools)`,
     description:
-      '17 burn_* MCP tools let an AI agent read the deliverable ledger, classify work in dollars, run the scope gate on a proposed charge, and open a change order with the same identity and audit trail as a human - while every approval stays behind the human queue and a confirm token.',
+      `${APP_TOOL_COUNTS.burn} burn_* MCP tools let an AI agent read the deliverable ledger, classify work in dollars, run the scope gate on a proposed charge, and open a change order with the same identity and audit trail as a human - while every approval stays behind the human queue and a confirm token.`,
     color: 'bg-orange-100 text-orange-700',
   },
 ];

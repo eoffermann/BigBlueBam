@@ -13,6 +13,7 @@ import { FloatingFrame } from '@/components/ui/floating-frame';
 import { AnimatedReveal } from '@/components/ui/animated-reveal';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { APP_TOOL_COUNTS } from '@/lib/facts';
 
 const features = [
   {
@@ -54,7 +55,7 @@ const features = [
     icon: Bot,
     title: 'AI Analytics',
     description:
-      '32 MCP tools let AI agents discover sources, run ad-hoc queries, build dashboards and widgets, and summarize a whole board in one call, plus anomaly detection and period comparison that have no UI equivalent. Try bench_summarize_dashboard, bench_query_ad_hoc, and bench_detect_anomalies.',
+      `${APP_TOOL_COUNTS.bench} MCP tools let AI agents discover sources, run ad-hoc queries, build dashboards and widgets, and summarize a whole board in one call, plus anomaly detection and period comparison that have no UI equivalent. Try bench_summarize_dashboard, bench_query_ad_hoc, and bench_detect_anomalies.`,
     color: 'bg-indigo-100 text-indigo-600',
   },
 ];
@@ -76,7 +77,7 @@ export function BenchSection() {
             numbers. Bench skips all of it: it builds dashboards, widgets, ad-hoc queries, and
             scheduled reports straight from the live data already in the suite: your Bam tasks and
             Bond deals as they stand right now, not as they looked at export time, all scoped to
-            your org. And with 32 MCP tools, an AI agent can query and summarize a whole dashboard
+            your org. And with {APP_TOOL_COUNTS.bench} MCP tools, an AI agent can query and summarize a whole dashboard
             without anyone touching a chart.
           </p>
         </div>

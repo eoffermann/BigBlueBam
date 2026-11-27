@@ -12,6 +12,7 @@ import { FloatingFrame } from '@/components/ui/floating-frame';
 import { AnimatedReveal } from '@/components/ui/animated-reveal';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { APP_TOOL_COUNTS } from '@/lib/facts';
 
 const features = [
   {
@@ -51,9 +52,9 @@ const features = [
   },
   {
     icon: Bot,
-    title: 'Built for agents (13 MCP tools)',
+    title: `Built for agents (${APP_TOOL_COUNTS.braid} MCP tools)`,
     description:
-      '13 MCP tools, led by the flagship braid_resolve, let an agent look up any record\'s golden id, read a profile, or propose a merge with the same identity and audit trail as a human reviewer. Merges and splits stay behind a confirm token.',
+      `${APP_TOOL_COUNTS.braid} MCP tools, led by the flagship braid_resolve, let an agent look up any record's golden id, read a profile, or propose a merge with the same identity and audit trail as a human reviewer. Merges and splits stay behind a confirm token.`,
     color: 'bg-rose-100 text-rose-600',
   },
 ];

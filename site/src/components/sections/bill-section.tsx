@@ -13,6 +13,7 @@ import { FloatingFrame } from '@/components/ui/floating-frame';
 import { AnimatedReveal } from '@/components/ui/animated-reveal';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { APP_TOOL_COUNTS } from '@/lib/facts';
 
 const features = [
   {
@@ -54,7 +55,7 @@ const features = [
     icon: Bot,
     title: 'AI Billing Operations',
     description:
-      '47 MCP tools let AI agents draft invoices from deals or time entries, record payments, run a recurring schedule, and surface overdue, revenue, and profitability. Try bill_create_invoice_from_deal, bill_record_payment, and bill_get_profitability.',
+      `${APP_TOOL_COUNTS.bill} MCP tools let AI agents draft invoices from deals or time entries, record payments, run a recurring schedule, and surface overdue, revenue, and profitability. Try bill_create_invoice_from_deal, bill_record_payment, and bill_get_profitability.`,
     color: 'bg-teal-100 text-teal-600',
   },
 ];
@@ -75,7 +76,7 @@ export function BillSection() {
             line, then chasing the payment for a month. Bill skips the retype: it turns a won Bond deal
             into a draft invoice and a range of logged Bam time into priced line items, on the same
             stack: line items, expenses, recurring billing, PDFs, and honest payment and aging. And
-            with 47 MCP tools, an AI agent can draft and send the whole lifecycle alongside you.
+            with {APP_TOOL_COUNTS.bill} MCP tools, an AI agent can draft and send the whole lifecycle alongside you.
           </p>
         </div>
       </AnimatedReveal>

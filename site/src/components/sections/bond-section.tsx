@@ -13,6 +13,7 @@ import { FloatingFrame } from '@/components/ui/floating-frame';
 import { AnimatedReveal } from '@/components/ui/animated-reveal';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { APP_TOOL_COUNTS } from '@/lib/facts';
 
 const features = [
   {
@@ -54,7 +55,7 @@ const features = [
     icon: Bot,
     title: 'AI Pipeline Management',
     description:
-      '69 MCP tools let AI agents create and advance deals, log activities, score leads, generate pipeline forecasts, upsert contacts by email, and flag likely duplicates, alongside your reps, not instead of them.',
+      `${APP_TOOL_COUNTS.bond} MCP tools let AI agents create and advance deals, log activities, score leads, generate pipeline forecasts, upsert contacts by email, and flag likely duplicates, alongside your reps, not instead of them.`,
     color: 'bg-fuchsia-100 text-fuchsia-600',
   },
 ];
@@ -76,7 +77,7 @@ export function BondSection() {
             someone's to-do list. Bond puts the pipeline on the same stack as your projects: a won
             deal can spin up a Bam project and a Bill invoice, and an agent can log the call you
             forgot to log. It moves contacts, companies, and deals through configurable stages with
-            activity logging, cross-product links, and 69 MCP tools, so an AI agent can advance a
+            activity logging, cross-product links, and {APP_TOOL_COUNTS.bond} MCP tools, so an AI agent can advance a
             deal or surface a duplicate as naturally as it files a task.
           </p>
         </div>

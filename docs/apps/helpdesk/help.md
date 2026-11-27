@@ -253,7 +253,7 @@ Note that the SLA minute settings live on the settings row but are not part of t
 
 ### Working with AI agents
 
-Helpdesk exposes 13 MCP tools so agents and automations can triage, answer, search, and configure tickets. They proxy to the Helpdesk API and forward the caller's token, so an agent acts with its own authority. Be aware that the agent surface routes (`/helpdesk/api/agents/`) require an `hdag_` agent API key, so a tool calling those routes acts as a configured support agent, not as a customer.
+Helpdesk exposes 11 MCP tools of its own, plus two platform tools that work on tickets (`helpdesk_find_similar_tickets` and `helpdesk_ticket_count_by_phrase`), so agents and automations can triage, answer, search, and configure tickets. They proxy to the Helpdesk API and forward the caller's token, so an agent acts with its own authority. Be aware that the agent surface routes (`/helpdesk/api/agents/`) require an `hdag_` agent API key, so a tool calling those routes acts as a configured support agent, not as a customer.
 
 Reading and finding tickets:
 

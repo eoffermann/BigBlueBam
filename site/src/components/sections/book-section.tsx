@@ -13,6 +13,7 @@ import { FloatingFrame } from '@/components/ui/floating-frame';
 import { AnimatedReveal } from '@/components/ui/animated-reveal';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { APP_TOOL_COUNTS } from '@/lib/facts';
 
 const features = [
   {
@@ -54,7 +55,7 @@ const features = [
     icon: Bot,
     title: 'AI Scheduling',
     description:
-      '25 MCP tools let AI agents create, update, cancel, and RSVP to events, find a meeting time across a roster, and read team availability (book_find_meeting_time, book_create_event, book_get_team_availability, and the rest) right next to your reps, not instead of them.',
+      `${APP_TOOL_COUNTS.book} MCP tools let AI agents create, update, cancel, and RSVP to events, find a meeting time across a roster, and read team availability (book_find_meeting_time, book_create_event, book_get_team_availability, and the rest) right next to your reps, not instead of them.`,
     color: 'bg-indigo-100 text-indigo-600',
   },
 ];

@@ -13,6 +13,7 @@ import { FloatingFrame } from '@/components/ui/floating-frame';
 import { AnimatedReveal } from '@/components/ui/animated-reveal';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { APP_TOOL_COUNTS } from '@/lib/facts';
 
 const features = [
   {
@@ -54,7 +55,7 @@ const features = [
     icon: Bot,
     title: 'AI Goal-Keeping',
     description:
-      '30 MCP tools let AI agents provision a whole quarter of objectives, wire key results to real Bam delivery, run a weekly at-risk sweep, and post the period report to Banter, alongside your team, not instead of it. Try bearing_goal_create, bearing_kr_link, and bearing_at_risk.',
+      `${APP_TOOL_COUNTS.bearing} MCP tools let AI agents provision a whole quarter of objectives, wire key results to real Bam delivery, run a weekly at-risk sweep, and post the period report to Banter, alongside your team, not instead of it. Try bearing_goal_create, bearing_kr_link, and bearing_at_risk.`,
     color: 'bg-purple-100 text-purple-600',
   },
 ];
@@ -77,7 +78,7 @@ export function BearingSection() {
             that drive them: link a key result to a Bam epic, project, sprint, or task and it
             advances as that work reaches done, while a status engine flags goals on-track, at-risk,
             or behind before the quarter quietly slips. And yes, agents can update progress too,
-            through 30 MCP tools.
+            through {APP_TOOL_COUNTS.bearing} MCP tools.
           </p>
         </div>
       </AnimatedReveal>

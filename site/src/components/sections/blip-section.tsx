@@ -13,6 +13,7 @@ import { FloatingFrame } from '@/components/ui/floating-frame';
 import { AnimatedReveal } from '@/components/ui/animated-reveal';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { APP_TOOL_COUNTS } from '@/lib/facts';
 
 const features = [
   {
@@ -54,7 +55,7 @@ const features = [
     icon: Bot,
     title: 'Agent-native telemetry',
     description:
-      '38 MCP tools let AI agents declare apps, mint keys, query and cursor-tail entries, manage watches and views, freeze collections, and stitch timelapses, all under heartbeat and agent-policy gating with a can_access visibility preflight.',
+      `${APP_TOOL_COUNTS.blip} MCP tools let AI agents declare apps, mint keys, query and cursor-tail entries, manage watches and views, freeze collections, and stitch timelapses, all under heartbeat and agent-policy gating with a can_access visibility preflight.`,
     color: 'bg-purple-100 text-purple-600',
   },
 ];
@@ -76,7 +77,7 @@ export function BlipSection() {
             declare an app, embed an ingest key, and POST JSON over a bearer token. Then watch it
             stream live, query the history, index the fields, set watches on the patterns that hurt,
             transform out the PII, and freeze a collection when you need it forever. It is
-            observability that did not require a second mortgage, and 38 MCP tools let an agent
+            observability that did not require a second mortgage, and {APP_TOOL_COUNTS.blip} MCP tools let an agent
             instrument and interrogate your runtime as naturally as it files a task.
           </p>
         </div>

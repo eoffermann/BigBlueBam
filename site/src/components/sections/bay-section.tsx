@@ -13,6 +13,7 @@ import { FloatingFrame } from '@/components/ui/floating-frame';
 import { AnimatedReveal } from '@/components/ui/animated-reveal';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { APP_TOOL_COUNTS } from '@/lib/facts';
 
 const features = [
   {
@@ -54,7 +55,7 @@ const features = [
     icon: Bot,
     title: 'Agents review like everyone else',
     description:
-      '14 MCP tools let an AI agent open an asset, drop frame- or viewpoint-anchored annotations, and record an approve/reject/changes decision through the same identity and audit trail as a human reviewer. No side door, no unsigned notes.',
+      `${APP_TOOL_COUNTS.bay} MCP tools let an AI agent open an asset, drop frame- or viewpoint-anchored annotations, and record an approve/reject/changes decision through the same identity and audit trail as a human reviewer. No side door, no unsigned notes.`,
     color: 'bg-purple-100 text-purple-600',
   },
 ];
@@ -77,7 +78,7 @@ export function BaySection() {
             token-gated guest links for clients who will never make an account. Then it does the
             thing every other review tool punts on: real 3D. Upload an FBX, OBJ, or GLB, and Bay
             renders it in a three.js viewer you can orbit, pan, and zoom, with viewpoint-anchored
-            pins that fly the camera back to exactly where the problem lives. 14 MCP tools mean an AI
+            pins that fly the camera back to exactly where the problem lives. {APP_TOOL_COUNTS.bay} MCP tools mean an AI
             agent reviews through the same tools, identity, and audit trail as your art director.
           </p>
         </div>

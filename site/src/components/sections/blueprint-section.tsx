@@ -13,6 +13,7 @@ import { FloatingFrame } from '@/components/ui/floating-frame';
 import { AnimatedReveal } from '@/components/ui/animated-reveal';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { APP_TOOL_COUNTS } from '@/lib/facts';
 
 const features = [
   {
@@ -54,7 +55,7 @@ const features = [
     icon: Bot,
     title: 'AI builds the diagram',
     description:
-      '36 MCP tools let an agent draft a diagram from a process description, lay it out, and link nodes to entities in one go. Try blueprint_add_node, blueprint_apply_layout, and blueprint_generate_from_bam. They work alongside you, not instead of you.',
+      `${APP_TOOL_COUNTS.blueprint} MCP tools let an agent draft a diagram from a process description, lay it out, and link nodes to entities in one go. Try blueprint_add_node, blueprint_apply_layout, and blueprint_generate_from_bam. They work alongside you, not instead of you.`,
     color: 'bg-indigo-100 text-indigo-600',
   },
 ];

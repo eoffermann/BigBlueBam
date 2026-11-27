@@ -13,11 +13,16 @@
  *      Numbers below 10 are ignored ("two apps" in prose is not the suite total).
  *   2. Every catalog app name appears in the docs.tsx FAQ answer to
  *      "How many apps are included?", which is hand-written prose.
+ *   3. (issue #405) Every per-app MCP tool count in the published files, the
+ *      per-app docs folders and the per-app site sections equals that app's
+ *      `toolCount` in the catalog, and every "`<module>-tools.ts` (N" equals the
+ *      registerTool() calls in that module. The site sections read the number
+ *      from APP_TOOL_COUNTS in site/src/lib/facts.ts rather than hard-coding it.
  *
  * Run alongside scripts/check-tool-return-coverage.mjs in the db-drift workflow.
  * Exits 0 when clean, 1 on any violation.
  */
-import { readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -95,11 +100,149 @@ export function missingFaqNames(answer, names) {
   return names.filter((name) => !new RegExp(`\\b${name}\\b`).test(answer));
 }
 
+// ---------------------------------------------------------------------------
+// Per-app MCP tool counts (issue #405)
+// ---------------------------------------------------------------------------
+// Each app's tool count is one fact: its `toolCount` in the generated catalog.
+// A tool module's count is the number of registerTool() calls in its file.
+// Published prose repeats both ("Bastion (67 tools)", "67 bastion_* MCP tools",
+// "`bastion-tools.ts` (67 tools)", "+ 67 Bastion +"), and those copies went
+// stale silently because only the suite total was checked.
+
+/** Extra published files that state per-app or per-module tool counts. */
+export const TOOL_COUNT_EXTRA = [
+  'CLAUDE.md',
+  'docs/reference/mcp-endpoint-mapping.md',
+];
+
+const escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+/** The docs/apps/<dir> folder for a catalog id (Bam's id is b3). */
+export function docDirFor(id) {
+  return id === 'b3' ? 'bam' : id;
+}
+
+/** The tool-name prefix an app's tools share ("bastion" for bastion_*); Bam has none. */
+export function toolPrefixFor(id) {
+  return id === 'b3' ? null : id;
+}
+
+/** "### Bastion (app)" / "## 4. Board" -> the app it introduces, or null. */
+export function headingApp(line, apps) {
+  const h = line.match(/^#{1,6}\s+(?:[\d.]+\s+)?([A-Z][A-Za-z]+)\b/);
+  if (!h) return undefined;
+  return apps.find((a) => a.name === h[1]) ?? null;
+}
+
+/**
+ * Find per-app and per-module tool counts in `text` that disagree with the code.
+ *   apps:      [{ id, name, toolCount }]
+ *   modules:   { 'bastion-tools': 67, ... } (registerTool calls per file)
+ *   scopeApp:  the app this whole file is about (docs/apps/<app>/..., <app>-section.tsx),
+ *              or null for a suite-wide file, where a markdown heading naming an app
+ *              scopes the lines under it.
+ */
+export function findStaleToolCounts(text, { apps, modules, scopeApp = null, label }) {
+  const stale = [];
+  const report = (i, said, expected) => stale.push(`${label}:${i + 1} says "${said}" (expected ${expected})`);
+  const lines = text.split('\n');
+  let sectionApp = null;
+  for (let i = 0; i < lines.length; i++) {
+    let line = lines[i];
+    if (!scopeApp) {
+      const h = headingApp(line, apps);
+      if (h !== undefined) sectionApp = h;
+    }
+    const scope = scopeApp ?? sectionApp;
+
+    // Module counts: "`bastion-tools.ts` (67 tools", "`project-tools.ts` (25)".
+    line = line.replace(/`(?:[\w./-]*\/)?([\w-]+-tools)\.ts`,? \((\d+)(?: MCP)?(?: tools?)?(?=[,)])/g, (m, mod, n) => {
+      if (mod in modules && Number(n) !== modules[mod]) report(i, m, modules[mod]);
+      return ' '.repeat(m.length);
+    });
+
+    for (const app of apps) {
+      const name = escapeRe(app.name);
+      const forms = [
+        new RegExp(`\\b${name} \\((\\d+) (?:MCP )?tools\\)`, 'g'),
+        new RegExp(`\\b${name} (?:exposes|has|ships|registers) (?:over |more than |about )?(\\d+) (?:MCP )?tools\\b`, 'g'),
+      ];
+      if (/\btools\b|\bMCP\b/.test(line)) forms.push(new RegExp(`(?:\\(|\\+ )(\\d+) ${name}\\b`, 'g'));
+      const prefix = toolPrefixFor(app.id);
+      if (prefix) forms.push(new RegExp(`\\b(?:over |more than |about )?(\\d+) \`?${prefix}_\\*\`? (?:MCP )?tools\\b`, 'g'));
+      for (const re of forms) {
+        line = line.replace(re, (m, n) => {
+          if (Number(n) !== app.toolCount) report(i, m, app.toolCount);
+          return ' '.repeat(m.length);
+        });
+      }
+    }
+
+    if (scope) {
+      const forms = [/\b(?:over |more than |about )?(\d{1,3})\+? (?:MCP |agent )?tools\b/g];
+      if (scopeApp) forms.push(/"mcp_tool_count":\s*(\d+)/g);
+      for (const re of forms) {
+        for (const m of line.matchAll(re)) {
+          const n = Number(m[1]);
+          if (n >= 10 && n !== scope.toolCount) report(i, m[0], scope.toolCount);
+        }
+      }
+    }
+  }
+  return stale;
+}
+
+/** registerTool() calls per tool module basename ('bastion-tools' -> 67). */
+export function moduleToolCounts(root = ROOT) {
+  const dir = join(root, 'apps/mcp-server/src/tools');
+  const out = {};
+  for (const f of readdirSync(dir).filter((x) => x.endsWith('-tools.ts'))) {
+    out[f.slice(0, -3)] = (readFileSync(join(dir, f), 'utf8').match(/registerTool\s*\(\s*server\s*,/g) || []).length;
+  }
+  return out;
+}
+
+/** [{ rel, scopeApp }] for every published file that may state a tool count. */
+export function toolCountFiles(apps, root = ROOT) {
+  const files = [...PUBLISHED, ...TOOL_COUNT_EXTRA].map((rel) => ({ rel, scopeApp: null }));
+  for (const app of apps) {
+    const dir = join(root, 'docs/apps', docDirFor(app.id));
+    if (!existsSync(dir)) continue;
+    for (const f of readdirSync(dir).filter((x) => x.endsWith('.md') || x.endsWith('.json')).sort()) {
+      files.push({ rel: `docs/apps/${docDirFor(app.id)}/${f}`, scopeApp: app });
+    }
+  }
+  for (const sub of ['site/src/components/sections', 'site/src/pages']) {
+    for (const f of readdirSync(join(root, sub)).filter((x) => x.endsWith('.tsx')).sort()) {
+      const id = sub.endsWith('sections') ? f.match(/^([a-z]+)-(?:section|stub)\.tsx$/)?.[1] : undefined;
+      const rel = `${sub}/${f}`;
+      if (files.some((x) => x.rel === rel)) continue;
+      files.push({ rel, scopeApp: apps.find((a) => a.id === id) ?? null });
+    }
+  }
+  return files;
+}
+
 function main() {
   const catalog = JSON.parse(readFileSync(CATALOG, 'utf8'));
   const apps = catalog.filter((p) => p.id !== 'platform');
   const expected = apps.length;
   let failed = false;
+
+  const modules = moduleToolCounts();
+  const staleTools = [];
+  const toolFiles = toolCountFiles(apps);
+  for (const { rel, scopeApp } of toolFiles) {
+    staleTools.push(...findStaleToolCounts(readFileSync(join(ROOT, rel), 'utf8'), { apps, modules, scopeApp, label: rel }));
+  }
+  console.log(`tool-count files:      ${toolFiles.length}`);
+  console.log(`per-app tool counts:   ${staleTools.length} stale (expected 0)`);
+  if (staleTools.length) {
+    failed = true;
+    console.error('FAIL: published per-app or per-module MCP tool counts differ from the catalog / tool sources:');
+    for (const s of staleTools) console.error(`  ${s}`);
+    console.error('');
+  }
 
   const stale = [];
   for (const rel of PUBLISHED) {

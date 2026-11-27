@@ -188,7 +188,7 @@ To remove a rule, click the delete (trash) icon on its row.
 
 ### Working with AI agents
 
-Burn exposes 17 MCP tools plus one deprecated alias, all named `burn_*` and gated behind the per-agent `burn.*` allowlist (they fail closed until an operator allowlists them). The flagship is **`burn_precheck`**, which asks whether a proposed charge is allowable against its envelope before it is committed and returns a verdict, a target deliverable, a clause cite, and a quantized overage. Only `deny` blocks, and only when the org has earned blocking mode for that class; `needs_mapping` never blocks.
+Burn exposes 18 MCP tools, one of them a deprecated alias, all named `burn_*` and gated behind the per-agent `burn.*` allowlist (they fail closed until an operator allowlists them). The flagship is **`burn_precheck`**, which asks whether a proposed charge is allowable against its envelope before it is committed and returns a verdict, a target deliverable, a clause cite, and a quantized overage. Only `deny` blocks, and only when the org has earned blocking mode for that class; `needs_mapping` never blocks.
 
 The full set:
 

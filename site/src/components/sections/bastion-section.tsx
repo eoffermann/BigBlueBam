@@ -13,6 +13,7 @@ import { FloatingFrame } from '@/components/ui/floating-frame';
 import { AnimatedReveal } from '@/components/ui/animated-reveal';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { APP_TOOL_COUNTS } from '@/lib/facts';
 
 // Screenshots are the numbered files the docs-capture bridge writes from
 // packages/docs-capture/recipes/bastion/bastion.yaml (GILLIGAN workspace only),
@@ -55,9 +56,9 @@ const features = [
   },
   {
     icon: Bot,
-    title: 'Built for agents (66 MCP tools)',
+    title: `Built for agents (${APP_TOOL_COUNTS.bastion} MCP tools)`,
     description:
-      '66 bastion_* MCP tools let an AI agent read readiness and the evidence map, run an evaluation, propose checks, draft fixes and questionnaire answers, and manage feeds and rooms, with the same identity and audit trail as a person. The vouching acts stay human: confirming a check, attesting to a policy, approving a fix or a questionnaire, and opening an auditor room all require a signed-in person, never an API key.',
+      `${APP_TOOL_COUNTS.bastion} bastion_* MCP tools let an AI agent read readiness and the evidence map, run an evaluation, propose checks, draft fixes and questionnaire answers, and manage feeds and rooms, with the same identity and audit trail as a person. The vouching acts stay human: confirming a check, attesting to a policy, approving a fix or a questionnaire, and opening an auditor room all require a signed-in person, never an API key.`,
     color: 'bg-stone-100 text-stone-700',
   },
 ];

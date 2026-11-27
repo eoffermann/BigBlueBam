@@ -12,6 +12,7 @@ import { FloatingFrame } from '@/components/ui/floating-frame';
 import { AnimatedReveal } from '@/components/ui/animated-reveal';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { APP_TOOL_COUNTS } from '@/lib/facts';
 
 const features = [
   {
@@ -53,7 +54,7 @@ const features = [
     icon: Bot,
     title: 'AI Campaign Management',
     description:
-      '28 MCP tools let AI agents draft email content, suggest subject lines, build and preview segments, assemble a campaign, and review results, with blast_draft_email_content, blast_suggest_subject_lines, and blast_preview_segment among them. Sends stay gated behind a human by default.',
+      `${APP_TOOL_COUNTS.blast} MCP tools let AI agents draft email content, suggest subject lines, build and preview segments, assemble a campaign, and review results, with blast_draft_email_content, blast_suggest_subject_lines, and blast_preview_segment among them. Sends stay gated behind a human by default.`,
     color: 'bg-pink-100 text-pink-600',
   },
 ];
@@ -73,7 +74,7 @@ export function BlastSection() {
             Export a list, re-import it somewhere else, watch the charge climb per contact, and pray
             at the black box that is your deliverability. Blast runs campaigns, templates, segments,
             and delivery analytics on the same stack as Bond, so a segment is built straight from
-            real CRM data and the open and click rates land next to the deal. 28 MCP tools let an AI
+            real CRM data and the open and click rates land next to the deal. {APP_TOOL_COUNTS.blast} MCP tools let an AI
             agent draft the copy and assemble the send, though the send itself waits for a human by
             default.
           </p>

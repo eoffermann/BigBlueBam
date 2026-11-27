@@ -17,6 +17,15 @@ export const APP_COUNT: number = (docsCatalog as { id: string }[]).filter(
   (p) => p.id !== 'platform',
 ).length;
 
+/**
+ * MCP tools per app, keyed by Launchpad id (Bam is 'b3'), from the same
+ * generated catalog. The per-app sections read their "N MCP tools" from here
+ * so a tool added or removed never leaves a hard-coded number behind (#405).
+ */
+export const APP_TOOL_COUNTS: Readonly<Record<string, number>> = Object.fromEntries(
+  (docsCatalog as { id: string; toolCount: number }[]).map((p) => [p.id, p.toolCount]),
+);
+
 const ONES = ['', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine',
   'ten', 'eleven', 'twelve', 'thirteen', 'fourteen', 'fifteen', 'sixteen', 'seventeen',
   'eighteen', 'nineteen'];

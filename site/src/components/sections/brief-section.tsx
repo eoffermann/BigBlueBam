@@ -14,6 +14,7 @@ import { FloatingFrame } from '@/components/ui/floating-frame';
 import { AnimatedReveal } from '@/components/ui/animated-reveal';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { APP_TOOL_COUNTS } from '@/lib/facts';
 
 const features = [
   {
@@ -77,7 +78,7 @@ export function BriefSection() {
             different copies. Brief is a real-time collaborative editor (rich text, threaded
             comments, version history, live co-editing) on the same stack as the work. A doc
             links to (or graduates into) Bam tasks and Beacon knowledge, and agents can draft and
-            edit it through 48 MCP tools.
+            edit it through {APP_TOOL_COUNTS.brief} MCP tools.
           </p>
         </div>
       </AnimatedReveal>
@@ -145,7 +146,7 @@ export function BriefSection() {
             <div>
               <h3 className="text-base font-semibold text-zinc-900">And yes, agents can do it too</h3>
               <p className="mt-2 text-sm text-zinc-600">
-                Brief exposes <span className="font-semibold text-zinc-900">48 MCP tools</span> so an
+                Brief exposes <span className="font-semibold text-zinc-900">{APP_TOOL_COUNTS.brief} MCP tools</span> so an
                 AI agent can author, edit, and curate documents the same way you do. It can create a doc
                 (<code className="rounded bg-zinc-100 px-1 py-0.5 text-xs">brief_create</code>),
                 stream content into it

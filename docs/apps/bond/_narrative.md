@@ -10,7 +10,7 @@ Bond is BigBlueBam's customer relationship management app for tracking contacts,
 - **Analytics** with total and weighted pipeline, win rate, conversion rates, deal velocity, revenue forecast buckets, and top loss reasons and competitors.
 - **Custom Fields** defined per entity type (Contact, Company, or Deal) and applied org-wide, plus **org-wide lead scoring rules** that add or subtract points to compute each contact's score.
 - **Duplicate and Stale Deal Detection** that ranks likely-duplicate contacts by confidence and flags deals stuck in a stage beyond their configured threshold.
-- **AI agent surface** of over 70 MCP tools covering contact/company/deal CRUD, stage moves, Won/Lost, activity logging, idempotent upsert, dedupe, pipeline and stage admin, custom-field and scoring-rule admin, and the full analytics set.
+- **AI agent surface** of 69 MCP tools covering contact/company/deal CRUD, stage moves, Won/Lost, activity logging, idempotent upsert, dedupe, pipeline and stage admin, custom-field and scoring-rule admin, and the full analytics set.
 
 ## Integrations
 

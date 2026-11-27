@@ -326,7 +326,7 @@ To review or change org settings:
 
 ### Working with AI agents
 
-Agents are first-class spatial occupants in Bureau. An agent that enters a room shows up on the floor and in the occupants list with an "(A) " prefix. Agents drive Bureau through over 30 `bureau_*` MCP tools, all forwarding the calling user's token and gated by the same server-side permission checks as the UI.
+Agents are first-class spatial occupants in Bureau. An agent that enters a room shows up on the floor and in the occupants list with an "(A) " prefix. Agents drive Bureau through 37 `bureau_*` MCP tools, all forwarding the calling user's token and gated by the same server-side permission checks as the UI.
 
 What agents commonly do:
 
@@ -559,4 +559,4 @@ BigBlueBam treats collaboration as ambient, not as a scheduled meeting. Bureau i
 - **Book** - Bureau bookings mirror to Book events; cancelling a booking cancels the linked Book event best-effort.
 - **Bolt** - Bureau emits events (entering and leaving rooms, status changes, knocks, room booked, room locked, summon issued) on the `bureau` source for automation.
 - **Bench** - Daily floor utilization rolls up for reporting in Bench.
-- MCP tools: this app exposes over 30 `bureau_*` tools. `bureau_summon`, `bureau_summon_grant_access`, `bureau_book_room`, `bureau_cancel_booking`, `bureau_delete_floor`, and `bureau_delete_room` use the `confirm_action` two-step. The presence tools `bureau_get_presence`, `bureau_locate_user`, and `bureau_set_status` are now backed by the real Redis presence store; prefer `bureau_where_is_user` for the access-checked, DND-respecting Hunt. See the MCP-tools reference in `docs/apps/bureau/`.
+- MCP tools: this app exposes 37 `bureau_*` tools. `bureau_summon`, `bureau_summon_grant_access`, `bureau_book_room`, `bureau_cancel_booking`, `bureau_delete_floor`, and `bureau_delete_room` use the `confirm_action` two-step. The presence tools `bureau_get_presence`, `bureau_locate_user`, and `bureau_set_status` are now backed by the real Redis presence store; prefer `bureau_where_is_user` for the access-checked, DND-respecting Hunt. See the MCP-tools reference in `docs/apps/bureau/`.

@@ -164,7 +164,7 @@ take in that app.
 - **Bursar (20 tools), vendor procurement.** Lays competing vendor quotes side by
   side against one list of what you need, shows what each quote leaves out, and
   after you choose a vendor, watches the bills against the agreed prices.
-- **Bastion (66 tools), compliance readiness.** Keeps one set of controls for SOC 2
+- **Bastion (67 tools), compliance readiness.** Keeps one set of controls for SOC 2
   and ISO 27001, checks them every night against what really happened in the
   suite, keeps sealed proof for the auditor, and drafts answers to customer
   security questionnaires from what it can prove.

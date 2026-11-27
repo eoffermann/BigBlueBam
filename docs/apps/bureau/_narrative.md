@@ -24,7 +24,7 @@ Bureau is the source of the floating docked box that the rest of the suite shows
 - **Book** mirrors every Bureau booking as a calendar event and is cancelled best-effort when the booking is cancelled.
 - **Bolt** receives Bureau events (room entry and exit, status changes, knocks, room booked, room locked, summon issued) on the `bureau` source for automation.
 - **Bench** rolls up daily floor utilization for reporting.
-- **AI agents** treat Bureau as a place they can occupy. Through over 30 `bureau_*` MCP tools they locate people, knock, summon, manage floors and offices, book rooms, and recover chats - all under the same server-side permission checks as the UI, the suite-wide `agent_policies` kill switch and allowlists, and the `can_access` visibility preflight before any cross-app result is posted.
+- **AI agents** treat Bureau as a place they can occupy. Through 37 `bureau_*` MCP tools they locate people, knock, summon, manage floors and offices, book rooms, and recover chats - all under the same server-side permission checks as the UI, the suite-wide `agent_policies` kill switch and allowlists, and the `can_access` visibility preflight before any cross-app result is posted.
 
 ## Getting Started
 

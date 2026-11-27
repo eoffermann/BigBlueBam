@@ -13,6 +13,7 @@ import { FloatingFrame } from '@/components/ui/floating-frame';
 import { AnimatedReveal } from '@/components/ui/animated-reveal';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { APP_TOOL_COUNTS } from '@/lib/facts';
 
 const features = [
   {
@@ -52,9 +53,9 @@ const features = [
   },
   {
     icon: Bot,
-    title: 'Built for agents (20 MCP tools)',
+    title: `Built for agents (${APP_TOOL_COUNTS.bursar} MCP tools)`,
     description:
-      '20 bursar_* MCP tools let an AI agent read the scope tree, level quotes, pull the coverage matrix and the exclusion diff, inspect a frozen baseline, and surface drift and renewal findings - with the same identity and audit trail as a human. Sealed bids stay sealed, every award and adjudication stays a human act behind a confirm token, and financial flooring narrows to the person the agent acts for.',
+      `${APP_TOOL_COUNTS.bursar} bursar_* MCP tools let an AI agent read the scope tree, level quotes, pull the coverage matrix and the exclusion diff, inspect a frozen baseline, and surface drift and renewal findings - with the same identity and audit trail as a human. Sealed bids stay sealed, every award and adjudication stays a human act behind a confirm token, and financial flooring narrows to the person the agent acts for.`,
     color: 'bg-indigo-100 text-indigo-700',
   },
 ];

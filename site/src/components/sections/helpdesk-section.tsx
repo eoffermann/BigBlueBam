@@ -13,6 +13,7 @@ import { FloatingFrame } from '@/components/ui/floating-frame';
 import { AnimatedReveal } from '@/components/ui/animated-reveal';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { APP_TOOL_COUNTS } from '@/lib/facts';
 
 const features = [
   {
@@ -54,7 +55,7 @@ const features = [
     icon: Bot,
     title: 'AI Triage',
     description:
-      '11 MCP tools let AI agents search and triage tickets, find similar open ones before a duplicate piles up, reconcile requesters by email, post replies, and move status, including helpdesk_search_tickets, helpdesk_find_similar_tickets, helpdesk_upsert_user, and more.',
+      `${APP_TOOL_COUNTS.helpdesk} MCP tools let AI agents search and triage tickets, find similar open ones before a duplicate piles up, reconcile requesters by email, post replies, and move status, including helpdesk_search_tickets, helpdesk_find_similar_tickets, helpdesk_upsert_user, and more.`,
     color: 'bg-green-100 text-green-600',
   },
 ];
@@ -74,7 +75,7 @@ export function HelpdeskSection() {
             A bug report lands in the support tool, gets retyped into the project tool, the customer
             repeats themselves twice, and nobody on the engineering board ever hears the ticket
             exists. Helpdesk runs on the same stack as the work: every ticket becomes a Bam task on
-            your board, SLA tracking is built into the queue, and with 11 MCP tools an AI agent can
+            your board, SLA tracking is built into the queue, and with {APP_TOOL_COUNTS.helpdesk} MCP tools an AI agent can
             triage, dedupe, and reply right alongside your team.
           </p>
         </div>
