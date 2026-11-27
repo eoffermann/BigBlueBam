@@ -2980,7 +2980,7 @@
           },
           {
             "name": "bay_review_link_create",
-            "description": "Mint a public, token-gated share link for a Bay review so an unauthenticated guest can view the media + annotations + decisions (and optionally comment) at /bay/r/:token. Optionally set an expiry (days) and whether guest comments are allowed. Returns the link including its shareable url."
+            "description": "Mint a public, token-gated share link for a Bay review so an unauthenticated guest can view the media + annotations + decisions (and optionally comment) at /bay/r#<token>. Optionally set an expiry (days) and whether guest comments are allowed. Returns the link including its shareable url. Only this call returns the token and url: Bay stores just a hash of the token, so hand the url on now; it cannot be listed again later."
           },
           {
             "name": "bay_review_resolve",

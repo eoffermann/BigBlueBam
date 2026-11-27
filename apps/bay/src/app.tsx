@@ -12,7 +12,7 @@ type Route =
   | { page: 'assets' }
   | { page: 'review'; id: string }
   | { page: 'review-by-bin'; binAssetId: string }
-  | { page: 'guest-review'; token: string };
+  | { page: 'guest-review' };
 
 const BASE_PATH = '/bay';
 
@@ -30,8 +30,9 @@ function parseRoute(path: string): Route {
 
   // /r/:token — public guest review (no auth). Checked early; rendered before
   // the auth guard so anonymous browsers can open shared links.
-  const guestMatch = p.match(/^\/r\/([^/]+)$/);
-  if (guestMatch) return { page: 'guest-review', token: guestMatch[1]! };
+  // The token is in the fragment (/r#<token>, #122); /r/<token> is the
+  // pre-#122 form, still accepted. GuestReviewPage reads it.
+  if (/^\/r(?:\/[^/]+)?\/?$/.test(p)) return { page: 'guest-review' };
 
   // /assets/:id — the review page (by Bay asset id)
   const reviewMatch = p.match(/^\/assets\/([^/]+)$/);
@@ -97,7 +98,7 @@ export function App() {
   // Public guest review bypasses auth entirely — render before the loading/auth
   // gate so a shared /r/:token link works for anonymous browsers.
   if (route.page === 'guest-review') {
-    return <GuestReviewPage token={route.token} />;
+    return <GuestReviewPage />;
   }
 
   if (isLoading) {

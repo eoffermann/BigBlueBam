@@ -12,7 +12,7 @@ The review loop is the same for every media kind:
 2. **Open the review.** The first time you open a file, Bay creates the review asset and mints version 1 referencing the Bin bytes. Every later open is idempotent: same file, same review.
 3. **Annotate.** Reviewers leave notes anchored to a precise place in the media: a video frame or time range, a region box on an image, or a remembered camera viewpoint (and optional surface spot) on a 3D model.
 4. **Decide.** Each reviewer records one decision per version: Approved, Changes requested, Rejected, or Pending. A reviewer can change their mind; their decision updates in place rather than stacking up.
-5. **Share.** Mint a public, token-gated link so an unauthenticated guest can view the media, the annotations, and the decisions at `/bay/r/:token`, and optionally leave comments of their own.
+5. **Share.** Mint a public, token-gated link so an unauthenticated guest can view the media, the annotations, and the decisions at `/bay/r#<token>`, and optionally leave comments of their own.
 6. **Re-version.** Upload a new cut as a new immutable version. The version stack is preserved, so you always have the history of what was reviewed.
 
 Bay is org-scoped and connects to the rest of the suite: bytes come from Bin, 3D proxies are produced by the background worker, and review events broadcast over a WebSocket so collaborators see new annotations and decisions arrive live.
@@ -27,12 +27,12 @@ This document describes what the Bay web app actually does today, across stills,
 - **Annotation** - a note anchored to a coordinate in the media. The anchor is structured and queryable, not just a screenshot. Annotations can be resolved and reopened, and can thread under a parent. Guest comments are annotations with no member author.
 - **Anchor** - the structured location an annotation points at. Four types: `frame`, `timerange`, `region`, and `viewpoint` (see Feature reference).
 - **Decision** - one reviewer's verdict on one version: `approved`, `changes_requested`, `rejected`, or `pending`. Exactly one decision per reviewer per version; setting it again updates the existing one.
-- **Review (share) link** - a public, token-gated URL (`/bay/r/:token`) that lets an unauthenticated guest view a review. Optional expiry (1-365 days) and an allow-comments toggle. Revoking a link is a soft revoke that keeps its view stats.
+- **Review (share) link** - a public, token-gated URL (`/bay/r#<token>`) that lets an unauthenticated guest view a review. Optional expiry (1-365 days) and an allow-comments toggle. Revoking a link is a soft revoke that keeps its view stats.
 - **GLB proxy** - for 3D models, a browser-loadable `.glb` that the background worker converts from the uploaded source (FBX, OBJ, STL, and others). The viewer always loads the proxy, never the raw source file.
 
 ### Where to find it
 
-Bay lives at `/bay/`. Open it from the Launchpad app switcher, or go straight to the URL. You must be signed in to BigBlueBam; Bay is org-scoped, so use the OrgSwitcher in the header to change which organization's data you see. Guests reach a single shared review at `/bay/r/:token` with no login.
+Bay lives at `/bay/`. Open it from the Launchpad app switcher, or go straight to the URL. You must be signed in to BigBlueBam; Bay is org-scoped, so use the OrgSwitcher in the header to change which organization's data you see. Guests reach a single shared review at `/bay/r#<token>` with no login.
 
 Roles and authority: viewing assets, versions, annotations, and decisions is member-level. Resolving (opening) a review, creating assets and versions, annotating, resolving annotations, setting your own decision, and minting or revoking share links are read/write actions, each gated by a named `bay.*` capability that is delegatable per the standard permission model.
 
@@ -67,10 +67,12 @@ Each reviewer records one decision per version: **Approved**, **Changes requeste
 
 ### Guest review links
 
-To get a sign-off from someone outside the org, mint a **share link**. It produces a public URL at `/bay/r/:token` that an unauthenticated guest can open to see the media, the annotations, and the decisions, all read-only. Options:
+To get a sign-off from someone outside the org, mint a **share link**. It produces a public URL at `/bay/r#<token>` that an unauthenticated guest can open to see the media, the annotations, and the decisions, all read-only. Options:
 
 - **Expiry** - optional, 1 to 365 days. After it expires the link returns "this share link has expired".
 - **Allow comments** - on by default. When on, a guest can leave comments (stored as annotations with no member author and the guest's typed name); when off, the comment form is hidden and guest comments are refused.
+
+Copy the link when you mint it. Bay keeps only a fingerprint (hash) of the link's secret, never the secret itself, so the full URL cannot be shown again later; if you lose it, revoke it and mint a new one. The secret sits after the `#` in the URL, which browsers never send to a server, so it stays out of server logs. Links shared before this change, in the older `/bay/r/<token>` form, still open.
 
 Revoking a link is a soft revoke: the token stops working but its view stats (view count, last viewed) are kept. A missing or revoked token returns a plain "not found" rather than confirming the token ever existed. Guest comments broadcast over the same WebSocket, so members watching the review see them arrive live.
 
@@ -151,7 +153,7 @@ For the full tool list and the REST/MCP mapping, see the Bay MCP-tools reference
 
 **Steps**
 
-1. Click **Share**. Bay mints a token-gated link and copies the `/bay/r/:token` URL to your clipboard.
+1. Click **Share**. Bay mints a token-gated link and copies the `/bay/r#<token>` URL to your clipboard.
 2. (Optional) Set an expiry in days and decide whether guests may comment.
 3. Send the URL to the client.
 4. The client opens it, sees the media, the annotations, and the decisions, and (if comments are allowed) leaves their own.

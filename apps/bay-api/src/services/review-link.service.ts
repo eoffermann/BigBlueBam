@@ -1,5 +1,12 @@
-import { randomBytes } from 'node:crypto';
 import { and, eq, asc, desc, sql } from 'drizzle-orm';
+import {
+  hashReviewToken,
+  hashesEqual,
+  isWellFormedReviewToken,
+  mintMediaTicket,
+  mintReviewToken,
+  verifyMediaTicket,
+} from '../lib/review-token.js';
 import { db } from '../db/index.js';
 import {
   bayReviewLinks,
@@ -18,8 +25,17 @@ export interface CreateLinkInput {
   allow_comments?: boolean;
 }
 
+/** The guest URL. The token rides in the fragment, which browsers never send to a server (#122). */
 function shareUrl(token: string): string {
-  return `${env.PUBLIC_URL.replace(/\/+$/, '')}/bay/r/${token}`;
+  return `${env.PUBLIC_URL.replace(/\/+$/, '')}/bay/r#${token}`;
+}
+
+type LinkRow = typeof bayReviewLinks.$inferSelect;
+
+/** A link as the API returns it: never the token hash. */
+function publicShape(link: LinkRow) {
+  const { token_hash: _hash, ...rest } = link;
+  return rest;
 }
 
 /** Mint a share link for a review the caller's org owns. */
@@ -31,7 +47,7 @@ export async function createReviewLink(orgId: string, userId: string, input: Cre
     .limit(1);
   if (!asset[0]) throw new NotFoundError('Review not found');
 
-  const token = randomBytes(24).toString('hex');
+  const token = mintReviewToken();
   const expiresAt =
     input.expires_in_days && input.expires_in_days > 0
       ? new Date(Date.now() + input.expires_in_days * 24 * 60 * 60 * 1000)
@@ -42,24 +58,25 @@ export async function createReviewLink(orgId: string, userId: string, input: Cre
     .values({
       org_id: orgId,
       asset_id: input.asset_id,
-      token,
+      token_hash: hashReviewToken(token),
       allow_comments: input.allow_comments ?? true,
       created_by: userId,
       expires_at: expiresAt,
     })
     .returning();
   const link = rows[0]!;
-  return { ...link, url: shareUrl(link.token) };
+  // The only time the raw token (and so the URL) is ever returned (#122).
+  return { ...publicShape(link), token, url: shareUrl(token) };
 }
 
-/** List share links for one review (org-scoped). */
+/** List share links for one review (org-scoped). Tokens are not stored, so no URL is returned. */
 export async function listReviewLinks(orgId: string, assetId: string) {
   const rows = await db
     .select()
     .from(bayReviewLinks)
     .where(and(eq(bayReviewLinks.org_id, orgId), eq(bayReviewLinks.asset_id, assetId)))
     .orderBy(desc(bayReviewLinks.created_at));
-  return rows.map((l) => ({ ...l, url: shareUrl(l.token) }));
+  return rows.map(publicShape);
 }
 
 /** Revoke a share link (org-scoped). Idempotent. */
@@ -70,21 +87,15 @@ export async function revokeReviewLink(id: string, orgId: string) {
     .where(and(eq(bayReviewLinks.id, id), eq(bayReviewLinks.org_id, orgId)))
     .returning();
   if (!rows[0]) throw new NotFoundError('Share link not found');
-  return rows[0];
+  return publicShape(rows[0]);
 }
 
 // ---------------------------------------------------------------------------
 // Public (token-bearer) access — NO org scoping; the token is the credential.
 // ---------------------------------------------------------------------------
 
-async function getActiveLink(token: string) {
-  const rows = await db
-    .select()
-    .from(bayReviewLinks)
-    .where(eq(bayReviewLinks.token, token))
-    .limit(1);
-  const link = rows[0];
-  // 404 (not 410) for missing/revoked so we don't confirm a token ever existed.
+/** 404 (not 410) for missing/revoked so we don't confirm a token ever existed. */
+function assertActive(link: LinkRow | undefined): LinkRow {
   if (!link || link.revoked_at) throw new NotFoundError('Link not found');
   if (link.expires_at && link.expires_at.getTime() < Date.now()) {
     throw new GoneError('This share link has expired');
@@ -92,8 +103,21 @@ async function getActiveLink(token: string) {
   return link;
 }
 
+async function getActiveLink(token: string) {
+  if (!isWellFormedReviewToken(token)) throw new NotFoundError('Link not found');
+  const hash = hashReviewToken(token);
+  const rows = await db
+    .select()
+    .from(bayReviewLinks)
+    .where(eq(bayReviewLinks.token_hash, hash))
+    .limit(1);
+  const link = rows[0];
+  if (link && !hashesEqual(link.token_hash, hash)) throw new NotFoundError('Link not found');
+  return assertActive(link);
+}
+
 /** Assemble the read-only review bundle for a guest. Returns only safe fields
- *  (no org_id, no internal storage keys). */
+ *  (no org_id, no internal storage keys), plus a short-lived media ticket. */
 export async function getPublicReviewByToken(token: string) {
   const link = await getActiveLink(token);
 
@@ -172,19 +196,24 @@ export async function getPublicReviewByToken(token: string) {
     version,
     annotations,
     decisions,
+    media_ticket: mintMediaTicket(link.id),
   };
 }
 
 /**
- * Resolve the bin_asset_id behind a token's review (for the media stream),
- * with the org that minted the link. The guest request has no identity, so
- * the link's org is what scopes the bin_assets read in lib/bin-media.ts: a
- * link only ever serves its own org's bytes.
+ * Resolve the bin_asset_id behind a media ticket's review (for the media
+ * stream), with the org that minted the link. The guest request has no
+ * identity, so the link's org is what scopes the bin_assets read in
+ * lib/bin-media.ts: a link only ever serves its own org's bytes. The link is
+ * re-checked on every request, so revoking or expiring it stops the stream.
  */
-export async function resolveTokenBinAsset(
-  token: string,
+export async function resolveTicketBinAsset(
+  ticket: unknown,
 ): Promise<{ binAssetId: string; orgId: string } | null> {
-  const link = await getActiveLink(token);
+  const linkId = verifyMediaTicket(ticket);
+  if (!linkId) throw new NotFoundError('Link not found');
+  const linkRows = await db.select().from(bayReviewLinks).where(eq(bayReviewLinks.id, linkId)).limit(1);
+  const link = assertActive(linkRows[0]);
   const rows = await db
     .select({ bin_asset_id: bayAssetVersions.bin_asset_id })
     .from(bayAssets)

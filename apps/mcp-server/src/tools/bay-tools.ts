@@ -83,7 +83,7 @@ export function registerBayTools(server: McpServer, api: ApiClient, bayApiUrl: s
   registerTool(server, {
     name: 'bay_review_link_create',
     description:
-      'Mint a public, token-gated share link for a Bay review so an unauthenticated guest can view the media + annotations + decisions (and optionally comment) at /bay/r/:token. Optionally set an expiry (days) and whether guest comments are allowed. Returns the link including its shareable url.',
+      'Mint a public, token-gated share link for a Bay review so an unauthenticated guest can view the media + annotations + decisions (and optionally comment) at /bay/r#<token>. Optionally set an expiry (days) and whether guest comments are allowed. Returns the link including its shareable url. Only this call returns the token and url: Bay stores just a hash of the token, so hand the url on now; it cannot be listed again later.',
     input: {
       asset_id: z.string().uuid().describe('The Bay review asset to share'),
       expires_in_days: z.number().int().positive().max(365).nullable().optional(),
