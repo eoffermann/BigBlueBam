@@ -33,6 +33,7 @@ import {
 import type { Served } from '../lib/served.js';
 import { auditRaw } from '../lib/audit-raw.js';
 import { ConflictError, ForbiddenError, NotFoundError } from '../lib/errors.js';
+import { revisionPendingError } from '../lib/revision-rule.js';
 import { delimitAsData, scanLabel } from '../lib/injection-prescan.js';
 import { boltRuleShapeFor } from '../library/fix-templates.js';
 import { REWORD_PROMPT_VERSION, REWORDABLE_TEMPLATES } from '../library/fix-reword.js';
@@ -707,8 +708,15 @@ async function applyApproval(tx: Tx, viewer: Viewer, r: Record<string, unknown>)
     case 'config_change': {
       if (r.gap_kind !== 'population_drift' || !r.assertion_id) return [];
       // File a superseding assertion with the found members added, for one-click confirmation.
-      const a = (await tx`SELECT * FROM bastion_assertions WHERE organization_id = ${viewer.org_id} AND id = ${r.assertion_id as string}`)[0];
+      // Locked, then one open revision per check (#401, lib/revision-rule.ts): a second revision
+      // waiting on the same check is refused, so approving this fix never forks the check.
+      const a = (await tx`SELECT * FROM bastion_assertions WHERE organization_id = ${viewer.org_id} AND id = ${r.assertion_id as string} FOR UPDATE`)[0];
       if (!a) return [];
+      const waiting = await tx`
+        SELECT 1 FROM bastion_assertions
+         WHERE organization_id = ${viewer.org_id} AND supersedes_id = ${a.id as string} AND review_status = 'proposed'
+         LIMIT 1`;
+      if (waiting.length > 0) throw revisionPendingError();
       // The confirmation stamp never carries over to a revised list (M3 decision).
       const { population_confirmed_at: _at, population_confirmed_by: _by, ...kept } = (a.params as Record<string, unknown>) ?? {};
       const params: Record<string, unknown> = { ...kept };

@@ -17,6 +17,7 @@ import type { DbTx } from '../db/index.js';
 import { bastionAssertions, bastionControls, bastionEvidenceFeeds } from '../db/schema/index.js';
 import { ConflictError, NotFoundError, ValidationFailure, one } from '../lib/errors.js';
 import { actorKind, audit } from '../lib/audit.js';
+import { revisionPendingError } from '../lib/revision-rule.js';
 import { probeEntry } from '../library/index.js';
 import { validateManualSuggestion, validateProbeSuggestion } from '../library/compile-plan.js';
 import { assertionView } from './controls.service.js';
@@ -49,6 +50,44 @@ async function loadAssertionForUpdate(tx: DbTx, orgId: string, id: string) {
     .for('update');
   if (!row) throw new NotFoundError('We could not find that check.');
   return row;
+}
+
+/**
+ * One open revision per check (#401, lib/revision-rule.ts). Revising the waiting revision keeps it
+ * the one open revision: the new row replaces the waiting one at once and, like it, supersedes the
+ * confirmed check (revisionAnchor). The caller holds the anchor row FOR UPDATE (the #393 lock
+ * pattern), so two revisions of the same check serialize and the second sees the first's committed
+ * proposal here.
+ */
+async function assertNoOpenRevision(tx: DbTx, orgId: string, anchorId: string, exceptId: string | null): Promise<void> {
+  const open = await tx
+    .select({ id: bastionAssertions.id })
+    .from(bastionAssertions)
+    .where(
+      and(
+        eq(bastionAssertions.organization_id, orgId),
+        eq(bastionAssertions.supersedes_id, anchorId),
+        eq(bastionAssertions.review_status, 'proposed'),
+      ),
+    );
+  if (open.some((r) => r.id !== exceptId)) throw revisionPendingError();
+}
+
+/**
+ * The row a revision of `old` replaces when it is confirmed: `old` itself, unless `old` is a
+ * proposed or rejected revision of a check that is still confirmed, in which case it is that
+ * confirmed check (so confirming the newest revision retires the check actually in force, not a
+ * row that was already superseded). Returned locked FOR UPDATE.
+ */
+async function revisionAnchor(tx: DbTx, orgId: string, old: typeof bastionAssertions.$inferSelect) {
+  if (old.review_status === 'confirmed' || !old.supersedes_id) return old;
+  const [parent] = await tx
+    .select()
+    .from(bastionAssertions)
+    .where(and(eq(bastionAssertions.id, old.supersedes_id), eq(bastionAssertions.organization_id, orgId)))
+    .limit(1)
+    .for('update');
+  return parent?.review_status === 'confirmed' ? parent : old;
 }
 
 async function loadActiveControl(tx: DbTx, orgId: string, id: string) {
@@ -191,7 +230,8 @@ export async function proposeAssertionIn(tx: DbTx, viewer: Viewer, controlId: st
 /**
  * POST /assertions/:id/revise. Files a superseding `proposed` row (confirmed assertions are
  * content-immutable). A proposed or rejected original is marked superseded at once; a confirmed
- * original stays in force until the revision is confirmed.
+ * original stays in force until the revision is confirmed, and has at most one revision waiting
+ * (#401: a second is refused with REVISION_PENDING; see assertNoOpenRevision).
  */
 export async function reviseAssertion(viewer: Viewer, id: string, body: BastionAssertionRevise): Promise<Served<BastionAssertionResponse>> {
   return runInOrgScope(viewer.org_id, (tx) => reviseAssertionIn(tx, viewer, id, body));
@@ -204,6 +244,10 @@ export async function reviseAssertionIn(tx: DbTx, viewer: Viewer, id: string, bo
   if (old.review_status === 'superseded') {
     throw new ConflictError('This check was already replaced; revise the newer version.', 'ASSERTION_SUPERSEDED');
   }
+  // One open revision per check (#401): lock what this revision will replace, then make sure no
+  // other revision of it is waiting (the one being revised here is about to be replaced).
+  const anchor = await revisionAnchor(tx, viewer.org_id, old);
+  await assertNoOpenRevision(tx, viewer.org_id, anchor.id, old.id);
   await loadActiveControl(tx, viewer.org_id, old.control_id);
   const plain_statement = body.plain_statement ?? old.plain_statement;
   let content: Partial<typeof bastionAssertions.$inferInsert>;
@@ -257,7 +301,7 @@ export async function reviseAssertionIn(tx: DbTx, viewer: Viewer, id: string, bo
       control_id: old.control_id,
       proposed_by: kind === 'human' ? 'human' : 'agent',
       review_status: 'proposed',
-      supersedes_id: old.id,
+      supersedes_id: anchor.id,
       created_by: viewer.id,
     })
     .returning(), 'row');
@@ -267,7 +311,7 @@ export async function reviseAssertionIn(tx: DbTx, viewer: Viewer, id: string, bo
       .set({ review_status: 'superseded' })
       .where(and(eq(bastionAssertions.id, old.id), eq(bastionAssertions.organization_id, viewer.org_id)));
   }
-  await audit(tx, viewer, 'assertion.revise', { type: 'assertion', id: row.id }, { supersedes_id: old.id });
+  await audit(tx, viewer, 'assertion.revise', { type: 'assertion', id: row.id }, { supersedes_id: anchor.id, revises_id: old.id });
   return { data: assertionView(row) };
 }
 

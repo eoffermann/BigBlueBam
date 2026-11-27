@@ -6299,7 +6299,7 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
   },
   {
     "mcp_tool": "bastion_create_policy",
-    "description": "Link a Beacon article as a policy people must read and acknowledge (POST /policies). Name the article by beacon_entry_id, or by beacon_slug (the last part of its Beacon link, /beacon/<slug>). The article must be shared with everyone (Beacon visibility Organization or Public; else 409 POLICY_NOT_SHARED). audience is everyone (default) or a list of members; cadence_days is how often it must be re-read (default 365). With control_id, Bastion proposes that control's two policy checks (read and acknowledged; kept current) pinned to this policy, for a person to confirm. Without control_id, Bastion does the same for the one control whose policy checks are not yet pinned to an active policy (if there is exactly one). 409 POLICY_ALREADY_LINKED. Needs bastion.policy.write (owners and admins).",
+    "description": "Link a Beacon article as a policy people must read and acknowledge (POST /policies). Name the article by beacon_entry_id, or by beacon_slug (the last part of its Beacon link, /beacon/<slug>). The article must be shared with everyone (Beacon visibility Organization or Public; else 409 POLICY_NOT_SHARED). audience is everyone (default) or a list of members; cadence_days is how often it must be re-read (default 365). With control_id, Bastion proposes that control's two policy checks (read and acknowledged; kept current) pinned to this policy, for a person to confirm. Without control_id, Bastion does the same for the one control whose policy checks are not yet pinned to an active policy (if there is exactly one). If the policy links but those checks cannot be pinned, the response still succeeds with pin_problem set and proposed_assertion_ids empty: the policy exists, so do not link it again. 409 POLICY_ALREADY_LINKED. Needs bastion.policy.write (owners and admins).",
     "source": "bastion",
     "parameters": []
   },
@@ -6873,7 +6873,7 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
   },
   {
     "mcp_tool": "bastion_propose_assertion",
-    "description": "Propose a new check for a control (control_id + proposal: POST /controls/:id/assertions) or a revision of an existing one (revise_assertion_id + revision: POST /assertions/:id/revise, which files a superseding proposed check). Probe checks use the closed probe menu (see bastion_list_probes); parameters outside the probe's range are refused. Everything lands as proposed; only a signed-in person can confirm it in Bastion. Give exactly one of control_id or revise_assertion_id.",
+    "description": "Propose a new check for a control (control_id + proposal: POST /controls/:id/assertions) or a revision of an existing one (revise_assertion_id + revision: POST /assertions/:id/revise, which files a superseding proposed check). A check has at most one revision waiting for review: revising a check that already has one is refused (409 REVISION_PENDING); revise the waiting revision instead (it replaces it) or wait until it is confirmed or rejected.Probe checks use the closed probe menu (see bastion_list_probes); parameters outside the probe's range are refused. Everything lands as proposed; only a signed-in person can confirm it in Bastion. Give exactly one of control_id or revise_assertion_id.",
     "source": "bastion",
     "parameters": [
       {

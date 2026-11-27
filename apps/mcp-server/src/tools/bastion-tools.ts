@@ -258,7 +258,7 @@ export function registerBastionTools(
   registerTool(server, {
     name: 'bastion_propose_assertion',
     description:
-      'Propose a new check for a control (control_id + proposal: POST /controls/:id/assertions) or a revision of an existing one (revise_assertion_id + revision: POST /assertions/:id/revise, which files a superseding proposed check). Probe checks use the closed probe menu (see bastion_list_probes); parameters outside the probe\'s range are refused. Everything lands as proposed; only a signed-in person can confirm it in Bastion. Give exactly one of control_id or revise_assertion_id.',
+      'Propose a new check for a control (control_id + proposal: POST /controls/:id/assertions) or a revision of an existing one (revise_assertion_id + revision: POST /assertions/:id/revise, which files a superseding proposed check). A check has at most one revision waiting for review: revising a check that already has one is refused (409 REVISION_PENDING); revise the waiting revision instead (it replaces it) or wait until it is confirmed or rejected.Probe checks use the closed probe menu (see bastion_list_probes); parameters outside the probe\'s range are refused. Everything lands as proposed; only a signed-in person can confirm it in Bastion. Give exactly one of control_id or revise_assertion_id.',
     input: {
       control_id: z.string().uuid().optional(),
       proposal: bastionAssertionProposeSchema.optional(),
