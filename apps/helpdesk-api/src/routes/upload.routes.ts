@@ -1,5 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { randomUUID } from 'node:crypto';
+import { sql } from 'drizzle-orm';
+import { db } from '../db/index.js';
 import { env } from '../env.js';
 import { uploadFile } from '../services/upload.service.js';
 import { requireHelpdeskAuth } from '../plugins/auth.js';
@@ -76,6 +78,18 @@ export default async function helpdeskUploadRoutes(fastify: FastifyInstance) {
       const key = `helpdesk/${uuid}-${safeFilename}`;
 
       await uploadFile(env.S3_BUCKET, key, buffer, contentType);
+
+      // #142: bind the key to the customer's org (their helpdesk_users.org_id, else the portal's
+      // tenant org). The Bam api's GET /files serves a helpdesk/ key only to that org.
+      const tenantOrgId = request.tenantContext?.orgId ?? null;
+      await db.execute(sql`
+        INSERT INTO file_upload_owners (storage_key, org_id, source, uploaded_by)
+        SELECT ${key}, COALESCE(hu.org_id, ${tenantOrgId}::uuid), 'helpdesk', hu.id
+        FROM helpdesk_users hu
+        WHERE hu.id = ${request.helpdeskUser!.id}
+          AND COALESCE(hu.org_id, ${tenantOrgId}::uuid) IS NOT NULL
+        ON CONFLICT (storage_key) DO NOTHING
+      `);
 
       // Return proxy URL through API
       const url = `/files/${key}`;

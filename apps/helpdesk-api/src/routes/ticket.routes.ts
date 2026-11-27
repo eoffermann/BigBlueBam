@@ -1,23 +1,20 @@
 import type { FastifyInstance } from 'fastify';
-import { createHash } from 'node:crypto';
 import { z } from 'zod';
-import { eq, and, asc, desc, gte, gt, lt, or, inArray, sql } from 'drizzle-orm';
+import { eq, and, asc, desc, gt, lt, or, inArray, sql } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import { tickets } from '../db/schema/tickets.js';
 import { ticketMessages } from '../db/schema/ticket-messages.js';
 import { ticketActivityLog } from '../db/schema/ticket-activity-log.js';
 import { helpdeskTicketEvents } from '../db/schema/ticket-events.js';
 import { logTicketActivity } from '../lib/ticket-activity.js';
-import { helpdeskSettings } from '../db/schema/helpdesk-settings.js';
-import { phases } from '../db/schema/bbb-refs.js';
 import { requireHelpdeskAuth } from '../plugins/auth.js';
-import { broadcastTaskCreated, broadcastTicketStatusChanged } from '../lib/broadcast.js';
+import { broadcastTicketStatusChanged } from '../lib/broadcast.js';
 import { mirrorTicketMessageToTask, mirrorTicketClosedToTask } from '../lib/task-sync.js';
 import { bbbClient } from '../lib/bbb-client.js';
 import { stripHtml } from '../lib/strip-html.js';
 import { publishBoltEvent } from '../lib/bolt-events.js';
 import { resolveTicketOrgId } from '../lib/ticket-org.js';
-import { projects } from '../db/schema/bbb-refs.js';
+import { createHelpdeskTicket, ticketResponse } from '../services/ticket-create.service.js';
 import {
   broadcastTicketMessage,
   broadcastTicketStatusChanged as broadcastTicketStatusChangedRT,
@@ -43,16 +40,6 @@ const createMessageSchema = z.object({
   body: z.string().min(1),
 });
 
-// Lightweight dedup: hash (user_id + subject + description + hour-bucket) so that
-// rapid retries within the same hour return the existing ticket rather than creating
-// duplicates. This avoids requiring a schema migration for an idempotency_key column.
-function buildDedupHash(userId: string, subject: string, description: string, explicitKey?: string): string {
-  const hourBucket = Math.floor(Date.now() / (60 * 60 * 1000));
-  const material = explicitKey
-    ? `${userId}:key:${explicitKey}`
-    : `${userId}:${hourBucket}:${subject}:${description}`;
-  return createHash('sha256').update(material).digest('hex');
-}
 
 export default async function ticketRoutes(fastify: FastifyInstance) {
   // GET /helpdesk/tickets/search. G5: ranked full-text search across the
@@ -146,316 +133,38 @@ export default async function ticketRoutes(fastify: FastifyInstance) {
     return reply.send({ data: rows });
   });
 
-  // POST /helpdesk/tickets — create ticket
+  // POST /helpdesk/tickets — create ticket. The work is services/ticket-create.service.ts, shared
+  // with the internal route other services use (#305).
   fastify.post('/helpdesk/tickets', { preHandler: [requireHelpdeskAuth] }, async (request, reply) => {
     const user = request.helpdeskUser!;
     const data = createTicketSchema.parse(request.body);
 
-    // HB-19: Sanitize HTML before storing anywhere.
-    const safeSubject = stripHtml(data.subject).slice(0, 500);
-    const safeDescription = stripHtml(data.description);
-    // HB-43: description_plain is the plain-text form of the (potentially
-    // rich-text) description. We derive it explicitly via stripHtml rather
-    // than reusing safeDescription so that future changes which keep HTML in
-    // `description` don't accidentally store HTML in `description_plain`.
-    const plainDescription = stripHtml(data.description).trim();
-
-    if (!safeSubject || !safeDescription) {
-      return reply.status(400).send({
-        error: {
-          code: 'VALIDATION_ERROR',
-          message: 'Subject and description must contain text after HTML is stripped',
-          details: [],
-          request_id: request.id,
-        },
-      });
-    }
-
-    // HB-8: Idempotency — look for a recent identical ticket from the same user.
-    // Lightweight dedup within a 1-hour window using a hashed marker stored in description
-    // is not possible without schema changes, so we query for an existing ticket matching
-    // (user, subject, description) created in the last hour as a pragmatic fallback.
-    const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
-    const dedupHash = buildDedupHash(user.id, safeSubject, safeDescription, data.idempotency_key);
-    void dedupHash; // documented marker; reserved for future idempotency_key column
-
-    const [existingDup] = await db
-      .select()
-      .from(tickets)
-      .where(
-        and(
-          eq(tickets.helpdesk_user_id, user.id),
-          eq(tickets.subject, safeSubject),
-          eq(tickets.description, safeDescription),
-          gte(tickets.created_at, oneHourAgo),
-        ),
-      )
-      .orderBy(desc(tickets.created_at))
-      .limit(1);
-
-    if (existingDup) {
-      return reply.status(200).send({
-        data: {
-          id: existingDup.id,
-          ticket_number: existingDup.ticket_number,
-          subject: existingDup.subject,
-          description: existingDup.description,
-          status: existingDup.status,
-          priority: existingDup.priority,
-          category: existingDup.category,
-          task_id: existingDup.task_id,
-          created_at: existingDup.created_at,
-          updated_at: existingDup.updated_at,
-        },
-        deduplicated: true,
-      });
-    }
-
-    // D-010: resolve target project via tenant context. Precedence:
-    //   1. X-Project-Slug resolved to a project id (per-project portal).
-    //   2. helpdesk_settings.default_project_id scoped to X-Org-Slug.
-    //   3. Oldest project in the org (persisted back to
-    //      helpdesk_settings.default_project_id so the next ticket skips
-    //      the fallback query).
-    // Legacy path (no X-Org-Slug header, direct API client): fall back to
-    // the historical "first settings row" lookup so existing automations
-    // keep working while the SPA rolls out the path-based portal.
-    let settings: typeof helpdeskSettings.$inferSelect | undefined;
-    if (request.tenantContext.orgId) {
-      const rows = await db
-        .select()
-        .from(helpdeskSettings)
-        .where(eq(helpdeskSettings.org_id, request.tenantContext.orgId))
-        .limit(1);
-      settings = rows[0];
-    } else {
-      const rows = await db
-        .select()
-        .from(helpdeskSettings)
-        .limit(1);
-      settings = rows[0];
-    }
-
-    let projectId: string | null =
-      request.tenantContext.projectId ?? settings?.default_project_id ?? null;
-
-    // Oldest-project fallback with write-back, but only when we know the
-    // owning org. If we somehow got this far without an org id (legacy
-    // callers that hit a stack with no helpdesk_settings row) we skip the
-    // fallback entirely; the downstream code already tolerates NULL
-    // projectId by leaving the ticket unlinked.
-    if (!projectId && request.tenantContext.orgId) {
-      const [oldestProject] = await db
-        .select({ id: projects.id })
-        .from(projects)
-        .where(
-          and(
-            eq(projects.org_id, request.tenantContext.orgId),
-            eq(projects.is_archived, false),
-          ),
-        )
-        .orderBy(asc(projects.created_at))
-        .limit(1);
-
-      if (oldestProject) {
-        projectId = oldestProject.id;
-        if (settings) {
-          // Persist the choice so the next ticket in this org does not
-          // re-run the fallback query. Failure is non-fatal (a later
-          // ticket will just re-pick the same oldest project).
-          await db
-            .update(helpdeskSettings)
-            .set({ default_project_id: projectId, updated_at: new Date() })
-            .where(eq(helpdeskSettings.id, settings.id))
-            .catch((err: unknown) => {
-              request.log.warn(
-                { err, orgId: request.tenantContext.orgId, projectId },
-                'Failed to persist fallback default_project_id; non-fatal',
-              );
-            });
-        }
-      }
-    }
-
-    // HB-7: Task creation now goes through Bam's /internal/helpdesk/* API
-    // rather than direct SQL. The request ordering is: (1) persist the
-    // ticket standalone; (2) call bbb-client to create the task; (3)
-    // back-link ticket.task_id. If (2) fails the ticket remains without
-    // a task_id — the next client retry / admin action can re-trigger
-    // task creation, and the existing async worker fallback (HB-23) is
-    // still available for manual re-enqueue. We keep the HB-37 phase
-    // validation on the helpdesk side because helpdesk settings store
-    // default_phase_id locally; if the configured phase is invalid we
-    // simply don't pass it and let Bam pick a start phase.
     try {
-      // Resolve + validate helpdesk-configured phase (if any) so we can
-      // surface a 500 CONFIGURATION_ERROR early when the admin-configured
-      // phase no longer exists AND the project has no start phase.
-      let resolvedPhaseId: string | null = null;
-      if (projectId && settings?.default_phase_id) {
-        const [configuredPhase] = await db
-          .select({ id: phases.id })
-          .from(phases)
-          .where(
-            and(
-              eq(phases.id, settings.default_phase_id),
-              eq(phases.project_id, projectId),
-            ),
-          )
-          .limit(1);
-        if (configuredPhase) resolvedPhaseId = configuredPhase.id;
-      }
-
-      // Create the ticket first, standalone. task_id is back-linked after
-      // the remote Bam call succeeds.
-      const [ticket] = await db
-        .insert(tickets)
-        .values({
-          helpdesk_user_id: user.id,
-          task_id: null,
-          project_id: projectId,
-          subject: safeSubject,
-          description: safeDescription,
+      const result = await createHelpdeskTicket(
+        {
+          requester: user,
+          orgId: request.tenantContext.orgId ?? null,
+          projectId: request.tenantContext.projectId ?? null,
+          subject: data.subject,
+          description: data.description,
           priority: data.priority,
           category: data.category ?? null,
-        })
-        .returning();
-
-      if (!ticket) {
-        throw new Error('TICKET_INSERT_FAILED');
-      }
-
-      // If we have a default project, create the Bam task via the
-      // internal API. Failure is logged but does not fail the request —
-      // the ticket exists and the customer sees it; task linkage can be
-      // reconciled later.
-      let taskIdFromBbb: string | null = null;
-      if (projectId) {
-        try {
-          const created = await bbbClient.createTaskFromTicket(
-            {
-              project_id: projectId,
-              phase_id: resolvedPhaseId,
-              title: safeSubject,
-              description: safeDescription,
-              description_plain: plainDescription,
-              priority: data.priority,
-              ticket_id: ticket.id,
-              ticket_number: ticket.ticket_number ?? undefined,
-              customer_email: user.email,
-              customer_name: user.display_name,
-              customer_id: user.id,
-            },
-            request.log,
-          );
-          taskIdFromBbb = created.id;
-
-          // Back-link ticket.task_id.
-          await db
-            .update(tickets)
-            .set({ task_id: taskIdFromBbb, updated_at: new Date() })
-            .where(eq(tickets.id, ticket.id));
-        } catch (bbbErr) {
-          const err = bbbErr as Error & { status?: number; body?: unknown };
-          // If Bam returned a 422 CONFIGURATION_ERROR (no valid phase)
-          // that is a setup error worth surfacing — but we've already
-          // created the ticket, so we respond 201 with a warning rather
-          // than failing. Log at warn; task will have to be created
-          // manually by an admin.
-          request.log.warn(
-            { err, status: err.status, ticketId: ticket.id, projectId },
-            'Helpdesk ticket created but Bam task creation failed; ticket is unlinked',
-          );
-        }
-      }
-
-      // HB-50 compat: if we have a task, broadcast so Bam boards refresh.
-      if (taskIdFromBbb && projectId) {
-        await broadcastTaskCreated(projectId, {
-          id: taskIdFromBbb,
-          project_id: projectId,
+        },
+        request.log,
+      );
+      if (result.kind === 'invalid') {
+        return reply.status(400).send({
+          error: { code: 'VALIDATION_ERROR', message: result.message, details: [], request_id: request.id },
         });
       }
-
-      // Normalise shape with prior transaction-based `result` object.
-      const result = { ticket, taskId: taskIdFromBbb };
-
-      // HB-45: audit ticket creation.
-      await logTicketActivity({
-        ticketId: result.ticket.id,
-        actorType: 'customer',
-        actorId: user.id,
-        action: 'ticket.created',
-        details: {
-          subject: result.ticket.subject,
-          priority: result.ticket.priority,
-          category: result.ticket.category,
-        },
-        logger: request.log,
-      });
-
-      // G3: Bolt event emission. Resolve the owning org via the ticket's
-      // linked project. Fire-and-forget (any transport failure is swallowed
-      // by publishBoltEvent so a Bolt outage cannot stall ticket creation).
-      // Unlinked tickets (no project_id) skip emission because Bolt rejects
-      // ingest payloads without an org_id.
-      if (projectId) {
-        const orgIdForEvent =
-          (
-            await db
-              .select({ org_id: projects.org_id })
-              .from(projects)
-              .where(eq(projects.id, projectId))
-              .limit(1)
-          )[0]?.org_id ?? null;
-        if (orgIdForEvent) {
-          void publishBoltEvent(
-            'ticket.created',
-            'helpdesk',
-            {
-              // #289: the nested shape the Bolt catalog, template and seeded rules read
-              // (event.ticket.priority, event.ticket.category); the flat keys stay for existing rules.
-              ticket: {
-                id: result.ticket.id,
-                number: result.ticket.ticket_number,
-                subject: result.ticket.subject,
-                priority: result.ticket.priority,
-                category: result.ticket.category,
-              },
-              ticket_id: result.ticket.id,
-              ticket_number: result.ticket.ticket_number,
-              subject: result.ticket.subject,
-              priority: result.ticket.priority,
-              category: result.ticket.category,
-              task_id: result.taskId,
-              helpdesk_user_id: user.id,
-              customer_email: user.email,
-            },
-            orgIdForEvent,
-            user.id,
-            'user',
-          );
-        }
+      if (result.kind === 'deduplicated') {
+        return reply.status(200).send({ data: ticketResponse(result.ticket), deduplicated: true });
       }
-
-      return reply.status(201).send({
-        data: {
-          id: result.ticket.id,
-          ticket_number: result.ticket.ticket_number,
-          subject: result.ticket.subject,
-          description: result.ticket.description,
-          status: result.ticket.status,
-          priority: result.ticket.priority,
-          category: result.ticket.category,
-          task_id: result.taskId ?? result.ticket.task_id,
-          created_at: result.ticket.created_at,
-          updated_at: result.ticket.updated_at,
-        },
-      });
+      return reply.status(201).send({ data: ticketResponse(result.ticket, result.taskId) });
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       if (message === 'NO_VALID_PHASE') {
-        request.log.error({ projectId }, 'Helpdesk cannot create task: no valid phase found for project');
+        request.log.error('Helpdesk cannot create task: no valid phase found for project');
         return reply.status(500).send({
           error: {
             code: 'CONFIGURATION_ERROR',

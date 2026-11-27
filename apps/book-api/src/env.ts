@@ -22,6 +22,9 @@ const envSchema = z.object({
   MCP_INTERNAL_URL: z.string().default('http://mcp-server:3001'),
   BBB_API_INTERNAL_URL: z.string().default('http://api:4000'),
   BOLT_API_INTERNAL_URL: z.string().default('http://bolt-api:4006'),
+  // bond-api's private base for the booking-page "create a Bond contact" call (#305). It was read
+  // through a cast and provisioned nowhere, so on Railway it always fell back to the compose host.
+  BOND_API_INTERNAL_URL: z.string().url().default('http://bond-api:4009'),
   INTERNAL_SERVICE_SECRET: z.string().min(32).optional(),
 
   // OAuth for external calendar sync

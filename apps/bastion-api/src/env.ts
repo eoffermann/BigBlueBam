@@ -107,7 +107,7 @@ const envSchema = z.object({
   // hardcoded boot invariant (see boot/assert-permissions-enforce.ts), not an env setting.
 
   // Platform RLS posture; Bastion binds app.current_org_id per transaction regardless.
-  BBB_RLS_ENFORCE: z.string().optional(),
+  BBB_RLS_ENFORCE: envBool(false),
 }).superRefine((e, ctx) => {
   // A slice heartbeats between calls, not during one (#257): one call plus a permit wait must
   // fit inside the run lease, or a healthy slice's run is reaped mid-call.

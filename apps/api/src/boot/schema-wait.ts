@@ -2,6 +2,7 @@ import { existsSync, readdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { sql } from 'drizzle-orm';
 import type { Logger } from 'pino';
+import { envFlag } from '@bigbluebam/shared';
 import { db } from '../db/index.js';
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -47,7 +48,7 @@ export function pendingMigrations(expectedFiles: string[], applied: Set<string>)
  *     stuck migrate.
  */
 export async function waitForSchemaReady(logger: Logger): Promise<void> {
-  if (process.env.BBB_SCHEMA_WAIT_DISABLED === '1') {
+  if (envFlag('BBB_SCHEMA_WAIT_DISABLED', process.env)) {
     logger.warn('schema-wait: disabled via BBB_SCHEMA_WAIT_DISABLED');
     return;
   }

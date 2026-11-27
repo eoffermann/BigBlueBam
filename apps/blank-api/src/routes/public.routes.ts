@@ -265,8 +265,12 @@ export default async function publicRoutes(fastify: FastifyInstance) {
         processRoutingRules(
           form.routing_config,
           body.response_data,
-          form.organization_id,
-          submission.id,
+          {
+            orgId: form.organization_id,
+            submissionId: submission.id,
+            formOwnerUserId: form.created_by ?? null,
+            submitterEmail: submitterEmail ?? null,
+          },
           fastify.log,
         ).catch((err: unknown) => {
           fastify.log.error(

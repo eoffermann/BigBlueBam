@@ -1,27 +1,25 @@
 /**
- * POST /internal/can-read — cross-app read preflight for the Bureau summon
- * system (D-12).
+ * POST /internal/can-read: cross-app read preflight for Bureau presence and summons (D-12, #300).
  *
- * bureau-api's cross-app-access.service.ts POSTs { user_id, org_id,
- * target_url } before navigating a summon recipient toward a Bam resource.
- * We map the URL to a §11 visibility entity (task / project / sprint) and
- * answer through the canonical preflightAccess() in
- * services/visibility.service.ts — the same rules every agent-facing
- * can_access check uses.
+ * bureau-api and the worker (through @bigbluebam/shared/cross-app-access) POST
+ * { user_id, org_id, target_url } for every suite URL except Board and Brief, which answer for
+ * their own. lib/suite-url-entity.ts maps the URL to a section 11 visibility entity (a Bam task,
+ * a Bond deal, a Bill invoice, a Helpdesk ticket, ...) and we answer through the canonical
+ * preflightAccess() in services/visibility.service.ts, the same rules every can_access check
+ * uses. It fails CLOSED: a URL we cannot map (an unknown id, a slug, a name) is denied, never
+ * assumed harmless. App homes and list pages (every segment a known page word) are allowed:
+ * nothing entity-scoped beyond org membership, which the caller's session implies.
  *
- * can_share is always false for Bam targets: "sharing" a task or sprint
- * means changing project membership, which is not a one-click grant the
- * §4.4 dialog should offer. (Board/Brief return real share rights because
- * they have collaborator tables.)
+ * can_share is always false here: "sharing" a task or a deal means changing membership, which is
+ * not a one-click grant the section 4.4 dialog should offer. (Board/Brief return real share
+ * rights because they have collaborator tables.)
  */
 
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { requireInternalSecret } from '../lib/internal-secret.js';
 import { preflightAccess } from '../services/visibility.service.js';
-
-const UUID_REGEX =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+import { suiteUrlEntity } from '../lib/suite-url-entity.js';
 
 // Auth: the shared guard (lib/internal-secret.ts). It fails CLOSED when the secret is unset:
 // these routes answer "may this asker see this entity" for a caller-supplied asker_user_id
@@ -45,39 +43,6 @@ const canAccessBody = z.object({
   entity_id: z.string().min(1).max(128),
 });
 
-/**
- * Map a Bam URL to a §11 visibility entity. Recognized shapes (anywhere
- * under /b3/): .../tasks/:uuid, .../sprints/:uuid, .../projects/:uuid.
- * Most-specific wins so /b3/projects/X/sprints/Y resolves to the sprint.
- */
-function parseBamEntityFromUrl(
-  targetUrl: string,
-): { type: 'bam.task' | 'bam.sprint' | 'bam.project'; id: string } | null {
-  let pathname: string;
-  try {
-    pathname = new URL(targetUrl, 'http://placeholder').pathname;
-  } catch {
-    return null;
-  }
-  const segments = pathname.split('/').filter(Boolean);
-  const findAfter = (label: string): string | null => {
-    for (let i = segments.length - 2; i >= 0; i--) {
-      const next = segments[i + 1];
-      if (segments[i] === label && next && UUID_REGEX.test(next)) {
-        return next;
-      }
-    }
-    return null;
-  };
-  const taskId = findAfter('tasks');
-  if (taskId) return { type: 'bam.task', id: taskId };
-  const sprintId = findAfter('sprints');
-  if (sprintId) return { type: 'bam.sprint', id: sprintId };
-  const projectId = findAfter('projects');
-  if (projectId) return { type: 'bam.project', id: projectId };
-  return null;
-}
-
 export default async function internalCanReadRoutes(fastify: FastifyInstance) {
   fastify.post(
     '/internal/can-read',
@@ -85,10 +50,14 @@ export default async function internalCanReadRoutes(fastify: FastifyInstance) {
     async (request, reply) => {
       const body = canReadBody.parse(request.body);
 
-      const entity = parseBamEntityFromUrl(body.target_url);
-      if (!entity) {
-        // Board pages, dashboards, list views — nothing entity-scoped to
-        // protect beyond org membership, which the summon context implies.
+      const entity = suiteUrlEntity(body.target_url);
+      if (entity.kind === 'unsupported') {
+        // Fail closed (#300): a URL we cannot judge is never assumed harmless.
+        return reply.send({ allowed: false, can_share: false, reason: entity.reason });
+      }
+      if (entity.kind === 'no_resource') {
+        // App homes, list and settings pages: nothing entity-scoped to protect
+        // beyond org membership, which the caller's session implies.
         return reply.send({ allowed: true, can_share: false, reason: 'no_resource' });
       }
 

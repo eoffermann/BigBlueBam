@@ -27,6 +27,7 @@ import { createHash } from 'node:crypto';
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import postgres from 'postgres';
+import { envFlag } from '@bigbluebam/shared';
 import { stripTopLevelTransactionControl } from './lib/migration-sql.js';
 
 const MIGRATIONS_DIR = process.env.MIGRATIONS_DIR ?? resolve(process.cwd(), 'migrations');
@@ -301,7 +302,7 @@ async function main(): Promise<void> {
             skippedCount++;
             continue;
           }
-          if (process.env.MIGRATE_ALLOW_HEADER_RESTAMP === '1') {
+          if (envFlag('MIGRATE_ALLOW_HEADER_RESTAMP', process.env)) {
             console.warn(
               `[migrate] MIGRATE_ALLOW_HEADER_RESTAMP=1 → re-stamping ${m.filename} (caller asserts SQL body unchanged; only header comments edited)`,
             );

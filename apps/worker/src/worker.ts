@@ -571,7 +571,7 @@ banterRetentionWorker.on('failed', (job, err) => {
 const banterTranscriptionWorker = new Worker<BanterTranscriptionJobData>(
   'banter-transcription',
   async (job: Job<BanterTranscriptionJobData>) => {
-    await processBanterTranscriptionJob(job, logger);
+    await processBanterTranscriptionJob(job, env, logger);
   },
   { ...connection, concurrency: 2 },
 );
@@ -1814,7 +1814,7 @@ bureauChatExpiryQueue
 const bureauSummonFanoutWorker = new Worker<BureauSummonFanoutJobData>(
   'bureau-summon-fanout',
   async (job: Job<BureauSummonFanoutJobData>) => {
-    await processBureauSummonFanoutJob(job, redis, logger);
+    await processBureauSummonFanoutJob(job, redis, env, logger);
   },
   { ...connection, concurrency: env.WORKER_CONCURRENCY },
 );

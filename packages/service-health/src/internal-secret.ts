@@ -1,5 +1,6 @@
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import {
+  carriesInternalTokenOf,
   type HeaderBag,
   INTERNAL_SECRET_HEADERS,
   INTERNAL_TOKEN_HEADER,
@@ -34,6 +35,15 @@ export { INTERNAL_SECRET_HEADERS, INTERNAL_TOKEN_HEADER, isPrivateNetworkAddress
 /** The TCP peer address, ignoring every proxy header. */
 export function socketPeerAddress(request: FastifyRequest): string | undefined {
   return request.raw.socket?.remoteAddress ?? undefined;
+}
+
+/**
+ * True when the request carries an x-internal-token header at all. For a route that serves both
+ * internal and non-internal callers and must pick a path before authenticating (helpdesk-api's
+ * agent routes, #306); the secret itself is still checked only by createInternalSecretGuard.
+ */
+export function carriesInternalToken(request: FastifyRequest): boolean {
+  return carriesInternalTokenOf(request.headers as HeaderBag);
 }
 
 /** True when the caller is a direct private-network peer, not a client relayed by the edge. */
@@ -75,6 +85,8 @@ export interface InternalSecretGuardOptions {
   secrets: () => ReadonlyArray<string | null | undefined>;
   /** Also read the x-internal-token header (helpdesk-api and blueprint-api conventions). */
   acceptTokenHeader?: boolean;
+  /** Read only the x-internal-token header (the HB-7 INTERNAL_HELPDESK_SECRET pair). */
+  tokenHeaderOnly?: boolean;
 }
 
 /** `(request, reply) => boolean`: true when allowed; otherwise the 401/403 is already sent. */
@@ -89,7 +101,11 @@ export function createInternalSecretGuard(options: InternalSecretGuardOptions): 
   return function requireInternalSecret(request: FastifyRequest, reply: FastifyReply): boolean {
     const verdict = internalRequestVerdict(
       { headers: request.headers as HeaderBag, remoteAddress: socketPeerAddress(request) },
-      { secrets: options.secrets(), acceptTokenHeader: options.acceptTokenHeader },
+      {
+        secrets: options.secrets(),
+        acceptTokenHeader: options.acceptTokenHeader,
+        tokenHeaderOnly: options.tokenHeaderOnly,
+      },
     );
     switch (verdict) {
       case 'ok':

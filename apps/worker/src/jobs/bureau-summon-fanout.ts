@@ -28,16 +28,9 @@
  *   LiveKit room the unified call manager resolves on URL change. The
  *   `?lkRoom=` query param is dead end-to-end.
  *
- * ──────────────────────────────────────────────────────────────────────
- * DUPLICATED CODE WARNING.
- *
- * The cross-app access check below is a lift of
- * apps/bureau-api/src/services/cross-app-access.service.ts. We cannot
- * import that file because the worker package does not depend on
- * bureau-api (and shouldn't — see bureau-presence-cleanup.ts for the
- * same pattern). If the canonical version changes, mirror the change
- * here in the same commit.
- * ──────────────────────────────────────────────────────────────────────
+ * The access check is the one in `@bigbluebam/shared/cross-app-access`
+ * (#300), the same function bureau-api calls. It used to be a copy here,
+ * and both copies failed open; it now fails CLOSED in one place.
  */
 
 import type { Job } from 'bullmq';
@@ -46,6 +39,11 @@ import type { Logger } from 'pino';
 import { sql } from 'drizzle-orm';
 import { getDb } from '../utils/db.js';
 import { publishBoltEvent } from '../utils/bolt-events.js';
+import {
+  resolveCrossAppAccess,
+  type CrossAppAccessDecision,
+} from '@bigbluebam/shared/cross-app-access';
+import type { Env } from '../env.js';
 
 // ---------------------------------------------------------------------------
 // Job payload (mirrors bureau-api summon.service.ts queue.add(...) payload)
@@ -90,92 +88,30 @@ interface SummonAuditRow {
 }
 
 // ---------------------------------------------------------------------------
-// Cross-app access check — duplicated from bureau-api/services/cross-app-access.
+// Cross-app access check: the shared fail-closed resolver (#300).
 // ---------------------------------------------------------------------------
 
-interface CrossAppAccessDecision {
-  allowed: boolean;
-  canShare: boolean;
-  reason?: string;
-}
+export type SummonFanoutEnv = Pick<
+  Env,
+  'INTERNAL_SERVICE_SECRET' | 'BBB_API_INTERNAL_URL' | 'BOARD_INTERNAL_URL' | 'BRIEF_INTERNAL_URL'
+>;
 
-const INTERNAL_SECRET = process.env.INTERNAL_SERVICE_SECRET ?? '';
-const BBB_API_INTERNAL_URL = process.env.BBB_API_INTERNAL_URL ?? 'http://api:4000';
-const BOARD_INTERNAL_URL = process.env.BOARD_INTERNAL_URL ?? 'http://board-api:4008';
-const BRIEF_INTERNAL_URL = process.env.BRIEF_INTERNAL_URL ?? 'http://brief-api:4005';
-
-async function tryLivePreflight(
-  baseUrl: string,
-  path: string,
-  args: { orgId: string; userId: string; targetUrl: string },
-): Promise<CrossAppAccessDecision | null> {
-  if (!INTERNAL_SECRET || !baseUrl) return null;
-  try {
-    const response = await fetch(`${baseUrl.replace(/\/$/, '')}${path}`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Internal-Service-Secret': INTERNAL_SECRET,
-        'X-Organization-ID': args.orgId,
-      },
-      body: JSON.stringify({
-        user_id: args.userId,
-        org_id: args.orgId,
-        target_url: args.targetUrl,
-      }),
-    });
-    if (!response.ok) return null;
-    const raw = (await response.json()) as {
-      allowed?: unknown;
-      canShare?: unknown;
-      can_share?: unknown;
-      reason?: unknown;
-    };
-    return {
-      allowed: raw.allowed === true,
-      canShare: raw.canShare === true || raw.can_share === true,
-      reason: typeof raw.reason === 'string' ? raw.reason : undefined,
-    };
-  } catch {
-    return null;
-  }
-}
-
-async function resolveAccess(
-  app: string,
+function resolveAccess(
+  env: SummonFanoutEnv,
+  logger: Logger,
   args: { orgId: string; userId: string; targetUrl: string },
 ): Promise<CrossAppAccessDecision> {
-  switch (app) {
-    case 'board': {
-      const live = await tryLivePreflight(
-        BOARD_INTERNAL_URL,
-        '/v1/internal/can-read',
-        args,
-      );
-      if (live) return live;
-      return { allowed: true, canShare: false, reason: 'stub_allow' };
-    }
-    case 'brief': {
-      const live = await tryLivePreflight(
-        BRIEF_INTERNAL_URL,
-        '/v1/internal/can-read',
-        args,
-      );
-      if (live) return live;
-      return { allowed: true, canShare: false, reason: 'stub_allow' };
-    }
-    case 'bam': {
-      const live = await tryLivePreflight(
-        BBB_API_INTERNAL_URL,
-        '/internal/can-read',
-        args,
-      );
-      if (live) return live;
-      return { allowed: true, canShare: false, reason: 'stub_allow' };
-    }
-    default:
-      return { allowed: true, canShare: false, reason: 'unknown_app' };
-  }
+  return resolveCrossAppAccess(args, {
+    internalServiceSecret: env.INTERNAL_SERVICE_SECRET,
+    apiInternalUrl: env.BBB_API_INTERNAL_URL,
+    boardInternalUrl: env.BOARD_INTERNAL_URL,
+    briefInternalUrl: env.BRIEF_INTERNAL_URL,
+    onDegraded: (info) =>
+      logger.warn(
+        { ...info, target_url: args.targetUrl },
+        'bureau-summon-fanout: access preflight degraded; recipient denied (fail closed)',
+      ),
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -308,6 +244,7 @@ async function updateRecipients(
 export async function processBureauSummonFanoutJob(
   job: Job<BureauSummonFanoutJobData>,
   redis: Redis,
+  env: SummonFanoutEnv,
   logger: Logger,
 ): Promise<void> {
   const { summonId, orgId, summonerId } = job.data;
@@ -340,7 +277,7 @@ export async function processBureauSummonFanoutJob(
   for (let i = 0; i < pendingRecipients.length; i++) {
     const recipient = pendingRecipients[i]!;
     // Re-run the access check; permissions may have changed since planSummon.
-    const decision = await resolveAccess(summon.target_app, {
+    const decision = await resolveAccess(env, logger, {
       orgId: summon.org_id,
       userId: recipient.userId,
       targetUrl: summon.target_url,
