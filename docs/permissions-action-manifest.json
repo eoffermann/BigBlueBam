@@ -4612,7 +4612,7 @@
       "is_destructive": false,
       "is_read": true,
       "requires_confirmation": false,
-      "requires_superuser": false,
+      "requires_superuser": true,
       "sources": [
         {
           "source": "rest",
@@ -4629,7 +4629,7 @@
       "is_destructive": false,
       "is_read": false,
       "requires_confirmation": false,
-      "requires_superuser": false,
+      "requires_superuser": true,
       "sources": [
         {
           "source": "rest",

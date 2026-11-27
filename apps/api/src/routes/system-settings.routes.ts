@@ -7,6 +7,7 @@ import { requireAuth } from '../plugins/auth.js';
 import { logSuperuserAction } from '../services/superuser-audit.service.js';
 import { isBootstrapRequired } from '../services/bootstrap-status.service.js';
 import { shadowOnly } from '../middleware/dual-read.js';
+import { requirePlatformSuperuser } from '../middleware/require-platform-superuser.js';
 import { validateExternalUrl } from '../lib/url-validator.js';
 import nodemailer from 'nodemailer';
 import { inArray } from 'drizzle-orm';
@@ -310,7 +311,7 @@ export default async function systemSettingsRoutes(fastify: FastifyInstance) {
   // ─── GET /system-settings — list all settings (SuperUser only) ────────
   fastify.get(
     '/system-settings',
-    { preHandler: [requireAuth, fastify.requireCan('bam.system_setting.list')] },
+    { preHandler: [requireAuth, requirePlatformSuperuser, fastify.requireCan('bam.system_setting.list')] },
     async () => {
       const rows = await db.select().from(systemSettings);
       // Mask secret values before returning. Even SuperUsers should not
@@ -355,9 +356,15 @@ export default async function systemSettingsRoutes(fastify: FastifyInstance) {
   );
 
   // ─── PUT /system-settings/:key — update a setting (SuperUser only) ─────
+  //
+  // requirePlatformSuperuser is the gate that matters here. requireCan only
+  // blocks under BBB_PERMISSIONS_ENFORCE=on, so before it was added any
+  // authenticated user could PUT smtp_host / smtp_user / smtp_pass, route the
+  // platform's outbound mail through their own relay, and read the
+  // password-reset mail of every user on the instance, SuperUsers included.
   fastify.put<{ Params: { key: string } }>(
     '/system-settings/:key',
-    { preHandler: [requireAuth, fastify.requireCan('bam.system_setting.update')] },
+    { preHandler: [requireAuth, requirePlatformSuperuser, fastify.requireCan('bam.system_setting.update')] },
     async (request, reply) => {
       const { key } = request.params;
 
@@ -487,6 +494,7 @@ export default async function systemSettingsRoutes(fastify: FastifyInstance) {
     {
       preHandler: [
         requireAuth,
+        requirePlatformSuperuser,
         fastify.requireCan('bam.system_setting.update'),
       ],
     },
@@ -626,7 +634,7 @@ export default async function systemSettingsRoutes(fastify: FastifyInstance) {
   // matter what the form sends.
   fastify.post(
     '/system-settings/password_policy/preview',
-    { preHandler: [requireAuth, fastify.requireCan('bam.system_setting.update')] },
+    { preHandler: [requireAuth, requirePlatformSuperuser, fastify.requireCan('bam.system_setting.update')] },
     async (request, reply) => {
       const bodySchema = z.object({
         policy: z.unknown(),

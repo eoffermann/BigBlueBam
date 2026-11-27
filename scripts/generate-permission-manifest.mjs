@@ -102,6 +102,16 @@ const REQUIRES_SUPERUSER_IDS = new Set([
   'bam.platform_setting.list',
   'bam.platform_setting.update',
   'bam.platform_user_superuser.update',
+  // system-settings.routes.ts: the list, write, SMTP test and password-policy
+  // preview routes carry requirePlatformSuperuser per route (the file also
+  // serves the public /root-redirect and the authenticated single-key read).
+  // Writing smtp_host/smtp_pass redirects every user's password-reset mail, so
+  // an org Owner must not reach these under BBB_PERMISSIONS_ENFORCE=on either.
+  // Migration 0292 sets the same flags in the DB.
+  // bam.system_setting.get is deliberately NOT listed: it is the authenticated
+  // single-key read ordinary app code uses, and it masks secret values.
+  'bam.system_setting.list',
+  'bam.system_setting.update',
 ]);
 
 function computeRequiresSuperuser(id, resource) {
