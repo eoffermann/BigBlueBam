@@ -4,10 +4,10 @@
   "api_port": 4002,
   "api_dir": "banter-api",
   "route_files": 22,
-  "schema_modules": 23,
+  "schema_modules": 24,
   "has_seeder": true,
   "has_frontend": true,
-  "src_hash": "6b38935c6cebb7cb530036ba1b79f76d9f8a31cd2706079eb6d3be3ad38dc448",
-  "generated_at": "2026-07-20T11:04:19.181Z",
+  "src_hash": "c8ea2c6a4287702cca8b34d5b0e02deff1b33e6f570f75fc503ee47b1251a554",
+  "generated_at": "2026-11-27T15:56:36.025Z",
   "mcp_tool_count": 80
 }

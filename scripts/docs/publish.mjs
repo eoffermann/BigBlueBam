@@ -414,10 +414,12 @@ function generateDocsIndex(appNames) {
     '| [Agent Conventions](docs/reference/agent-conventions.md) | Rules agents must follow (visibility preflight, audit) |',
   ];
 
-  // Add per-app guide links
+  // Add per-app guide links. Only apps that have a guide.md (same rule as the
+  // app card link row): compose no longer writes stub guides (#398), so an app
+  // documented by help.md alone must not get a dead link here.
   lines.push('| | |');
   lines.push('| **Per-App Guides** | |');
-  for (const app of appNames) {
+  for (const app of appNames.filter((a) => fs.existsSync(path.join(ROOT, 'docs', 'apps', a, 'guide.md')))) {
     lines.push(`| [${displayName(app)} Guide](docs/apps/${app}/guide.md) | User guide and MCP tool reference |`);
   }
 
@@ -497,15 +499,21 @@ function computeReadme(appMetas, { logging = true } = {}) {
   return readme;
 }
 
+/** Returns true when the README content changed. */
 function rewriteReadme(appMetas) {
   const readmePath = path.join(ROOT, 'README.md');
+  const before = fs.readFileSync(readmePath, 'utf-8');
   const readme = computeReadme(appMetas);
+  const changed = before.replace(/\r\n?/g, '\n') !== readme.replace(/\r\n?/g, '\n');
 
-  if (!dryRun) {
+  if (dryRun) {
+    console.log('  [dry-run] README.md not written');
+  } else if (changed) {
     fs.writeFileSync(readmePath, readme, 'utf-8');
   } else {
-    console.log('  [dry-run] README.md not written');
+    console.log('  README.md unchanged');
   }
+  return changed;
 }
 
 /**
@@ -667,7 +675,7 @@ function main() {
 
   // 1. README rewrite
   console.log('[README rewrite]');
-  rewriteReadme(readmeMetas);
+  const readmeChanged = rewriteReadme(readmeMetas);
   console.log('');
 
   // --readme-only stops here: no marketing sync, screenshot manifest, or regen
@@ -686,16 +694,34 @@ function main() {
   console.log('[Screenshot manifest]');
   const manifest = buildScreenshotManifest(appNames);
   const manifestPath = path.join(ROOT, 'docs', 'auto', 'screenshot-manifest.json');
-  if (!dryRun) {
+  // Keep the previous generated_at when the screenshot list is identical, so a
+  // rerun on unchanged screenshots leaves the file byte-identical (#398).
+  const prevManifest = readFileOr(manifestPath, null);
+  let manifestChanged = true;
+  try {
+    const prev = prevManifest && JSON.parse(prevManifest);
+    if (prev && JSON.stringify(prev.screenshots) === JSON.stringify(manifest.screenshots)) {
+      manifest.generated_at = prev.generated_at;
+      manifestChanged = false;
+    }
+  } catch {
+    // Unreadable previous manifest: rewrite it.
+  }
+  if (!dryRun && manifestChanged) {
     ensureDir(path.join(ROOT, 'docs', 'auto'));
     fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2) + '\n', 'utf-8');
   }
-  console.log(`  ${manifest.screenshots.length} screenshots indexed`);
+  console.log(`  ${manifest.screenshots.length} screenshots indexed${manifestChanged ? '' : ' (unchanged)'}`);
   console.log('');
 
-  // 4. Regen log
+  // 4. Regen log: one entry per publish that changed something, so an
+  // idempotent rerun of docs:generate does not dirty the tree.
   console.log('[Regen log]');
-  appendRegenLog(appNames, startTime);
+  if (readmeChanged || manifestChanged) {
+    appendRegenLog(appNames, startTime);
+  } else {
+    console.log('  Nothing changed; no regen log entry');
+  }
   console.log('');
 
   console.log('Stage 5 complete.');

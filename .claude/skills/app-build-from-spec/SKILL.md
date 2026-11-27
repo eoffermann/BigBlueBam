@@ -390,9 +390,14 @@ not as an acceptable gap.
   full `pnpm docs:publish` (README regions plus the `site/public/screenshots/` sync; it no
   longer copies anything into `site/src/content/`, so nothing there needs protecting), then
   commit what they write. `pnpm check:app-completeness` fails while `mcp-tools.md` is missing
-  or its row count differs from the docs catalog. Do not run `pnpm docs:compose` (or the
-  one-shot `pnpm docs:generate`) for an app whose `guide.md` is hand-written and has no
-  `_narrative.md`: compose replaces that guide with a stub.
+  or its row count differs from the docs catalog. The one-shot `pnpm docs:generate`
+  (`--skip-capture --skip-seed` when you have no fresh captures) is safe to run end to end
+  and is idempotent: compose only rewrites a `guide.md` / `marketing.md` that carries its
+  `AUTODOCS:GENERATED` marker (or a legacy `generated:` front-matter key) and has a
+  `_narrative.md` / `_marketing_hook.md` source. A hand-written `guide.md` (the norm for new
+  apps) is reported as "SKIPPED, hand-written" and never touched, and an app with no source
+  partial gets no stub. Do not add the marker or a `generated:` key to a hand-written guide.
+  A rerun on unchanged sources must leave `git status` clean (#398).
 - **MCP Tooling:** The Docs for the new app (and the Marketing site described below) should
   include the tool count for MCP tools on this app. The total MCP tool count should be
   updated wherever this is referenced.

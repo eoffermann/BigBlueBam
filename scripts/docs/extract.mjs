@@ -79,17 +79,36 @@ function ensureDir(dirPath) {
 
 /**
  * Compute SHA-256 of all *.ts files under a directory, concatenated in sorted
- * order. Returns hex string.
+ * order. Returns hex string. Platform-independent (#398): files are ordered by
+ * their POSIX path relative to `dir` and hashed with CRLF folded to LF, so a
+ * Windows autocrlf checkout and a Linux CI checkout of the same commit agree
+ * and docs:generate does not rewrite every meta.json when the platform changes.
  */
 function hashSourceTree(dir) {
   if (!fs.existsSync(dir)) return null;
   const hash = createHash('sha256');
-  const files = collectFiles(dir, /\.ts$/);
-  files.sort();
-  for (const f of files) {
-    hash.update(fs.readFileSync(f));
+  const files = collectFiles(dir, /\.ts$/)
+    .map((f) => ({ f, key: path.relative(dir, f).split(path.sep).join('/') }))
+    .sort((a, b) => (a.key < b.key ? -1 : a.key > b.key ? 1 : 0));
+  for (const { f } of files) {
+    hash.update(fs.readFileSync(f, 'utf-8').replace(/\r\n/g, '\n'));
   }
   return hash.digest('hex');
+}
+
+/**
+ * Keep the previous `generated_at` when nothing else in the JSON changed, so a
+ * rerun on unchanged sources leaves the file byte-identical (#398).
+ */
+function withStableTimestamp(next, prevPath) {
+  try {
+    const prev = JSON.parse(fs.readFileSync(prevPath, 'utf-8'));
+    const strip = ({ generated_at: _ignored, ...rest }) => JSON.stringify(rest);
+    if (prev.generated_at && strip(prev) === strip(next)) return { ...next, generated_at: prev.generated_at };
+  } catch {
+    // No previous file (or unreadable): keep the fresh timestamp.
+  }
+  return next;
 }
 
 function collectFiles(dir, pattern) {
@@ -306,14 +325,18 @@ function main() {
     const metaPath = path.join(appDocsDir, 'meta.json');
     if (!dryRun) {
       ensureDir(appDocsDir);
-      fs.writeFileSync(metaPath, JSON.stringify(meta, null, 2) + '\n', 'utf-8');
+      fs.writeFileSync(metaPath, JSON.stringify(withStableTimestamp(meta, metaPath), null, 2) + '\n', 'utf-8');
     }
   }
 
+  // changed-apps.json records the most recent extract that saw a source change.
+  // A run that detects no change leaves it as is (rewriting it with an empty
+  // list would make every rerun of docs:generate dirty the tree).
   const changedPath = path.join(ROOT, 'docs', 'auto', 'changed-apps.json');
-  if (!dryRun) {
+  if (!dryRun && changes.length > 0) {
     ensureDir(path.join(ROOT, 'docs', 'auto'));
-    fs.writeFileSync(changedPath, JSON.stringify({ generated_at: new Date().toISOString(), changed: changes }, null, 2) + '\n', 'utf-8');
+    const next = withStableTimestamp({ generated_at: new Date().toISOString(), changed: changes }, changedPath);
+    fs.writeFileSync(changedPath, JSON.stringify(next, null, 2) + '\n', 'utf-8');
   }
   console.log(`Change detection: ${changes.length} app(s) changed`);
   for (const c of changes) {

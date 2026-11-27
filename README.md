@@ -472,7 +472,7 @@ Generate an API key from **Settings > Integrations** in the BigBlueBam UI. For s
 
 Bam is the BigBlueBam flagship: a multi-user Kanban planner where teams run projects on configurable boards, plan and close sprints, track tasks with rich detail, and report on delivery. Reach for it when a team needs to organize work into phases and time-boxed iterations.
 
-66 routes, 54 schemas, 128 MCP tools
+70 routes, 56 schemas, 128 MCP tools
 
 <img src="docs/apps/bam/screenshots/light/01-board.png" width="400" alt="Bam - Sprint-based Kanban project and task management">
 
@@ -482,7 +482,7 @@ Bam is the BigBlueBam flagship: a multi-user Kanban planner where teams run proj
 
 Banter is the chat layer of BigBlueBam. It gives your team channels, direct messages, threads, reactions, pins, and bookmarks so conversations live alongside the rest of the suite. Reach for it when work needs a back-and-forth instead of a ticket or a task.
 
-22 routes, 23 schemas, 80 MCP tools
+22 routes, 24 schemas, 80 MCP tools
 
 <img src="docs/apps/banter/screenshots/light/01-channel-view.png" width="400" alt="Banter - Team chat for your organization">
 
@@ -512,7 +512,7 @@ Bastion checks your SOC 2 or ISO 27001 controls every night against what actuall
 
 Bay is the BigBlueBam media review and approval app. It turns a file sitting in Bin into a reviewable asset: a version stack, coordinate-anchored annotations, per-reviewer decisions, and a token-gated link you can hand to an outside client. It reviews stills, video, audio, and now interactive 3D models in the same place, and an AI agent reviews through the exact same tools, identity, and audit trail as a person.
 
-6 routes, 8 schemas, 14 MCP tools
+7 routes, 8 schemas, 14 MCP tools
 
 <img src="docs/apps/bay/screenshots/light/01-review-library.png" width="400" alt="Bay - Media review and approval">
 
@@ -712,7 +712,7 @@ Bursar reads a request into a scope tree, then measures every vendor offer again
 
 Helpdesk is the public-facing support portal where your customers register, file tickets, track replies, and close out issues. Behind the scenes every ticket spawns a Bam task so your support staff can work it from the project board.
 
-10 routes, 13 schemas, 11 MCP tools
+11 routes, 13 schemas, 11 MCP tools
 
 <img src="docs/apps/helpdesk/screenshots/light/01-portal-entry.png" width="400" alt="Helpdesk - Support tickets and customer portal">
 
@@ -1086,7 +1086,6 @@ site/               → Marketing site (served at /)
 | [Bearing (Goals & OKRs) Guide](docs/apps/bearing/guide.md) | User guide and MCP tool reference |
 | [Bench (Analytics) Guide](docs/apps/bench/guide.md) | User guide and MCP tool reference |
 | [Bill (Invoicing) Guide](docs/apps/bill/guide.md) | User guide and MCP tool reference |
-| [Bin Guide](docs/apps/bin/guide.md) | User guide and MCP tool reference |
 | [Blank (Forms) Guide](docs/apps/blank/guide.md) | User guide and MCP tool reference |
 | [Blast (Email Campaigns) Guide](docs/apps/blast/guide.md) | User guide and MCP tool reference |
 | [Blip Guide](docs/apps/blip/guide.md) | User guide and MCP tool reference |
