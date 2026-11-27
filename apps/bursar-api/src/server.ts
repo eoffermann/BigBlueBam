@@ -3,6 +3,7 @@ import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import cookie from '@fastify/cookie';
 import multipart from '@fastify/multipart';
+import websocket from '@fastify/websocket';
 import rateLimit from '@fastify/rate-limit';
 import { sql } from 'drizzle-orm';
 import { createErrorHandler, httpSystemErrorRecorder } from '@bigbluebam/logging';
@@ -20,6 +21,7 @@ import authPlugin from './plugins/auth.js';
 import permissionsPlugin from './plugins/permissions.js';
 import viewerCapsPlugin from './plugins/viewer-caps.js';
 import rlsPlugin from './plugins/rls.js';
+import registerBursarWs from './ws/bursar-ws.js';
 import vendorRoutes from './routes/vendors.routes.js';
 import requestRoutes from './routes/requests.routes.js';
 import settingsRoutes from './routes/settings.routes.js';
@@ -104,6 +106,8 @@ await fastify.register(rateLimit, {
 await fastify.register(multipart, {
   limits: { fileSize: env.MAX_DOC_BYTES, files: 1, fields: 10 },
 });
+// /bursar/ws (spec 11.1, issue #121). Client frames are tiny subscribe messages.
+await fastify.register(websocket, { options: { maxPayload: 64 * 1024 } });
 
 fastify.addHook('onSend', async (_req, reply) => {
   reply.header('X-Content-Type-Options', 'nosniff');
@@ -170,6 +174,9 @@ await fastify.register(
   },
   { prefix: '/v1' },
 );
+
+// The realtime hub at /ws; nginx maps /bursar/ws onto it (spec 11.1, issue #121).
+await fastify.register(registerBursarWs);
 
 const signals: NodeJS.Signals[] = ['SIGINT', 'SIGTERM'];
 for (const signal of signals) {

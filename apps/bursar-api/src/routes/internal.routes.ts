@@ -13,6 +13,7 @@ import {
 import { createInternalSecretGuard } from '@bigbluebam/service-health';
 import { env } from '../env.js';
 import { validationError } from '../lib/http.js';
+import { publishLevelingProgress, publishScopeProgress } from '../lib/realtime.js';
 import { runInOrgScope } from '../plugins/rls.js';
 import { consumeInternalEvent } from '../services/ingest.service.js';
 import { runDriftSweep } from '../services/engines/drift.engine.js';
@@ -134,6 +135,8 @@ export default async function internalRoutes(fastify: FastifyInstance) {
         classifier,
         request.log,
       );
+      // /bursar/ws scope.progress (spec 11.1, issue #121). Advisory; never throws.
+      await publishScopeProgress(orgId, request_id, result);
       reply.status(result.done ? 200 : 202);
       return { data: result };
     } catch (err) {
@@ -325,6 +328,8 @@ export default async function internalRoutes(fastify: FastifyInstance) {
           orgId,
         ).catch(() => {});
       }
+      // /bursar/ws leveling.progress + matrix.updated (spec 11.1, issue #121). Advisory.
+      await publishLevelingProgress(orgId, request_id, result);
       reply.status(result.done ? 200 : 202);
       return { data: result };
     } catch (err) {
