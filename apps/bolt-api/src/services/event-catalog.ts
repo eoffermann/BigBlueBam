@@ -3837,13 +3837,26 @@ const bastionEvents: EventDefinition[] = [
     source: 'bastion',
     event_type: 'auditor_room.created',
     description: 'Fired when an auditor room (time-limited read-only link) is created.',
-    payload_schema: [{ name: 'room_id', type: 'uuid', description: 'The room' }, { name: 'expires_at', type: 'string', description: 'When the link lapses' }, bastionOrg],
+    payload_schema: [
+      { name: 'room_id', type: 'uuid', description: 'The room' },
+      { name: 'label', type: 'string', description: 'The room name, e.g. the audit firm and engagement' },
+      { name: 'framework_id', type: 'uuid', description: 'The framework the room shows' },
+      { name: 'controls', type: 'number', description: 'How many controls the room shows' },
+      { name: 'restricted', type: 'number', description: 'How many restricted evidence records the room may show' },
+      { name: 'expires_at', type: 'string', description: 'When the link lapses' },
+      bastionOrg,
+    ],
   },
   {
     source: 'bastion',
     event_type: 'auditor_room.revoked',
     description: 'Fired when an auditor room is revoked or auto-locked.',
-    payload_schema: [{ name: 'room_id', type: 'uuid', description: 'The room' }, { name: 'reason', type: 'string', description: 'revoked | locked' }, bastionOrg],
+    payload_schema: [
+      { name: 'room_id', type: 'uuid', description: 'The room' },
+      { name: 'label', type: 'string', description: 'The room name' },
+      { name: 'reason', type: 'string', description: 'revoked | locked' },
+      bastionOrg,
+    ],
   },
   {
     source: 'bastion',
