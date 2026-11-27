@@ -11,6 +11,7 @@ import {
   useAuditorRooms,
   useCreateExport,
   useCreateRoom,
+  useDismissExport,
   useExports,
   useManualEvidence,
   useRevokeRoom,
@@ -331,6 +332,7 @@ function Packets({ frameworks }: { frameworks: FrameworkView[] }) {
   const canRestricted = useCan('bastion.evidence.read_restricted');
   const exports = useExports();
   const create = useCreateExport();
+  const dismiss = useDismissExport();
   const [open, setOpen] = useState(false);
   const [frameworkId, setFrameworkId] = useState(frameworks[0]?.id ?? '');
   const [from, setFrom] = useState(daysAgo(90));
@@ -415,10 +417,22 @@ function Packets({ frameworks }: { frameworks: FrameworkView[] }) {
               </a>
             )}
             {(p.status === 'queued' || p.status === 'running') && <Loader2 className="h-4 w-4 animate-spin text-zinc-400" />}
+            {p.status === 'failed' && canCreate && (
+              <button
+                type="button"
+                className={secondary}
+                disabled={dismiss.isPending}
+                title="Hide this packet from the list. It is kept in the audit history."
+                onClick={() => dismiss.mutate(p.id)}
+              >
+                Dismiss
+              </button>
+            )}
           </li>
         ))}
         {rows.length === 0 && <li className="py-2 text-sm text-zinc-500">No packets yet.</li>}
       </ul>
+      {dismiss.error && <p className="text-sm text-red-600">{friendlyError(dismiss.error)}</p>}
       {frameworks.some((f) => f.is_iso) && (
         <div className="text-sm space-y-1">
           <p className="font-medium text-zinc-900 dark:text-zinc-100">Statement of Applicability</p>
@@ -441,7 +455,9 @@ export function SharingPage() {
   const canCreate = useCan('bastion.auditor_room.create');
   const canExports = useCan('bastion.export.read');
   const impersonating = getImpersonation() !== null;
-  const rooms = useAuditorRooms(canRead);
+  // #402: active (and locked) rooms by default; revoked and expired ones behind the toggle.
+  const [showClosed, setShowClosed] = useState(false);
+  const rooms = useAuditorRooms(canRead, showClosed);
   const [creating, setCreating] = useState(false);
   const [created, setCreated] = useState<CreatedRoom | null>(null);
   const frameworks = useMemo(() => (setup.data?.data.frameworks ?? []).filter((f) => f.status !== 'archived'), [setup.data]);
@@ -476,14 +492,22 @@ export function SharingPage() {
               }}
             />
           )}
+          <label className="flex items-center gap-2 text-sm text-zinc-700 dark:text-zinc-300">
+            <input type="checkbox" checked={showClosed} onChange={(e) => setShowClosed(e.target.checked)} />
+            Show closed rooms
+          </label>
           {rooms.isLoading ? (
             <Loader2 className="h-5 w-5 animate-spin text-zinc-400" />
           ) : (
-            <ul className="divide-y divide-zinc-200 dark:divide-zinc-800">
+            <ul className="divide-y divide-zinc-200 dark:divide-zinc-800" data-testid="room-list">
               {(rooms.data?.data ?? []).map((r) => (
                 <RoomRow key={r.id} room={r} />
               ))}
-              {(rooms.data?.data ?? []).length === 0 && <li className="py-2 text-sm text-zinc-500">No rooms yet. Create one to give an auditor a private, read-only view.</li>}
+              {(rooms.data?.data ?? []).length === 0 && (
+                <li className="py-2 text-sm text-zinc-500">
+                  {showClosed ? 'No rooms yet. Create one to give an auditor a private, read-only view.' : 'No open rooms. Create one to give an auditor a private, read-only view, or tick Show closed rooms.'}
+                </li>
+              )}
             </ul>
           )}
         </section>

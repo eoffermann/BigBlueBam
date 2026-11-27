@@ -2035,6 +2035,8 @@ export type BastionExportCreate = z.infer<typeof bastionExportCreateSchema>;
 export const bastionExportListQuerySchema = z
   .object({
     status: BastionExportStatus.optional(),
+    /** Also list failed packets a person dismissed (#402); hidden by default. */
+    include_dismissed: boolQueryParam().optional(),
     limit: z.coerce.number().int().min(1).max(100).default(25),
   })
   .strict();
@@ -3660,10 +3662,16 @@ export const bastionExportPacketSchema = z.object({
   size_bytes: z.number().int().nullable(),
   error: z.string().nullable(),
   requested_by_name: z.string().nullable(),
+  /** When a person dismissed this failed packet (#402); null while it is listed. */
+  dismissed_at: ts.nullable(),
   created_at: ts,
   updated_at: ts,
 });
 export type BastionExportPacket = z.infer<typeof bastionExportPacketSchema>;
+
+/** POST /exports/:id/dismiss (#402): the dismissed packet. Only a failed packet can be dismissed. */
+export const bastionExportDismissResponseSchema = z.object({ data: bastionExportPacketSchema });
+export type BastionExportDismissResponse = z.infer<typeof bastionExportDismissResponseSchema>;
 
 export const bastionExportListResponseSchema = z.object({ data: z.array(bastionExportPacketSchema), next_cursor: nextCursor });
 export type BastionExportListResponse = z.infer<typeof bastionExportListResponseSchema>;

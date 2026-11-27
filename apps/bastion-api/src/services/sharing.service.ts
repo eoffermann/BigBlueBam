@@ -26,6 +26,7 @@ import type {
   BastionExportCreate,
   BastionExportCreateResponse,
   BastionExportListQuery,
+  BastionExportDismissResponse,
   BastionExportListResponse,
   BastionExportPacket,
   BastionRoomOverview,
@@ -449,7 +450,7 @@ export function stageWords(stage: string | null, progress: number, total: number
 /** One packet as the list and the create both send it (bastionExportPacketSchema). */
 const EXPORT_SELECT = (tx: Tx, orgId: string) => tx`
   SELECT p.id, p.framework_id, f.name AS framework_name, p.period_start::text AS period_start, p.period_end::text AS period_end,
-         p.include_restricted, p.status, p.stage, p.stage_progress, p.size_bytes, p.error, p.created_at, p.updated_at,
+         p.include_restricted, p.status, p.stage, p.stage_progress, p.size_bytes, p.error, p.dismissed_at, p.created_at, p.updated_at,
          u.display_name AS requested_by_name
     FROM bastion_export_packets p
     LEFT JOIN bastion_frameworks f ON f.id = p.framework_id AND f.organization_id = p.organization_id
@@ -523,8 +524,33 @@ export async function createExport(deps: SharingDeps, viewer: Viewer, body: Bast
 export async function listExports(deps: SharingDeps, viewer: Viewer, q: BastionExportListQuery): Promise<Served<BastionExportListResponse>> {
   const rows = await orgTx(deps.engine.sql, viewer.org_id, (tx) => tx`
     ${EXPORT_SELECT(tx, viewer.org_id)} ${q.status ? tx`AND p.status = ${q.status}` : tx``}
+       ${q.include_dismissed ? tx`` : tx`AND p.dismissed_at IS NULL`}
      ORDER BY p.created_at DESC LIMIT ${q.limit}`);
   return { data: rows.map((r) => exportOut(r as Record<string, unknown>)), next_cursor: null };
+}
+
+/**
+ * POST /exports/:id/dismiss (#402). Hides a packet that could not be built from the default list.
+ * A soft hide: the row stays (with who dismissed it and when) and the act is audited as
+ * export.dismiss. Only a `failed` packet can be dismissed; a built one never can (also a CHECK in
+ * migration 0364), and one still being built is refused until it finishes. Dismissing twice is a
+ * no-op that answers the same row.
+ */
+export async function dismissExport(deps: SharingDeps, viewer: Viewer, id: string): Promise<Served<BastionExportDismissResponse>> {
+  const row = await orgTx(deps.engine.sql, viewer.org_id, async (tx) => {
+    const p = (await tx`SELECT status, dismissed_at FROM bastion_export_packets WHERE organization_id = ${viewer.org_id} AND id = ${id} FOR UPDATE`)[0];
+    if (!p) throw new NotFoundError('We could not find that packet.');
+    if (p.status !== 'failed') {
+      throw new ConflictError('Only a packet that could not be built can be dismissed.', 'PACKET_NOT_FAILED');
+    }
+    if (!p.dismissed_at) {
+      await tx`UPDATE bastion_export_packets SET dismissed_at = ${deps.engine.now()}, dismissed_by = ${viewer.id}
+                WHERE organization_id = ${viewer.org_id} AND id = ${id}`;
+      await auditRaw(tx, viewer, 'export.dismiss', { type: 'export_packet', id });
+    }
+    return (await tx`${EXPORT_SELECT(tx, viewer.org_id)} AND p.id = ${id}`)[0] as Record<string, unknown>;
+  });
+  return { data: exportOut(row) };
 }
 
 /** GET /exports/:id/download (row 93): the zip, streamed from the Bastion bucket. */

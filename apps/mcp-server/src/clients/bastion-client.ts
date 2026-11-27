@@ -319,7 +319,11 @@ export function createBastionClient(bastionApiUrl: string, api: ApiClient, fetch
     respondAuditorRequest: (id: string, body: BastionAuditorRequestUpdate) => request('PATCH', `/auditor-requests/${id}`, body),
     createExport: (body: BastionExportCreate) => request('POST', '/exports', body),
     listExports: (q: Partial<BastionExportListQuery> = {}) =>
-      request('GET', `/exports${qs({ status: q.status, limit: q.limit === undefined ? undefined : String(q.limit) })}`),
+      request(
+        'GET',
+        `/exports${qs({ status: q.status, include_dismissed: q.include_dismissed, limit: q.limit === undefined ? undefined : String(q.limit) })}`,
+      ),
+    dismissExport: (id: string) => request('POST', `/exports/${id}/dismiss`),
     getSettings: () => request('GET', '/settings'),
     updateSettings: (body: BastionSettingsUpdate) => request('PATCH', '/settings', body),
     listDeliveryProblems: (q: Partial<BastionDeliveryProblemListQuery> = {}) =>

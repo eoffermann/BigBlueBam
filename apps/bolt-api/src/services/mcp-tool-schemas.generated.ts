@@ -6397,6 +6397,21 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
     ]
   },
   {
+    "mcp_tool": "bastion_dismiss_export",
+    "description": "Dismiss an audit packet that could not be built (POST /exports/:id/dismiss): it drops out of the default packet list. A soft hide, audited as export.dismiss: the packet row is kept and bastion_list_exports with include_dismissed still shows it. Only a failed packet can be dismissed; a built (succeeded) packet or one still queued or running answers 409 PACKET_NOT_FAILED. Dismissing again is a no-op. Needs bastion.export.create.",
+    "source": "bastion",
+    "parameters": [
+      {
+        "name": "export_id",
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "nullable": false,
+        "description": ""
+      }
+    ]
+  },
+  {
     "mcp_tool": "bastion_dismiss_gap",
     "description": "Dismiss a gap with a reason (POST /gaps/:id/dismiss), for example when it does not apply to how the company works. Recorded in the Bastion audit log with who dismissed it; a dismissed gap stays dismissed when gaps are re-ranked. Needs bastion.gap.dismiss (owners and admins).",
     "source": "bastion",
@@ -6684,9 +6699,16 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
   },
   {
     "mcp_tool": "bastion_list_exports",
-    "description": "Audit packets, newest first (GET /exports): framework, period, whether restricted evidence is included, status (queued, running, succeeded, failed, expired), the current stage in words (\"Writing evidence\", \"Zipping\", \"Ready to download\") and any failure reason. Read-only; floored: needs bastion.export.read.",
+    "description": "Audit packets, newest first (GET /exports): framework, period, whether restricted evidence is included, status (queued, running, succeeded, failed, expired), the current stage in words (\"Writing evidence\", \"Zipping\", \"Ready to download\") and any failure reason. Failed packets someone dismissed are left out unless include_dismissed is true (each row carries dismissed_at). Read-only; floored: needs bastion.export.read.",
     "source": "bastion",
     "parameters": [
+      {
+        "name": "include_dismissed",
+        "type": "boolean",
+        "required": false,
+        "nullable": false,
+        "description": "Also list failed packets that were dismissed."
+      },
       {
         "name": "limit",
         "type": "number",

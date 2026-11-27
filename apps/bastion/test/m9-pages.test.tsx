@@ -98,6 +98,46 @@ afterEach(() => {
 });
 
 describe('Sharing', () => {
+  it('shows open rooms by default with a "Show closed rooms" toggle, and dismisses only a failed packet (#402)', async () => {
+    const FAILED = '0e0e0e0e-0000-4000-8000-00000000000f';
+    const roomQueries: string[] = [];
+    const fetchMock = sharingApi({
+      'GET /bastion/api/v1/auditor-rooms': (_init: RequestInit, url: URL) => {
+        roomQueries.push(url.searchParams.get('include_closed') ?? '(none)');
+        return url.searchParams.get('include_closed') === 'true'
+          ? jsonResponse(200, { data: [ROOM_ROW, { ...ROOM_ROW, id: '0d0d0d0d-0000-4000-8000-000000000002', label: 'Old test room', state: 'revoked', revoked_at: '2026-11-20T00:00:00Z' }] })
+          : jsonResponse(200, { data: [ROOM_ROW] });
+      },
+      'GET /bastion/api/v1/exports': () =>
+        jsonResponse(200, {
+          data: [
+            { id: PKT, framework_id: FW, framework_name: 'ISO 27001', period_start: '2026-09-01', period_end: '2026-11-26', include_restricted: false, status: 'succeeded', stage: null, stage_words: 'Ready to download', size_bytes: 1000, error: null, requested_by_name: 'Skipper', dismissed_at: null, created_at: '2026-11-26T09:00:00Z' },
+            { id: FAILED, framework_id: FW, framework_name: 'ISO 27001', period_start: '2026-09-01', period_end: '2026-11-26', include_restricted: false, status: 'failed', stage: null, stage_words: 'Could not be built', size_bytes: null, error: 'The packet could not be built.', requested_by_name: 'Skipper', dismissed_at: null, created_at: '2026-11-26T08:00:00Z' },
+          ],
+        }),
+      [`POST /bastion/api/v1/exports/${FAILED}/dismiss`]: () => jsonResponse(200, { data: {} }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    const { qc } = wrap(<SharingPage />, OWNER);
+    const rooms = await screen.findByTestId('room-list');
+    await waitFor(() => expect(rooms).toHaveTextContent('Lagoon & Reef CPAs'));
+    expect(rooms).not.toHaveTextContent('Old test room');
+    expect(roomQueries[0]).toBe('false');
+
+    fireEvent.click(screen.getByLabelText('Show closed rooms'));
+    await waitFor(() => expect(screen.getByTestId('room-list')).toHaveTextContent('Old test room'));
+    expect(roomQueries).toContain('true');
+
+    // One Dismiss button: on the failed packet, never on the built one.
+    const dismiss = await screen.findAllByRole('button', { name: 'Dismiss' });
+    expect(dismiss).toHaveLength(1);
+    fireEvent.click(dismiss[0]!);
+    await waitFor(() =>
+      expect(fetchMock.mock.calls.some(([u, init]) => String(u).includes(`/exports/${FAILED}/dismiss`) && (init as RequestInit)?.method === 'POST')).toBe(true),
+    );
+    await settled(qc);
+  });
+
   it('creates a room, shows the link once with the "shown only once" text, and sends confirm', async () => {
     const fetchMock = sharingApi();
     vi.stubGlobal('fetch', fetchMock);

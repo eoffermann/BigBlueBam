@@ -131,6 +131,13 @@ export default async function sharingRoutes(fastify: FastifyInstance) {
     return handled(request, reply, () => sharing.listExports(deps(), viewerOf(request), parsed.data));
   });
 
+  // #402: hide a packet that could not be built (soft, audited; a built packet is refused).
+  fastify.post('/exports/:id/dismiss', { preHandler: [requireAuth, can('bastion.export.create')] }, async (request, reply) => {
+    const id = idParam(request);
+    if (!id) return notFound(request, reply);
+    return handled(request, reply, () => sharing.dismissExport(deps(), viewerOf(request), id));
+  });
+
   // Row 93: the zip (spec 5.1 byte-response headers).
   fastify.get('/exports/:id/download', { preHandler: [requireAuth, can('bastion.export.read')] }, async (request, reply) => {
     const id = idParam(request);

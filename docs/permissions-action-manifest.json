@@ -1,7 +1,7 @@
 {
   "counts": {
     "total": 1569,
-    "mcp_tools_scanned": 951,
+    "mcp_tools_scanned": 952,
     "rest_routes_scanned": 888,
     "read_permissions": 608,
     "destructive_permissions": 148
@@ -27994,6 +27994,10 @@
     },
     {
       "tool": "bastion_list_exports",
+      "file": "bastion-tools.ts"
+    },
+    {
+      "tool": "bastion_dismiss_export",
       "file": "bastion-tools.ts"
     },
     {

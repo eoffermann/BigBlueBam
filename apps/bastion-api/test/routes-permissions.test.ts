@@ -122,6 +122,8 @@ const AGENT_REACHABLE = [
   'PATCH /auditor-requests/:id',
   'POST /exports',
   'GET /exports',
+  // #402: bastion_dismiss_export (soft-hide of a failed packet; not a vouching act).
+  'POST /exports/:id/dismiss',
   'GET /exports/:id/download',
   'GET /settings',
   'PATCH /settings',

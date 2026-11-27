@@ -82,8 +82,9 @@ describe('Bastion tools are a registered tool module (M11)', () => {
     // withdrawal has no tool, #217) + M6 (9 gap, fix, exception and drift handlers) + M7 (6 policy
     // handlers; attest has none) + the not-applicable suggestions read (#238) + M8 (9 questionnaire
     // and answer-library handlers; approve and the export have none) + M9 (9 sharing, settings and
-    // audit handlers; room create, revoke and unlock and the packet download have none).
-    expect((PENDING.match(/registerTool\(server, \{/g) ?? []).length).toBe(66);
+    // audit handlers; room create, revoke and unlock and the packet download have none) + the
+    // failed-packet dismiss (#402).
+    expect((PENDING.match(/registerTool\(server, \{/g) ?? []).length).toBe(67);
     expect(PENDING).not.toMatch(/server\.tool\(/);
   });
 });
@@ -111,6 +112,15 @@ describe('Bastion M3 tool handlers', () => {
         ...BASTION_SHARING_TOOL_NAMES,
       ].sort(),
     );
+  });
+
+  it('bastion_dismiss_export posts the dismiss; bastion_list_exports forwards include_dismissed (#402)', async () => {
+    const tool = await load();
+    const PKT = '88888888-8888-4888-8888-888888888888';
+    await tool('bastion_dismiss_export').handler({ export_id: PKT } as never);
+    expect(`${calls[0]!.method} ${calls[0]!.url}`).toBe(`POST http://bastion-api:4024/v1/exports/${PKT}/dismiss`);
+    await tool('bastion_list_exports').handler({ include_dismissed: true } as never);
+    expect(`${calls[1]!.method} ${calls[1]!.url}`).toBe('GET http://bastion-api:4024/v1/exports?include_dismissed=true');
   });
 
   it('bastion_not_applicable_suggestions reads the framework\'s suggestions (#238)', async () => {

@@ -276,6 +276,8 @@ To create a room:
 
 The link looks like `/bastion/room#` followed by a long code. The code sits after the `#`, a part of the address browsers never send to servers or write into logs. Anyone with the link can open the room until it expires or you revoke it.
 
+The list shows the rooms that are still open (Active or Locked). Tick **Show closed rooms** to also see revoked and expired ones.
+
 Each room row shows its label, framework, whether it is Active, Expired, Revoked or Locked, the date it works until, how many times it was viewed, when it was last opened, and how many questions are open. The actions are:
 
 - **Preview** shows the room exactly as the auditor sees it ("This is exactly what the auditor sees."): the controls, the restricted items you included, and, for ISO 27001, the Statement of Applicability.
@@ -302,6 +304,8 @@ An audit packet is a zip file for your auditor to keep. To build one:
 4. Click **Build packet**.
 5. Watch the progress line in the list: "Collecting controls", "Checking recorded names", "Writing evidence 120 of 412", "Rendering summary", "Zipping", "Uploading".
 6. Click **Download** when it is ready.
+
+A packet that reads **Could not be built** shows the reason under it. Fix the cause and build a new packet, then click **Dismiss** on the failed one to clear it from the list. Dismissing only hides it: the packet stays in Bastion's records, and the dismissal is written to the audit log. A packet that was built can never be dismissed.
 
 A packet contains a manifest listing every file with its fingerprint, every signed daily seal with every public key needed to check them, any restore notices, `controls.csv` and `controls.jsonl`, the evidence files and selected uploaded files, `attestations.csv`, `exceptions.csv`, `drift.csv`, `statement_of_applicability.csv` (ISO 27001), and `summary.pdf`. For each item that records people's names, the manifest says whether those names still match what was recorded (intact), were changed, were removed on request (redacted), or were recorded under an older key.
 

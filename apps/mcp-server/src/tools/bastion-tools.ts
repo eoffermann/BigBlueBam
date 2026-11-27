@@ -1342,6 +1342,7 @@ export const BASTION_SHARING_TOOL_NAMES = [
   'bastion_respond_auditor_request',
   'bastion_create_export',
   'bastion_list_exports',
+  'bastion_dismiss_export',
   'bastion_get_settings',
   'bastion_update_settings',
   'bastion_list_delivery_problems',
@@ -1408,15 +1409,29 @@ export function registerBastionSharingTools(server: McpServer, client: BastionCl
   registerTool(server, {
     name: 'bastion_list_exports',
     description:
-      'Audit packets, newest first (GET /exports): framework, period, whether restricted evidence is included, status (queued, running, succeeded, failed, expired), the current stage in words ("Writing evidence", "Zipping", "Ready to download") and any failure reason. Read-only; floored: needs bastion.export.read.',
+      'Audit packets, newest first (GET /exports): framework, period, whether restricted evidence is included, status (queued, running, succeeded, failed, expired), the current stage in words ("Writing evidence", "Zipping", "Ready to download") and any failure reason. Failed packets someone dismissed are left out unless include_dismissed is true (each row carries dismissed_at). Read-only; floored: needs bastion.export.read.',
     input: {
       status: BastionExportStatus.optional(),
+      include_dismissed: z.boolean().optional().describe('Also list failed packets that were dismissed.'),
       limit: z.number().int().min(1).max(100).optional(),
     },
     returns: z.record(z.unknown()),
     handler: async (q) => {
       const r = await client.listExports(strip(q));
       return r.ok ? ok(r.data) : err('listing audit packets', r.data);
+    },
+  });
+
+  // S4b. bastion_dismiss_export (#402)
+  registerTool(server, {
+    name: 'bastion_dismiss_export',
+    description:
+      'Dismiss an audit packet that could not be built (POST /exports/:id/dismiss): it drops out of the default packet list. A soft hide, audited as export.dismiss: the packet row is kept and bastion_list_exports with include_dismissed still shows it. Only a failed packet can be dismissed; a built (succeeded) packet or one still queued or running answers 409 PACKET_NOT_FAILED. Dismissing again is a no-op. Needs bastion.export.create.',
+    input: { export_id: z.string().uuid() },
+    returns: z.record(z.unknown()),
+    handler: async ({ export_id }) => {
+      const r = await client.dismissExport(export_id);
+      return r.ok ? ok(r.data) : err('dismissing the audit packet', r.data);
     },
   });
 

@@ -24,6 +24,9 @@ export const bastionExportPackets = pgTable(
     claimed_by: varchar('claimed_by', { length: 128 }),
     heartbeat_at: timestamp('heartbeat_at', { withTimezone: true }),
     error: text('error'),
+    // #402 (migration 0364): a failed packet a person dismissed; hidden from the default list, never deleted.
+    dismissed_at: timestamp('dismissed_at', { withTimezone: true }),
+    dismissed_by: uuid('dismissed_by').references(() => users.id, { onDelete: 'set null' }),
     created_at: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
     updated_at: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
   },

@@ -608,8 +608,14 @@ export function useAcknowledgeDrift() {
 
 /* ------------------------------ M9: sharing and settings ------------------------------ */
 
-export function useAuditorRooms(enabled = true) {
-  return useQuery({ queryKey: key('auditor-rooms'), queryFn: () => api.get<{ data: AuditorRoomRow[] }>('/auditor-rooms'), enabled, retry: false });
+/** Auditor rooms; active (and locked) ones only unless includeClosed (#402: "Show closed rooms"). */
+export function useAuditorRooms(enabled = true, includeClosed = false) {
+  return useQuery({
+    queryKey: key('auditor-rooms', { includeClosed }),
+    queryFn: () => api.get<{ data: AuditorRoomRow[] }>('/auditor-rooms', { include_closed: includeClosed }),
+    enabled,
+    retry: false,
+  });
 }
 
 export function useRoomAccessLog(id: string | null) {
@@ -679,6 +685,15 @@ export function useCreateExport() {
   const invalidate = useInvalidate();
   return useMutation({
     mutationFn: (body: BastionExportCreate) => api.post<{ data: ExportRow }>('/exports', body),
+    onSuccess: invalidate,
+  });
+}
+
+/** Dismiss a packet that could not be built (#402): hidden from the list, kept and audited. */
+export function useDismissExport() {
+  const invalidate = useInvalidate();
+  return useMutation({
+    mutationFn: (id: string) => api.post<{ data: ExportRow }>(`/exports/${id}/dismiss`, {}),
     onSuccess: invalidate,
   });
 }
