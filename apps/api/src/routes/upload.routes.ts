@@ -7,6 +7,7 @@ import { uploadFile, getFileStream } from '../services/upload.service.js';
 import { updateProfile } from '../services/auth.service.js';
 import { requireAuth } from '../plugins/auth.js';
 import { shadowOnly } from '../middleware/dual-read.js';
+import { recordUploadOwner, uploadOwnerOrg } from '../services/file-ownership.service.js';
 
 const MAX_FILE_SIZE = env.UPLOAD_MAX_FILE_SIZE; // 25MB
 
@@ -31,22 +32,21 @@ const BLOCKED_MIME_TYPES = ['image/svg+xml'];
  * - FILES_PUBLIC_PREFIXES: the prefix this route exists for. Avatars are shown to
  *   other users and are safe to cache publicly.
  * - FILES_LEGACY_PRIVATE_PREFIXES: keys that existing features still hand out as
- *   `/files/<key>` URLs today. Every one ends in a random UUID chosen at write time, so
- *   the URL works as a capability (no revocation, no tenant check); they are served with
- *   `Cache-Control: private, no-store`. Issue #142 tracks moving each to its app's own
- *   authorized download route:
+ *   `/files/<key>` URLs, embedded in stored content. They are served with
+ *   `Cache-Control: private, no-store`, and (#142) only to a caller whose ACTIVE ORG owns the
+ *   key per file_upload_owners: both upload routes record the owner, migration 0310 backfilled
+ *   existing objects from the content that links them, and a key with no owner row 404s. So a
+ *   URL no longer works across orgs, and leaving an org revokes it.
  *     bill/receipts/    REMOVED (#145): bill-api GET /v1/expenses/:id/receipt.
  *     banter/uploads/   REMOVED (#142): banter-api GET /v1/channels/:id/attachments/:attId,
  *                       authorized by channel membership.
- *     uploads/          STILL HERE. apps/api POST /upload; the `/files/uploads/...` URL is
- *                       embedded in persisted content (task descriptions, comments and
- *                       subtask bodies as rich-text images, task attachment rows, Bureau
- *                       floor underlay settings, image-upload fields), so moving it needs
- *                       an attachment-ownership record per upload plus a content rewrite.
- *     helpdesk/         STILL HERE. helpdesk-api POST /upload; the URL is embedded in ticket
- *                       descriptions and message bodies written before a ticket id exists,
- *                       and is read by both helpdesk portal customers and Bam agents, so
- *                       it needs an ownership record and dual-auth route in helpdesk-api.
+ *     uploads/          Org-bound (#142). apps/api POST /upload: task description, comment and
+ *                       subtask images, task attachment rows, Bureau floor underlays.
+ *     helpdesk/         Org-bound (#142). helpdesk-api POST /helpdesk/upload: ticket
+ *                       description and message images, read by Bam agents of the org.
+ *   Still not per-record: within the owning org a member who lost access to one project can
+ *   still open an image URL they saw there. Closing that needs a per-entity owner (task,
+ *   ticket) on each row; the org binding is the tenant boundary.
  * Do not add a prefix here for new work; serve new objects from the owning app.
  */
 export const FILES_PUBLIC_PREFIXES = ['avatars/'] as const;
@@ -141,6 +141,8 @@ export default async function uploadRoutes(fastify: FastifyInstance) {
       const key = `uploads/${uuid}-${safeFilename}`;
 
       await uploadFile(env.S3_BUCKET, key, buffer, contentType);
+      // #142: bind the key to the uploader's active org; GET /files serves it to that org only.
+      await recordUploadOwner(key, request.user!.active_org_id, 'bam', request.user!.id);
 
       // Return a proxy URL through our API (not a direct MinIO URL)
       const url = `/files/${key}`;
@@ -257,6 +259,23 @@ export default async function uploadRoutes(fastify: FastifyInstance) {
             request_id: request.id,
           },
         });
+      }
+
+      if (access === 'private') {
+        // #142: a legacy upload is served only to the org that owns it (file_upload_owners,
+        // written at upload time and backfilled by migration 0310). Another org, or a key
+        // nothing records, gets the same 404 as a missing object.
+        const owner = await uploadOwnerOrg(key);
+        if (!owner || owner !== request.user?.active_org_id) {
+          return reply.status(404).send({
+            error: {
+              code: 'NOT_FOUND',
+              message: 'File not found',
+              details: [],
+              request_id: request.id,
+            },
+          });
+        }
       }
 
       try {

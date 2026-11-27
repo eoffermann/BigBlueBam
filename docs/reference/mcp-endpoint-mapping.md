@@ -294,8 +294,8 @@ Notes:
 | `POST /tasks/:id/attachments` | — _(skip: multipart upload)_ | Attach a file record to a task | `apps/frontend/src/components/tasks/task-detail-drawer.tsx` |
 | `GET /tasks/:id/attachments` | — _(skip: covered by cross-app `attachment_list`)_ | List a task's attachments | `apps/frontend/src/components/tasks/task-detail-drawer.tsx` |
 | `DELETE /attachments/:id` | — _(skip: binary/attachment lifecycle)_ | Delete an attachment | `apps/frontend/src/components/tasks/task-detail-drawer.tsx` |
-| `POST /upload` | — _(skip: multipart binary upload)_ | Multipart upload to MinIO | `apps/frontend/src/components/common/image-upload.tsx` |
-| `GET /files/*` | — _(skip: binary download proxy)_ | Proxy file download from MinIO. Allowlisted prefixes only (#123): `avatars/` (public cache) plus legacy capability prefixes `uploads/` and `helpdesk/` (`Cache-Control: private, no-store`; still to move to owning-app routes, #142); `banter/uploads/` and `bill/receipts/` moved to their apps' authorized routes (#142, #145); any other key, including org-prefixed objects, returns 404 | `apps/frontend/src/components/common/image-upload.tsx` |
+| `POST /upload` | — _(skip: multipart binary upload)_ | Multipart upload to MinIO; records the uploader's active org as the key's owner (#142) | `apps/frontend/src/components/common/image-upload.tsx` |
+| `GET /files/*` | — _(skip: binary download proxy)_ | Proxy file download from MinIO. Allowlisted prefixes only (#123): `avatars/` (public cache) plus legacy prefixes `uploads/` and `helpdesk/` (`Cache-Control: private, no-store`), served only to a caller whose active org owns the key in `file_upload_owners` (written by both upload routes, backfilled by migration 0310; another org or an unrecorded key gets 404, #142); `banter/uploads/` and `bill/receipts/` moved to their apps' authorized routes (#142, #145); any other key, including org-prefixed objects, returns 404 | `apps/frontend/src/components/common/image-upload.tsx` |
 | `GET /version` | — _(skip: build/version probe, not agent surface)_ | Public version info | `apps/frontend/src/hooks/use-version.ts` |
 | `POST /version/check` | — _(skip: SuperUser break-glass)_ | Force version check (SuperUser) | — |
 
@@ -1752,7 +1752,7 @@ the upstream registers, so external path = `/helpdesk/api/` + the part after `/h
 | `POST /helpdesk/api/tickets/:id/update-priority` | — _(skip: customer-portal route — customer JWT, not Bearer)_ | Customer changes priority | `apps/helpdesk/src/pages/ticket-detail.tsx` |
 | `POST /helpdesk/api/tickets/:id/mark-duplicate` | — _(skip: customer-portal route — customer JWT, not Bearer)_ | Customer flags duplicate | `apps/helpdesk/src/pages/ticket-detail.tsx` |
 | `DELETE /helpdesk/api/tickets/:id/mark-duplicate` | — _(skip: customer-portal route — customer JWT, not Bearer)_ | Customer clears duplicate flag | `apps/helpdesk/src/pages/ticket-detail.tsx` |
-| `POST /helpdesk/api/upload` | — _(skip: multipart attachment upload/download)_ | Generic multipart file upload | `apps/helpdesk/src/pages/new-ticket.tsx` |
+| `POST /helpdesk/api/upload` | — _(skip: multipart attachment upload/download)_ | Generic multipart file upload; records the customer's org as the key's owner, so Bam's `/files/helpdesk/...` serves it to that org only (#142) | `apps/helpdesk/src/pages/new-ticket.tsx` |
 | `GET /helpdesk/api/v1/tickets/analytics/count-by-phrase` | `helpdesk_ticket_count_by_phrase` | Ticket counts bucketed by phrase | — |
 | `POST /helpdesk/api/v1/helpdesk-users/upsert` | `helpdesk_upsert_user` | Idempotent helpdesk-user upsert | — |
 | `POST /helpdesk/internal/tickets` | — _(skip: internal service-to-service route, INTERNAL_SERVICE_SECRET, refused through the edge)_ | Open a ticket for a requester (found or created by email in the org). Caller: blank-api form routing. Body is the shared `helpdeskInternalTicketCreateSchema` (#305) | — *(internal)* |
