@@ -1,19 +1,4 @@
 {
   "_comment": "Payload keys publishers send that the Bolt catalog does not declare yet (scripts/lib/bolt-payload-keys.mjs, #262). Each value is the issue tracking it. This list may only shrink: scripts/check-bolt-catalog.mjs fails on a new undeclared key AND on an entry here that is no longer sent. Fix by declaring the key in apps/bolt-api/src/services/event-catalog.ts (or not sending it), then delete the line.",
-  "entries": {
-    "blank:form.closed:total_submissions": 292,
-    "blank:submission.confirmation_sent:notified_banter": 292,
-    "blueprint:diagram.generated:edge_count": 292,
-    "blueprint:diagram.generated:source": 292,
-    "blueprint:diagram.generated:source.project_id": 292,
-    "blueprint:node.created:duplicate_of": 292,
-    "book:event.rsvp:response_status": 292,
-    "brief:document.embedded:collection": 292,
-    "bureau:knock.resolved:decision": 292,
-    "bureau:user.left_room:reason": 292,
-    "schedule:cron.fired:automation_id": 292,
-    "schedule:cron.fired:cron_expression": 292,
-    "schedule:cron.fired:cron_timezone": 292,
-    "schedule:cron.fired:schedule_id": 292
-  }
+  "entries": {}
 }

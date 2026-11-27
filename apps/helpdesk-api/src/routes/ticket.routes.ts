@@ -947,10 +947,8 @@ export default async function ticketRoutes(fastify: FastifyInstance) {
           'ticket.reopened',
           'helpdesk',
           {
-            ticket: { id: id },
+            ticket: { id: id, reopened_by: user.id, reopened_at: new Date().toISOString() },
             ticket_id: id,
-            'ticket.reopened_by': user.id,
-            'ticket.reopened_at': new Date().toISOString(),
             from: ticket.status,
           },
           orgIdForReopen,
@@ -1069,10 +1067,8 @@ export default async function ticketRoutes(fastify: FastifyInstance) {
           'ticket.closed',
           'helpdesk',
           {
-            ticket: { id: id },
+            ticket: { id: id, closed_by: user.id, closed_at: new Date().toISOString() },
             ticket_id: id,
-            'ticket.closed_by': user.id,
-            'ticket.closed_at': new Date().toISOString(),
             from: ticket.status,
           },
           orgIdForClose,

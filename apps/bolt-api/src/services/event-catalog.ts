@@ -1009,8 +1009,10 @@ const scheduleEvents: EventDefinition[] = [
     description: 'Fired on a cron schedule. Use cron_expression to define timing.',
     payload_schema: [
       { name: 'fired_at', type: 'datetime', description: 'Timestamp when the cron fired' },
-      { name: 'automation.id', type: 'uuid', description: 'Automation ID' },
-      { name: 'automation.name', type: 'string', description: 'Automation name' },
+      { name: 'schedule_id', type: 'uuid', description: 'The schedule that fired' },
+      { name: 'automation_id', type: 'uuid', description: 'The automation the schedule belongs to' },
+      { name: 'cron_expression', type: 'string', description: 'The cron expression that fired' },
+      { name: 'cron_timezone', type: 'string', description: 'The timezone the cron expression is read in' },
     ],
   },
 ];
@@ -2007,6 +2009,7 @@ const blankEvents: EventDefinition[] = [
       { name: 'form_slug', type: 'string', description: 'Form slug' },
       { name: 'notified_submitter', type: 'boolean', description: 'True when the submitter had an email to send a confirmation to' },
       { name: 'notification_recipients_count', type: 'number', description: 'Number of admin notify-on-submit recipients that were emailed' },
+      { name: 'notified_banter', type: 'boolean', description: 'True when the submission was also posted to a Banter channel' },
     ],
   },
 ];
@@ -2109,7 +2112,7 @@ const wave1bEvents: EventDefinition[] = [
       { name: 'form.id', type: 'uuid', description: 'Form ID' },
       { name: 'form.slug', type: 'string', description: 'Form slug' },
       { name: 'form.title', type: 'string', description: 'Form title' },
-      { name: 'form.total_submissions', type: 'number', description: 'Total submissions received before closing' },
+      { name: 'total_submissions', type: 'number', description: 'Total submissions received before closing' },
       { name: 'actor', type: 'object', description: 'Full actor object (id/name/email)' },
       { name: 'org', type: 'object', description: 'Full org context (id/name/slug)' },
     ],
@@ -2494,7 +2497,7 @@ const wave1bEvents: EventDefinition[] = [
     payload_schema: [
       { name: 'event.id', type: 'uuid', description: 'Event ID' },
       { name: 'event.title', type: 'string', description: 'Event title' },
-      { name: 'response.status', type: 'string', description: 'yes, no, or maybe' },
+      { name: 'response_status', type: 'enum', enum: ['accepted', 'declined', 'tentative'], description: 'The RSVP answer' },
       { name: 'respondent', type: 'object', description: 'Person who responded' },
       { name: 'actor', type: 'object', description: 'Actor (may equal respondent)' },
       { name: 'org', type: 'object', description: 'Full org context' },
@@ -2626,6 +2629,7 @@ const wave1bEvents: EventDefinition[] = [
       { name: 'document_id', type: 'uuid', description: 'Document ID' },
       { name: 'chunk_count', type: 'number', description: 'Number of chunks embedded' },
       { name: 'vector_dim', type: 'number?', description: 'Vector dimension' },
+      { name: 'collection', type: 'string', description: 'The Qdrant collection the chunks were written to' },
       { name: 'embedding_model', type: 'string?', description: 'Embedding model identifier' },
       { name: 'embedded_at', type: 'datetime', description: 'When the embedding finished' },
       { name: 'org', type: 'object', description: 'Full org context' },
@@ -2783,6 +2787,9 @@ const blueprintEvents: EventDefinition[] = [
     payload_schema: [
       { name: 'diagram.id', type: 'uuid', format: 'uuid', description: 'Diagram ID' },
       { name: 'node_count', type: 'number', description: 'Number of nodes materialized by the generate call' },
+      { name: 'edge_count', type: 'number?', description: 'Number of edges materialized (present when generated from a Bam project)' },
+      { name: 'source', type: 'string?', description: 'The app the diagram was generated from, e.g. bam (present when generated from another app)' },
+      { name: 'project_id', type: 'uuid?', format: 'uuid', description: 'The Bam project the diagram was generated from (present when source is bam)' },
     ],
   },
   {
@@ -2804,6 +2811,7 @@ const blueprintEvents: EventDefinition[] = [
       { name: 'diagram.id', type: 'uuid', format: 'uuid', description: 'Parent diagram ID' },
       { name: 'node.id', type: 'uuid', format: 'uuid', description: 'Node ID' },
       { name: 'node.shape', type: 'string', description: 'Shape token (rounded/rect/diamond/...)' },
+      { name: 'duplicate_of', type: 'uuid?', format: 'uuid', description: 'The node this one was duplicated from (present only for duplicates)' },
     ],
   },
   {
@@ -2922,6 +2930,7 @@ const bureauEvents: EventDefinition[] = [
       { name: 'user.id', type: 'uuid', format: 'uuid', description: 'User leaving the room' },
       { name: 'user.name', type: 'string?', description: 'User display name' },
       { name: 'session_duration_ms', type: 'number?', description: 'How long the user was present in the room (milliseconds)' },
+      { name: 'reason', type: 'string?', description: 'Why the user left when it was not their own action, e.g. reaped (presence timed out)' },
       { name: 'actor.id', type: 'uuid', format: 'uuid', description: 'User who left (same as user.id)' },
       { name: 'org.id', type: 'uuid', format: 'uuid', description: 'Organization ID' },
     ],
@@ -2961,6 +2970,7 @@ const bureauEvents: EventDefinition[] = [
     payload_schema: [
       { name: 'knock.id', type: 'uuid', format: 'uuid', description: 'Knock request ID' },
       { name: 'knock.status', type: 'enum', enum: ['admitted', 'declined', 'deferred', 'timed_out', 'dnd_blocked'], description: 'Outcome of the knock' },
+      { name: 'decision', type: 'enum', enum: ['admitted', 'declined', 'deferred', 'timed_out', 'dnd_blocked'], description: 'Same as knock.status; present only when the knock timed out (sent by the timeout sweep)' },
       { name: 'room.id', type: 'uuid', format: 'uuid', description: 'Bureau room the knock targeted' },
       { name: 'visitor.id', type: 'uuid', format: 'uuid', description: 'User who knocked' },
       { name: 'owner.id', type: 'uuid', format: 'uuid', description: 'Office owner who resolved the knock' },
