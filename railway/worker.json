@@ -12,7 +12,8 @@
       "tsconfig.base.json",
       "apps/worker/Dockerfile",
       "packages/smtp-resolver/**",
-      "packages/storage/**"
+      "packages/storage/**",
+      "packages/egress-guard/**"
     ]
   },
   "deploy": {
