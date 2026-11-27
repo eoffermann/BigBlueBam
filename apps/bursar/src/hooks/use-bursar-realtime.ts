@@ -1,21 +1,35 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
+import { bursarServerFrameSchema, type BursarClientFrame, type BursarServerFrame } from '@bigbluebam/shared';
 
-// Realtime client for /bursar/ws (spec 11.1). Rooms are org:<id>, request:<id>, vendor:<id>.
-// Server events: scope.progress, leveling.progress (offer n/N, node m/M, window w/W),
-// matrix.updated.
+// Realtime client for /bursar/ws (spec 11.1), served by bursar-api's hub. Rooms are org:<id> and
+// request:<id>; the hub refuses vendor:<id> rooms (reserved by the spec until a server event
+// targets them). Server events: scope.progress (chunk n/N), leveling.progress (offer n/N only;
+// node and window progress are on the polled run row), matrix.updated, plus the hub's ready,
+// subscribed and error control frames.
 //
-// There is NO browser-WS precedent in apps/burn/src, so this is written from scratch to the
-// spec's contract: exponential backoff (1s base, capped 30s, jittered), a visible "reconnecting"
-// state, and - crucially - it is NOT the source of truth. GET /requests/:id/leveling-runs polled
-// at 5s (useLevelingRuns) is authoritative; this stream only accelerates the UI. If the WS server
-// is not yet mounted the socket simply keeps retrying under the cap and the poll carries progress.
+// The frame contract is @bigbluebam/shared's bursar-realtime schemas (#374), the same ones
+// bursar-api publishes with. Every incoming message is safeParsed against it, and a frame that does
+// not match is dropped, so pages switch on a typed union instead of bare strings.
+//
+// Exponential backoff (1s base, capped 30s, jittered) with a visible "reconnecting" state. The
+// stream is NOT the source of truth: GET /requests/:id/leveling-runs polled at 5s
+// (useLevelingRuns) is authoritative, and a frame only makes the UI refetch sooner. If the
+// socket drops, it retries under the cap and the poll carries progress meanwhile.
 
 export type RealtimeStatus = 'connecting' | 'open' | 'reconnecting' | 'closed';
 
-export interface BursarRealtimeEvent {
-  type: string; // 'scope.progress' | 'leveling.progress' | 'matrix.updated' | ...
-  room?: string;
-  payload?: Record<string, unknown>;
+export type BursarRealtimeEvent = BursarServerFrame;
+
+/** Parse one raw WebSocket message into a contract frame, or null when it is not one. */
+export function parseBursarFrame(raw: unknown): BursarServerFrame | null {
+  let data: unknown;
+  try {
+    data = JSON.parse(String(raw));
+  } catch {
+    return null; // non-JSON frames (heartbeats) are ignored
+  }
+  const parsed = bursarServerFrameSchema.safeParse(data);
+  return parsed.success ? parsed.data : null;
 }
 
 const BASE_DELAY_MS = 1000;
@@ -57,19 +71,16 @@ export function useBursarRealtime(rooms: string[], onEvent?: (e: BursarRealtimeE
       setStatus('open');
       // Announce the rooms we want; the server may also read them from the query string.
       try {
-        ws.send(JSON.stringify({ type: 'subscribe', rooms: roomKey ? roomKey.split(',') : [] }));
+        const subscribe: BursarClientFrame = { type: 'subscribe', rooms: roomKey ? roomKey.split(',') : [] };
+        ws.send(JSON.stringify(subscribe));
       } catch {
         // ignore
       }
     };
 
     ws.onmessage = (evt) => {
-      try {
-        const data = JSON.parse(evt.data as string) as BursarRealtimeEvent;
-        if (data && typeof data.type === 'string') onEventRef.current?.(data);
-      } catch {
-        // Non-JSON frames (heartbeats) are ignored.
-      }
+      const frame = parseBursarFrame(evt.data);
+      if (frame) onEventRef.current?.(frame);
     };
 
     ws.onerror = () => {

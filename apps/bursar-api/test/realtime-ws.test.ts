@@ -98,6 +98,31 @@ describe('bursar realtime publishers (#121)', () => {
   });
 });
 
+describe('one frame contract for publisher and SPA (#374)', () => {
+  afterEach(() => realtime.__setBursarPublisherForTests(null));
+
+  it('every published frame parses with the shared server-frame schema the SPA uses', async () => {
+    const { bursarServerFrameSchema } = await import('@bigbluebam/shared');
+    const publish = vi.fn(async () => 1);
+    realtime.__setBursarPublisherForTests({ publish } as never);
+    await realtime.publishScopeProgress(ORG, REQ, { runId: 'd1', status: 'running', done: false, processedChunk: null, chunkCount: 2 });
+    await realtime.publishLevelingProgress(ORG, REQ, { runId: 'r1', status: 'succeeded', done: true, processedOffer: 2, offerCount: 3 });
+    const frames = publish.mock.calls.map((c) => JSON.parse((c as unknown as [string, string])[1]).frame);
+    expect(frames.map((f) => f.type)).toEqual(['scope.progress', 'leveling.progress', 'matrix.updated']);
+    for (const f of frames) expect(bursarServerFrameSchema.safeParse(f).success, JSON.stringify(f)).toBe(true);
+  });
+
+  it('neither end re-declares the frame shape', async () => {
+    const { readFileSync } = await import('node:fs');
+    const { join } = await import('node:path');
+    const api = readFileSync(join(__dirname, '..', 'src', 'lib', 'realtime.ts'), 'utf8');
+    expect(api).not.toMatch(/interface BursarFrame\b|type BursarEventType\s*=/);
+    const spa = readFileSync(join(__dirname, '..', '..', 'bursar', 'src', 'hooks', 'use-bursar-realtime.ts'), 'utf8');
+    expect(spa).toMatch(/bursarServerFrameSchema/);
+    expect(spa).not.toMatch(/type:\s*string/);
+  });
+});
+
 describe('bursar-api serves /ws (#121)', () => {
   it('server.ts registers @fastify/websocket and the hub', async () => {
     const { readFileSync } = await import('node:fs');

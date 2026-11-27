@@ -8,6 +8,9 @@
 //   request:<id>        scope.progress, leveling.progress, matrix.updated for one request
 //   vendor:<id>         reserved by the spec; no server event targets it yet (see the hub)
 //
+// The frame shapes are NOT declared here: they are @bigbluebam/shared's bursar-realtime schemas
+// (#374), which the SPA's useBursarRealtime safeParses, so both ends compile against one contract.
+//
 // ── FRAMES ARE ADVISORY ONLY ─────────────────────────────────────────────────────────
 // GET /requests/:id/leveling-runs polled at 5 s is the authoritative progress source (spec 11.1);
 // a frame only makes the UI refetch sooner. So every publish swallows its errors: a realtime
@@ -16,23 +19,15 @@
 // have nothing to act on.
 
 import Redis from 'ioredis';
+import type { BursarEventFrame, BursarEventPayload, BursarEventType } from '@bigbluebam/shared';
 import { env } from '../env.js';
 
 export const BURSAR_WS_CHANNEL = 'bursar:events';
 
-export type BursarEventType = 'scope.progress' | 'leveling.progress' | 'matrix.updated';
-
-/** The frame a browser receives; the shape apps/bursar's useBursarRealtime parses. */
-export interface BursarFrame {
-  type: BursarEventType;
-  room: string;
-  payload: Record<string, string | number | boolean | null>;
-}
-
 /** What travels on the Redis channel. The hub checks org_id before it looks at the room. */
 export interface BursarEnvelope {
   org_id: string;
-  frame: BursarFrame;
+  frame: BursarEventFrame;
 }
 
 export const orgRoom = (orgId: string) => `org:${orgId}`;
@@ -58,13 +53,15 @@ export function __setBursarPublisherForTests(p: Pick<Redis, 'publish'> | null): 
 }
 
 /** Publish one frame to one room of one org. Best effort; never throws. */
-export async function publishBursarFrame(
+export async function publishBursarFrame<T extends BursarEventType>(
   orgId: string,
   room: string,
-  type: BursarEventType,
-  payload: BursarFrame['payload'],
+  type: T,
+  payload: BursarEventPayload<T>,
 ): Promise<void> {
-  const envelope: BursarEnvelope = { org_id: orgId, frame: { type, room, payload } };
+  // The generic pairs type with its payload at every call site; TS cannot narrow the union back
+  // from a generic T, hence the cast.
+  const envelope: BursarEnvelope = { org_id: orgId, frame: { type, room, payload } as BursarEventFrame };
   try {
     await getPublisher().publish(BURSAR_WS_CHANNEL, JSON.stringify(envelope));
   } catch {
