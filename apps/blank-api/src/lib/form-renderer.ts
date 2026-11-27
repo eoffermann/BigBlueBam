@@ -692,9 +692,18 @@ function esc(str: string): string {
  * Basic CSS sanitization: strip anything that looks like a JS expression,
  * import, or url() with non-http schemes. The form's custom_css is already
  * stored sanitized, but we add a defense-in-depth layer here.
+ *
+ * The first replace is the one that matters. custom_css is placed inside a
+ * <style> element on this server-rendered public page, where the HTML parser
+ * only looks for `</style`; the CSS-level rules below never touched `<`, so
+ * `</style><script>...</script><style>` closed the element and ran on every
+ * visitor's page. `\3C ` is the CSS escape for `<`: it cannot end the element
+ * and no real stylesheet needs a literal `<`. Applied at render so rows stored
+ * before the write-time rule existed are inert too.
  */
 function sanitizeCss(css: string): string {
   return css
+    .replace(/</g, '\\3C ')
     .replace(/@import\b/gi, '/* blocked-import */')
     .replace(/expression\s*\(/gi, '/* blocked-expression */(')
     .replace(/javascript\s*:/gi, '/* blocked-js */')
