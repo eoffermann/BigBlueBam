@@ -89,7 +89,10 @@ stay terse:
   `attachment_get` / `attachment_list`); raw credential management (API-key
   secrets); SuperUser break-glass & permission-matrix admin (intentionally
   UI/CLI-only); pure internal/service-to-service routes (`/internal/*`,
-  `/tools/call`, dual-read). Slug/name **resolver** GETs are not standalone tools
+  `/tools/call`, dual-read; `/tools/call` answers 401 for a missing or wrong
+  secret and 403 for a right secret from a caller relayed by the edge or not on
+  the private network, which is what a `MCP_INTERNAL_URL` pointed through nginx
+  produces). Slug/name **resolver** GETs are not standalone tools
   — the write tools resolve names/slugs internally.
 - **Permission mapping.** New tools are not added to `@bigbluebam/permissions`
   `TOOL_TO_PERMISSION` in this pass, so under per-action enforcement they
@@ -856,7 +859,7 @@ X-Internal-Secret gated; not user-facing, no MCP tools.
 
 | REST endpoint | MCP tool | Description | UI call site |
 | --- | --- | --- | --- |
-| `POST /v1/internal/dm` | — _(skip: internal service-to-service route)_ | Send a DM between two users (bureau) | — *(internal)* |
+| `POST /v1/internal/dm` | — _(skip: internal service-to-service route)_ | Send a DM between two users. Callers: bureau-api leave-a-note (`knocks.routes.ts`) and the Bam api assignment notification (`notification-fanout.service.ts`). Body is the shared `banterInternalDmRequestSchema` in `@bigbluebam/shared`; callers reach it at `BANTER_API_URL` | — *(internal)* |
 | `POST /v1/internal/feed` | — _(skip: internal service-to-service route)_ | Post an activity-feed message | — *(internal)* |
 | `POST /v1/internal/share` | — _(skip: internal service-to-service route)_ | Share a Bam entity into a channel | — *(internal)* |
 | `POST /v1/internal/transcript` | — _(skip: internal service-to-service route)_ | Receive one live transcript segment | — *(voice-agent)* |

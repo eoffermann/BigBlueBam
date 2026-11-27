@@ -17,7 +17,8 @@
 import IORedis from 'ioredis';
 import { Queue } from 'bullmq';
 import { env } from '../env.js';
-import type { NotificationJobData } from '@bigbluebam/shared';
+import type { BanterInternalDmRequest, NotificationJobData } from '@bigbluebam/shared';
+import { BANTER_DM_MAX_CONTENT } from '@bigbluebam/shared';
 
 export type { NotificationJobData };
 
@@ -121,21 +122,15 @@ async function dispatchEmail(payload: NotificationPayload): Promise<FanoutResult
   }
 }
 
-/** banter-api's POST /v1/internal/dm body (apps/banter-api/src/routes/internal.routes.ts). */
-export function banterDmRequest(payload: NotificationPayload): {
-  org_id: string;
-  from_user_id: string;
-  to_user_id: string;
-  content: string;
-  source: string;
-} | null {
+/** banter-api's POST /v1/internal/dm body: the shared contract in @bigbluebam/shared (#301). */
+export function banterDmRequest(payload: NotificationPayload): BanterInternalDmRequest | null {
   if (!payload.actor_user_id || payload.actor_user_id === payload.recipient_user_id) return null;
   const content = `**${payload.subject}**\n\n${payload.body}${payload.url ? `\n\n[View](${payload.url})` : ''}`;
   return {
     org_id: payload.org_id,
     from_user_id: payload.actor_user_id,
     to_user_id: payload.recipient_user_id,
-    content: content.slice(0, 4000),
+    content: content.slice(0, BANTER_DM_MAX_CONTENT),
     source: 'bam-notification',
   };
 }

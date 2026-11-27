@@ -29,7 +29,12 @@ vi.mock('../src/env.js', () => ({
 }));
 
 // ---------- import (after mocks) ----------
-import { enqueueNotification, fanoutNotification } from '../src/services/notification-fanout.service.js';
+import {
+  banterDmRequest,
+  enqueueNotification,
+  fanoutNotification,
+} from '../src/services/notification-fanout.service.js';
+import { BANTER_DM_MAX_CONTENT, banterInternalDmRequestSchema } from '@bigbluebam/shared';
 
 // #278: the Banter DM must match banter-api's POST /v1/internal/dm contract and guard.
 describe('fanoutNotification banter_dm', () => {
@@ -69,6 +74,19 @@ describe('fanoutNotification banter_dm', () => {
     expect(self!.status).toBe('skipped');
     expect(fetchSpy).not.toHaveBeenCalled();
     fetchSpy.mockRestore();
+  });
+
+  // #301: the body is built as the shared contract banter-api parses, so drift is a type error.
+  it('builds a body that banter-api\'s shared schema accepts, even for an oversized notification', () => {
+    const body = banterDmRequest({
+      ...base,
+      body: 'x'.repeat(BANTER_DM_MAX_CONTENT + 500),
+      actor_user_id: '00000000-0000-4000-8000-0000000000c1',
+    });
+    expect(body).not.toBeNull();
+    const parsed = banterInternalDmRequestSchema.safeParse(body);
+    expect(parsed.success).toBe(true);
+    expect(body!.content.length).toBe(BANTER_DM_MAX_CONTENT);
   });
 });
 
