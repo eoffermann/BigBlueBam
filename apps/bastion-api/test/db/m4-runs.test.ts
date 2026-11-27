@@ -5,7 +5,7 @@ import type { EngineDeps } from '../../src/engine/context.js';
 import { runEvaluationSlice } from '../../src/engine/evaluator.js';
 import { drainOutbox, enqueueOutbox, OUTBOX_MAX_ATTEMPTS, type Deliverer } from '../../src/engine/outbox.js';
 import { evaluateTick, runReaper } from '../../src/engine/sweeps.js';
-import { clock, DATABASE_URL, fakeBucket, makeDeps, seedOrg, wipeOrg } from './engine-harness.js';
+import { clock, DATABASE_URL, fakeBucket, frozenClock, makeDeps, seedOrg, wipeOrg } from './engine-harness.js';
 
 /**
  * M4 run-lifecycle gates against a real migrated database and the real engine (spec 7.3, 11.2):
@@ -195,7 +195,14 @@ describe.skipIf(!DATABASE_URL)('M4 evaluation runs and the outbox (live database
       });
     }
     const order: string[] = [];
-    await drainOutbox(deps, { deliver: async (row) => (order.push(row.idempotency_key), { ok: true }) }, { orgId: s.org, claimant: 't' });
+    const deliverer: Deliverer = { deliver: async (row) => (order.push(row.idempotency_key), { ok: true }) };
+    // #347: a drain stops at its wall-clock budget, which a loaded host can reach before 15 rows;
+    // the worker simply drains again a minute later. Drain until nothing is left, as it does, so
+    // the assertion is about ORDER, not about how much one drain gets through.
+    for (let pass = 0; pass < 20 && order.length < 15; pass++) {
+      if ((await drainOutbox(deps, deliverer, { orgId: s.org, claimant: 't' })).delivered === 0) break;
+    }
+    expect(order).toHaveLength(15);
     for (let i = 0; i < 5; i++) {
       expect(order.filter((k) => k.endsWith(`-${i}`))).toEqual([`first-${i}`, `second-${i}`, `third-${i}`]);
     }
@@ -204,7 +211,11 @@ describe.skipIf(!DATABASE_URL)('M4 evaluation runs and the outbox (live database
   it('outbox ordering: oldest pending row per key, a backing-off row blocks its key, a dead row stops blocking', async () => {
     const s = await seedOrg(sql, 'outbox', 1, 1);
     orgs.push(s.org);
-    const c = clock();
+    // #347: the engine clock is frozen, and deliberately 10 minutes behind the database's clock.
+    // Frozen, so a1's 30 s backoff cannot lapse mid-test on a loaded host; skewed, so a step that
+    // reads the database's now() where the drainer reads the engine clock fails every time here
+    // instead of only when the host and database clocks happen to drift apart.
+    const c = frozenClock(Date.now() - 10 * 60_000);
     const deps = makeDeps(sql, { clock: c });
     const put = (key: string, idem: string) =>
       sql.begin(async (raw) => {
@@ -240,7 +251,7 @@ describe.skipIf(!DATABASE_URL)('M4 evaluation runs and the outbox (live database
     expect(delivered).toEqual(['b1']);
 
     // Its last attempt fails: dead, and a2 proceeds in the same drain.
-    await sql`UPDATE bastion_outbox SET attempts = ${OUTBOX_MAX_ATTEMPTS - 1}, next_attempt_at = now() - interval '1 second'
+    await sql`UPDATE bastion_outbox SET attempts = ${OUTBOX_MAX_ATTEMPTS - 1}, next_attempt_at = ${new Date(c.now().getTime() - 1000)}
                WHERE organization_id = ${s.org} AND idempotency_key = 'a1'`;
     const last = await drainOutbox(deps, deliverer, { orgId: s.org, claimant: 't' });
     expect(last).toMatchObject({ dead: 1, delivered: 1 });
