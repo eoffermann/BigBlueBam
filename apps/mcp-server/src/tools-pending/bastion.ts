@@ -240,10 +240,17 @@ export function registerBastionTools(
   registerTool(server, {
     name: 'bastion_control_status',
     description:
-      'One control: its stored status and reason, setup state, derived applicability, every framework requirement it satisfies, and its checks (assertions) with their review state and, for population checks, the listed systems and whether a person confirmed the list (GET /controls/:id). Read-only.',
-    input: { control_id: z.string().uuid() },
+      'One control: its stored status and reason, setup state, derived applicability, every framework requirement it satisfies, and its checks (assertions) with their review state and, for population checks, the listed systems and whether a person confirmed the list (GET /controls/:id). With checks_only, just the checks, newest first (GET /controls/:id/assertions). Read-only.',
+    input: {
+      control_id: z.string().uuid(),
+      checks_only: z.boolean().optional().describe('Return only the control\'s checks (GET /controls/:id/assertions).'),
+    },
     returns: z.record(z.unknown()),
-    handler: async ({ control_id }) => {
+    handler: async ({ control_id, checks_only }) => {
+      if (checks_only) {
+        const r = await client.listControlAssertions(control_id);
+        return r.ok ? ok(r.data) : err('reading checks', r.data);
+      }
       const r = await client.getControl(control_id);
       return r.ok ? ok(r.data) : err('reading control', r.data);
     },

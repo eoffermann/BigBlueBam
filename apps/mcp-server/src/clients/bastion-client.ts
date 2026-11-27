@@ -62,6 +62,7 @@ import type {
   BastionDeliveryProblemListQuery,
   BastionExportCreate,
   BastionExportListQuery,
+  BastionSearchQuery,
   BastionSettingsUpdate,
 } from '@bigbluebam/shared';
 import type { ApiClient } from '../middleware/api-client.js';
@@ -72,8 +73,11 @@ import type { ApiClient } from '../middleware/api-client.js';
  * the human UI does. BASTION_API_URL already ends in /v1 (apps/mcp-server/src/env.ts), so paths
  * here carry no /v1 prefix.
  *
- * Started at M3 with the routes M3 ships; later milestones add their routes here, and M10
- * completes it. It is not wired into server.ts until the M11 merge unit.
+ * Started at M3 with the routes M3 ships; later milestones added theirs, and M10 completed it:
+ * every bastion-api route an API key may call has a method here, and every route without one is
+ * a sanctioned skip (session-required vouching acts, byte downloads, feed-key credentials, the
+ * public room and the machine push, internal routes). test/bastion-parity.test.ts holds that
+ * cross-walk against the route files. It is not wired into server.ts until the M11 merge unit.
  */
 
 export interface BastionResult<T = unknown> {
@@ -316,6 +320,12 @@ export function createBastionClient(bastionApiUrl: string, api: ApiClient, fetch
         'GET',
         `/audit${qs({ action: q.action, subject_type: q.subject_type, cursor: q.cursor, limit: q.limit === undefined ? undefined : String(q.limit) })}`,
       ),
+
+    // ── M10: search (spec 5.1 row 95). The platform search_everything reads this route
+    // directly (tools/search-tools.ts); the method is here so the client covers every
+    // agent-reachable route (test/bastion-parity.test.ts).
+    search: (q: Partial<BastionSearchQuery> & Pick<BastionSearchQuery, 'q'> & Partial<Asker>) =>
+      request('GET', `/search${qs({ q: q.q, limit: q.limit === undefined ? undefined : String(q.limit), asker_user_id: q.asker_user_id })}`),
   };
 }
 
