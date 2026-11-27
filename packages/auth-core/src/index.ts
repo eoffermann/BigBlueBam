@@ -80,6 +80,20 @@ export {
   type ProjectRestrictedUser,
 } from './key-project.js';
 
+// The satellites' Fastify auth plugin (#369): session, API key, org context, impersonation.
+export {
+  createSatelliteAuth,
+  requireAuthenticated,
+  sqlSatelliteAuthStore,
+  type SatelliteAuth,
+  type SatelliteAuthOptions,
+  type SatelliteAuthStore,
+  type SatelliteAuthUser,
+  type SatelliteSessionRow,
+  type SatelliteUserRow,
+  type SqlSatelliteAuthStoreDeps,
+} from './satellite-plugin.js';
+
 // ─────────────────────────────────────────────────────────────────────
 // Scopes and roles
 // ─────────────────────────────────────────────────────────────────────
