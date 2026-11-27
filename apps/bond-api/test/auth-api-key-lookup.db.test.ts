@@ -47,6 +47,10 @@ if (IN_CI && !usable) {
   const lookupKey = `bbam_svc_${randomBytes(32).toString('base64url')}`;
   const legacyKey = `bbam_svc_${randomBytes(32).toString('base64url')}`;
   let legacyKeyId = '';
+  // #372: a live legacy key used less recently than four dead legacy keys in the same bucket.
+  const retired = randomUUID(); // a deactivated service account
+  const liveBehindDead = `bbam_svc_${randomBytes(32).toString('base64url')}`;
+  const deadIds: string[] = [];
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let app: any;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -65,6 +69,20 @@ if (IN_CI && !usable) {
       RETURNING id`;
     legacyKeyId = legacy!.id;
 
+    await admin`INSERT INTO users (id, org_id, email, display_name, password_hash, kind, is_active) VALUES
+      (${retired}, ${org}, ${`retired-${tag}@lookup.test`}, 'Retired Relay', '!', 'service', false)`;
+    await admin`INSERT INTO api_keys (user_id, org_id, name, key_hash, key_prefix, scope, last_used_at) VALUES
+      (${professor}, ${org}, 'Live behind dead', ${await argon2.hash(liveBehindDead)}, 'bbam_svc', 'read', now() - interval '1 minute')`;
+    const dead = await admin<Array<{ id: string }>>`
+      INSERT INTO api_keys (user_id, org_id, name, key_hash, key_prefix, scope, last_used_at, expires_at, rotated_at, rotation_grace_expires_at)
+      VALUES
+        (${professor}, ${org}, 'Expired', ${await argon2.hash(`bbam_svc_${tag}_a`)}, 'bbam_svc', 'read', now(), now() - interval '1 day', NULL, NULL),
+        (${professor}, ${org}, 'Expired 2', ${await argon2.hash(`bbam_svc_${tag}_b`)}, 'bbam_svc', 'read', now(), now() - interval '1 hour', NULL, NULL),
+        (${professor}, ${org}, 'Rotated out', ${await argon2.hash(`bbam_svc_${tag}_c`)}, 'bbam_svc', 'read', now(), NULL, now() - interval '2 days', now() - interval '1 day'),
+        (${retired}, ${org}, 'Owner gone', ${await argon2.hash(`bbam_svc_${tag}_d`)}, 'bbam_svc', 'read', now(), NULL, NULL, NULL)
+      RETURNING id`;
+    deadIds.push(...dead.map((d) => d.id));
+
     const Fastify = (await import('fastify')).default;
     const cookie = (await import('@fastify/cookie')).default;
     const authPlugin = (await import('../src/plugins/auth.js')).default;
@@ -82,9 +100,9 @@ if (IN_CI && !usable) {
 
   afterAll(async () => {
     await app?.close();
-    await admin`DELETE FROM api_keys WHERE user_id = ${professor}`;
+    await admin`DELETE FROM api_keys WHERE user_id IN (${professor}, ${retired})`;
     await admin`DELETE FROM organization_memberships WHERE user_id = ${professor}`;
-    await admin`DELETE FROM users WHERE id = ${professor}`;
+    await admin`DELETE FROM users WHERE id IN (${professor}, ${retired})`;
     await admin`DELETE FROM organizations WHERE id = ${org}`;
     await admin.end();
     await dbModule?.connection?.end();
@@ -112,6 +130,22 @@ if (IN_CI && !usable) {
     expect(stored).toBe(sha256(legacyKey));
     // Next request takes the lookup path.
     expect((await bearer(legacyKey)).statusCode).toBe(200);
+  });
+
+  // #372: the bucket verifies only 3 legacy keys per request. Dead keys (expired, rotated past
+  // grace, owner deactivated) used more recently than a live one used to fill those slots, so
+  // the live key never authenticated and never adopted a lookup id: a permanent lockout.
+  it('never returns a dead legacy key from the candidate function', async () => {
+    const rows = await dbModule.connection<Array<{ id: string }>>`
+      SELECT id FROM auth_api_key_legacy_candidates('bbam_svc', 64)`;
+    const ids = rows.map((r: { id: string }) => r.id);
+    expect(ids.filter((id: string) => deadIds.includes(id))).toEqual([]);
+  });
+
+  it('authenticates a live legacy key behind more recently used dead keys', async () => {
+    const res = await bearer(liveBehindDead);
+    expect(res.statusCode, res.body).toBe(200);
+    expect(res.json()).toEqual({ id: professor, org });
   });
 
   it('refuses an unknown bbam_svc token', async () => {
