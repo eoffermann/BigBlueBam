@@ -3,6 +3,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import type { ApiClient } from '../middleware/api-client.js';
 import { isUuid } from '../middleware/resolve-helpers.js';
+import { callInternalLlm } from '@bigbluebam/shared/internal-llm-client';
 
 function createBlastClient(blastApiUrl: string, api: ApiClient) {
   const baseUrl = blastApiUrl.replace(/\/$/, '');
@@ -73,7 +74,7 @@ interface ResolvedLlmProvider {
  * resolve the org's provider, and the internal service secret to invoke the
  * decrypt-and-proxy endpoint.
  */
-async function generateWithLlm(
+export async function generateWithLlm(
   api: ApiClient,
   cfg: BlastLlmConfig,
   systemPrompt: string,
@@ -99,26 +100,22 @@ async function generateWithLlm(
     return null;
   }
 
-  // 2. Proxy the chat completion through the internal LLM endpoint.
+  // 2. Proxy the chat completion through the internal LLM endpoint, via the shared client (#283):
+  //    the body follows the shared contract and the deadline is the proxy's own default, sent as
+  //    timeout_ms, instead of a literal 45 s. Any failure falls back to the heuristic.
   try {
-    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-    if (cfg.internalSecret) headers['x-internal-secret'] = cfg.internalSecret;
-    const res = await fetch(`${baseUrl}/internal/llm/chat`, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({
-        provider_id: provider.id,
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: userPrompt },
-        ],
-      }),
-      signal: AbortSignal.timeout(45000),
+    const r = await callInternalLlm({
+      apiBaseUrl: baseUrl,
+      secret: cfg.internalSecret,
+      service: 'mcp-blast',
+      providerId: provider.id,
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userPrompt },
+      ],
     });
-    if (!res.ok) return null;
-    const body = (await res.json()) as { data?: { content?: string } };
-    const text = body.data?.content?.trim();
-    return text && text.length > 0 ? text : null;
+    const text = r.content.trim();
+    return text.length > 0 ? text : null;
   } catch {
     return null;
   }

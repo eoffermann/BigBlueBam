@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { envBool } from '@bigbluebam/shared';
+import { envBool, llmTimeoutEnvSchema } from '@bigbluebam/shared';
 
 const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
@@ -37,7 +37,9 @@ const envSchema = z.object({
   COOKIE_DOMAIN: z.string().optional(),
   COOKIE_SECURE: envBool(false),
 
-  LLM_TIMEOUT_MS: z.coerce.number().int().positive().default(15000),
+  // Reserved for Braid's LLM calls (none ship yet, #283); bounded by the proxy's own limits so the
+  // first caller cannot be silently cut at the proxy.
+  LLM_TIMEOUT_MS: llmTimeoutEnvSchema(),
   UPSTREAM_TIMEOUT_MS: z.coerce.number().int().positive().default(10000),
 
   // Per-action permission enforcement (mirrors basis-api). 'warn' records

@@ -2,7 +2,7 @@
 // imports (env validation, pool creation) run before any statement in this file.
 import 'dotenv/config';
 import Fastify from 'fastify';
-import { LLM_CLIENT_GRACE_MS } from '@bigbluebam/shared';
+import { llmCallDrainMs } from '@bigbluebam/shared';
 import cors from '@fastify/cors';
 import cookie from '@fastify/cookie';
 import rateLimit from '@fastify/rate-limit';
@@ -154,29 +154,31 @@ await fastify.register(
   { prefix: '/v1' },
 );
 
-// Graceful shutdown. compose gives 75 s (stop_grace_period) so a later in-flight LLM call can
-// finish (spec 7.3); Railway uses RAILWAY_DEPLOYMENT_DRAINING_SECONDS=75.
+// Graceful shutdown (spec 7.3, #284). The platform's stop grace (compose stop_grace_period, mirrored
+// as STOP_GRACE_SECONDS; Railway RAILWAY_DEPLOYMENT_DRAINING_SECONDS) is checked against this
+// drain at boot (env.ts bastionStopGraceProblem), so a raised BASTION_LLM_TIMEOUT_MS can never
+// outgrow it silently. Both phases are measured from the signal, as the boot check assumes.
 let shuttingDown = false;
 const signals: NodeJS.Signals[] = ['SIGINT', 'SIGTERM'];
 for (const signal of signals) {
   process.on(signal, async () => {
     if (shuttingDown) return;
     shuttingDown = true;
+    // A call ends at most LLM_CLIENT_GRACE_MS past its deadline (shared client, #257); counted
+    // from the signal, not from after fastify.close(), so close and drain overlap.
+    const drainUntil = Date.now() + llmCallDrainMs(env.BASTION_LLM_TIMEOUT_MS);
     fastify.log.info(`Received ${signal}, draining and shutting down...`);
     try {
-      // fastify.close() lets in-flight requests finish: an evaluation slice is bounded at about
-      // 28 s and compose allows 75 s (stop_grace_period), so a slice is never cut mid-write; the
-      // claim stays with the worker's claimant, which re-drives the run on its next poll.
+      // fastify.close() lets in-flight requests finish: an evaluation slice is bounded by
+      // ENGINE_TIMEOUT_MS, which the boot check counts inside the stop grace, so a slice is never
+      // cut mid-write; the claim stays with the worker's claimant, which re-drives the run.
       // M7 (spec 7.3): LLM compile slices stop starting calls now; each lets its current call
       // finish (at most BASTION_LLM_TIMEOUT_MS) and releases its run (queued, resume_count + 1).
       markCompileShuttingDown();
       markAutofillShuttingDown();
       await fastify.close();
-      const [draining, drafting] = await Promise.all([
-        // A call ends at most LLM_CLIENT_GRACE_MS past its deadline (lib/llm-client.ts, #257).
-        drainCompileSlices(env.BASTION_LLM_TIMEOUT_MS + LLM_CLIENT_GRACE_MS),
-        drainAutofillSlices(env.BASTION_LLM_TIMEOUT_MS + LLM_CLIENT_GRACE_MS),
-      ]);
+      const left = Math.max(0, drainUntil - Date.now());
+      const [draining, drafting] = await Promise.all([drainCompileSlices(left), drainAutofillSlices(left)]);
       if (draining > 0) fastify.log.info(`released ${draining} AI compile slice(s) for the worker to resume`);
       if (drafting > 0) fastify.log.info(`released ${drafting} questionnaire autofill slice(s) for the worker to resume`);
       await closeBastionQueues();

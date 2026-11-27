@@ -82,6 +82,7 @@ with **R**, optional with `o`.
 | o | `SMTP_USER` | user | `<smtp-user>` |  |
 | o | `SMTP_PASS` | user | `<smtp-password>` |  |
 | o | `EMAIL_FROM` | user | `noreply@yourdomain.com` |  |
+| o | `RAILWAY_DEPLOYMENT_DRAINING_SECONDS` | literal | `75` | Seconds between stop signal and kill. bastion-api needs BASTION_LLM_TIMEOUT_MS/1000 + 10 (75 covers the default 60000) and refuses to start otherwise. On api, 190 lets the longest (180 s) proxied AI call finish; at 75, a call still running at a deploy is stopped and its caller retries it. |
 
 ### helpdesk-api
 
@@ -298,7 +299,7 @@ with **R**, optional with `o`.
 | o | `BOLT_API_INTERNAL_URL` | computed | `http://bolt-api.railway.internal:8080` |  |
 | o | `INTERNAL_SERVICE_SECRET` | secret | `<generate>` | openssl rand -hex 32 — protects internal service-to-service calls (bolt-api event ingestion, MCP /tools/call). Validated min(32); use 64 hex chars. |
 | o | `QUERY_TIMEOUT_MS` | literal | `10000` |  |
-| o | `LLM_TIMEOUT_MS` | unknown | `<see app docs>` |  |
+| o | `LLM_TIMEOUT_MS` | literal | `60000` | One AI call deadline in ms, sent to the api LLM proxy. At most 180000; the service refuses to start above it. |
 | o | `EXPLANATION_CACHE_TTL_SECONDS` | unknown | `<see app docs>` |  |
 
 ### braid-api
@@ -405,7 +406,7 @@ with **R**, optional with `o`.
 | o | `CORS_ORIGIN` | public | `<frontend-public-url>` |  |
 | o | `LOG_LEVEL` | literal | `info` |  |
 | o | `BASTION_TRUST_PROXY_HOPS` | literal | `2` |  |
-| o | `BASTION_LLM_TIMEOUT_MS` | literal | `60000` |  |
+| o | `BASTION_LLM_TIMEOUT_MS` | literal | `60000` | One AI call deadline in ms, at most 180000. Above 65000, raise RAILWAY_DEPLOYMENT_DRAINING_SECONDS on bastion-api to this/1000 + 10 or the service refuses to start. |
 | o | `BASTION_LLM_MAX_TOKENS` | literal | `8192` |  |
 | o | `BASTION_QUESTIONNAIRE_MAX_TOKENS` | literal | `2048` |  |
 | o | `BASTION_REWORD_MAX_TOKENS` | literal | `2048` |  |
@@ -414,7 +415,7 @@ with **R**, optional with `o`.
 | o | `BASTION_PUT_TIMEOUT_MS` | literal | `5000` |  |
 | o | `BASTION_RUN_LEASE_MS` | literal | `300000` |  |
 | o | `BASTION_SEAL_RETIRED_PUBLIC_KEYS` | literal | `` | Comma-separated 64-hex Ed25519 PUBLIC keys of replaced seal signing keys (not secret). When BASTION_SEAL_SIGNING_KEY changes, append the old public key here and never remove one, or seals signed under it stop verifying. |
-| o | `RAILWAY_DEPLOYMENT_DRAINING_SECONDS` | literal | `75` |  |
+| o | `RAILWAY_DEPLOYMENT_DRAINING_SECONDS` | literal | `75` | Seconds between stop signal and kill. bastion-api needs BASTION_LLM_TIMEOUT_MS/1000 + 10 (75 covers the default 60000) and refuses to start otherwise. On api, 190 lets the longest (180 s) proxied AI call finish; at 75, a call still running at a deploy is stopped and its caller retries it. |
 | o | `BASTION_BACKUP_S3_ENDPOINT` | literal | `` |  |
 | o | `BASTION_BACKUP_S3_BUCKET` | literal | `` |  |
 | o | `BASTION_BACKUP_S3_ACCESS_KEY` | secret | `` | Off-site evidence backup; leave empty to disable (ops.backup_fresh then reports cannot prove). |
