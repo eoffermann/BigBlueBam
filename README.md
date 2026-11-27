@@ -62,14 +62,16 @@ This is made possible by **951 MCP tools** that give AI assistants (Claude, Clau
 
 25 apps, one workspace. If you've used the tools on the right you already know most of how each app works - the twist is that all 25 live under the same auth, the same org and project permissions, and the same 951-tool MCP surface. No integration glue, no per-tool API keys, no glue-code tax: an agent that can move a card can also close a deal, publish an article, and send an invoice.
 
+<!-- AUTODOCS:SUITE_GLANCE:START -->
 | App | What it is | Comparable to |
 |-----|------------|---------------|
 | **Bam** | Project management - Kanban board, sprints, five views (board/list/timeline/calendar/workload) | Trello, Linear, Jira, Asana |
 | **Banter** | Team chat with LiveKit voice/video, transcripts, and AI agents as spoken call participants | Slack or Microsoft Teams, with Zoom-style voice/video built in |
+| **Basis** | Governed metric layer - one certified definition per number, immutable version lineage, and an AI "why did it change" decomposition | dbt Semantic Layer, Cube, Looker's LookML |
+| **Bastion** | Continuous compliance readiness for SOC 2 and ISO 27001 - nightly control checks against what really happened in the suite, tamper-evident evidence, a drafted fix for every unproven control, and an expiring auditor room | Vanta, Drata, Secureframe |
 | **Bay** | Media review and approval - frame/timecode/region annotations, per-reviewer decisions, token-gated guest links, and 3D/FBX model review | Frame.io, Ziflow |
 | **Beacon** | AI knowledge base with semantic search (Qdrant) and a graph explorer | Notion or Confluence, with an Obsidian-style graph view |
 | **Bearing** | Goals and OKRs with key results linked to Bam tasks for automatic progress | Lattice, 15Five, Quantive |
-| **Basis** | Governed metric layer - one certified definition per number, immutable version lineage, and an AI "why did it change" decomposition | dbt Semantic Layer, Cube, Looker's LookML |
 | **Bench** | Analytics dashboards, widgets, ad-hoc queries, scheduled reports, anomaly detection | Metabase, Tableau, Looker |
 | **Bill** | Invoicing, expenses, recurring billing, PDF generation, profitability reports | FreshBooks, QuickBooks, Wave |
 | **Bin** | Digital asset management - object-storage backbone plus a structured-data (CSV/JSON/YAML) grid/tree editor with live co-editing | Dropbox/Box, plus an Airtable-style data grid |
@@ -86,7 +88,9 @@ This is made possible by **951 MCP tools** that give AI assistants (Claude, Clau
 | **Bulwark** | AI contract-obligation monitor - clause-cited obligation ledger, deadline radar, and drafted (never auto-sent) notices and vendor-compliance chases | Ironclad, ContractWorks |
 | **Bureau** | Virtual office - a spatial floor map with rooms, live presence, knock-to-enter, teleport/summons, and LiveKit conferencing | Gather, Teamflow |
 | **Burn** | Contract scope and margin monitor - reads a signed SOW into a priced deliverable ledger and attributes every unit of work against it in dollars | (SOW burn-down / margin tracking) |
+| **Bursar** | Procurement leveling - reads a request into a scope tree, levels every vendor offer against it to show what each one leaves out, then watches spend against the awarded baseline | Coupa Sourcing, Fairmarkit |
 | **Helpdesk** | Customer support portal with ticket tracking, similar-ticket dedupe, and auto task creation | Zendesk, Intercom, Help Scout |
+<!-- AUTODOCS:SUITE_GLANCE:END -->
 
 **What the comparison table doesn't show:** every one of these apps is wired into the same MCP surface, so an AI agent triaging a Helpdesk ticket can upsert the requester in Bond, create a Bam task, post a Banter update to the engineering channel, and schedule a Book meeting with the customer - in one cross-app flow, with visibility preflight and a durable approval queue gating anything destructive.
 
@@ -387,53 +391,53 @@ This is the part most work suites bolt on as an afterthought. BigBlueBam exposes
 
 ### MCP Tools Reference
 
-**951 tools** across the 25 apps plus cross-cutting agentic platform surfaces:
+<!-- AUTODOCS:MCP_TOOLS:START -->
+**951 tools** across the 25 apps plus cross-cutting agentic platform surfaces. This table is generated from `site/src/content/docs-catalog.generated.json`; each app links its full tool reference.
 
-| Category | Count | What they cover |
-|----------|------:|-----------------|
-| **Task Management** | 12 | CRUD, move, bulk update, duplicate, time logging, task-by-human-id, upsert-by-external-id |
-| **Sprints** | 5 | CRUD, start, complete, report |
-| **Projects** | 5 | List, get, create, test Slack webhook, disconnect GitHub |
-| **Reports** | 8 | Velocity, burndown, CFD, cycle time, time tracking, overdue, workload, status distribution |
-| **Comments** | 2 | List, add |
-| **Members** | 4 | List, get my tasks, find user by name/email |
-| **Bam Resolvers** | 4 | Phases, labels, states, epics |
-| **Templates** | 2 | List, create from template |
-| **Import** | 2 | CSV import, GitHub Issues import |
-| **User Profile & Notifications** | 10 | Profile CRUD, org switching, password, logout, notification feed management |
-| **User Resolver** | 3 | find_user_by_email, find_user_by_name, list_users |
-| **Platform Admin** | 5 | Platform settings toggle, beta signups, public config (SuperUser-gated) |
-| **Banter Messaging** | 53 | Channels, DMs, messages, threads, reactions, calls, search, scheduled posts, quiet-hours deferrals, admin, presence, preferences |
-| **Banter Subscriptions** | 3 | Agent pattern-match subscribe / unsubscribe / list |
-| **Beacon Knowledge Base** | 30 | CRUD, upsert-by-slug, search, verification, graph, policies, saved queries |
-| **Brief Documents** | 18 | CRUD, upsert-by-slug, collaboration, versions, search, graduation, templates |
-| **Bolt Automation** | 13 | Rule CRUD, execution management, templates, triggers, conditions, actions, get-by-name |
-| **Bolt Observability** | 2 | bolt_event_trace, bolt_recent_events |
-| **Bearing Goals** | 12 | Periods, goals, key results, progress, links, reports, at-risk detection |
-| **Board Whiteboard** | 14 | Room CRUD, shapes, assets, canvas reading, participants, embeds, sticky-to-task |
-| **Bond CRM** | 23 | Contacts (with upsert-by-email), companies, deals, pipeline stages, activities, notes, search, reports |
-| **Blast Email Campaigns** | 14 | Campaigns, templates, segments, analytics, subject-line generation |
-| **Bill Invoicing** | 16 | Invoices, line items, payments, expenses, clients, profitability, revenue summary |
-| **Bench Analytics** | 11 | Dashboards, widgets, ad-hoc queries, scheduled reports, anomaly detection, period compare |
-| **Book Scheduling** | 11 | Events, RSVPs, booking pages, availability (including mixed human-and-agent rosters) |
-| **Blank Forms** | 11 | Forms, submissions, analytics, AI generation, response summarization |
-| **Helpdesk** | 11 | Ticket operations, public/admin settings, user upsert-by-email |
-| **Agent Identity** | 3 | agent_heartbeat, agent_audit, agent_self_report |
-| **Agent Proposals** | 3 | proposal_create, proposal_list, proposal_decide |
-| **Agent Policies** | 3 | agent_policy_get / set / list (per-agent kill switches and allowlists) |
-| **Agent Webhooks** | 4 | Configure, rotate-secret, deliveries list, redeliver |
-| **Visibility Preflight** | 1 | can_access |
-| **Unified Activity** | 2 | activity_query, activity_by_actor |
-| **Cross-App Search** | 1 | search_everything |
-| **Fuzzy Entity Resolver** | 1 | resolve_references |
-| **Composite Views** | 3 | account_view, project_view, user_view |
-| **Entity Links** | 3 | entity_links_list / create / remove |
-| **Attachments** | 2 | attachment_get, attachment_list (federated across apps) |
-| **Dedupe** | 4 | bond_find_duplicates, helpdesk_find_similar_tickets, dedupe_record_decision, dedupe_list_pending |
-| **Trend Queries** | 2 | helpdesk_ticket_count_by_phrase, bam_task_count_by_phrase |
-| **Expertise** | 1 | expertise_for_topic (ranked across Beacon, Bam, Brief, Bond) |
-| **Ingest Fingerprint** | 1 | ingest_fingerprint_check (Redis-backed intake dedup) |
-| **Utility** | 2 | Server info, action confirmation (Redis-backed tokens with dynamic TTL) |
+| Area | Tools | What they cover |
+|------|------:|-----------------|
+| [**Bam**](docs/apps/bam/mcp-tools.md) | 128 | Project Management: Projects & Board (24), Tasks (19), Sprints (8), Comments (7), Members (14), People Lookup (3), Resolvers (4), Epics (5), Reports (8), Templates (4), Import (5), Utility (2), Account (11), Platform (14) |
+| [**Banter**](docs/apps/banter/mcp-tools.md) | 80 | Team Messaging: Messaging (77), Agent Subscriptions (3) |
+| [**Basis**](docs/apps/basis/mcp-tools.md) | 16 | Metric Layer |
+| [**Bastion**](docs/apps/bastion/mcp-tools.md) | 66 | Compliance Readiness |
+| [**Bay**](docs/apps/bay/mcp-tools.md) | 14 | Media Review & Approval |
+| [**Beacon**](docs/apps/beacon/mcp-tools.md) | 38 | Knowledge Base |
+| [**Bearing**](docs/apps/bearing/mcp-tools.md) | 30 | Goals & OKRs |
+| [**Bench**](docs/apps/bench/mcp-tools.md) | 32 | Analytics |
+| [**Bill**](docs/apps/bill/mcp-tools.md) | 47 | Invoicing & Billing |
+| [**Bin**](docs/apps/bin/mcp-tools.md) | 19 | Files & Structured Data |
+| [**Blank**](docs/apps/blank/mcp-tools.md) | 20 | Forms & Surveys |
+| [**Blast**](docs/apps/blast/mcp-tools.md) | 28 | Email Campaigns |
+| [**Blip**](docs/apps/blip/mcp-tools.md) | 38 | Telemetry & Logs |
+| [**Blueprint**](docs/apps/blueprint/mcp-tools.md) | 36 | Diagrams & Flows |
+| [**Board**](docs/apps/board/mcp-tools.md) | 40 | Whiteboards |
+| [**Bolt**](docs/apps/bolt/mcp-tools.md) | 26 | Automations: Automations (24), Observability (2) |
+| [**Bond**](docs/apps/bond/mcp-tools.md) | 69 | CRM |
+| [**Book**](docs/apps/book/mcp-tools.md) | 25 | Scheduling & Calendar |
+| [**Braid**](docs/apps/braid/mcp-tools.md) | 13 | Customer Identity |
+| [**Brief**](docs/apps/brief/mcp-tools.md) | 48 | Documents |
+| [**Bulwark**](docs/apps/bulwark/mcp-tools.md) | 16 | Contract Obligations |
+| [**Bureau**](docs/apps/bureau/mcp-tools.md) | 37 | Virtual Office |
+| [**Burn**](docs/apps/burn/mcp-tools.md) | 18 | Scope and Margin |
+| [**Bursar**](docs/apps/bursar/mcp-tools.md) | 20 | Vendor Procurement |
+| [**Helpdesk**](docs/apps/helpdesk/mcp-tools.md) | 11 | Customer Support |
+| **Platform: Activity** | 2 | `activity_by_actor`, `activity_query` |
+| **Platform: Agent** | 4 | `agent_audit`, `agent_heartbeat`, `agent_list`, `agent_self_report` |
+| **Platform: Agent Policy** | 3 | `agent_policy_get`, `agent_policy_list`, `agent_policy_set` |
+| **Platform: Agent Webhook** | 4 | `agent_webhook_configure`, `agent_webhook_deliveries_list`, `agent_webhook_redeliver`, `agent_webhook_rotate_secret` |
+| **Platform: Attachment** | 3 | `attachment_get`, `attachment_list`, `attachment_meta` |
+| **Platform: Composite** | 3 | `account_view`, `project_view`, `user_view` |
+| **Platform: Dedupe** | 4 | `bond_find_duplicates`, `dedupe_list_pending`, `dedupe_record_decision`, `helpdesk_find_similar_tickets` |
+| **Platform: Entity Links** | 3 | `entity_link_create`, `entity_link_remove`, `entity_links_list` |
+| **Platform: Expertise** | 1 | `expertise_for_topic` |
+| **Platform: Ingest Fingerprint** | 1 | `ingest_fingerprint_check` |
+| **Platform: Phrase Count** | 2 | `bam_task_count_by_phrase`, `helpdesk_ticket_count_by_phrase` |
+| **Platform: Proposal** | 3 | `proposal_create`, `proposal_decide`, `proposal_list` |
+| **Platform: Resolve** | 1 | `resolve_references` |
+| **Platform: Search** | 1 | `search_everything` |
+| **Platform: Visibility** | 1 | `can_access` |
+| **Total** | 951 | |
+<!-- AUTODOCS:MCP_TOOLS:END -->
 
 ### MCP Setup
 

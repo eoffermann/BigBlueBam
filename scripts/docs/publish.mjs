@@ -89,6 +89,99 @@ const APP_SECTIONS_START = '<!-- AUTODOCS:APP_SECTIONS:START -->';
 const APP_SECTIONS_END = '<!-- AUTODOCS:APP_SECTIONS:END -->';
 const DOCS_INDEX_START = '<!-- AUTODOCS:DOCS_INDEX:START -->';
 const DOCS_INDEX_END = '<!-- AUTODOCS:DOCS_INDEX:END -->';
+const SUITE_GLANCE_START = '<!-- AUTODOCS:SUITE_GLANCE:START -->';
+const SUITE_GLANCE_END = '<!-- AUTODOCS:SUITE_GLANCE:END -->';
+const MCP_TOOLS_START = '<!-- AUTODOCS:MCP_TOOLS:START -->';
+const MCP_TOOLS_END = '<!-- AUTODOCS:MCP_TOOLS:END -->';
+
+const SUITE_GLANCE_FILE = path.join(__dirname, 'suite-glance.json');
+const DOCS_CATALOG_FILE = path.join(ROOT, 'site', 'src', 'content', 'docs-catalog.generated.json');
+
+/** Fail the stage (and so docs:readme:check) with a message. */
+function fail(message) {
+  console.error(`\nERROR: ${message}`);
+  process.exit(1);
+}
+
+/** Escape a value for a markdown table cell. */
+function cell(s) {
+  return String(s).replace(/\|/g, '\\|');
+}
+
+/**
+ * The README "Suite at a Glance" table: one row per LAUNCHPAD_CATALOG app, in
+ * name order, with the curated description and comparables from
+ * scripts/docs/suite-glance.json. A Launchpad app with no curated row (or a
+ * curated row for an app that is not on the Launchpad) is an error, so the
+ * table can never again be one app short of the published count (#394).
+ */
+function generateSuiteGlance() {
+  const glance = JSON.parse(fs.readFileSync(SUITE_GLANCE_FILE, 'utf-8')).apps;
+  const launchpad = readLaunchpadCatalog();
+  const ids = new Set(launchpad.map((e) => e.id));
+  const missing = launchpad.filter((e) => !glance[e.id]).map((e) => e.id);
+  const extra = Object.keys(glance).filter((id) => !ids.has(id));
+  if (missing.length || extra.length) {
+    fail(
+      'scripts/docs/suite-glance.json does not match LAUNCHPAD_CATALOG.' +
+        (missing.length ? `\n  No row for: ${missing.join(', ')}` : '') +
+        (extra.length ? `\n  Row for an app not on the Launchpad: ${extra.join(', ')}` : ''),
+    );
+  }
+  const rows = [...launchpad]
+    .sort((a, b) => a.name.localeCompare(b.name))
+    .map((e) => `| **${cell(e.name)}** | ${cell(glance[e.id].what)} | ${cell(glance[e.id].comparable)} |`);
+  return ['| App | What it is | Comparable to |', '|-----|------------|---------------|', ...rows].join('\n');
+}
+
+/**
+ * The README "MCP Tools Reference": the total and one row per product from the
+ * committed docs catalog (itself guarded against the tool source by
+ * docs:catalog:check), then one row per cross-cutting platform category. Each
+ * product links its generated docs/apps/<dir>/mcp-tools.md.
+ */
+function generateMcpToolsReference() {
+  const catalog = JSON.parse(fs.readFileSync(DOCS_CATALOG_FILE, 'utf-8'));
+  const products = catalog.filter((e) => e.id !== 'platform');
+  const platform = catalog.find((e) => e.id === 'platform');
+  const total = catalog.reduce((n, e) => n + e.toolCount, 0);
+  const sum = (entry) => entry.categories.reduce((n, c) => n + c.tools.length, 0);
+  for (const entry of catalog) {
+    if (sum(entry) !== entry.toolCount) {
+      fail(`docs catalog entry "${entry.id}" lists ${sum(entry)} tools but says toolCount ${entry.toolCount}. Run pnpm docs:catalog.`);
+    }
+  }
+
+  const lines = [
+    `**${total} tools** across the ${products.length} apps plus cross-cutting agentic platform surfaces. ` +
+      'This table is generated from `site/src/content/docs-catalog.generated.json`; each app links its full tool reference.',
+    '',
+    '| Area | Tools | What they cover |',
+    '|------|------:|-----------------|',
+  ];
+  for (const e of [...products].sort((a, b) => a.name.localeCompare(b.name))) {
+    const groups =
+      e.categories.length > 1 ? `: ${e.categories.map((c) => `${c.name} (${c.tools.length})`).join(', ')}` : '';
+    lines.push(
+      `| [**${cell(e.name)}**](docs/apps/${docDirForAppId(e.id)}/mcp-tools.md) | ${e.toolCount} | ${cell(e.description)}${cell(groups)} |`,
+    );
+  }
+  if (platform) {
+    for (const c of [...platform.categories].sort((a, b) => a.name.localeCompare(b.name))) {
+      const names = c.tools.map((t) => `\`${t.name}\``).join(', ');
+      lines.push(`| **Platform: ${cell(c.name)}** | ${c.tools.length} | ${cell(names)} |`);
+    }
+  }
+  lines.push(`| **Total** | ${total} | |`);
+  return lines.join('\n');
+}
+
+/** Replace a required generated region; a missing marker pair is an error. */
+function replaceRequiredRegion(readme, start, end, content, label) {
+  const result = replaceBetweenMarkers(readme, start, end, content);
+  if (result === null) fail(`README.md is missing the ${label} markers (${start} ... ${end}).`);
+  return result;
+}
 
 /**
  * Replace content between start and end markers in a string.
@@ -395,6 +488,14 @@ function computeReadme(appMetas, { logging = true } = {}) {
       log(`  Rewrote DOCS_INDEX with ${appNames.length} per-app guide links`);
     }
   }
+
+  // Suite at a Glance + MCP Tools Reference (#394). Both are generated from
+  // LAUNCHPAD_CATALOG / the docs catalog regardless of --apps, so they always
+  // cover the whole suite.
+  readme = replaceRequiredRegion(readme, SUITE_GLANCE_START, SUITE_GLANCE_END, generateSuiteGlance(), 'SUITE_GLANCE');
+  log('  Rewrote SUITE_GLANCE from LAUNCHPAD_CATALOG');
+  readme = replaceRequiredRegion(readme, MCP_TOOLS_START, MCP_TOOLS_END, generateMcpToolsReference(), 'MCP_TOOLS');
+  log('  Rewrote MCP_TOOLS from the docs catalog');
 
   return readme;
 }
