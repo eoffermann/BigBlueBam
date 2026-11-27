@@ -13,6 +13,7 @@
 //   finish    succeeded with the object key, its SHA-256 and size
 //   fail      failed with a plain error
 
+import { randomUUID } from 'node:crypto';
 import { toCsv, type BastionExportPacketEngine, type BastionPacketClaim, type BastionPacketContents } from '@bigbluebam/shared';
 import { type EngineDeps, orgTx, type Tx } from '../engine/context.js';
 import { frameworkTemplate } from '../library/index.js';
@@ -129,7 +130,7 @@ async function packetContents(tx: Tx, p: Record<string, unknown>, now: Date): Pr
       period_end: periodEnd,
       include_restricted: includeRestricted,
       max_packet_bytes: Number(p.max_packet_bytes),
-      object_key: packetObjectKey(orgId, String(p.id)),
+      object_key: String(p.object_key),
     },
     organization_name: String(org?.name ?? ''),
     framework: fw,
@@ -225,20 +226,27 @@ export async function exportPacketEngine(deps: EngineDeps, body: BastionExportPa
   const now = deps.now();
   if (body.action === 'claim') {
     const staleBefore = new Date(now.getTime() - PACKET_LEASE_MS);
+    // This attempt's own key (#312). Its intent row lets the object sweep remove the zip if the
+    // attempt never finishes (reaped, crashed, lost its claim); `finish` clears it.
+    const attemptKey = packetObjectKey(orgId, body.packet_id, randomUUID());
     const claimed = await orgTx(deps.sql, orgId, async (tx) => {
       const [p] = await tx`
         UPDATE bastion_export_packets p
            SET status = 'running', claimed_by = ${body.claimant}, heartbeat_at = ${now}, stage = 'collecting', stage_progress = 0,
-               object_key = ${packetObjectKey(orgId, body.packet_id)}, error = NULL
+               object_key = CASE WHEN p.status = 'running' AND p.claimed_by = ${body.claimant} AND p.object_key IS NOT NULL
+                                 THEN p.object_key ELSE ${attemptKey} END,
+               error = NULL
          WHERE p.organization_id = ${orgId} AND p.id = ${body.packet_id}
            AND (p.status = 'queued' OR (p.status = 'running' AND (p.claimed_by = ${body.claimant} OR p.heartbeat_at < ${staleBefore})))
         RETURNING p.id, p.organization_id, p.framework_id, p.period_start::text AS period_start, p.period_end::text AS period_end,
-                  p.include_restricted,
+                  p.include_restricted, p.object_key,
                   (SELECT s.max_packet_bytes FROM bastion_org_settings s WHERE s.organization_id = p.organization_id) AS max_packet_bytes`;
       if (!p) {
         const cur = (await tx`SELECT status FROM bastion_export_packets WHERE organization_id = ${orgId} AND id = ${body.packet_id}`)[0];
         return { row: null, status: (cur?.status as string | undefined) ?? null };
       }
+      await tx`INSERT INTO bastion_object_intents (organization_id, object_key) VALUES (${orgId}, ${String(p.object_key)})
+               ON CONFLICT (object_key) DO UPDATE SET created_at = now()`;
       return { row: p as Record<string, unknown>, status: 'running' };
     });
     if (!claimed.row) {
@@ -282,14 +290,28 @@ export async function exportPacketEngine(deps: EngineDeps, body: BastionExportPa
     return { ok: rows.length > 0 };
   }
   if (body.action === 'finish') {
-    const rows = await orgTx(deps.sql, orgId, (tx) => tx`
-      UPDATE bastion_export_packets
-         SET status = 'succeeded', stage = NULL, stage_progress = 0, object_key = ${body.object_key},
-             content_sha256 = ${body.content_sha256}, size_bytes = ${body.size_bytes}, heartbeat_at = ${now}, error = NULL
-       WHERE organization_id = ${orgId} AND id = ${body.packet_id} AND status = 'running' AND claimed_by = ${body.claimant}
-      RETURNING id`);
-    deps.log.info({ organization_id: orgId, packet_id: body.packet_id, size_bytes: body.size_bytes, ok: rows.length > 0 }, 'bastion-export-packet: finished');
-    return { ok: rows.length > 0 };
+    // Fenced on the claimant AND the attempt's key. Idempotent: a retry after a lost response
+    // finds its own success and answers ok, so the worker never mistakes it for a failure (#312).
+    const ok = await orgTx(deps.sql, orgId, async (tx) => {
+      const rows = await tx`
+        UPDATE bastion_export_packets
+           SET status = 'succeeded', stage = NULL, stage_progress = 0,
+               content_sha256 = ${body.content_sha256}, size_bytes = ${body.size_bytes}, heartbeat_at = ${now}, error = NULL
+         WHERE organization_id = ${orgId} AND id = ${body.packet_id} AND status = 'running' AND claimed_by = ${body.claimant}
+           AND object_key = ${body.object_key}
+        RETURNING id`;
+      if (rows.length > 0) {
+        await tx`DELETE FROM bastion_object_intents WHERE organization_id = ${orgId} AND object_key = ${body.object_key}`;
+        return true;
+      }
+      const again = await tx`
+        SELECT 1 FROM bastion_export_packets
+         WHERE organization_id = ${orgId} AND id = ${body.packet_id} AND status = 'succeeded' AND claimed_by = ${body.claimant}
+           AND object_key = ${body.object_key} AND content_sha256 = ${body.content_sha256}`;
+      return again.length > 0;
+    });
+    deps.log.info({ organization_id: orgId, packet_id: body.packet_id, size_bytes: body.size_bytes, ok }, 'bastion-export-packet: finished');
+    return { ok };
   }
   await failPacket(deps, orgId, body.packet_id, body.claimant, body.error);
   return { ok: true };

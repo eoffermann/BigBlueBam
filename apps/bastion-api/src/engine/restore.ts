@@ -68,16 +68,26 @@ async function listAll(deps: EngineDeps, prefix: string): Promise<string[]> {
   return (await listObjects(storage, prefix, deps.putTimeoutMs)).map((o) => o.key);
 }
 
-/** Every object under a prefix, page by page (the seal check, the mirror and the restore CLI). */
-export async function listObjects(storage: StorageDriver, prefix: string, timeoutMs: number): Promise<ObjectStat[]> {
-  const out: ObjectStat[] = [];
-  let cursor: string | undefined;
-  for (let page = 0; page < 1000; page++) {
+/**
+ * The objects under a prefix one page at a time, starting after `startAfter`, until the listing
+ * says there are no more. No page cap: a listing is either complete or it throws (#313). A
+ * cursor that does not advance is an error, never a silent stop.
+ */
+export async function* listPages(storage: StorageDriver, prefix: string, timeoutMs: number, startAfter?: string): AsyncGenerator<ObjectStat[]> {
+  let cursor = startAfter;
+  for (;;) {
     const res = await withStorageTimeout('list', storage.list(prefix, cursor), timeoutMs);
-    out.push(...res.objects);
-    if (!res.cursor) break;
+    if (res.objects.length > 0) yield res.objects;
+    if (!res.cursor) return;
+    if (res.cursor === cursor) throw new Error(`Listing ${prefix} did not advance past ${cursor}.`);
     cursor = res.cursor;
   }
+}
+
+/** Every object under a prefix (the seal check). */
+export async function listObjects(storage: StorageDriver, prefix: string, timeoutMs: number): Promise<ObjectStat[]> {
+  const out: ObjectStat[] = [];
+  for await (const page of listPages(storage, prefix, timeoutMs)) out.push(...page);
   return out;
 }
 

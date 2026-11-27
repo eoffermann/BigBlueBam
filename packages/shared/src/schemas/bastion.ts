@@ -420,6 +420,13 @@ export const BASTION_EXCEPTION_MAX_DAYS: Record<BastionExceptionScope, number> =
 export const BastionPolicyStatus = z.enum(['active', 'retired']);
 export type BastionPolicyStatus = z.infer<typeof BastionPolicyStatus>;
 
+/**
+ * A policy's linked Beacon article as Bastion sees it (#244, #285): only `current` can be read and
+ * acknowledged. One union for bastion-api, the SPA and the MCP tools.
+ */
+export const BastionPolicyArticleState = z.enum(['current', 'missing', 'retired', 'expired']);
+export type BastionPolicyArticleState = z.infer<typeof BastionPolicyArticleState>;
+
 export const bastionPolicyAudienceSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('all') }).strict(),
   z.object({ kind: z.literal('users'), user_ids: z.array(z.string().uuid()).min(1) }).strict(),

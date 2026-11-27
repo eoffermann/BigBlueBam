@@ -19,7 +19,7 @@ import type { Readable } from 'node:stream';
 import { type StorageDriver, isStorageNotFoundError, withStorageTimeout } from '@bigbluebam/storage';
 import type { BastionMirrorResult, BastionMirrorStatus, BastionObjectSweepResult } from '@bigbluebam/shared';
 import { type EngineDeps, orgTx } from './context.js';
-import { listObjects } from './restore.js';
+import { listPages } from './restore.js';
 
 /** An intent younger than this may belong to a write still in flight (spec 7). */
 export const SWEEP_INTENT_AGE_MS = 24 * 3_600_000;
@@ -126,7 +126,22 @@ interface MirrorProgress {
   objects: number;
   bytes: number;
   records_done: boolean;
+  /** Resume point of an unfinished records step: index into MIRRORED_RECORD_PREFIXES and last key done. */
+  records_prefix?: number;
+  records_after?: string | null;
+  /** When the current records step began (becomes the next high-water mark when it finishes). */
+  records_started?: string;
 }
+
+/**
+ * High-water mark of the records step, surviving the per-backup reset (#309): seal and restore
+ * records modified before it were already checked by an earlier finished pass, so they are listed
+ * but not stat'ed again. Seals are written once per key; a rewritten object gets a new modified
+ * time and is checked again. Deleting this key forces a full re-check (for example after pointing
+ * the mirror at a new destination).
+ */
+export const MIRROR_RECORDS_SINCE_KEY = 'bastion:mirror:records-since';
+const FRESH_PROGRESS: MirrorProgress = { objects: 0, bytes: 0, records_done: false };
 
 async function copyObject(source: StorageDriver, dest: StorageDriver, key: string, timeoutMs: number): Promise<number> {
   const got = await withStorageTimeout('get', source.getStream(key), timeoutMs);
@@ -143,12 +158,25 @@ async function copyObject(source: StorageDriver, dest: StorageDriver, key: strin
   }
 }
 
-async function writeMirrorStatus(deps: EngineDeps, backupId: string | undefined, status: BastionMirrorStatus, cursor: Date | null): Promise<void> {
-  if (!backupId) return;
-  // platform_backups is platform-wide (no org column, no RLS). Only the mirror columns are
-  // written: the backup's own status is never touched (spec 9.7).
-  await deps.sql`UPDATE platform_backups SET bastion_mirror_status = ${status}, bastion_mirror_cursor = ${cursor}
-                  WHERE id = ${backupId}`;
+/**
+ * Record the mirror outcome on the backup row. platform_backups is platform-wide (no org column,
+ * no RLS). Only the mirror columns are written: the backup's own status is never touched (spec
+ * 9.7). `fenced` writes (the end of a call) land only while the row still says `running`, so a
+ * call the worker already gave up on (and recorded `failed` for) can never overwrite that outcome
+ * when it finally finishes (#309). The start of a call is unfenced: a new call is a new attempt.
+ */
+async function writeMirrorStatus(
+  deps: EngineDeps,
+  backupId: string | undefined,
+  status: BastionMirrorStatus,
+  cursor: Date | null,
+  fenced = false,
+): Promise<boolean> {
+  if (!backupId) return true;
+  const rows = await deps.sql`UPDATE platform_backups SET bastion_mirror_status = ${status}, bastion_mirror_cursor = ${cursor}
+                               WHERE id = ${backupId} ${fenced ? deps.sql`AND bastion_mirror_status = 'running'` : deps.sql``}
+                              RETURNING id`;
+  return rows.length > 0;
 }
 
 /**
@@ -189,18 +217,24 @@ export async function mirrorObjects(deps: EngineDeps, dest: StorageDriver | null
     (backup?.started_at ? new Date(backup.started_at as string).getTime() : deps.now().getTime()) - CURRENT_SLACK_MS,
   );
   const progressKey = `bastion:mirror:${opts.backup_id ?? 'manual'}`;
-  const progress: MirrorProgress = JSON.parse((await deps.cursors.get(progressKey)) ?? '{"objects":0,"bytes":0,"records_done":false}');
+  const progress: MirrorProgress = { ...FRESH_PROGRESS, ...JSON.parse((await deps.cursors.get(progressKey)) ?? '{}') };
   deps.log.info(
-    { backup_id: opts.backup_id ?? null, objects_so_far: progress.objects, bytes_so_far: progress.bytes },
+    { backup_id: opts.backup_id ?? null, objects_so_far: progress.objects, bytes_so_far: progress.bytes, records_done: progress.records_done },
     'bastion-mirror: starting a pass to the off-site evidence backup',
   );
-  if (progress.objects === 0 && progress.bytes === 0) await writeMirrorStatus(deps, opts.backup_id, 'running', null);
+  if (progress.objects === 0 && progress.bytes === 0 && !progress.records_after && !progress.records_prefix) {
+    await writeMirrorStatus(deps, opts.backup_id, 'running', null);
+  } else if (opts.backup_id) {
+    // A resumed call is a live attempt again (keeps the recorded cursor).
+    await deps.sql`UPDATE platform_backups SET bastion_mirror_status = 'running'
+                    WHERE id = ${opts.backup_id} AND bastion_mirror_status IS DISTINCT FROM 'running'`;
+  }
   const out = { ...base };
   const fail = async (err: unknown) => {
     const error = `The off-site evidence backup could not be written: ${(err as Error).message}`.slice(0, 500);
     deps.log.error({ backup_id: opts.backup_id ?? null, err: (err as Error).message }, 'bastion-mirror: pass failed; the database backup itself is unaffected');
     const remaining = await unmirroredBefore(deps, null);
-    await writeMirrorStatus(deps, opts.backup_id, 'failed', remaining.oldest);
+    await writeMirrorStatus(deps, opts.backup_id, 'failed', remaining.oldest, true);
     await deps.cursors.set(progressKey, JSON.stringify(progress));
     return { ...out, status: 'failed' as const, complete: true, error, remaining: remaining.count, cursor: remaining.oldest?.toISOString() ?? null };
   };
@@ -221,25 +255,59 @@ export async function mirrorObjects(deps: EngineDeps, dest: StorageDriver | null
       out.removed_redacted += 1;
     }
 
-    // 2. Seals and restore records: few (one a day per org), compared by size, copied if missing.
+    // 2. Seals and restore records (one a day per org, never pruned). Listed page by page under
+    //    the same time budget as step 3 and resumable from the last key done; only records
+    //    modified since the last finished records step are stat'ed and copied (#309).
+    let recordsTimeUp = false;
     if (!progress.records_done) {
-      for (const prefix of MIRRORED_RECORD_PREFIXES) {
-        const objects = await listObjects(source, prefix, deps.putTimeoutMs);
-        for (const [i, o] of objects.entries()) {
-          const there = await withStorageTimeout('stat', dest.stat(o.key), deps.putTimeoutMs);
-          if (there && there.size === o.size) continue;
-          await copyObject(source, dest, o.key, deps.putTimeoutMs);
-          out.seals_and_records += 1;
-          if ((i + 1) % 100 === 0) deps.log.info({ prefix }, `bastion-mirror: records ${i + 1}/${objects.length}`);
+      const sinceRaw = await deps.cursors.get(MIRROR_RECORDS_SINCE_KEY);
+      const since = sinceRaw ? new Date(sinceRaw).getTime() : null;
+      progress.records_started ??= deps.now().toISOString();
+      let listed = 0;
+      const startIdx = progress.records_prefix ?? 0;
+      records: for (const [idx, prefix] of MIRRORED_RECORD_PREFIXES.entries()) {
+        if (idx < startIdx) continue;
+        let after = idx === (progress.records_prefix ?? 0) ? (progress.records_after ?? undefined) : undefined;
+        for await (const page of listPages(source, prefix, deps.putTimeoutMs, after)) {
+          for (const o of page) {
+            if (Date.now() - started > timeBudget) {
+              progress.records_prefix = idx;
+              progress.records_after = after ?? null;
+              recordsTimeUp = true;
+              break records;
+            }
+            listed += 1;
+            const unchanged = since !== null && o.modifiedAt && new Date(o.modifiedAt).getTime() < since;
+            if (!unchanged) {
+              const there = await withStorageTimeout('stat', dest.stat(o.key), deps.putTimeoutMs);
+              if (!there || there.size !== o.size) {
+                await copyObject(source, dest, o.key, deps.putTimeoutMs);
+                out.seals_and_records += 1;
+              }
+            }
+            after = o.key;
+          }
+          deps.log.info(
+            { prefix, listed, copied: out.seals_and_records },
+            `bastion-mirror: records ${listed} checked this call, budget remaining ${Math.max(0, timeBudget - (Date.now() - started))} ms`,
+          );
         }
       }
-      progress.records_done = true;
+      if (!recordsTimeUp) {
+        // Everything modified before this step began (less the clock slack) is now on the mirror.
+        const mark = new Date(new Date(progress.records_started).getTime() - CURRENT_SLACK_MS);
+        await deps.cursors.set(MIRROR_RECORDS_SINCE_KEY, mark.toISOString());
+        progress.records_done = true;
+        progress.records_prefix = undefined;
+        progress.records_after = undefined;
+        progress.records_started = undefined;
+      }
     }
 
     // 3. Evidence objects not yet mirrored, oldest first, within the time and per-backup budgets.
     let after: { created_at: Date; object_key: string } | null = null;
     let budgetHit = false;
-    outer: for (let round = 0; round < 1000; round++) {
+    outer: for (let round = 0; !recordsTimeUp && round < 1000; round++) {
       const batch: Array<Record<string, unknown>> = await deps.sql`
         SELECT organization_id, content_sha256, object_key, size_bytes, created_at FROM bastion_evidence_objects
          WHERE mirrored_at IS NULL AND bytes_redacted_at IS NULL
@@ -267,10 +335,26 @@ export async function mirrorObjects(deps: EngineDeps, dest: StorageDriver | null
           }
           throw err;
         }
-        await orgTx(deps.sql, String(o.organization_id), (tx) => tx`
+        // The bytes reached the mirror, so mirrored_at is recorded whatever happened meanwhile
+        // (#310): a redaction that landed during the copy must still find this copy. When it did,
+        // the copy is deleted at once; if that delete fails, step 1 retries it next pass.
+        const orgId = String(o.organization_id);
+        const [marked] = await orgTx(deps.sql, orgId, (tx) => tx`
           UPDATE bastion_evidence_objects SET mirrored_at = ${deps.now()}
-           WHERE organization_id = ${String(o.organization_id)} AND content_sha256 = ${String(o.content_sha256)}
-             AND bytes_redacted_at IS NULL`);
+           WHERE organization_id = ${orgId} AND content_sha256 = ${String(o.content_sha256)}
+          RETURNING bytes_redacted_at`);
+        if (marked?.bytes_redacted_at) {
+          try {
+            await withStorageTimeout('delete', dest.delete(String(o.object_key)), deps.putTimeoutMs);
+            await orgTx(deps.sql, orgId, (tx) => tx`
+              UPDATE bastion_evidence_objects SET mirrored_at = NULL
+               WHERE organization_id = ${orgId} AND content_sha256 = ${String(o.content_sha256)}`);
+            out.removed_redacted += 1;
+          } catch (err) {
+            deps.log.warn({ organization_id: orgId, err: (err as Error).message }, 'bastion-mirror: bytes redacted during the copy are still on the mirror; the next pass deletes them');
+          }
+          continue;
+        }
         out.mirrored += 1;
         out.bytes += size;
         progress.objects += 1;
@@ -290,7 +374,11 @@ export async function mirrorObjects(deps: EngineDeps, dest: StorageDriver | null
     const timeUp = Date.now() - started > timeBudget;
     let status: BastionMirrorStatus;
     let complete: boolean;
-    if (left.count === 0) {
+    if (!progress.records_done) {
+      // The records step ran out of time: resume it on the next call.
+      status = 'running';
+      complete = false;
+    } else if (left.count === 0) {
       status = 'completed';
       complete = true;
     } else if (budgetHit) {
@@ -304,10 +392,13 @@ export async function mirrorObjects(deps: EngineDeps, dest: StorageDriver | null
       status = 'partial';
       complete = true;
     }
-    const cursor = left.count === 0 ? horizon : left.oldest;
+    const cursor = left.count === 0 && progress.records_done ? horizon : left.oldest;
     out.cursor = cursor ? cursor.toISOString() : null;
-    await writeMirrorStatus(deps, opts.backup_id, status, cursor);
-    if (complete) await deps.cursors.set(progressKey, JSON.stringify({ objects: 0, bytes: 0, records_done: false }));
+    if (!(await writeMirrorStatus(deps, opts.backup_id, status, cursor, true))) {
+      // The worker gave up on this call and recorded the outcome; leave its word standing.
+      deps.log.warn({ backup_id: opts.backup_id ?? null, status }, 'bastion-mirror: this call finished after the backup job recorded its outcome; status left unchanged');
+    }
+    if (complete) await deps.cursors.set(progressKey, JSON.stringify(FRESH_PROGRESS));
     else await deps.cursors.set(progressKey, JSON.stringify(progress));
     deps.log.info(
       { backup_id: opts.backup_id ?? null, status, mirrored: out.mirrored, bytes: out.bytes, remaining: out.remaining, elapsed_ms: Date.now() - started },
@@ -333,48 +424,95 @@ export interface RestoreObjectsResult {
   copied: number;
   already_present: number;
   failed: number;
+  /** Redacted objects the mirror still held: not copied back (and deleted if already in the bucket). */
+  redacted_skipped: number;
+  /** False when no database was reachable, so redacted bytes may have been copied back. */
+  redaction_checked: boolean;
+}
+
+/**
+ * The database's word on which objects were redacted (spec 3.4): the keys of one org whose
+ * bastion_evidence_objects row has bytes_redacted_at set. Null = no database reachable.
+ */
+export type RedactedKeysLookup = (orgId: string) => Promise<Set<string>>;
+
+const UUID_SEGMENT = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** The org of an `evidence/<org>/...` or `manual/<org>/...` key (the prefixes redaction applies to). */
+function redactableOrg(key: string): string | null {
+  const [top, org] = key.split('/');
+  if ((top !== 'evidence' && top !== 'manual') || !org || !UUID_SEGMENT.test(org)) return null;
+  return org;
 }
 
 /**
  * Copy the off-site mirror back into the Bastion bucket (spec 9.7 runbook). Objects already
- * present with the same size are left alone, so the command is safe to run twice. Logs
- * `objects n/N` as it goes.
+ * present with the same size are left alone, so the command is safe to run twice.
+ *
+ * Streams page by page (#313): each listed page is copied before the next is fetched, so memory
+ * stays flat and `objects n` progress appears from the first page. A listing that fails throws
+ * (the CLI exits non-zero); there is no page cap that could end the restore early and quietly.
+ *
+ * Redaction (#310): the mirror may still hold bytes that were redacted after its last pass, and
+ * nothing would ever delete a copy put back here. With `redactedKeys` (the database), those keys
+ * are never copied back, and a copy already in the bucket is deleted. Without it the result says
+ * `redaction_checked: false` and the CLI tells the operator to run it again once the database is
+ * back.
  */
 export async function restoreObjectsFromBackup(
   mirror: StorageDriver,
   bucket: StorageDriver,
   log: (line: string) => void,
-  opts: { timeoutMs?: number; dryRun?: boolean } = {},
+  opts: { timeoutMs?: number; dryRun?: boolean; redactedKeys?: RedactedKeysLookup | null } = {},
 ): Promise<RestoreObjectsResult> {
   const timeoutMs = opts.timeoutMs ?? 30_000;
   const started = Date.now();
-  const res: RestoreObjectsResult = { listed: 0, copied: 0, already_present: 0, failed: 0 };
-  const all: Array<{ key: string; size: number }> = [];
+  const secs = () => ((Date.now() - started) / 1000).toFixed(1);
+  const lookup = opts.redactedKeys ?? null;
+  const res: RestoreObjectsResult = { listed: 0, copied: 0, already_present: 0, failed: 0, redacted_skipped: 0, redaction_checked: !!lookup };
+  const redactedByOrg = new Map<string, Set<string>>();
+  const isRedacted = async (key: string): Promise<boolean> => {
+    const org = lookup ? redactableOrg(key) : null;
+    if (!lookup || !org) return false;
+    let set = redactedByOrg.get(org);
+    if (!set) {
+      set = await lookup(org);
+      redactedByOrg.set(org, set);
+    }
+    return set.has(key);
+  };
   for (const prefix of RESTORABLE_PREFIXES) {
-    log(`listing ${prefix} in the off-site backup...`);
-    const objects = await listObjects(mirror, prefix, timeoutMs);
-    for (const o of objects) all.push({ key: o.key, size: o.size });
-  }
-  res.listed = all.length;
-  log(`found ${all.length} objects in the off-site backup (${((Date.now() - started) / 1000).toFixed(1)}s)`);
-  for (const [i, o] of all.entries()) {
-    try {
-      const here = await withStorageTimeout('stat', bucket.stat(o.key), timeoutMs);
-      if (here && here.size === o.size) {
-        res.already_present += 1;
-      } else if (!opts.dryRun) {
-        await copyObject(mirror, bucket, o.key, timeoutMs);
-        res.copied += 1;
-      } else {
-        res.copied += 1;
+    log(`listing ${prefix} in the off-site backup, one page at a time...`);
+    let page = 0;
+    for await (const objects of listPages(mirror, prefix, timeoutMs)) {
+      page += 1;
+      for (const o of objects) {
+        res.listed += 1;
+        try {
+          if (await isRedacted(o.key)) {
+            res.redacted_skipped += 1;
+            const here = await withStorageTimeout('stat', bucket.stat(o.key), timeoutMs);
+            if (here && !opts.dryRun) await withStorageTimeout('delete', bucket.delete(o.key), timeoutMs);
+            continue;
+          }
+          const here = await withStorageTimeout('stat', bucket.stat(o.key), timeoutMs);
+          if (here && here.size === o.size) {
+            res.already_present += 1;
+          } else {
+            if (!opts.dryRun) await copyObject(mirror, bucket, o.key, timeoutMs);
+            res.copied += 1;
+          }
+        } catch (err) {
+          res.failed += 1;
+          log(`could not copy one object: ${(err as Error).message}`);
+        }
+        if (res.listed % 50 === 0) {
+          log(`objects ${res.listed} (copied ${res.copied}, already there ${res.already_present}, redacted ${res.redacted_skipped}, failed ${res.failed}) ${secs()}s`);
+        }
       }
-    } catch (err) {
-      res.failed += 1;
-      log(`could not copy one object: ${(err as Error).message}`);
-    }
-    if ((i + 1) % 50 === 0 || i + 1 === all.length) {
-      log(`objects ${i + 1}/${all.length} (copied ${res.copied}, already there ${res.already_present}, failed ${res.failed}) ${((Date.now() - started) / 1000).toFixed(1)}s`);
+      log(`${prefix} page ${page} done: objects ${res.listed} so far, ${secs()}s`);
     }
   }
+  log(`objects ${res.listed} (copied ${res.copied}, already there ${res.already_present}, redacted ${res.redacted_skipped}, failed ${res.failed}) ${secs()}s; listing complete`);
   return res;
 }
