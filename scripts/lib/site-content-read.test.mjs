@@ -42,7 +42,6 @@ test('every file under site/src/content is imported by site source', () => {
   assert.deepEqual(
     unread,
     [],
-    `site/src/content file(s) nothing in site/ imports: ${unread.join(', ')}. ` +
-      'Delete them (and whatever writes them) or import them where they are meant to render.',
+    `site/src/content file(s) nothing in site/ imports: ${unread.join(', ')}. Delete them (and whatever writes them) or import them where they are meant to render.`,
   );
 });

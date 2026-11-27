@@ -122,11 +122,9 @@ function generateSuiteGlance() {
   const missing = launchpad.filter((e) => !glance[e.id]).map((e) => e.id);
   const extra = Object.keys(glance).filter((id) => !ids.has(id));
   if (missing.length || extra.length) {
-    fail(
-      'scripts/docs/suite-glance.json does not match LAUNCHPAD_CATALOG.' +
-        (missing.length ? `\n  No row for: ${missing.join(', ')}` : '') +
-        (extra.length ? `\n  Row for an app not on the Launchpad: ${extra.join(', ')}` : ''),
-    );
+    const noRow = missing.length ? `\n  No row for: ${missing.join(', ')}` : '';
+    const stray = extra.length ? `\n  Row for an app not on the Launchpad: ${extra.join(', ')}` : '';
+    fail(`scripts/docs/suite-glance.json does not match LAUNCHPAD_CATALOG.${noRow}${stray}`);
   }
   const rows = [...launchpad]
     .sort((a, b) => a.name.localeCompare(b.name))
@@ -153,8 +151,7 @@ function generateMcpToolsReference() {
   }
 
   const lines = [
-    `**${total} tools** across the ${products.length} apps plus cross-cutting agentic platform surfaces. ` +
-      'This table is generated from `site/src/content/docs-catalog.generated.json`; each app links its full tool reference.',
+    `**${total} tools** across the ${products.length} apps plus cross-cutting agentic platform surfaces. This table is generated from \`site/src/content/docs-catalog.generated.json\`; each app links its full tool reference.`,
     '',
     '| Area | Tools | What they cover |',
     '|------|------:|-----------------|',
