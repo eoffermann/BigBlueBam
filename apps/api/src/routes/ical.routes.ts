@@ -5,7 +5,7 @@ import { z } from 'zod';
 import { db } from '../db/index.js';
 import { tasks } from '../db/schema/tasks.js';
 import { projects } from '../db/schema/projects.js';
-import { findApiKeyCandidates, touchApiKey } from '../services/auth-identity.service.js';
+import { touchApiKey, verifyApiKeyToken } from '../services/auth-identity.service.js';
 import { projectCalendarTokens } from '../db/schema/project-calendar-tokens.js';
 import { requireAuth, requireScope } from '../plugins/auth.js';
 import { requireProjectAccess } from '../middleware/authorize.js';
@@ -172,35 +172,13 @@ export default async function icalRoutes(fastify: FastifyInstance) {
       if (request.user) {
         userId = request.user.id;
       } else if (request.query.token) {
-        const token = request.query.token;
-        const prefix = token.slice(0, 8);
-
-        // #40 sibling: service-account tokens are `bbam_svc_<random>`, so
-        // token.slice(0,8) is the literal 'bbam_svc' for every svc key — a
-        // degenerate bucket. This path has no DoS cap (it verifies every
-        // fetched candidate), so the only risk is the fetch window truncating
-        // the bucket and excluding a valid svc key past the 10th row; raise the
-        // limit for that known bucket to match the auth-plugin fix. (Mirrors
-        // SVC_BUCKET_MAX in plugins/auth.ts; svc tokens as iCal feed tokens are
-        // rare, but the root cause is shared.)
-        const SVC_KEY_PREFIX = 'bbam_svc';
-        // Pre-auth read of org-gated api_keys: through the identity function (#105).
-        const candidates = await findApiKeyCandidates(prefix, prefix === SVC_KEY_PREFIX ? 64 : 10);
-
-        for (const apiKey of candidates) {
-          if (apiKey.expires_at && new Date(apiKey.expires_at) < new Date()) {
-            continue;
-          }
-          try {
-            const valid = await argon2.verify(apiKey.key_hash, token);
-            if (valid) {
-              userId = apiKey.user_id;
-              await touchApiKey(apiKey.id);
-              break;
-            }
-          } catch {
-            continue;
-          }
+        // The same verification the auth plugin applies to a Bearer key
+        // (expiry, rotation grace window, #40 svc bucket, DoS cap, owner
+        // active), so a key that authenticates there works here and vice versa.
+        const verified = await verifyApiKeyToken(request.query.token, request.log);
+        if (verified) {
+          userId = verified.user.id;
+          await touchApiKey(verified.apiKey.id);
         }
       }
 
