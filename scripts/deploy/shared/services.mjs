@@ -678,7 +678,7 @@ export const APP_SERVICES = [
         // BASIS_API_URL + BRAID_API_URL are present in docker-compose.yml but were
         // missing here (pre-existing gap, spec 9.5/IK2); BULWARK_API_URL is the new one.
         'BASIS_API_URL', 'BRAID_API_URL', 'BULWARK_API_URL', 'BURN_API_URL', 'BURSAR_API_URL',
-        // Bastion's client base (tools register at M11; the URL exists from M1).
+        // Bastion's client base: bastion-tools.ts and the search_everything Bastion arm.
         'BASTION_API_URL',
         'MCP_AUTH_REQUIRED', 'LOG_LEVEL', 'INTERNAL_SERVICE_SECRET',
         'MCP_INTERNAL_API_TOKEN',

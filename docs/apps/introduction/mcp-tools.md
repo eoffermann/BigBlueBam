@@ -7,7 +7,7 @@ the same audit trail. Destructive actions require a two-step confirmation. This 
 not a chat sidebar bolted onto the product; it is the product, reachable by a tool
 call.
 
-The suite exposes 885 tools. They divide into per-app catalogs and a
+The suite exposes 951 tools. They divide into per-app catalogs and a
 shared cross-cutting platform layer (identity and audit, cross-app search, the
 unified activity stream, approval queues, visibility checks, entity links,
 attachments, agent policies and webhooks, and more) that any agent can use across
@@ -18,6 +18,7 @@ apps.
 | Bam | plan sprints, create and move tasks, run reports | 128 |
 | Banter | post, reply, react, and manage channels | 80 |
 | Bond | manage contacts, companies, deals, and pipelines | 69 |
+| Bastion | map controls to frameworks, read live evidence, draft fixes, answer questionnaires | 66 |
 | Brief | create and co-edit documents, manage versions | 48 |
 | Bill | create invoices, record payments, run billing | 47 |
 | Board | add and arrange canvas elements, promote to tasks | 40 |

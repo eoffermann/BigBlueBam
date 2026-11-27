@@ -14,6 +14,7 @@ import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { readLaunchpadCatalog, docDirForAppId } from './lib/tool-source.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -265,14 +266,19 @@ function generateAppCard(appName, meta, productCount) {
   // hand-curated display name.
   const heading = help && help.heading ? help.heading : displayName(appName);
 
-  // Counts line kept as a secondary detail.
-  const counts = meta.mcp_tool_count > 0
+  // Counts line kept as a secondary detail. A meta.json written by the
+  // docs-capture bridge is the screenshot array, with no counts: omit the line
+  // rather than print "undefined routes, undefined schemas".
+  const hasCounts = typeof meta.route_files === 'number' && typeof meta.schema_modules === 'number';
+  const counts = !hasCounts
+    ? ''
+    : meta.mcp_tool_count > 0
     ? `${meta.route_files} routes, ${meta.schema_modules} schemas, ${meta.mcp_tool_count} MCP tools`
     : `${meta.route_files} routes, ${meta.schema_modules} schemas`;
 
   // Description sentence: prefer the help.md blockquote; otherwise the counts
   // line stands alone (old behavior).
-  const description = help && help.description ? help.description : counts;
+  const description = help && help.description ? help.description : counts || displayName(appName);
 
   // Hero screenshot: prefer docs/apps/<app>/screenshots/light/<first>.png.
   const heroDir = path.join(ROOT, 'docs', 'apps', appName, 'screenshots', 'light');
@@ -286,7 +292,7 @@ function generateAppCard(appName, meta, productCount) {
 
   const parts = [`### ${heading}`, '', description];
   // Only repeat the counts line when the description came from help.md.
-  if (help && help.description) {
+  if (help && help.description && counts) {
     parts.push('', counts);
   }
   if (heroImg) {
@@ -570,16 +576,29 @@ function main() {
     }
   }
 
+  // The README app catalog is the Launchpad roster (plus the suite introduction):
+  // an app whose docs exist but which is not yet in LAUNCHPAD_CATALOG is still
+  // being built and is withheld from the README, exactly as it is withheld from
+  // the Launchpad, the /docs catalog and the published app count.
+  const launchpadDirs = new Set(readLaunchpadCatalog().map((e) => docDirForAppId(e.id)));
+  const readmeMetas = Object.fromEntries(
+    Object.entries(appMetas).filter(([name]) => name === 'introduction' || launchpadDirs.has(name)),
+  );
+  const withheld = Object.keys(appMetas).filter((name) => !(name in readmeMetas));
+  if (withheld.length) {
+    console.log(`  Withheld from the README (not in LAUNCHPAD_CATALOG yet): ${withheld.join(', ')}`);
+  }
+
   // --check: compare README AUTODOCS regions only; no writes, no side effects.
   if (checkMode) {
     console.log('[README check]');
-    checkReadme(appMetas);
+    checkReadme(readmeMetas);
     return;
   }
 
   // 1. README rewrite
   console.log('[README rewrite]');
-  rewriteReadme(appMetas);
+  rewriteReadme(readmeMetas);
   console.log('');
 
   // --readme-only stops here: no marketing sync, screenshot manifest, or regen

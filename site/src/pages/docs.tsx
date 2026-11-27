@@ -4,7 +4,7 @@ import {
   FileText, Bot, Server, Users, Rocket, HelpCircle,
   LayoutDashboard, MessageCircle, Handshake, Mail, DollarSign, ClipboardList,
   Calendar, BarChart3, Target, PenTool, Sparkles, Database, Clapperboard,
-  Activity, Headset, Building2, Ruler, GitMerge, ShieldCheck,
+  Activity, Headset, Building2, Ruler, GitMerge, ShieldCheck, Flame, ShoppingCart, Castle,
 } from 'lucide-react';
 import docsCatalog from '../content/docs-catalog.generated.json';
 import { MCP_TOOL_COUNT, APP_COUNT_WORDS, APP_NAMES_LIST } from '@/lib/facts';
@@ -72,6 +72,9 @@ const APP_ICON: Record<string, React.ReactNode> = {
   basis: <Ruler className="h-4 w-4" />,
   braid: <GitMerge className="h-4 w-4" />,
   bulwark: <ShieldCheck className="h-4 w-4" />,
+  burn: <Flame className="h-4 w-4" />,
+  bursar: <ShoppingCart className="h-4 w-4" />,
+  bastion: <Castle className="h-4 w-4" />,
 };
 
 const APP_COLOR: Record<string, string> = {
@@ -97,6 +100,9 @@ const APP_COLOR: Record<string, string> = {
   basis: 'bg-indigo-100 text-indigo-700',
   braid: 'bg-indigo-100 text-indigo-700',
   bulwark: 'bg-blue-100 text-blue-700',
+  burn: 'bg-orange-100 text-orange-700',
+  bursar: 'bg-teal-100 text-teal-700',
+  bastion: 'bg-stone-100 text-stone-700',
 };
 
 // Build the render model from the committed, auto-generated catalog. Each
