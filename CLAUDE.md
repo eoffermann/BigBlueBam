@@ -60,7 +60,7 @@ apps/
   bureau/           Bureau React SPA served by nginx at /bureau/.
   bin-api/          Bin Fastify REST API + WebSocket (internal :4016, proxied at /bin/api/, realtime at /bin/ws). 4 route files, 4 schema modules. DAM / object-storage backbone + structured-data editor; writes bytes straight to MinIO/S3 via @bigbluebam/storage. Does NOT emit Bolt events.
   bin/              Bin React SPA served by nginx at /bin/.
-  bay-api/          Bay Fastify REST API + WebSocket (internal :4017, proxied at /bay/api/, realtime at /bay/ws). 6 route files, 6 schema modules. Media review & approval (annotations, decisions) with public token-gated guest links served under /bay/api/v1/public/review/:token (a 48-hex path token is the sole credential; no session auth). needs bin-api + minio.
+  bay-api/          Bay Fastify REST API + WebSocket (internal :4017, proxied at /bay/api/, realtime at /bay/ws). 6 route files, 6 schema modules. Media review & approval (annotations, decisions) with public token-gated guest links. A guest opens `/bay/r#<token>` (the 48-hex token sits in the URL fragment, so it never reaches a server log or a Referer header); the SPA sends it in the `X-Bay-Review-Token` header to `GET /bay/api/v1/public/review` and `POST /bay/api/v1/public/review/comments`, and media streams from `GET /bay/api/v1/public/review/media?ticket=` with a short-lived ticket. The token is the sole credential (no session auth) and is stored only as a SHA-256 (`bay_review_links.token_hash`), so a link is shown once at mint time and cannot be re-displayed. needs bin-api + minio.
   bay/              Bay React SPA served by nginx at /bay/.
   blip-api/         Blip Fastify REST API + WebSocket + ingest (internal :4018, proxied at /blip/api/, realtime at /blip/ws, ingest at /blip/ingest/). 12 route files, 12 schema modules. App telemetry / log-ingest & observability: bearer-token ingest, live streaming log viewer, saved views + field indexing, watches/alerts (throttled Bolt events), transform pipelines, retention policies, timelapse, and scheduled reports. Screen-capture/export bytes live in Bin.
   blip/             Blip React SPA served by nginx at /blip/.
@@ -161,7 +161,7 @@ The entire stack runs via `docker compose up`. All services are accessed through
 - `http://DOMAIN/bin/api/` proxies to the Bin API
 - `http://DOMAIN/bin/ws` proxies Bin WebSocket connections (live structured-data edits + presence)
 - `http://DOMAIN/bay/` serves the Bay media-review SPA
-- `http://DOMAIN/bay/api/` proxies to the Bay API (incl. public token-gated guest review under /bay/api/v1/public/review/:token)
+- `http://DOMAIN/bay/api/` proxies to the Bay API (incl. public token-gated guest review at /bay/api/v1/public/review, token in the `X-Bay-Review-Token` header, guest page `/bay/r#<token>`)
 - `http://DOMAIN/bay/ws` proxies Bay WebSocket connections (live annotations/decisions)
 - `http://DOMAIN/helpdesk/` serves the Helpdesk portal SPA
 - `http://DOMAIN/helpdesk/api/` proxies to the Helpdesk API
