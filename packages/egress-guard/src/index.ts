@@ -320,6 +320,50 @@ export async function assertSafeSmtpTarget(cfg: SmtpEgressTarget, env?: NodeJS.P
 
 // ── Pinned dispatcher (closes DNS rebind) ─────────────────────────────────
 
+type LookupAddress = { address: string; family: number };
+type Resolve = (
+  hostname: string,
+  options: { all: true; verbatim: true },
+  callback: (err: NodeJS.ErrnoException | null, addresses: LookupAddress[]) => void,
+) => void;
+
+/**
+ * The `lookup` handed to net.connect: resolve, refuse the whole answer if any
+ * address is private/internal, then answer in the shape the CALLER asked for.
+ * Node's net.connect (autoSelectFamily, on by default since Node 20) calls it
+ * with `{ all: true }` and reads an ARRAY of `{ address, family }`; answering
+ * `(null, address, family)` there makes net read `.address` off a string and
+ * every connection fails with "Invalid IP address: undefined". The
+ * single-address form is kept for callers that pass `all: false`.
+ * Exported for tests; `resolve` and `isBlocked` are injectable for them.
+ */
+export function createPinnedLookup(
+  resolve: Resolve = lookupCb as unknown as Resolve,
+  isBlocked: (address: string, family: number) => boolean = isBlockedAddress,
+) {
+  return function pinnedLookup(
+    hostname: string,
+    options: { all?: boolean } | number | null | undefined,
+    callback: (err: Error | null, address: string | LookupAddress[], family?: number) => void,
+  ) {
+    const wantsAll = typeof options === 'object' && options !== null && options.all === true;
+    resolve(hostname, { all: true, verbatim: true }, (err, addresses) => {
+      if (err) return callback(err, wantsAll ? [] : '', 0);
+      if (!Array.isArray(addresses) || addresses.length === 0) {
+        return callback(new Error('DNS resolution returned no addresses'), wantsAll ? [] : '', 0);
+      }
+      for (const a of addresses) {
+        if (isBlocked(a.address, a.family)) {
+          return callback(new Error('Hostname resolves to a private/internal address'), wantsAll ? [] : '', 0);
+        }
+      }
+      if (wantsAll) return callback(null, addresses.map((a) => ({ address: a.address, family: a.family })));
+      const chosen = addresses[0]!;
+      callback(null, chosen.address, chosen.family);
+    });
+  };
+}
+
 /**
  * undici Agent that vets the addresses inside the lookup undici connects
  * with, so the address dialed is the address checked. Module-level so the
@@ -327,25 +371,7 @@ export async function assertSafeSmtpTarget(cfg: SmtpEgressTarget, env?: NodeJS.P
  */
 export const safeDispatcher = new Agent({
   connect: {
-    lookup(
-      hostname: string,
-      _options: unknown,
-      callback: (err: Error | null, address: string, family: number) => void,
-    ) {
-      lookupCb(hostname, { all: true, verbatim: true }, (err, addresses) => {
-        if (err) return callback(err, '', 0);
-        if (!Array.isArray(addresses) || addresses.length === 0) {
-          return callback(new Error('DNS resolution returned no addresses'), '', 0);
-        }
-        for (const a of addresses) {
-          if (isBlockedAddress(a.address, a.family)) {
-            return callback(new Error('Hostname resolves to a private/internal address'), '', 0);
-          }
-        }
-        const chosen = addresses[0]!;
-        callback(null, chosen.address, chosen.family);
-      });
-    },
+    lookup: createPinnedLookup() as never,
   },
 });
 

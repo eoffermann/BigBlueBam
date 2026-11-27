@@ -23,6 +23,7 @@
     "dotenv": "^16.4.0",
     "drizzle-orm": "^0.33.0",
     "ioredis": "^5.4.0",
+    "jszip": "^3.10.0",
     "meshoptimizer": "^0.22.0",
     "minio": "^8.0.0",
     "node-stream-zip": "^1.15.0",
@@ -38,7 +39,6 @@
   "devDependencies": {
     "@types/node": "^22.0.0",
     "@types/nodemailer": "^6.4.0",
-    "jszip": "^3.10.0",
     "tsup": "^8.0.0",
     "tsx": "^4.0.0",
     "typescript": "^5.4.0",
