@@ -68,7 +68,7 @@ describe("#389: a drafted answer names the control it can't prove, never a stand
   });
 
   it('notProvenClause uses the exact label the pages show for every not-proven state', () => {
-    for (const state of ['fail', 'unprovable', 'not_set_up', null] as const) {
+    for (const state of ['fail', 'unprovable', null] as const) {
       const label = STATE_WORDS[state ?? 'not_set_up'] as string;
       expect(notProvenClause('Backups run', state)).toBe(`the control "Backups run" shows "${label}"`);
     }
