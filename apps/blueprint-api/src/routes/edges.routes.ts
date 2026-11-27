@@ -59,7 +59,7 @@ export default async function edgeRoutes(fastify: FastifyInstance) {
         publishBoltEvent(
           'edge.created',
           'blueprint',
-          { 'diagram.id': request.params.id, 'edge.id': row.id, 'edge.kind': row.kind },
+          { diagram: { id: request.params.id }, edge: { id: row.id, kind: row.kind } },
           orgId,
           userId,
           'user',

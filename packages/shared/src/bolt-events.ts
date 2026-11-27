@@ -93,6 +93,64 @@ export async function publishBoltEvent(
   }
 }
 
+const UNSAFE_SEGMENTS = new Set(['__proto__', 'constructor', 'prototype']);
+
+function isPlainObject(v: unknown): v is Record<string, unknown> {
+  return v !== null && typeof v === 'object' && !Array.isArray(v) && !(v instanceof Date);
+}
+
+/**
+ * The wire shape of a Bolt payload is NESTED (issue #316). Bolt reads every field by walking one
+ * object level per dot: the rule condition engine, the template resolver, trigger filters and the
+ * per-app dispatch hooks all do `path.split('.')`. The catalog's dotted names (`diagram.id`,
+ * `org.id`) therefore describe `{ diagram: { id }, org: { id } }`, and a top-level key that is the
+ * literal string `'diagram.id'` can never be read by any of them.
+ *
+ * Publishers should send nested objects (scripts/check-bolt-catalog.mjs fails on a literal dotted
+ * key at a publish call). Payloads assembled dynamically, which the static guard cannot see (the
+ * Board and Blast payload builders), are expanded here, at the one place every ingest request is
+ * built, so the wire shape is right for every publisher. Returns a new object; the input is not
+ * mutated. Only top-level keys are expanded: nested values are data. A dotted key whose path
+ * collides with a non-object value, or that has an empty or unsafe segment, is left as it is.
+ */
+export function nestBoltPayload(payload: Record<string, unknown>): Record<string, unknown> {
+  if (!isPlainObject(payload)) return payload;
+  const out: Record<string, unknown> = {};
+  const dotted: [string, unknown][] = [];
+  for (const [k, v] of Object.entries(payload)) {
+    if (k.includes('.')) dotted.push([k, v]);
+    else out[k] = v;
+  }
+  for (const [key, value] of dotted) {
+    const parts = key.split('.');
+    if (parts.some((p) => p.length === 0 || UNSAFE_SEGMENTS.has(p))) {
+      out[key] = value;
+      continue;
+    }
+    // Walk (copying each level, so the caller's nested objects are never mutated) and set the leaf.
+    let cur: Record<string, unknown> = out;
+    let ok = true;
+    for (let i = 0; i < parts.length - 1; i++) {
+      const p = parts[i]!;
+      const existing = cur[p];
+      if (existing === undefined) cur[p] = {};
+      else if (isPlainObject(existing)) cur[p] = { ...existing };
+      else {
+        ok = false;
+        break;
+      }
+      cur = cur[p] as Record<string, unknown>;
+    }
+    const leaf = parts[parts.length - 1]!;
+    if (!ok || (cur[leaf] !== undefined && value !== undefined)) {
+      out[key] = value;
+      continue;
+    }
+    if (cur[leaf] === undefined) cur[leaf] = value;
+  }
+  return out;
+}
+
 /** What publishBoltEventChecked reports: `ok` only for a 2xx from bolt-api ingest. */
 export interface BoltPublishOutcome {
   ok: boolean;
@@ -132,7 +190,7 @@ export async function publishBoltEventChecked(
       body: JSON.stringify({
         event_type: eventType,
         source,
-        payload,
+        payload: nestBoltPayload(payload),
         org_id: orgId,
         actor_id: actorId,
         actor_type: resolvedActorType,

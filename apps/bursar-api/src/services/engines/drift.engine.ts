@@ -496,13 +496,13 @@ async function recordFinding(
       void publishBoltEvent(
         'drift.detected',
         'bursar',
-        { 'mismatch.id': res.id, detector, severity: input.severity, 'vendor.id': finding.vendor_id ?? null, 'org.id': orgId },
+        { mismatch: { id: res.id }, detector, severity: input.severity, vendor: { id: finding.vendor_id ?? null }, org: { id: orgId } },
         orgId,
       ).catch(() => {});
       void publishBoltEvent(
         'mismatch.opened',
         'bursar',
-        { 'mismatch.id': res.id, detector, severity: input.severity, 'org.id': orgId },
+        { mismatch: { id: res.id }, detector, severity: input.severity, org: { id: orgId } },
         orgId,
       ).catch(() => {});
     }

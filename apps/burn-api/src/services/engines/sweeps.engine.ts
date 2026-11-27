@@ -65,7 +65,11 @@ export async function runSilentDeliverableSweep(
     raised += res.count;
     for (const e of emitted) {
       await publishBoltEvent('deliverable.silent', 'burn', {
-        'deliverable.id': e.deliverable_id, 'engagement.id': e.engagement_id, due_date: e.due_date, days_remaining: e.days_remaining, 'org.id': oid,
+        deliverable: { id: e.deliverable_id },
+        engagement: { id: e.engagement_id },
+        due_date: e.due_date,
+        days_remaining: e.days_remaining,
+        org: { id: oid },
       }, oid).catch(() => {});
     }
   }
@@ -146,14 +150,16 @@ export async function runCalibrationRecompute(
       await runInOrgScope(oid, async (tx) => {
         await tx.execute(sql`UPDATE burn_org_settings SET gate_mode = 'advisory', gate_demoted_at = now() WHERE organization_id = ${oid} AND gate_mode = 'blocking'`);
       });
-      await publishBoltEvent('gate.demoted', 'burn', { 'org.id': oid, from_mode: 'blocking', to_mode: 'advisory', trigger: 'coverage', window_days: settings.min_gate_unavailable_days }, oid).catch(() => {});
+      await publishBoltEvent('gate.demoted', 'burn', { org: { id: oid }, from_mode: 'blocking', to_mode: 'advisory', trigger: 'coverage', window_days: settings.min_gate_unavailable_days }, oid).catch(() => {});
       demoted += 1;
     }
     // Coverage-degraded signal (fired whether or not blocking, so operators see the gap).
     if (coverage < Number(settings.min_gate_coverage_pct)) {
       await publishBoltEvent('gate.coverage_degraded', 'burn', {
-        'org.id': oid, coverage_pct_band: coverage < 0.5 ? 'below_50' : coverage < 0.9 ? '50_90' : '90_plus',
-        window_days: 1, cause: gateCalls === 0 ? 'not_configured' : 'unavailable',
+        org: { id: oid },
+        coverage_pct_band: coverage < 0.5 ? 'below_50' : coverage < 0.9 ? '50_90' : '90_plus',
+        window_days: 1,
+        cause: gateCalls === 0 ? 'not_configured' : 'unavailable',
       }, oid).catch(() => {});
       degraded += 1;
     }

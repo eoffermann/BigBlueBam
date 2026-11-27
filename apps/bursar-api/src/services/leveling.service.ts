@@ -397,7 +397,7 @@ export async function overrideCoverage(viewer: Viewer, coverageId: string, body:
   await publishBoltEvent(
     'exclusion.detected',
     'bursar',
-    { 'offer.id': result.offer_id, 'request.id': null, 'org.id': viewer.org_id, gap_count: 1 },
+    { offer: { id: result.offer_id }, request: { id: null }, org: { id: viewer.org_id }, gap_count: 1 },
     viewer.org_id,
     viewer.id,
   ).catch(() => {});

@@ -71,6 +71,36 @@ test('publishBoltEvent: a nested object is declared by its dotted children; dyna
   assert.deepEqual(checkPayloadCalls('b.ts', `publishBoltEvent('deal.weird', 'bond', { anything: 1 }, orgId);`, schemas), []);
 });
 
+test('#316: a literal dotted payload key fails, even though it matches the dotted catalog name, and cannot be baselined', () => {
+  const bad = `publishBoltEvent('deal.rotting', 'bond', { 'deal.id': d.id, days: 3 }, orgId);`;
+  const v = checkPayloadCalls('b.ts', bad, schemas);
+  assert.equal(v.length, 1);
+  assert.equal(v[0].kind, 'dotted-key');
+  assert.match(v[0].reason, /literal dotted payload key "deal\.id".*deal: \{ id: \.\.\. \}/);
+  assert.equal(applyDriftBaseline(v, { [v[0].driftKey]: 316 }, 'baseline.json').filter((x) => x.kind === 'dotted-key').length, 1);
+  // Checked for unknown schemas and for the Bastion outbox too.
+  assert.equal(checkPayloadCalls('b.ts', `publishBoltEvent('deal.weird', 'bond', { 'org.id': o }, o);`, schemas).length, 1);
+  assert.equal(checkPayloadCalls('a.ts', `enqueueBastionEvent('questionnaire.drafted', { questionnaire_id: q, 'org.id': o }, tx, opts);`, schemas).filter((x) => x.kind === 'dotted-key').length, 1);
+  assert.deepEqual(checkPayloadCalls('b.ts', `publishBoltEvent('deal.rotting', 'bond', { deal: { id: d.id }, days: 3 }, orgId);`, schemas), []);
+});
+
+test('#316: no publisher in the repo sends a literal dotted payload key', () => {
+  const root = join(import.meta.dirname, '..', '..');
+  const found = [];
+  const walk = (dir) => {
+    for (const n of readdirSync(dir)) {
+      if (['node_modules', 'dist', 'build', '__tests__'].includes(n)) continue;
+      const p = join(dir, n);
+      if (statSync(p).isDirectory()) walk(p);
+      else if (n.endsWith('.ts') && !n.endsWith('.d.ts') && !n.endsWith('.test.ts')) {
+        found.push(...checkPayloadCalls(p, readFileSync(p, 'utf8'), new Map()).filter((x) => x.kind === 'dotted-key').map((x) => `${p}: ${x.reason}`));
+      }
+    }
+  };
+  walk(join(root, 'apps'));
+  assert.deepEqual(found, []);
+});
+
 test('the baseline hides known drift and reports entries that are no longer sent', () => {
   const v = checkPayloadCalls('b.ts', `publishBoltEvent('deal.rotting', 'bond', { stage: 1 }, o);`, schemas);
   const out = applyDriftBaseline(v, { 'bond:deal.rotting:stage': 1, 'bond:deal.rotting:gone': 2 }, 'baseline.json');

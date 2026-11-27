@@ -164,7 +164,10 @@ export async function runVarianceSweep(
     // Emit refs-only variance.detected AFTER the transaction commits.
     for (const f of emitted) {
       await publishBoltEvent('variance.detected', 'burn', {
-        'engagement.id': f.engagement_id, variance_kind: f.variance_kind, severity: f.severity, 'org.id': oid,
+        engagement: { id: f.engagement_id },
+        variance_kind: f.variance_kind,
+        severity: f.severity,
+        org: { id: oid },
       }, oid).catch(() => {});
     }
   }

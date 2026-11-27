@@ -299,11 +299,38 @@ export function checkPayloadCalls(file, text, schemas) {
       const eventName = literal(args[0] ?? '');
       const source = typeof call.source === 'string' ? call.source : literal(args[call.source] ?? '');
       const payloadArg = args[call.payload];
-      if (!eventName || !source || payloadArg === undefined) continue;
+      if (!eventName || payloadArg === undefined) continue;
+      // #316: checked even when the source is dynamic or the schema is unreadable.
+      out.push(...dottedKeyViolations({ file, source: source ?? '?', eventName, payloadArg, callee: m[1] }));
+      if (!source) continue;
       out.push(...payloadKeyViolations({ file, source, eventName, payloadArg, schemas, callee: m[1] }));
     }
   }
   return out;
+}
+
+/**
+ * Issue #316: a quoted top-level payload key containing a dot (`'diagram.id': x`). Bolt reads every
+ * field by walking one object level per dot, so the catalog name `diagram.id` means
+ * `{ diagram: { id } }`; the literal key is unreadable by rule conditions, templates and trigger
+ * filters. It also passes the declared-name check above, because the key string equals the
+ * catalog's dotted name. Not baselinable: send the nested object instead.
+ */
+export function dottedKeyViolations({ file, source, eventName, payloadArg, callee }) {
+  const lit = objectLiteralKeys(payloadArg);
+  if (!lit) return [];
+  return [...new Set(lit.keys.filter((k) => k.includes('.')))].map((k) => {
+    const [head, ...rest] = k.split('.');
+    return {
+      file,
+      callee,
+      eventName,
+      source,
+      kind: 'dotted-key',
+      driftKey: `dotted-key:${source}:${eventName}:${k}`,
+      reason: `${callee}('${eventName}') sends the literal dotted payload key "${k}", which Bolt rules, templates and filters can never read (they walk ${k} as ${head} -> ${rest.join(' -> ')}); send a nested object instead, e.g. { ${head}: { ${rest.join('.')}: ... } } (#316)`,
+    };
+  });
 }
 
 /**
@@ -333,7 +360,7 @@ export function payloadKeyViolations({ file, source, eventName, payloadArg, sche
  */
 export function applyDriftBaseline(violations, baseline, baselineFile) {
   const seen = new Set(violations.map((v) => v.driftKey));
-  const kept = violations.filter((v) => !(v.driftKey in baseline));
+  const kept = violations.filter((v) => v.kind === 'dotted-key' || !(v.driftKey in baseline));
   const stale = Object.keys(baseline)
     .filter((k) => !seen.has(k))
     .map((k) => ({

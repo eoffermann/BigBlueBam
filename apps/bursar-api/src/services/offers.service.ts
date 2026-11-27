@@ -144,7 +144,7 @@ export async function createOffer(
   await publishBoltEvent(
     'offer.received',
     'bursar',
-    { 'offer.id': outcome.offer.id, 'request.id': requestId, 'org.id': viewer.org_id },
+    { offer: { id: outcome.offer.id }, request: { id: requestId }, org: { id: viewer.org_id } },
     viewer.org_id,
     viewer.id,
   ).catch(() => {});
@@ -260,7 +260,7 @@ export async function unsealOffer(viewer: Viewer, offerId: string, body: BursarU
   await publishBoltEvent(
     'offer.unsealed',
     'bursar',
-    { 'offer.id': offerId, 'request.id': result.request_id, 'org.id': viewer.org_id },
+    { offer: { id: offerId }, request: { id: result.request_id }, org: { id: viewer.org_id } },
     viewer.org_id,
     viewer.id,
   ).catch(() => {});
