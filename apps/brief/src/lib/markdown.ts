@@ -1,4 +1,5 @@
 import TurndownService from 'turndown';
+import DOMPurify from 'dompurify';
 
 // ----- HTML to Markdown (for saving to backend) -----
 
@@ -185,4 +186,26 @@ function escapeHtml(str: string): string {
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;');
+}
+
+// ----- Render-time sanitization -----
+
+const SANITIZE_CONFIG = { ADD_ATTR: ['target'] };
+
+/**
+ * Sanitize HTML string: strip dangerous tags/attributes.
+ *
+ * SECURITY: brief had no client-side sanitizer, and document-detail.tsx
+ * rendered the stored `html_snapshot` (and markdownToHtml output, which does
+ * not escape raw HTML in the source) straight into dangerouslySetInnerHTML.
+ * Write-time sanitization in brief-api is the primary defense, but it cannot
+ * cover rows written before it existed, rows written by another service, or
+ * payloads an older DOMPurify allowed. Re-sanitizing at render is cheap; this
+ * matches apps/frontend and apps/blueprint.
+ *
+ * `target` is added to the allowlist so Tiptap Link output keeps opening in a
+ * new tab.
+ */
+export function sanitizeHtml(html: string): string {
+  return DOMPurify.sanitize(html, SANITIZE_CONFIG);
 }

@@ -201,7 +201,13 @@ function CommentNodeView({
 }: CommentNodeViewProps) {
   const canDelete = isAdmin || node.author_id === currentUserId;
   const canReply = depth < 4;
-  const bodyHtml = node.body_html ?? sanitizeHtml(markdownToHtml(node.body_markdown));
+  // SECURITY: sanitize BOTH branches. This used to read
+  //   node.body_html ?? sanitizeHtml(markdownToHtml(node.body_markdown))
+  // so whenever the server-stored body_html was present the `??`
+  // short-circuited and it reached dangerouslySetInnerHTML unsanitized.
+  // Write-time sanitization cannot cover rows written before it existed or
+  // by another service, so re-sanitize at render.
+  const bodyHtml = sanitizeHtml(node.body_html ?? markdownToHtml(node.body_markdown));
   const isReplying = replyingTo === node.id;
 
   return (
