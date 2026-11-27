@@ -1,11 +1,12 @@
 // #400: scripts/docs/bridge.mjs (screenshot list) and scripts/docs/extract.mjs
 // (route/schema counts) both wrote docs/apps/<app>/meta.json, so its shape
 // depended on which stage ran last. One file, one writer: extract owns
-// meta.json, the screenshot stages own screenshots.json.
+// meta.json; the bridge copies PNGs only; the legacy scene capture writes its
+// list to screenshots.json.
 
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, relative } from 'node:path';
 import { test } from 'node:test';
@@ -31,7 +32,7 @@ const COUNTS = {
   generated_at: '2026-11-27T00:00:00.000Z',
 };
 
-test('bridge writes the screenshot list to screenshots.json and never touches meta.json', () => {
+test('bridge copies the doc PNGs and never touches meta.json (the per-shot record stays in the capture manifest)', () => {
   const root = mkdtempSync(join(tmpdir(), 'bbb-bridge-'));
   try {
     mkdirSync(join(root, 'screenshots', 'demo'), { recursive: true });
@@ -60,12 +61,8 @@ test('bridge writes the screenshot list to screenshots.json and never touches me
 
     assert.equal(readFileSync(appMetaPath(root, 'demo'), 'utf8'), metaBefore, 'meta.json is extract-owned');
     assert.deepEqual(readAppMeta(root, 'demo'), COUNTS);
-    const shots = JSON.parse(readFileSync(appScreenshotsPath(root, 'demo'), 'utf8'));
-    assert.ok(Array.isArray(shots));
-    assert.deepEqual(
-      shots.map((s) => [s.id, s.label, s.theme, s.file.split('\\').join('/')]),
-      [['01-home', 'Home', 'light', 'docs/apps/demo/screenshots/light/01-home.png']],
-    );
+    assert.equal(existsSync(appScreenshotsPath(root, 'demo')), false, 'bridge writes no list file');
+    assert.deepEqual(readdirSync(join(root, 'docs', 'apps', 'demo')).sort(), ['meta.json', 'screenshots']);
     assert.equal(readFileSync(join(root, 'docs', 'apps', 'demo', 'screenshots', 'light', '01-home.png'), 'utf8'), 'png-bytes');
   } finally {
     rmSync(root, { recursive: true, force: true });

@@ -6,19 +6,22 @@
  * The recipe-driven engine (packages/docs-capture) writes a flat shared tree
  * `screenshots/<app>/<id>.png` + `screenshots/manifest.json`. The docs/help/
  * marketing pipeline instead expects `docs/apps/<app>/screenshots/<light|dark>/
- * <NN>-<slug>.png` + a per-app `meta.json`. This script maps the former into the
- * latter for every capture that opted into the docs via its recipe `doc:` field
- * (surfaced on the manifest entry as `doc: { order, label }`).
+ * <NN>-<slug>.png`. This script maps the former into the latter for every
+ * capture that opted into the docs via its recipe `doc:` field (surfaced on the
+ * manifest entry as `doc: { order, label }`).
  *
  * For each doc-marked entry it copies the PNG to
  *   docs/apps/<app>/screenshots/<theme>/<NN>-<slug>.png
  * where NN = zero-padded `doc.order` and slug = the recipe id with the `<app>-`
  * prefix and any trailing `-dark` removed (so a light recipe and its `-dark`
- * sibling share an ordinal and land in light/ and dark/). It then regenerates
- * the per-app `docs/apps/<app>/screenshots.json` array (id/label/theme/file/
- * sha256/width/height/captured_at). It never writes meta.json: that file is
- * extract.mjs's route/schema counts (one file, one writer, #400; see
- * scripts/docs/lib/app-doc-files.mjs).
+ * sibling share an ordinal and land in light/ and dark/).
+ *
+ * It does NOT write `docs/apps/<app>/meta.json`. That file is owned by
+ * scripts/docs/extract.mjs (an object: route_files, schema_modules, src_hash,
+ * mcp_tool_count, ...) and read by publish.mjs for the README card. The bridge
+ * used to overwrite it with an array of shots, which no consumer reads, and
+ * the README card then printed "undefined routes, undefined schemas". The
+ * per-shot record (sha256, size, capture time) lives in screenshots/manifest.json.
  *
  * Captures without a `doc:` field are ignored here; they stay in the shared
  * `screenshots/` tree for ad-hoc / marketing use.
@@ -28,12 +31,14 @@
  *   node scripts/docs/bridge.mjs --apps=bam,bond  # subset
  *   node scripts/docs/bridge.mjs --dry-run        # report only, no writes
  *   node scripts/docs/bridge.mjs --root=<dir>     # another repo-shaped tree (tests)
+ *
+ * One file, one writer (#400): see scripts/docs/lib/app-doc-files.mjs for who
+ * owns each generated file under docs/apps/<app>/.
  */
 
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { appScreenshotsPath } from './lib/app-doc-files.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const args = process.argv.slice(2);
@@ -63,8 +68,8 @@ function slugFor(id, app) {
   return s;
 }
 
-/** Remove the *.png currently in an app's light/ + dark/ dirs (screenshots.json is the
- *  authoritative regenerated list, so stale renamed slugs must not linger). */
+/** Remove the *.png currently in an app's light/ + dark/ dirs (the bridged set
+ *  is regenerated from the manifest, so stale renamed slugs must not linger). */
 function clearThemeDirs(app) {
   for (const theme of ['light', 'dark']) {
     const dir = path.join(ROOT, 'docs', 'apps', app, 'screenshots', theme);
@@ -102,14 +107,13 @@ function main() {
     if (!dryRun) clearThemeDirs(app);
     entries.sort((a, b) => a.doc.order - b.doc.order || a.theme.localeCompare(b.theme));
 
-    const meta = [];
+    let bridged = 0;
     for (const e of entries) {
       const slug = slugFor(e.id, app);
       const fname = `${pad2(e.doc.order)}-${slug}.png`;
       const src = path.join(SHOTS_ROOT, ...e.file.split('/'));
       const destDir = path.join(ROOT, 'docs', 'apps', app, 'screenshots', e.theme);
       const dest = path.join(destDir, fname);
-      const relFile = path.join('docs', 'apps', app, 'screenshots', e.theme, fname);
 
       if (!fs.existsSync(src)) {
         console.warn(`  [skip] ${app}/${e.id}: source image missing (${e.file})`);
@@ -121,24 +125,10 @@ function main() {
         fs.copyFileSync(src, dest);
       }
       copied++;
-      meta.push({
-        id: `${pad2(e.doc.order)}-${slug}`,
-        label: e.doc.label,
-        theme: e.theme,
-        file: relFile,
-        sha256: e.sha256,
-        width: e.width,
-        height: e.height,
-        captured_at: e.capturedAt,
-      });
+      bridged++;
     }
 
-    const listPath = appScreenshotsPath(ROOT, app);
-    if (!dryRun) {
-      fs.mkdirSync(path.dirname(listPath), { recursive: true });
-      fs.writeFileSync(listPath, `${JSON.stringify(meta, null, 2)}\n`);
-    }
-    summary.push(`${app}: ${meta.length} image(s)`);
+    summary.push(`${app}: ${bridged} image(s)`);
   }
 
   console.log(`${dryRun ? '[dry-run] ' : ''}Bridged ${copied} doc image(s)${missing ? ` (${missing} source(s) missing)` : ''} across ${summary.length} app(s):`);

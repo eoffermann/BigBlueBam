@@ -7,11 +7,14 @@
  *                     (`{ app, route_files, schema_modules, mcp_tool_count,
  *                     src_hash, ... }`). Read by compose, publish (README
  *                     cards), check-app-counts and the docs book.
- *   screenshots.json  written by the screenshot stages (scripts/docs/bridge.mjs
- *                     from the recipe engine's manifest, and the legacy
- *                     scripts/docs/capture.mjs / docs-capture runScenes). An
- *                     array of `{ id, label, theme, file, sha256, width,
- *                     height, captured_at }`, one per doc screenshot.
+ *   screenshots.json  written only by the legacy scene capture
+ *                     (scripts/docs/capture.mjs and docs-capture runScenes):
+ *                     an array of `{ id, label, theme, file, sha256, width,
+ *                     height, captured_at }`, one per screenshot.
+ *
+ * scripts/docs/bridge.mjs (the recipe engine's path) writes neither: it only
+ * copies PNGs into docs/apps/<app>/screenshots/<theme>/, and the per-shot
+ * record stays in screenshots/manifest.json.
  *
  * Before #400 the screenshot stages also wrote meta.json, so its shape
  * depended on which stage ran last. Every path to these files goes through

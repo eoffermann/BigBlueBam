@@ -36,6 +36,12 @@ export interface RunOptions {
    * (the caller routes the flat output to the right place).
    */
   themeOverride?: 'light' | 'dark';
+  /**
+   * Text that must not be visible in any capture. Filled by the workspace
+   * guard with the names and emails of members tolerated through
+   * DOCS_CAPTURE_ALLOW_MEMBER_EMAILS.
+   */
+  forbiddenText?: string[];
 }
 
 export interface RunResult {
@@ -245,6 +251,7 @@ async function captureRecipe(
     // any stale asset from a prior run so it can't linger as a wrong capture.
     const verdict = await verifyBeforeCapture(page, toArray(recipe.expect), toArray(recipe.expectNot), {
       appSegment: recipe.allowOffApp ? undefined : firstSegment(recipe.route),
+      forbiddenText: opts.forbiddenText,
     });
     if (!verdict.ok) {
       if (fs.existsSync(file)) fs.rmSync(file);
@@ -300,29 +307,60 @@ async function captureRecipe(
 // ---------------------------------------------------------------------------
 
 /**
+ * Emails named in DOCS_CAPTURE_ALLOW_MEMBER_EMAILS (comma-separated, matched
+ * case-insensitively). Meant for one case: the local stack's own operator
+ * (typically the platform SuperUser) is a member of the demo workspace and
+ * removing that membership just to take screenshots would be a destructive
+ * edit to the dev database. Every member listed here is still treated as a
+ * real person: their name and email become forbidden page text, so any shot
+ * that shows them fails verification exactly as an unknown real member would.
+ */
+export function allowedMemberEmails(raw = process.env.DOCS_CAPTURE_ALLOW_MEMBER_EMAILS): Set<string> {
+  return new Set(
+    (raw ?? '')
+      .split(',')
+      .map((s) => s.trim().toLowerCase())
+      .filter(Boolean),
+  );
+}
+
+/**
  * Fails the whole run if the capture workspace has any member whose email is
  * not on a reserved demo domain. Member lists, pickers and DM sidebars show
  * names without emails, so the per-page email check alone cannot catch them.
  * Service accounts (users.kind = 'service') are not people and are allowed.
+ * Members explicitly listed in DOCS_CAPTURE_ALLOW_MEMBER_EMAILS do not stop
+ * the run; their names and emails are returned so every capture can assert
+ * they are not visible.
  */
 async function assertDemoWorkspace(
   browser: Browser,
   env: RunOptions['env'],
   storageState: Record<string, unknown>,
-): Promise<void> {
+  log: (msg: string) => void,
+): Promise<string[]> {
   const context = await browser.newContext();
   try {
     await context.addCookies(((storageState.cookies as never[]) ?? []) as Parameters<typeof context.addCookies>[0]);
     const res = await context.request.get(`${env.baseUrl}/b3/api/org/members`);
     if (!res.ok()) throw new Error(`workspace check: GET /b3/api/org/members returned ${res.status()}`);
     const body = (await res.json()) as { data?: { email?: string; display_name?: string; kind?: string }[] };
-    const real = (body.data ?? []).filter((m) => m.kind !== 'service' && !isDemoEmail(m.email ?? ''));
+    const nonDemo = (body.data ?? []).filter((m) => m.kind !== 'service' && !isDemoEmail(m.email ?? ''));
+    const allowList = allowedMemberEmails();
+    const tolerated = nonDemo.filter((m) => allowList.has((m.email ?? '').toLowerCase()));
+    const real = nonDemo.filter((m) => !allowList.has((m.email ?? '').toLowerCase()));
     if (real.length > 0) {
       const names = real.map((m) => m.display_name ?? '(no name)').join(', ');
       throw new Error(
         `workspace "${env.workspaceSlug}" has ${real.length} non-demo member(s): ${names}. Remove them from the capture workspace first; shipped captures must show only demo people.`,
       );
     }
+    if (tolerated.length > 0) {
+      log(
+        `[guard] tolerating ${tolerated.length} listed non-demo member(s) via DOCS_CAPTURE_ALLOW_MEMBER_EMAILS; any shot that shows their name or email will fail`,
+      );
+    }
+    return tolerated.flatMap((m) => [m.email ?? '', m.display_name ?? '']).filter((s) => s.trim().length > 0);
   } finally {
     await context.close();
   }
@@ -366,7 +404,8 @@ export async function runRecipes(recipes: LoadedRecipe[], opts: RunOptions): Pro
     const anyState = authByIdentity.get('admin') ?? [...authByIdentity.values()][0];
     if (anyState) {
       log('[guard] checking the workspace has only demo members');
-      await assertDemoWorkspace(browser, opts.env, anyState);
+      const forbidden = await assertDemoWorkspace(browser, opts.env, anyState, log);
+      opts = { ...opts, forbiddenText: [...(opts.forbiddenText ?? []), ...forbidden] };
     }
 
     for (const loaded of recipes) {
