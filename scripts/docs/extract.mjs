@@ -13,7 +13,7 @@ import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { parseToolsFromFile, APP_TOOL_MODULES, TOOLS_DIR } from './lib/tool-source.mjs';
+import { parseToolsFromFile, APP_TOOL_MODULES, TOOLS_DIR, readLaunchpadCatalog } from './lib/tool-source.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -62,6 +62,8 @@ const APP_REGISTRY = {
   braid:    { nginxPath: '/braid/',    apiPort: 4020, apiDir: 'braid-api',    appId: 'braid' },
   bulwark:  { nginxPath: '/bulwark/',  apiPort: 4021, apiDir: 'bulwark-api',  appId: 'bulwark' },
   burn:     { nginxPath: '/burn/',     apiPort: 4022, apiDir: 'burn-api',     appId: 'burn' },
+  bursar:   { nginxPath: '/bursar/',   apiPort: 4023, apiDir: 'bursar-api',   appId: 'bursar' },
+  bastion:  { nginxPath: '/bastion/',  apiPort: 4024, apiDir: 'bastion-api',  appId: 'bastion' },
   helpdesk: { nginxPath: '/helpdesk/', apiPort: 4001, apiDir: 'helpdesk-api', appId: 'helpdesk' },
 };
 
@@ -77,17 +79,36 @@ function ensureDir(dirPath) {
 
 /**
  * Compute SHA-256 of all *.ts files under a directory, concatenated in sorted
- * order. Returns hex string.
+ * order. Returns hex string. Platform-independent (#398): files are ordered by
+ * their POSIX path relative to `dir` and hashed with CRLF folded to LF, so a
+ * Windows autocrlf checkout and a Linux CI checkout of the same commit agree
+ * and docs:generate does not rewrite every meta.json when the platform changes.
  */
 function hashSourceTree(dir) {
   if (!fs.existsSync(dir)) return null;
   const hash = createHash('sha256');
-  const files = collectFiles(dir, /\.ts$/);
-  files.sort();
-  for (const f of files) {
-    hash.update(fs.readFileSync(f));
+  const files = collectFiles(dir, /\.ts$/)
+    .map((f) => ({ f, key: path.relative(dir, f).split(path.sep).join('/') }))
+    .sort((a, b) => (a.key < b.key ? -1 : a.key > b.key ? 1 : 0));
+  for (const { f } of files) {
+    hash.update(fs.readFileSync(f, 'utf-8').replace(/\r\n/g, '\n'));
   }
   return hash.digest('hex');
+}
+
+/**
+ * Keep the previous `generated_at` when nothing else in the JSON changed, so a
+ * rerun on unchanged sources leaves the file byte-identical (#398).
+ */
+function withStableTimestamp(next, prevPath) {
+  try {
+    const prev = JSON.parse(fs.readFileSync(prevPath, 'utf-8'));
+    const strip = ({ generated_at: _ignored, ...rest }) => JSON.stringify(rest);
+    if (prev.generated_at && strip(prev) === strip(next)) return { ...next, generated_at: prev.generated_at };
+  } catch {
+    // No previous file (or unreadable): keep the fresh timestamp.
+  }
+  return next;
 }
 
 function collectFiles(dir, pattern) {
@@ -235,6 +256,21 @@ function main() {
   if (dryRun) console.log('  (dry-run mode)');
   console.log('');
 
+  // The Launchpad roster is the fact; APP_REGISTRY only adds API metadata to
+  // it. A Launchpad app missing here would get no mcp-tools.md or meta.json,
+  // silently (Bastion and Bursar shipped that way, #395), so refuse to run.
+  const registeredIds = new Set(Object.values(APP_REGISTRY).map((r) => r.appId));
+  const unregistered = readLaunchpadCatalog()
+    .map((e) => e.id)
+    .filter((id) => !registeredIds.has(id));
+  if (unregistered.length > 0) {
+    console.error(
+      `ERROR: Launchpad app(s) missing from APP_REGISTRY in scripts/docs/extract.mjs: ${unregistered.join(', ')}.\n` +
+        '  Add an entry (nginx path, API port, API dir) for each so its MCP tool reference is generated.',
+    );
+    process.exit(1);
+  }
+
   const toolsDir = TOOLS_DIR;
   const allMeta = [];
 
@@ -289,14 +325,18 @@ function main() {
     const metaPath = path.join(appDocsDir, 'meta.json');
     if (!dryRun) {
       ensureDir(appDocsDir);
-      fs.writeFileSync(metaPath, JSON.stringify(meta, null, 2) + '\n', 'utf-8');
+      fs.writeFileSync(metaPath, JSON.stringify(withStableTimestamp(meta, metaPath), null, 2) + '\n', 'utf-8');
     }
   }
 
+  // changed-apps.json records the most recent extract that saw a source change.
+  // A run that detects no change leaves it as is (rewriting it with an empty
+  // list would make every rerun of docs:generate dirty the tree).
   const changedPath = path.join(ROOT, 'docs', 'auto', 'changed-apps.json');
-  if (!dryRun) {
+  if (!dryRun && changes.length > 0) {
     ensureDir(path.join(ROOT, 'docs', 'auto'));
-    fs.writeFileSync(changedPath, JSON.stringify({ generated_at: new Date().toISOString(), changed: changes }, null, 2) + '\n', 'utf-8');
+    const next = withStableTimestamp({ generated_at: new Date().toISOString(), changed: changes }, changedPath);
+    fs.writeFileSync(changedPath, JSON.stringify(next, null, 2) + '\n', 'utf-8');
   }
   console.log(`Change detection: ${changes.length} app(s) changed`);
   for (const c of changes) {

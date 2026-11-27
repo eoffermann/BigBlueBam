@@ -4,19 +4,32 @@
  * Stage 4: Compose
  *
  * Assembles guide.md and marketing.md for each app from extracted metadata,
- * screenshots, MCP tools, and narrative partials.
+ * screenshots, MCP tools, and the source partials _narrative.md (guide) and
+ * _marketing_hook.md (marketing).
+ *
+ * Ownership (#398): compose only writes a file it generated itself. A generated
+ * file carries GENERATED_MARKER (or, for files composed before the marker, a
+ * `generated:` front-matter key). A guide.md or marketing.md without either is
+ * hand-written and is never touched. An app with no source partial is skipped:
+ * compose no longer invents stub narratives or hooks. A file whose content
+ * would differ only in its `generated:` timestamp is left as is, so rerunning
+ * the stage on unchanged sources produces no diff. See scripts/docs/lib/
+ * generated-marker.mjs.
  *
  * Usage:
- *   node scripts/docs/compose.mjs [--apps bond,bench] [--dry-run]
+ *   node scripts/docs/compose.mjs [--apps=bond,bench] [--dry-run] [--root=<dir>]
+ *
+ * --root points the stage at another repo-shaped tree (used by the tests in
+ * scripts/lib/docs-compose-ownership.test.mjs); it defaults to this repo.
  */
 
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { GENERATED_MARKER, isUnchanged, planOutput } from './lib/generated-marker.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const ROOT = path.resolve(__dirname, '..', '..');
 
 // ---------------------------------------------------------------------------
 // CLI args
@@ -24,17 +37,23 @@ const ROOT = path.resolve(__dirname, '..', '..');
 const args = process.argv.slice(2);
 const dryRun = args.includes('--dry-run');
 const appsFlag = args.find((a) => a.startsWith('--apps='));
-const requestedApps = appsFlag ? appsFlag.split('=')[1].split(',').map((s) => s.trim()) : null;
+const requestedApps = appsFlag
+  ? appsFlag
+      .split('=')[1]
+      .split(',')
+      .map((s) => s.trim())
+  : null;
+const rootFlag = args.find((a) => a.startsWith('--root='));
+const ROOT = rootFlag
+  ? path.resolve(rootFlag.slice('--root='.length))
+  : path.resolve(__dirname, '..', '..');
+
+// Per-run tally, printed at the end.
+const tally = { written: [], unchanged: [], handwritten: [], noSource: [] };
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-
-function ensureDir(dirPath) {
-  if (!dryRun) {
-    fs.mkdirSync(dirPath, { recursive: true });
-  }
-}
 
 function readFileOr(filePath, fallback) {
   try {
@@ -57,11 +76,14 @@ function displayName(appName) {
     bam: 'Bam (Project Management)',
     banter: 'Banter (Team Messaging)',
     beacon: 'Beacon (Knowledge Base)',
+    bay: 'Bay (Media Review & Approval)',
     bearing: 'Bearing (Goals & OKRs)',
     bench: 'Bench (Analytics)',
     bill: 'Bill (Invoicing)',
+    bin: 'Bin (Digital Asset Management)',
     blank: 'Blank (Forms)',
     blast: 'Blast (Email Campaigns)',
+    blip: 'Blip (Telemetry)',
     board: 'Board (Visual Collaboration)',
     bolt: 'Bolt (Workflow Automation)',
     bond: 'Bond (CRM)',
@@ -73,61 +95,55 @@ function displayName(appName) {
 }
 
 /**
- * Short description for stub generation when no narrative exists.
+ * Write `content` to `filePath` unless the file there is hand-written, has no
+ * source, or would change only in its timestamp. `plan` comes from planOutput.
  */
-function shortDescription(appName) {
-  const descriptions = {
-    bam: 'sprint-based Kanban project management with drag-and-drop boards, custom fields, and carry-forward mechanics',
-    banter: 'real-time team messaging with channels, threads, reactions, and file sharing',
-    beacon: 'knowledge base and documentation with full-text search, graph exploration, and policy management',
-    bearing: 'goals and OKR tracking with key results, progress reporting, and timeline views',
-    bench: 'analytics dashboards with configurable widgets, ad-hoc queries, and scheduled reports',
-    bill: 'invoicing and billing with line items, payment tracking, and PDF generation',
-    blank: 'form builder with conditional logic, submissions, and public form links',
-    blast: 'email campaign management with templates, audience segments, and delivery analytics',
-    board: 'infinite canvas whiteboard with real-time collaboration, shapes, and audio conferencing',
-    bolt: 'workflow automation engine with visual rule builder, triggers, and execution logs',
-    bond: 'CRM with contacts, companies, deal pipelines, activities, and revenue forecasting',
-    book: 'appointment scheduling with availability rules, booking pages, and calendar integrations',
-    brief: 'collaborative document editor with real-time co-editing, templates, and version history',
-    helpdesk: 'customer support portal with ticket management, SLA tracking, and a public-facing help center',
-  };
-  return descriptions[appName] || `the ${capitalize(appName)} module of BigBlueBam`;
+function emit(appName, fileName, filePath, plan, buildContent, sourceName) {
+  const label = `${appName}/${fileName}`;
+  if (plan === 'handwritten') {
+    console.log(
+      `  ${fileName}: SKIPPED, hand-written (no generated marker). Compose never overwrites it.`,
+    );
+    tally.handwritten.push(label);
+    return;
+  }
+  if (plan === 'no-source') {
+    console.log(`  ${fileName}: SKIPPED, no ${sourceName} to compose it from.`);
+    tally.noSource.push(label);
+    return;
+  }
+  const existing = readFileOr(filePath, null);
+  const next = buildContent();
+  if (isUnchanged(existing, next)) {
+    console.log(`  ${fileName}: unchanged`);
+    tally.unchanged.push(label);
+    return;
+  }
+  if (!dryRun) {
+    fs.mkdirSync(path.dirname(filePath), { recursive: true });
+    fs.writeFileSync(filePath, next, 'utf-8');
+  }
+  console.log(`  ${fileName}: ${dryRun ? '[dry-run] would write' : 'written'}`);
+  tally.written.push(label);
+}
+
+/** Front matter + marker shared by both outputs. */
+function header(title, appName) {
+  return [
+    [
+      '---',
+      `title: "${title}"`,
+      `app: ${appName}`,
+      `generated: "${new Date().toISOString()}"`,
+      '---',
+    ].join('\n'),
+    GENERATED_MARKER,
+  ];
 }
 
 // ---------------------------------------------------------------------------
 // Agent invocation infrastructure (stub for v1)
 // ---------------------------------------------------------------------------
-
-/**
- * Prompt template for the doc-writer agent. In a future version, this would
- * be sent to the Claude API. For now it is logged and skipped.
- */
-function buildNarrativePrompt(appName, meta, mcpToolNames, screenshotLabels, relatedApps) {
-  return [
-    `You are writing the technical instruction guide for "${displayName(appName)}",`,
-    `a module in the BigBlueBam productivity suite.`,
-    '',
-    `App details:`,
-    `- Nginx path: ${meta.nginx_path}`,
-    `- API port: ${meta.api_port}`,
-    `- Route files: ${meta.route_files}`,
-    `- Schema modules: ${meta.schema_modules}`,
-    `- MCP tools: ${mcpToolNames.join(', ')}`,
-    '',
-    screenshotLabels.length > 0
-      ? `Screenshots available: ${screenshotLabels.join(', ')}`
-      : 'No screenshots available yet.',
-    '',
-    relatedApps.length > 0
-      ? `Related apps: ${relatedApps.join(', ')}`
-      : '',
-    '',
-    `Write a clear, practical guide covering what this module does, how users`,
-    `navigate it, and the key workflows. Use markdown. Do not use em dashes.`,
-    `Target length: 400-800 words.`,
-  ].filter(Boolean).join('\n');
-}
 
 /**
  * Check whether a narrative refresh is needed based on changed-apps.json.
@@ -143,22 +159,6 @@ function shouldRefreshNarrative(appName) {
   }
 }
 
-/**
- * Attempt to refresh narrative via agent. In v1, this is a no-op stub.
- * Returns true if the agent was invoked (would have been), false otherwise.
- */
-function attemptNarrativeRefresh(appName, meta, mcpToolNames, screenshotLabels, relatedApps) {
-  const prompt = buildNarrativePrompt(appName, meta, mcpToolNames, screenshotLabels, relatedApps);
-  console.log(`  Would invoke doc-writer agent for ${appName}`);
-  if (dryRun) {
-    console.log(`  [dry-run] Prompt length: ${prompt.length} chars`);
-  }
-  // In a future version, this would call the Claude API with the prompt
-  // and write the result to _narrative.md. For now, return false to
-  // indicate no actual refresh happened.
-  return false;
-}
-
 // ---------------------------------------------------------------------------
 // Screenshot discovery
 // ---------------------------------------------------------------------------
@@ -166,11 +166,17 @@ function attemptNarrativeRefresh(appName, meta, mcpToolNames, screenshotLabels, 
 function discoverScreenshots(appDocsDir) {
   const lightDir = path.join(appDocsDir, 'screenshots', 'light');
   if (!fs.existsSync(lightDir)) return [];
-  const files = fs.readdirSync(lightDir).filter((f) => f.endsWith('.png')).sort();
+  const files = fs
+    .readdirSync(lightDir)
+    .filter((f) => f.endsWith('.png'))
+    .sort();
   return files.map((f) => {
     const id = f.replace(/\.png$/, '');
     // Derive a label from the id: "01-pipeline" -> "Pipeline"
-    const label = id.replace(/^\d+-/, '').replace(/-/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+    const label = id
+      .replace(/^\d+-/, '')
+      .replace(/-/g, ' ')
+      .replace(/\b\w/g, (c) => c.toUpperCase());
     return { id, file: f, label };
   });
 }
@@ -203,180 +209,96 @@ function findRelatedApps(appName, allAppNames) {
 // Guide assembly
 // ---------------------------------------------------------------------------
 
-function composeGuide(appName, appDocsDir, meta, allAppNames) {
-  const screenshots = discoverScreenshots(appDocsDir);
-  const screenshotLabels = screenshots.map((s) => s.label);
-  const relatedApps = findRelatedApps(appName, allAppNames);
-
-  // Read or generate narrative
-  const narrativePath = path.join(appDocsDir, '_narrative.md');
-  let narrative = readFileOr(narrativePath, null);
-
-  if (narrative === null) {
-    // No narrative exists. Check if agent refresh would run.
-    const refreshed = attemptNarrativeRefresh(appName, meta, [], screenshotLabels, relatedApps);
-    if (!refreshed) {
-      // Generate a stub
-      narrative = [
-        `This guide covers ${shortDescription(appName)}.`,
-        '',
-        `${displayName(appName)} is accessible at \`${meta.nginx_path}\` and provides`,
-        `${meta.route_files} API route modules backed by ${meta.schema_modules} database schema modules.`,
-        meta.mcp_tool_count > 0
-          ? `It exposes ${meta.mcp_tool_count} MCP tools for AI-assisted workflows.`
-          : '',
-        '',
-        '_This narrative will be expanded in a future documentation pass._',
-      ].filter((line) => line !== undefined).join('\n');
-
-      // Write the stub so future runs can reuse it
-      if (!dryRun) {
-        fs.writeFileSync(narrativePath, narrative + '\n', 'utf-8');
-      }
-      console.log(`  Generated narrative stub`);
-    }
-  } else if (shouldRefreshNarrative(appName)) {
-    // Narrative exists but app changed. Try agent refresh.
-    const mcpToolsPath = path.join(appDocsDir, 'mcp-tools.md');
-    const mcpContent = readFileOr(mcpToolsPath, '');
-    const toolNames = [...mcpContent.matchAll(/`(\w+)`/g)].map((m) => m[1]).filter((n) => n.includes('_'));
-    attemptNarrativeRefresh(appName, meta, toolNames, screenshotLabels, relatedApps);
-    // Agent is a no-op in v1, so we keep existing narrative
-    console.log(`  Reusing existing narrative (agent refresh is a no-op in v1)`);
-  } else {
-    console.log(`  Reusing existing narrative (no source changes)`);
-  }
-
-  // Read MCP tools content
-  const mcpToolsPath = path.join(appDocsDir, 'mcp-tools.md');
-  const mcpToolsContent = readFileOr(mcpToolsPath, '_MCP tool catalog not yet generated. Run `pnpm docs:extract` first._');
-
-  // Assemble guide.md
-  const timestamp = new Date().toISOString();
-  const sections = [];
-
-  // Frontmatter
-  sections.push([
-    '---',
-    `title: "${displayName(appName)} Guide"`,
-    `app: ${appName}`,
-    `generated: "${timestamp}"`,
-    '---',
-  ].join('\n'));
-
-  // Title
-  sections.push(`# ${displayName(appName)} Guide\n`);
-
-  // Narrative
-  sections.push(narrative.trim());
-
-  // Walkthrough (screenshots)
-  if (screenshots.length > 0) {
-    const walkthroughLines = ['## Walkthrough\n'];
-    for (const shot of screenshots) {
-      walkthroughLines.push(`### ${shot.label}\n`);
-      walkthroughLines.push(`![${shot.label}](screenshots/light/${shot.file})\n`);
-    }
-    sections.push(walkthroughLines.join('\n'));
-  }
-
-  // MCP Tools
-  sections.push('## MCP Tools\n');
-  sections.push(mcpToolsContent.trim());
-
-  // Related Apps
-  if (relatedApps.length > 0) {
-    const relatedLines = ['## Related Apps\n'];
-    for (const rel of relatedApps) {
-      relatedLines.push(`- [${displayName(rel)}](../${rel}/guide.md)`);
-    }
-    sections.push(relatedLines.join('\n'));
-  }
-
-  const guideContent = sections.join('\n\n') + '\n';
+function composeGuide(appName, appDocsDir, allAppNames) {
   const guidePath = path.join(appDocsDir, 'guide.md');
-  if (!dryRun) {
-    ensureDir(appDocsDir);
-    fs.writeFileSync(guidePath, guideContent, 'utf-8');
-  }
-  console.log(`  guide.md written`);
+  const narrative = readFileOr(path.join(appDocsDir, '_narrative.md'), null);
+  const plan = planOutput({ existing: readFileOr(guidePath, null), source: narrative });
+
+  emit(
+    appName,
+    'guide.md',
+    guidePath,
+    plan,
+    () => {
+      if (shouldRefreshNarrative(appName)) {
+        console.log('  Reusing existing narrative (agent refresh is a no-op in v1)');
+      }
+      const screenshots = discoverScreenshots(appDocsDir);
+      const relatedApps = findRelatedApps(appName, allAppNames);
+      const mcpToolsContent = readFileOr(
+        path.join(appDocsDir, 'mcp-tools.md'),
+        '_MCP tool catalog not yet generated. Run `pnpm docs:extract` first._',
+      );
+
+      const sections = [...header(`${displayName(appName)} Guide`, appName)];
+      sections.push(`# ${displayName(appName)} Guide\n`);
+      sections.push(narrative.trim());
+
+      if (screenshots.length > 0) {
+        const walkthroughLines = ['## Walkthrough\n'];
+        for (const shot of screenshots) {
+          walkthroughLines.push(`### ${shot.label}\n`);
+          walkthroughLines.push(`![${shot.label}](screenshots/light/${shot.file})\n`);
+        }
+        sections.push(walkthroughLines.join('\n'));
+      }
+
+      sections.push('## MCP Tools\n');
+      sections.push(mcpToolsContent.trim());
+
+      if (relatedApps.length > 0) {
+        const relatedLines = ['## Related Apps\n'];
+        for (const rel of relatedApps) {
+          relatedLines.push(`- [${displayName(rel)}](../${rel}/guide.md)`);
+        }
+        sections.push(relatedLines.join('\n'));
+      }
+
+      return `${sections.join('\n\n')}\n`;
+    },
+    '_narrative.md',
+  );
 }
 
 // ---------------------------------------------------------------------------
 // Marketing assembly
 // ---------------------------------------------------------------------------
 
-function composeMarketing(appName, appDocsDir, meta) {
-  const screenshots = discoverScreenshots(appDocsDir);
-
-  // Read marketing hook if it exists
-  const hookPath = path.join(appDocsDir, '_marketing_hook.md');
-  let hook = readFileOr(hookPath, null);
-
-  if (hook === null) {
-    // Generate a default hook from the app description
-    hook = [
-      `**${displayName(appName)}** -- ${shortDescription(appName)}.`,
-      '',
-      `- Streamline your ${appName} workflows from a single interface`,
-      `- Collaborate with your team in real time`,
-      `- Automate repetitive tasks with ${meta.mcp_tool_count} AI-powered tools`,
-    ].join('\n');
-
-    // Write the default so future runs can reuse it
-    if (!dryRun) {
-      fs.writeFileSync(hookPath, hook + '\n', 'utf-8');
-    }
-    console.log(`  Generated marketing hook stub`);
-  }
-
-  // Assemble marketing.md
-  const timestamp = new Date().toISOString();
-  const sections = [];
-
-  // Frontmatter
-  sections.push([
-    '---',
-    `title: "${displayName(appName)}"`,
-    `app: ${appName}`,
-    `generated: "${timestamp}"`,
-    '---',
-  ].join('\n'));
-
-  // Title and hook
-  sections.push(`# ${displayName(appName)}\n`);
-  sections.push(hook.trim());
-
-  // Hero screenshot
-  if (screenshots.length > 0) {
-    sections.push(`## See It in Action\n`);
-    const hero = screenshots[0];
-    sections.push(`![${hero.label}](screenshots/light/${hero.file})\n`);
-
-    // Up to 2 supporting screenshots
-    const supporting = screenshots.slice(1, 3);
-    if (supporting.length > 0) {
-      const supportLines = supporting.map(
-        (s) => `![${s.label}](screenshots/light/${s.file})`,
-      );
-      sections.push(supportLines.join('\n\n'));
-    }
-  }
-
-  // Footer
-  sections.push([
-    '---',
-    '',
-    `Part of the [BigBlueBam](/) productivity suite.`,
-  ].join('\n'));
-
-  const marketingContent = sections.join('\n\n') + '\n';
+function composeMarketing(appName, appDocsDir) {
   const marketingPath = path.join(appDocsDir, 'marketing.md');
-  if (!dryRun) {
-    ensureDir(appDocsDir);
-    fs.writeFileSync(marketingPath, marketingContent, 'utf-8');
-  }
-  console.log(`  marketing.md written`);
+  const hook = readFileOr(path.join(appDocsDir, '_marketing_hook.md'), null);
+  const plan = planOutput({ existing: readFileOr(marketingPath, null), source: hook });
+
+  emit(
+    appName,
+    'marketing.md',
+    marketingPath,
+    plan,
+    () => {
+      const screenshots = discoverScreenshots(appDocsDir);
+      const sections = [...header(displayName(appName), appName)];
+      sections.push(`# ${displayName(appName)}\n`);
+      sections.push(hook.trim());
+
+      if (screenshots.length > 0) {
+        sections.push('## See It in Action\n');
+        const hero = screenshots[0];
+        sections.push(`![${hero.label}](screenshots/light/${hero.file})\n`);
+
+        // Up to 2 supporting screenshots
+        const supporting = screenshots.slice(1, 3);
+        if (supporting.length > 0) {
+          sections.push(
+            supporting.map((s) => `![${s.label}](screenshots/light/${s.file})`).join('\n\n'),
+          );
+        }
+      }
+
+      sections.push(['---', '', 'Part of the [BigBlueBam](/) productivity suite.'].join('\n'));
+      return `${sections.join('\n\n')}\n`;
+    },
+    '_marketing_hook.md',
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -395,7 +317,8 @@ function main() {
     process.exit(1);
   }
 
-  const allAppNames = fs.readdirSync(appsDir, { withFileTypes: true })
+  const allAppNames = fs
+    .readdirSync(appsDir, { withFileTypes: true })
     .filter((d) => d.isDirectory())
     .map((d) => d.name)
     .filter((name) => fs.existsSync(path.join(appsDir, name, 'meta.json')));
@@ -412,20 +335,17 @@ function main() {
   for (const appName of appsToProcess) {
     console.log(`[${appName}]`);
     const appDocsDir = path.join(appsDir, appName);
-    const metaPath = path.join(appDocsDir, 'meta.json');
-    let meta;
-    try {
-      meta = JSON.parse(fs.readFileSync(metaPath, 'utf-8'));
-    } catch (err) {
-      console.error(`  ERROR: Could not read meta.json: ${err.message}`);
-      continue;
-    }
-
-    composeGuide(appName, appDocsDir, meta, allAppNames);
-    composeMarketing(appName, appDocsDir, meta);
+    composeGuide(appName, appDocsDir, allAppNames);
+    composeMarketing(appName, appDocsDir);
     console.log('');
   }
 
+  const list = (xs) => (xs.length ? xs.join(', ') : 'none');
+  console.log(`Written:   ${tally.written.length} (${list(tally.written)})`);
+  console.log(`Unchanged: ${tally.unchanged.length}`);
+  console.log(`Skipped, hand-written: ${tally.handwritten.length} (${list(tally.handwritten)})`);
+  console.log(`Skipped, no source partial: ${tally.noSource.length} (${list(tally.noSource)})`);
+  console.log('');
   console.log('Stage 4 complete.');
 }
 

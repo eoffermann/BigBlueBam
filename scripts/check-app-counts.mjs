@@ -27,7 +27,6 @@ const CATALOG = join(ROOT, 'site/src/content/docs-catalog.generated.json');
 export const PUBLISHED = [
   'README.md',
   'site/index.html',
-  'site/src/content/apps/introduction.md',
   'docs/apps/introduction/marketing.md',
   'site/src/pages/docs.tsx',
   'site/src/lib/facts.ts',

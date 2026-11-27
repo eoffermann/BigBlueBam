@@ -1,11 +1,9 @@
 ---
 title: "Bin (Digital Asset Management)"
 app: bin
-generated: "2026-07-01T00:00:00.000Z"
 ---
 
 # Bin (Digital Asset Management)
-
 
 The drive that isn't just a drive: upload anything, get it scanned, versioned, foldered, and tagged, then opened in the right editor.
 
@@ -19,7 +17,6 @@ The drive that isn't just a drive: upload anything, get it scanned, versioned, f
 - Let AI agents upload, version, tag, move, fetch, and edit structured data through 19 MCP tools, gated by visibility preflight and agent policies
 
 ## See It in Action
-
 
 ![Asset Library](screenshots/light/asset-library.png)
 

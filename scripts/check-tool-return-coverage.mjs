@@ -143,7 +143,6 @@ if (totalMissingReturns > 0) {
 const PUBLISHED = [
   'README.md',
   'site/index.html',
-  'site/src/content/apps/introduction.md',
   'site/src/lib/facts.ts',
   // Issue #143: the suite introduction (in-app Help Center, guide, manual sources).
   'docs/apps/introduction/help.md',
