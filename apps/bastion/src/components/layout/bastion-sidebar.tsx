@@ -1,4 +1,4 @@
-import { Archive, BookOpenCheck, Castle, ClipboardList, FileText, Gauge, Inbox, ListChecks, Map as MapIcon, Settings2, Wrench } from 'lucide-react';
+import { Archive, BookOpenCheck, Castle, ClipboardList, FileText, Gauge, Inbox, ListChecks, Map as MapIcon, Settings2, Share2, SlidersHorizontal, Wrench } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/stores/auth.store';
 import { SidebarPlatformFooter } from '@bigbluebam/ui/sidebar-footer';
@@ -25,7 +25,9 @@ const nav: Array<{
   { label: 'Policies', icon: FileText, path: '/policies', pages: ['policies'] },
   { label: 'Policies to read', icon: BookOpenCheck, path: '/attest', pages: ['attest'] },
   { label: 'Questionnaires', icon: ClipboardList, path: '/questionnaires', pages: ['questionnaires'] },
+  { label: 'Sharing', icon: Share2, path: '/sharing', pages: ['sharing'] },
   { label: 'Setup', icon: Settings2, path: '/setup', pages: ['setup'] },
+  { label: 'Settings', icon: SlidersHorizontal, path: '/settings', pages: ['settings'] },
 ];
 
 export function BastionSidebar({ onNavigate, activeRoute }: BastionSidebarProps) {

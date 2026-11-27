@@ -15,6 +15,11 @@ declare module 'fastify' {
     bastionCan(request: FastifyRequest, permissionId: string): Promise<boolean>;
     /** preHandler: when `asker_user_id` is given, the asker must hold `permissionId` too (#217). */
     requireAskerCan(permissionId: string): (request: FastifyRequest, reply: FastifyReply) => Promise<unknown>;
+    /**
+     * Does a given user (not the caller) hold `permissionId` in an org? Fail-closed. The public
+     * auditor room re-checks its creator on every request (spec 5.2).
+     */
+    bastionUserCan(userId: string, orgId: string, permissionId: string): Promise<boolean>;
   }
 }
 import { env } from '../env.js';
@@ -66,6 +71,15 @@ const bastionPermissionsPlugin = fp(
       if (asker === null) return true;
       if (asker === 'invalid') return false;
       return checker({ user_id: asker, org_id: caller.org_id }, permissionId, log(request));
+    });
+
+    const quietLog = { warn: (o: object, m: string) => fastify.log.warn(o, m) };
+    fastify.decorate('bastionUserCan', async (userId: string, orgId: string, permissionId: string): Promise<boolean> => {
+      try {
+        return await checker({ user_id: userId, org_id: orgId }, permissionId, quietLog);
+      } catch {
+        return false;
+      }
     });
 
     // preHandler for detail-bearing reads: the asker, when given, must also hold the route's

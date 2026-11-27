@@ -693,3 +693,242 @@ export interface EvidenceSnapshotRow {
   hidden_citation_count?: number;
   created_at: string;
 }
+
+/* ------------------------------ M9: sharing, settings, the auditor room ------------------------------ */
+
+export type RoomState = 'active' | 'expired' | 'revoked' | 'locked';
+
+/** roomOut in apps/bastion-api/src/services/sharing.service.ts. */
+export interface AuditorRoomRow {
+  id: string;
+  label: string;
+  framework_id: string | null;
+  framework_name: string | null;
+  period_start: string | null;
+  period_end: string | null;
+  expires_at: string;
+  revoked_at: string | null;
+  locked_at: string | null;
+  state: RoomState;
+  has_passcode: boolean;
+  passcode_failures: number;
+  link_hint: string | null;
+  control_count: number;
+  restricted_count: number;
+  access_count: number;
+  last_accessed_at: string | null;
+  open_requests: number;
+  created_by_name: string | null;
+  created_at: string;
+}
+
+export interface CreatedRoom extends AuditorRoomRow {
+  token: string;
+  link: string;
+  token_notice: string;
+}
+
+export interface AccessLogRow {
+  id: string;
+  accessed_at: string;
+  view_kind: string;
+  what: string;
+  visitor: string;
+  device: string;
+}
+
+export interface AuditorRequestRow {
+  id: string;
+  room_id: string;
+  room_label: string;
+  control_id: string | null;
+  control_title: string | null;
+  requester_name: string | null;
+  body: string;
+  status: 'open' | 'answered' | 'closed';
+  answer_note: string | null;
+  answered_by_name: string | null;
+  created_at: string;
+}
+
+export interface ExportRow {
+  id: string;
+  framework_id: string | null;
+  framework_name: string | null;
+  period_start: string;
+  period_end: string;
+  include_restricted: boolean;
+  status: 'queued' | 'running' | 'succeeded' | 'failed' | 'expired';
+  stage: string | null;
+  stage_words: string | null;
+  size_bytes: number | null;
+  error: string | null;
+  requested_by_name: string | null;
+  created_at: string;
+}
+
+/** One control as an auditor sees it (audit-view.ts AuditControlRow). */
+export interface RoomControl {
+  id: string;
+  control_key: string;
+  title: string;
+  category: string | null;
+  owner: string | null;
+  state: 'met' | 'not_met' | 'risk_accepted' | 'cant_prove' | 'not_assessed';
+  state_words: string;
+  reason: string | null;
+  requirement_codes: string[];
+  last_evaluated_at: string | null;
+}
+
+export interface RoomRisk {
+  id: string;
+  control_key: string;
+  control_title: string;
+  reason: string;
+  compensating_note: string | null;
+  expires_at: string;
+  owner: string | null;
+}
+
+export interface SoaRowView {
+  ref_code: string;
+  title: string;
+  applicable: 'Yes' | 'No' | 'Not decided';
+  justification: string;
+  implementing_controls: string;
+  current_status: string;
+}
+
+/** roomOverview in sharing.service.ts: the public room and the creator's Preview. */
+export interface RoomOverview {
+  room: {
+    label: string;
+    organization_name: string;
+    framework_name: string | null;
+    is_iso: boolean;
+    period_start: string | null;
+    period_end: string | null;
+    expires_at: string;
+  };
+  numbers: { met: number; not_met: number; risk_accepted: number; cant_prove: number; not_assessed: number; total: number };
+  controls: RoomControl[];
+  accepted_risks: RoomRisk[];
+  restricted_items: Array<{ id: string; title: string }>;
+  statement_of_applicability: SoaRowView[] | null;
+  seals: Array<{ seal_date: string; epoch: number; head_seq: number; head_hash: string; signature: string; signing_key_id: string }>;
+  public_keys: Array<{ signing_key_id: string; public_key_hex: string; current: boolean }>;
+  notices: string[];
+  not_an_audit: string;
+  /** Preview only. */
+  state?: RoomState;
+}
+
+export interface RoomFile {
+  id: string;
+  kind: 'file' | 'statement';
+  title: string;
+  description: string | null;
+  source_system: string | null;
+  produced_on: string | null;
+  valid_until: string | null;
+  restricted: boolean;
+  review: string;
+  scan: string | null;
+  superseded: boolean;
+}
+
+export interface RoomControlDetail {
+  control: RoomControl;
+  requirements: Array<{ ref_code: string; title: string | null }>;
+  evidence: Array<{ id: string; recorded_at: string; what: string | null; outcome: string; outcome_words: string; explanation: string | null }>;
+  files: RoomFile[];
+  accepted_risks: RoomRisk[];
+}
+
+export interface RoomEvidenceDetail {
+  id: string;
+  kind: 'check' | 'file' | 'statement';
+  title?: string;
+  control_title?: string;
+  what?: string | null;
+  recorded_at?: string;
+  outcome_words?: string;
+  explanation?: string | null;
+  review?: string;
+  file: 'available' | 'missing' | 'redacted' | 'none';
+  file_words: string | null;
+}
+
+export interface SettingsView {
+  settings: {
+    remediation_tasks: 'create' | 'propose';
+    timezone: string;
+    evaluation_hour_local: number;
+    llm_provider_id: string | null;
+    stale_after_hours: number;
+    not_assessed_grace_days: number;
+    manual_expiry_warn_days: number;
+    questionnaire_high_floor: number;
+    questionnaire_medium_floor: number;
+    max_llm_calls_per_compile: number;
+    max_llm_calls_per_questionnaire: number;
+    max_rows_per_questionnaire: number;
+    auditor_room_max_days: number;
+    max_packet_bytes: number;
+  };
+  compliance_project: { id: string; name: string | null } | null;
+  ai_providers: Array<{ id: string; name: string; model: string; scope: string; is_default: boolean }>;
+  evidence_integrity: {
+    seal_keys: Array<{ fingerprint: string; current: boolean }>;
+    personal_data_key: string;
+    restores_awaiting: Array<{ id: string; detected_at: string; status: 'pending_ack' | 'unmatched' | string; lost_from_seq: number | null; lost_to_seq: number | null; bucket_epoch: number | null }>;
+  };
+  offsite_backup: { configured: boolean; last_backup_at: string | null; last_mirror_status: string | null; current_through: string | null };
+  storage_ok: boolean;
+  delivery_problems: number;
+}
+
+export interface DeliveryProblemRow {
+  id: string;
+  what: string;
+  event: string | null;
+  attempts: number;
+  retried_before: number;
+  last_error: string | null;
+  created_at: string;
+}
+
+/**
+ * The public auditor room's own client (spec 5.2). No session, no org header, no impersonation:
+ * the room token travels only as the X-Bastion-Room-Token header (it comes from the URL fragment,
+ * which never reaches a server), never in a path or query string. Never redirects to a login.
+ */
+export function roomRequest<T>(
+  path: string,
+  token: string,
+  opts: { passcode?: string | null; method?: string; body?: unknown; tokenHeader: string; passcodeHeader: string },
+): Promise<T> {
+  const headers: Record<string, string> = { [opts.tokenHeader]: token };
+  if (opts.passcode) headers[opts.passcodeHeader] = opts.passcode;
+  if (opts.body !== undefined) headers['Content-Type'] = 'application/json';
+  return fetch(`${BASE}/public/room${path}`, {
+    method: opts.method ?? 'GET',
+    headers,
+    credentials: 'omit',
+    body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined,
+  }).then(async (response) => {
+    if (!response.ok) {
+      let e: { error?: { code?: string; message?: string; details?: Record<string, unknown>[]; request_id?: string } } = {};
+      try {
+        e = await response.json();
+      } catch {
+        // ignore
+      }
+      throw new ApiError(response.status, e.error?.code ?? 'UNKNOWN', e.error?.message ?? `Request failed with status ${response.status}`, e.error?.details, e.error?.request_id);
+    }
+    const ct = response.headers.get('content-type') ?? '';
+    if (ct.includes('application/json')) return (await response.json()) as T;
+    return (await response.blob()) as unknown as T;
+  });
+}

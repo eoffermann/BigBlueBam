@@ -38,6 +38,10 @@ import policyRoutes from './routes/policies.routes.js';
 import { drainCompileSlices, markCompileShuttingDown } from './services/compile-ai.service.js';
 import questionnaireRoutes from './routes/questionnaires.routes.js';
 import { drainAutofillSlices, markAutofillShuttingDown } from './services/questionnaire-autofill.service.js';
+import sharingRoutes from './routes/sharing.routes.js';
+import settingsRoutes from './routes/settings.routes.js';
+import publicRoomRoutes from './routes/public-room.routes.js';
+import { offsiteBackupConfigured } from './services/evidence-runtime.js';
 import { engineDeps } from './engine/runtime.js';
 import { checkLedgerIdentity } from './engine/restore.js';
 import { closeBastionQueues } from './lib/queue.js';
@@ -137,6 +141,11 @@ await fastify.register(
     await v1.register(policyRoutes);
     // M8: questionnaires and the answer library (approve is session-only).
     await v1.register(questionnaireRoutes);
+    // M9: rooms, questions and packets; settings, delivery problems and the audit log; and the
+    // public auditor room (token-gated, no user).
+    await v1.register(sharingRoutes);
+    await v1.register(settingsRoutes);
+    await v1.register(publicRoomRoutes);
     await v1.register(internalRoutes);
   },
   { prefix: '/v1' },
@@ -197,6 +206,15 @@ void runBucketCheck(createBastionStorage(env), env.BASTION_S3_BUCKET, fastify.lo
 void (async () => {
   try {
     const deps = engineDeps(fastify.log, fastify.redis);
+    // spec 4.1: bastion_org_settings.offsite_backup_configured is "computed at boot". The
+    // ops.backup_fresh probe reads it (unprovable / source_not_connected while it is false).
+    const offsite = offsiteBackupConfigured();
+    const updated = await deps.sql`UPDATE bastion_org_settings SET offsite_backup_configured = ${offsite}
+                                    WHERE offsite_backup_configured IS DISTINCT FROM ${offsite} RETURNING organization_id`;
+    fastify.log.info(
+      { offsite_backup_configured: offsite, orgs_updated: updated.length },
+      offsite ? `[${elapsed()}] off-site evidence backup is configured` : `[${elapsed()}] No off-site evidence backup is configured`,
+    );
     if (!deps.storage) return;
     const orgs = await deps.sql`SELECT DISTINCT organization_id FROM bastion_ledger_entries`;
     fastify.log.info(`[${elapsed()}] checking ${orgs.length} evidence ledgers against their bucket seals...`);

@@ -27,10 +27,13 @@ const INTERNAL_FILE = 'internal.routes.ts';
 // The machine push (spec 5.1 row 48) authenticates with its own per-feed key, not a user. Checked
 // separately below.
 const FEED_INGEST_FILE = 'feed-ingest.routes.ts';
+// The public auditor room (spec 5.1 rows 101-104, 5.2) authenticates with the room token, not a
+// user. Checked separately below.
+const PUBLIC_ROOM_FILE = 'public-room.routes.ts';
 
 function routes(): RouteDecl[] {
   const out: RouteDecl[] = [];
-  for (const file of readdirSync(ROUTES).filter((f) => f.endsWith('.routes.ts') && f !== INTERNAL_FILE && f !== FEED_INGEST_FILE)) {
+  for (const file of readdirSync(ROUTES).filter((f) => f.endsWith('.routes.ts') && f !== INTERNAL_FILE && f !== FEED_INGEST_FILE && f !== PUBLIC_ROOM_FILE)) {
     const src = readFileSync(join(ROUTES, file), 'utf8');
     const re = /fastify\.(get|post|patch|put|delete)\(\s*'([^']+)',\s*\{\s*preHandler:\s*\[([^\]]*)\]/g;
     for (const m of src.matchAll(re)) out.push({ file, method: m[1]!.toUpperCase(), path: m[2]!, preHandler: m[3]! });
@@ -58,6 +61,10 @@ const INTEGRITY: Record<string, string> = {
   'POST /policies/:id/attest': "can('bastion.attestation.sign')",
   // M8: Approve is the questionnaire's release gate (spec 2.7 step 7, 2.8): a person vouches.
   'POST /questionnaires/:id/approve': "can('bastion.questionnaire.approve')",
+  // M9: opening, closing and unlocking an auditor room are disclosure acts (spec 2.8, 5.2).
+  'POST /auditor-rooms': "can('bastion.auditor_room.create')",
+  'POST /auditor-rooms/:id/revoke': "can('bastion.auditor_room.revoke')",
+  'POST /auditor-rooms/:id/unlock': "can('bastion.auditor_room.create')",
 };
 
 // Routes that must NOT require a session: everything an agent may do through an API key
@@ -107,6 +114,20 @@ const AGENT_REACHABLE = [
   'POST /answers/draft',
   'GET /answer-library',
   'PATCH /answer-library/:id',
+  // M9
+  'GET /auditor-rooms',
+  'GET /auditor-rooms/:id/access-log',
+  'GET /auditor-rooms/:id/preview',
+  'GET /auditor-requests',
+  'PATCH /auditor-requests/:id',
+  'POST /exports',
+  'GET /exports',
+  'GET /exports/:id/download',
+  'GET /settings',
+  'PATCH /settings',
+  'GET /delivery-problems',
+  'POST /delivery-problems/:id/retry',
+  'GET /audit',
 ];
 
 describe('bastion-api route gates', () => {
@@ -173,6 +194,21 @@ describe('bastion-api route gates', () => {
     expect(src).toContain('FEED_AUTH_FAIL_PREFIX');
     // The Redis counters go through the fail-open helper, never a bare incr (#225).
     expect(src).not.toMatch(/redis\.incr\(/);
+  });
+
+  it('the public auditor room has no user gate, a per-address limit, and only the four spec routes', () => {
+    const src = readFileSync(join(ROUTES, PUBLIC_ROOM_FILE), 'utf8');
+    const handlers = [...src.matchAll(/fastify\.(get|post|patch|put|delete)\(\s*'([^']+)'/g)].map((m) => `${m[1]!.toUpperCase()} ${m[2]}`);
+    expect(handlers.sort()).toEqual(['GET /public/room', 'GET /public/room/controls/:id', 'GET /public/room/evidence/:id', 'POST /public/room/requests']);
+    expect(src).not.toMatch(/import[^;]*requireAuth|requireCan\(/);
+    expect(src).not.toMatch(/rateLimit:\s*false/);
+    expect(src).toContain('rateLimit: { max: BASTION_ROOM_RATE_PER_MINUTE');
+    // Every handler carries the limit.
+    const declared = [...src.matchAll(/fastify\.(get|post)\(\s*'[^']+',\s*\{\s*config:\s*limit/g)].length;
+    expect(declared).toBe(4);
+    // The token only ever comes from the header (never the path or query string).
+    expect(src).toContain('BASTION_ROOM_TOKEN_HEADER');
+    expect(src).not.toMatch(/:token/);
   });
 
   it('every internal route checks the internal secret first', () => {

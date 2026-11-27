@@ -254,7 +254,7 @@ export async function archiveFramework(viewer: Viewer, id: string) {
   });
 }
 
-async function soaLinks(tx: DbTx, orgId: string, frameworkId: string): Promise<SoaLink[]> {
+export async function soaLinks(tx: DbTx, orgId: string, frameworkId: string): Promise<SoaLink[]> {
   const rows = await tx
     .select({
       ref_code: bastionControlRequirements.ref_code,

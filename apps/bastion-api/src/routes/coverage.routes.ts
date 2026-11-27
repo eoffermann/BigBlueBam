@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { bastionCoverageQuerySchema } from '@bigbluebam/shared';
-import { getBucketCheckStatus } from '../boot/bucket-check.js';
+import { bucketStorageOk } from '../boot/bucket-check.js';
 import { requireAuth } from '../plugins/auth.js';
 import { handled, validationError, viewerOf } from '../lib/http.js';
 import { engineDeps } from '../engine/runtime.js';
@@ -31,10 +31,9 @@ export default async function coverageRoutes(fastify: FastifyInstance) {
   fastify.get('/summary', { preHandler: [requireAuth, can('bastion.control.read'), asker('bastion.control.read')] }, async (request, reply) => {
     const parsed = query(request.query);
     if (!parsed.success) return validationError(request, reply, parsed.error);
-    const bucket = getBucketCheckStatus();
     return handled(request, reply, () =>
       readinessSummary(deps(), viewerOf(request), parsed.data.framework_id, {
-        storage_ok: bucket.status === 'ok' || bucket.status === 'pending',
+        storage_ok: bucketStorageOk(),
         offsite_backup_configured: offsiteBackupConfigured(),
       }),
     );

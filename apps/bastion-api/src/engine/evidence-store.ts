@@ -32,7 +32,7 @@ const STORAGE_DOWN = "Evidence storage isn't reachable right now, so nothing was
 async function writeIntent(deps: EngineDeps, orgId: string, key: string): Promise<void> {
   await orgTx(deps.sql, orgId, (tx) => tx`
     INSERT INTO bastion_object_intents (organization_id, object_key) VALUES (${orgId}, ${key})
-    ON CONFLICT (object_key) DO NOTHING`);
+    ON CONFLICT (object_key) DO UPDATE SET created_at = now()`);
 }
 
 /** Put a small in-memory body (a written statement). */
