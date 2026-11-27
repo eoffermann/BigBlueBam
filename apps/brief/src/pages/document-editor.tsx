@@ -16,6 +16,7 @@ import { EditorToolbar } from '@/components/editor/editor-toolbar';
 import { TableOfContents } from '@/components/editor/table-of-contents';
 import { ExportMenu } from '@/components/document/export-menu';
 import { markdownToHtml, htmlToMarkdown } from '@/lib/markdown';
+import { countWordsInHtml } from '@/lib/word-count';
 import { useCollaboration } from '@/hooks/use-collaboration';
 import { PresenceChipStrip } from '@bigbluebam/ui/presence-chip-strip';
 
@@ -134,15 +135,7 @@ export function DocumentEditorPage({ idOrSlug, onNavigate }: DocumentEditorPageP
 
   const handleEditorUpdate = useCallback((html: string) => {
     setEditorHtml(html);
-    // Count words from text content
-    const tempDiv = document.createElement('div');
-    tempDiv.innerHTML = html;
-    const text = tempDiv.textContent || '';
-    const words = text
-      .trim()
-      .split(/\s+/)
-      .filter((w) => w.length > 0);
-    setWordCount(words.length);
+    setWordCount(countWordsInHtml(html));
     markEdited();
   }, [markEdited]);
 
