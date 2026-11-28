@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { fetchSessionAttempt, loadSession } from '@bigbluebam/ui/session';
 
 export interface BanterUser {
   id: string;
@@ -31,33 +32,33 @@ export const useAuthStore = create<AuthState>((set) => ({
   isLoading: true,
 
   fetchMe: async () => {
-    try {
-      // Use the Bam auth endpoint since Banter shares the same session
-      const res = await fetch('/b3/api/auth/me', { credentials: 'include' });
-      if (!res.ok) throw new Error('Not authenticated');
-      const json = await res.json();
-      const user = json.data;
-      set({
-        user: {
-          id: user.id,
-          email: user.email,
-          display_name: user.display_name,
-          avatar_url: user.avatar_url ?? null,
-          org_id: user.org_id,
-          // `/b3/api/auth/me` returns both fields — they are typically equal
-          // once resolveOrgContext has run, but we key off active_org_id for
-          // the X-Org-Id header and React Query cache to keep them in sync
-          // with Bam's switch-org flow.
-          active_org_id: user.active_org_id ?? user.org_id,
-          presence: 'online',
-          role: user.role,
-          is_superuser: user.is_superuser === true,
-        },
-        isAuthenticated: true,
-        isLoading: false,
-      });
-    } catch {
+    // Use the Bam auth endpoint since Banter shares the same session
+    // #412: only a 401 signs the user out. A 429, a 5xx or a dropped connection keeps the
+    // session and retries (honouring Retry-After) behind the shared Reconnecting notice.
+    const session = await loadSession(fetchSessionAttempt('/b3/api/auth/me'));
+    if (session.kind === 'signed_out') {
       set({ user: null, isAuthenticated: false, isLoading: false });
+      return;
     }
+    const user = session.data.data;
+    set({
+      user: {
+        id: user.id,
+        email: user.email,
+        display_name: user.display_name,
+        avatar_url: user.avatar_url ?? null,
+        org_id: user.org_id,
+        // `/b3/api/auth/me` returns both fields — they are typically equal
+        // once resolveOrgContext has run, but we key off active_org_id for
+        // the X-Org-Id header and React Query cache to keep them in sync
+        // with Bam's switch-org flow.
+        active_org_id: user.active_org_id ?? user.org_id,
+        presence: 'online',
+        role: user.role,
+        is_superuser: user.is_superuser === true,
+      },
+      isAuthenticated: true,
+      isLoading: false,
+    });
   },
 }));

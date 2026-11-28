@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { fetchSessionAttempt, loadSession } from '@bigbluebam/ui/session';
 
 export interface BursarUser {
   id: string;
@@ -25,27 +26,27 @@ export const useAuthStore = create<AuthState>((set) => ({
   isLoading: true,
 
   fetchMe: async () => {
-    try {
-      const res = await fetch('/b3/api/auth/me', { credentials: 'include' });
-      if (!res.ok) throw new Error('Not authenticated');
-      const json = await res.json();
-      const user = json.data;
-      set({
-        user: {
-          id: user.id,
-          email: user.email,
-          display_name: user.display_name,
-          avatar_url: user.avatar_url ?? null,
-          org_id: user.org_id,
-          role: user.role,
-          is_superuser: user.is_superuser === true,
-        },
-        isAuthenticated: true,
-        isLoading: false,
-      });
-    } catch {
+    // #412: only a 401 signs the user out. A 429, a 5xx or a dropped connection keeps the
+    // session and retries (honouring Retry-After) behind the shared Reconnecting notice.
+    const session = await loadSession(fetchSessionAttempt('/b3/api/auth/me'));
+    if (session.kind === 'signed_out') {
       set({ user: null, isAuthenticated: false, isLoading: false });
+      return;
     }
+    const user = session.data.data;
+    set({
+      user: {
+        id: user.id,
+        email: user.email,
+        display_name: user.display_name,
+        avatar_url: user.avatar_url ?? null,
+        org_id: user.org_id,
+        role: user.role,
+        is_superuser: user.is_superuser === true,
+      },
+      isAuthenticated: true,
+      isLoading: false,
+    });
   },
 }));
 

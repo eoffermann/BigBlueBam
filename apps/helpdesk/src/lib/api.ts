@@ -18,6 +18,8 @@ export class ApiError extends Error {
     message: string,
     public details?: Record<string, unknown>[],
     public requestId?: string,
+    /** The Retry-After header of a 429/503, so the session check can honour it (#412). */
+    public retryAfter?: string | null,
   ) {
     super(message);
     this.name = 'ApiError';
@@ -87,6 +89,7 @@ class ApiClient {
         errorData.error?.message ?? `Request failed with status ${response.status}`,
         errorData.error?.details,
         errorData.error?.request_id,
+        response.headers?.get('Retry-After') ?? null,
       );
     }
 

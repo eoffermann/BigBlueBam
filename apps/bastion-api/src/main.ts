@@ -5,10 +5,9 @@ import Fastify from 'fastify';
 import { llmCallDrainMs } from '@bigbluebam/shared';
 import cors from '@fastify/cors';
 import cookie from '@fastify/cookie';
-import rateLimit from '@fastify/rate-limit';
 import { sql } from 'drizzle-orm';
 import { createErrorHandler, httpSystemErrorRecorder } from '@bigbluebam/logging';
-import { healthCheckPlugin } from '@bigbluebam/service-health';
+import { healthCheckPlugin, registerGlobalRateLimit } from '@bigbluebam/service-health';
 import { env } from './env.js';
 import {
   BASTION_PERMISSIONS_MODE,
@@ -91,9 +90,10 @@ await fastify.register(cors, {
 await fastify.register(cookie, { secret: env.SESSION_SECRET });
 
 // Keyed on request.ip, which honours BASTION_TRUST_PROXY_HOPS (spec 5.2).
-await fastify.register(rateLimit, {
+await registerGlobalRateLimit(fastify, {
   max: env.RATE_LIMIT_MAX,
   timeWindow: env.RATE_LIMIT_WINDOW_MS,
+  nodeEnv: env.NODE_ENV,
 });
 
 fastify.addHook('onSend', async (_req, reply) => {
