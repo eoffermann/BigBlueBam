@@ -1,0 +1,27 @@
+/*
+ * Suite-wide theme rules for native form controls.
+ *
+ * Every SPA toggles dark mode by putting the `dark` class on <html>. Tailwind's
+ * `dark:` variant restyles our own elements, but the browser draws native
+ * controls (the <select> option popup, date pickers, scrollbars) from the
+ * page's color-scheme, which defaults to light. A <select> with
+ * `bg-transparent` then shows its option list as light text on a white popup.
+ *
+ * Declaring the color-scheme on `.dark` makes the browser draw those controls
+ * dark, and the explicit option colors cover engines that ignore color-scheme
+ * for option popups. Imported once from every app's src/styles/globals.css
+ * (enforced by scripts/lib/spa-dark-controls.test.mjs).
+ */
+:root {
+  color-scheme: light;
+}
+
+.dark {
+  color-scheme: dark;
+}
+
+.dark select option,
+.dark select optgroup {
+  background-color: #18181b;
+  color: #f4f4f5;
+}
