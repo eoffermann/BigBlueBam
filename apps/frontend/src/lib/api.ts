@@ -93,7 +93,7 @@ class ApiClient {
         errorData.error?.message ?? `Request failed with status ${response.status}`,
         errorData.error?.details,
         errorData.error?.request_id,
-        response.headers.get('Retry-After'),
+        response.headers?.get('Retry-After') ?? null,
       );
     }
 
