@@ -13,7 +13,7 @@ import {
   bastionProposeFixSchema,
 } from '@bigbluebam/shared';
 import { rejectWhenImpersonating, requireAuth, requireSession } from '../plugins/auth.js';
-import { handled, idParam, notFound, validationError, viewerOf } from '../lib/http.js';
+import { askingViewerOf, handled, idParam, notFound, validationError, viewerOf } from '../lib/http.js';
 import { decisionDeps } from '../services/evidence-runtime.js';
 import * as drift from '../services/drift.service.js';
 import * as exceptions from '../services/exceptions.service.js';
@@ -25,10 +25,15 @@ import * as fixes from '../services/fixes.service.js';
 export default async function decisionRoutes(fastify: FastifyInstance) {
   const can = (p: string) => fastify.requireCan(p);
   const deps = () => decisionDeps(fastify.log, fastify.redis);
-  const query = (request: { query: unknown }) => {
+  // asker_user_id (#414) is read by requireAskerCan and askingViewerOf, never by the strict query
+  // schemas. It is taken out of the query only on routes that honor it; anywhere else it stays in
+  // and the strict schema refuses it, so a request to narrow never silently comes back wider.
+  const query = (request: { query: unknown }, honorsAsker = false) => {
     const raw = (request.query ?? {}) as Record<string, string | undefined>;
-    return Object.fromEntries(Object.entries(raw).filter(([, v]) => v !== undefined && v !== ''));
+    return Object.fromEntries(Object.entries(raw).filter(([k, v]) => !(honorsAsker && k === 'asker_user_id') && v !== undefined && v !== ''));
   };
+  // The fix drafts and exceptions cite source records: those reads take asker_user_id (#414).
+  const asker = (p: string) => fastify.requireAskerCan(p);
 
   // Row 51.
   fastify.get('/gaps', { preHandler: [requireAuth, can('bastion.gap.read')] }, async (request, reply) => {
@@ -60,17 +65,17 @@ export default async function decisionRoutes(fastify: FastifyInstance) {
   });
 
   // Row 54.
-  fastify.get('/fix-drafts', { preHandler: [requireAuth, can('bastion.fix.read')] }, async (request, reply) => {
-    const parsed = bastionFixDraftListQuerySchema.safeParse(query(request));
+  fastify.get('/fix-drafts', { preHandler: [requireAuth, can('bastion.fix.read'), asker('bastion.fix.read')] }, async (request, reply) => {
+    const parsed = bastionFixDraftListQuerySchema.safeParse(query(request, true));
     if (!parsed.success) return validationError(request, reply, parsed.error);
-    return handled(request, reply, () => fixes.listFixDrafts(deps(), viewerOf(request), parsed.data));
+    return handled(request, reply, () => fixes.listFixDrafts(deps(), askingViewerOf(request), parsed.data));
   });
 
   // Row 55.
-  fastify.get('/fix-drafts/:id', { preHandler: [requireAuth, can('bastion.fix.read')] }, async (request, reply) => {
+  fastify.get('/fix-drafts/:id', { preHandler: [requireAuth, can('bastion.fix.read'), asker('bastion.fix.read')] }, async (request, reply) => {
     const id = idParam(request);
     if (!id) return notFound(request, reply);
-    return handled(request, reply, () => fixes.getFixDraft(deps(), viewerOf(request), id));
+    return handled(request, reply, () => fixes.getFixDraft(deps(), askingViewerOf(request), id));
   });
 
   // Row 56: humans decide in Bastion. fix.decide plus control owner or control.write (service).
@@ -97,17 +102,19 @@ export default async function decisionRoutes(fastify: FastifyInstance) {
   });
 
   // Row 58.
-  fastify.get('/exceptions', { preHandler: [requireAuth, can('bastion.exception.read')] }, async (request, reply) => {
-    const parsed = bastionExceptionListQuerySchema.safeParse(query(request));
+  fastify.get('/exceptions', { preHandler: [requireAuth, can('bastion.exception.read'), asker('bastion.exception.read')] }, async (request, reply) => {
+    const parsed = bastionExceptionListQuerySchema.safeParse(query(request, true));
     if (!parsed.success) return validationError(request, reply, parsed.error);
-    return handled(request, reply, () => exceptions.listExceptions(deps().engine, viewerOf(request), parsed.data));
+    const d = deps();
+    return handled(request, reply, () => exceptions.listExceptions(d.engine, askingViewerOf(request), parsed.data, d.canAccess));
   });
 
   // Row 59.
-  fastify.get('/exceptions/:id', { preHandler: [requireAuth, can('bastion.exception.read')] }, async (request, reply) => {
+  fastify.get('/exceptions/:id', { preHandler: [requireAuth, can('bastion.exception.read'), asker('bastion.exception.read')] }, async (request, reply) => {
     const id = idParam(request);
     if (!id) return notFound(request, reply);
-    return handled(request, reply, () => exceptions.getException(deps().engine, viewerOf(request), id));
+    const d = deps();
+    return handled(request, reply, () => exceptions.getException(d.engine, askingViewerOf(request), id, d.canAccess));
   });
 
   // Row 60.

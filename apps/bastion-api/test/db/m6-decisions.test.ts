@@ -206,7 +206,7 @@ describe.skipIf(!DATABASE_URL)('M6 gaps, fixes, exceptions and drift (live datab
     expect(gaps.data.map((g) => g.gap_kind)).not.toContain('failing');
     expect(gaps.accepted_risks.map((r) => r.id)).toContain(proposed.id);
     expectWire(bastionGapsResponseSchema, gaps);
-    const exceptions = await listExceptions(deps, viewer(s.org, s.owner), { limit: 50 });
+    const exceptions = await listExceptions(deps, viewer(s.org, s.owner), { limit: 50 }, d.canAccess);
     expect(exceptions.data.map((e) => e.id)).toContain(proposed.id);
     expectWire(bastionExceptionListResponseSchema, exceptions);
     const ctl = await outbox(s.org, `control:${control}`);

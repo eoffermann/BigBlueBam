@@ -27,7 +27,7 @@ import { registerTool } from '../lib/register-tool.js';
 import { createBastionClient, type BastionClient, type BastionFetch } from '../clients/bastion-client.js';
 import type { ConfirmTokenStore } from '../lib/confirm-token-store.js';
 // #196 parity tools (registerBastionAdminTools at the bottom of this file).
-import { randomBytes } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 // M5 evidence, feeds and coverage tools (registerBastionEvidenceTools at the very bottom).
 import {
   bastionFeedCreateSchema,
@@ -92,7 +92,9 @@ import {
  * everything a human can, under the same permissions and audit. The setup and admin writes
  * (adopt, edit and archive a framework, create and edit controls, applicability decisions, the
  * company profile, the Compliance project) and the floored room reads therefore have tools, in
- * registerBastionAdminTools below; archive is two-step through a confirm token.
+ * registerBastionAdminTools below. Every path that changes what Bastion reports as compliant
+ * (archive, not applicable, dismiss a gap, unlink evidence, retire a policy) is two-step through a
+ * confirm token (BASTION_CONFIRM_ACTIONS, #415).
  *
  * Deliberately NO tool: confirming or rejecting a check, and every later vouching route (attest,
  * decide, evidence review, room create/revoke/unlock, ...). Category "auth: session required
@@ -138,9 +140,10 @@ export function registerBastionTools(
 ): void {
   const client = createBastionClient(bastionApiUrl, api, fetchImpl);
   registerBastionAdminTools(server, client, confirmTokenStore);
-  registerBastionEvidenceTools(server, client);
-  registerBastionDecisionTools(server, client);
-  registerBastionPolicyTools(server, client);
+  // The truth-flip paths in these blocks are confirm-gated too (BASTION_CONFIRM_ACTIONS, #415).
+  registerBastionEvidenceTools(server, client, confirmTokenStore);
+  registerBastionDecisionTools(server, client, confirmTokenStore);
+  registerBastionPolicyTools(server, client, confirmTokenStore);
   registerBastionQuestionnaireTools(server, client);
   registerBastionSharingTools(server, client);
 
@@ -343,8 +346,9 @@ export function registerBastionTools(
   registerTool(server, {
     name: 'bastion_evidence_for',
     description:
-      'The evidence recorded for one control, newest first (GET /controls/:id/evidence): each snapshot\'s outcome (pass, fail, unprovable with a reason), the check that produced it, its window, counts, its hash and ledger position, and a plain explanation. Names and cited records are shown only to owners, admins and the control\'s owner; everyone else gets counts. Every evaluation run stores one snapshot per check, so the full list repeats each check once per run; latest=true returns only the newest snapshot of each confirmed check (one page, what Control detail shows). Optional assertion_id narrows to one check (its history). Pass next_cursor back as cursor while has_more is true. Read-only.',
+      'The evidence recorded for one control, newest first (GET /controls/:id/evidence): each snapshot\'s outcome (pass, fail, unprovable with a reason), the check that produced it, its window, counts, its hash and ledger position, and a plain explanation. Names and cited records are shown only to owners, admins and the control\'s owner; everyone else gets counts. Every evaluation run stores one snapshot per check, so the full list repeats each check once per run; latest=true returns only the newest snapshot of each confirmed check (one page, what Control detail shows). Optional assertion_id narrows to one check (its history). Pass next_cursor back as cursor while has_more is true. asker_user_id is required: the person you are answering must hold bastion.evidence.read too, detail is shown only when both of you may see it, and each cited record (cited_refs, cited_items, cited_labels) and repository name appears only when both of you can open it; the rest are counted in hidden_citation_count. Read-only.',
     input: {
+      asker_user_id: askerUserId,
       control_id: z.string().uuid(),
       assertion_id: z.string().uuid().optional(),
       latest: z.boolean().optional().describe('Only the newest snapshot of each confirmed check.'),
@@ -352,8 +356,8 @@ export function registerBastionTools(
       limit: z.number().int().min(1).max(100).optional(),
     },
     returns: z.record(z.unknown()),
-    handler: async ({ control_id, assertion_id, latest, cursor, limit }) => {
-      const r = await client.listControlEvidence(control_id, { assertion_id, latest, cursor, limit });
+    handler: async ({ control_id, assertion_id, latest, cursor, limit, asker_user_id }) => {
+      const r = await client.listControlEvidence(control_id, { assertion_id, latest, cursor, limit, asker_user_id });
       return r.ok ? ok(r.data) : err('listing evidence', r.data);
     },
   });
@@ -362,11 +366,11 @@ export function registerBastionTools(
   registerTool(server, {
     name: 'bastion_get_evidence',
     description:
-      'One evidence snapshot by id (GET /evidence/:id), with the same counts-only rule as bastion_evidence_for. Read-only.',
-    input: { evidence_id: z.string().uuid() },
+      'One evidence snapshot by id (GET /evidence/:id), with the same counts-only rule as bastion_evidence_for. asker_user_id is required: detail and each cited record are shown only when both you and the person you are answering may see them (the rest are counted in hidden_citation_count). Read-only.',
+    input: { asker_user_id: askerUserId, evidence_id: z.string().uuid() },
     returns: z.record(z.unknown()),
-    handler: async ({ evidence_id }) => {
-      const r = await client.getEvidence(evidence_id);
+    handler: async ({ evidence_id, asker_user_id }) => {
+      const r = await client.getEvidence(evidence_id, { asker_user_id });
       return r.ok ? ok(r.data) : err('reading evidence', r.data);
     },
   });
@@ -446,6 +450,101 @@ export const BASTION_ADMIN_TOOL_NAMES = [
 export const BASTION_CONFIRM_TTL_MS = 300_000;
 export const BASTION_ARCHIVE_FRAMEWORK_ACTION = 'bastion_archive_framework';
 
+/**
+ * Every Bastion tool path that changes what Bastion reports as compliant (a "truth flip", #415),
+ * each behind the same two-step confirm token. The ONE list: the gate, the descriptions and the
+ * tests all read it.
+ *
+ *   archive_framework  retires every control only that framework needs
+ *   not_applicable     takes a requirement out of scope (bastion_decide_applicability)
+ *   dismiss_gap        removes a gap from the ranked list for good
+ *   unlink_evidence    takes reviewed proof off a check, which is then re-evaluated
+ *   retire_policy      stops tracking who has read a policy (bastion_update_policy, status retired)
+ *
+ * The other paths of those tools ("applicable", policy edits other than retiring) stay one call.
+ */
+export const BASTION_CONFIRM_ACTIONS = {
+  archive_framework: BASTION_ARCHIVE_FRAMEWORK_ACTION,
+  not_applicable: 'bastion_decide_applicability:not_applicable',
+  dismiss_gap: 'bastion_dismiss_gap',
+  unlink_evidence: 'bastion_unlink_manual_evidence',
+  retire_policy: 'bastion_update_policy:retire',
+} as const;
+
+/** Stable JSON (sorted keys) so the same request always digests the same. */
+function stableJson(v: unknown): string {
+  if (Array.isArray(v)) return `[${v.map(stableJson).join(',')}]`;
+  if (v && typeof v === 'object') {
+    const o = v as Record<string, unknown>;
+    return `{${Object.keys(o)
+      .filter((k) => o[k] !== undefined)
+      .sort()
+      .map((k) => `${JSON.stringify(k)}:${stableJson(o[k])}`)
+      .join(',')}}`;
+  }
+  return JSON.stringify(v ?? null);
+}
+
+/**
+ * The resource a token is bound to: the record's id, plus (#415) a digest of exactly what the call
+ * will do, so a token staged for one change cannot carry out a different one on the same record.
+ */
+export function bastionConfirmResource(id: string, payload?: unknown): string {
+  if (payload === undefined) return id;
+  return `${id}#${createHash('sha256').update(stableJson(payload)).digest('hex').slice(0, 32)}`;
+}
+
+type ToolResult = { content: Array<{ type: 'text'; text: string }>; isError?: true };
+
+/**
+ * The two-step confirm for a truth-flip path (bastion_archive_framework's flow, #415). Without
+ * confirm_token: stage a token bound to (action, resource) and call nothing. With it: the token
+ * must match both, is consumed, and only then does `run` call bastion-api. No token store: fail
+ * closed.
+ */
+async function confirmGate(
+  store: ConfirmTokenStore | undefined,
+  gate: { tool: string; action: string; resource: string; label: string; what: string; noun: string; consequence: string },
+  confirmToken: string | undefined,
+  run: () => Promise<ToolResult>,
+): Promise<ToolResult> {
+  if (!store) {
+    return err(gate.label, {
+      code: 'CONFIRMATION_UNAVAILABLE',
+      message: `${gate.what} needs a confirmation step, which is not available on this server.`,
+    });
+  }
+  if (!confirmToken) {
+    const token = randomBytes(16).toString('hex');
+    await store.set(token, { action: gate.action, resource_id: gate.resource, ttlMs: BASTION_CONFIRM_TTL_MS });
+    return ok({
+      status: 'pending_confirmation',
+      message: `${gate.consequence} Re-call ${gate.tool} with the same arguments and this confirm_token to proceed. Token expires in ${Math.floor(
+        BASTION_CONFIRM_TTL_MS / 1000,
+      )} seconds.`,
+      action: gate.action,
+      resource_id: gate.resource,
+      confirm_token: token,
+    });
+  }
+  const pending = await store.get(confirmToken);
+  if (!pending || pending.action !== gate.action || pending.resource_id !== gate.resource) {
+    return {
+      content: [
+        {
+          type: 'text' as const,
+          text: `Invalid or expired confirm_token for this ${gate.noun}. Re-call ${gate.tool} without a token to stage a new one.`,
+        },
+      ],
+      isError: true as const,
+    };
+  }
+  await store.delete(confirmToken);
+  return run();
+}
+
+const confirmTokenInput = z.string().optional().describe('Token from the staging call. Required to carry out this change.');
+
 export function registerBastionAdminTools(
   server: McpServer,
   client: BastionClient,
@@ -490,46 +589,24 @@ export function registerBastionAdminTools(
       confirm_token: z.string().optional().describe('Token from the staging call. Required to archive.'),
     },
     returns: z.record(z.unknown()),
-    handler: async ({ framework_id, confirm_token }) => {
-      if (!confirmTokenStore) {
-        return err('archiving framework', {
-          code: 'CONFIRMATION_UNAVAILABLE',
-          message: 'Archiving needs a confirmation step, which is not available on this server.',
-        });
-      }
-      if (!confirm_token) {
-        const token = randomBytes(16).toString('hex');
-        await confirmTokenStore.set(token, {
-          action: BASTION_ARCHIVE_FRAMEWORK_ACTION,
-          resource_id: framework_id,
-          ttlMs: BASTION_CONFIRM_TTL_MS,
-        });
-        return ok({
-          status: 'pending_confirmation',
-          message: `Archiving retires every control that only this framework needs. Re-call bastion_archive_framework with this confirm_token to proceed. Token expires in ${Math.floor(
-            BASTION_CONFIRM_TTL_MS / 1000,
-          )} seconds.`,
-          action: BASTION_ARCHIVE_FRAMEWORK_ACTION,
-          resource_id: framework_id,
-          confirm_token: token,
-        });
-      }
-      const pending = await confirmTokenStore.get(confirm_token);
-      if (!pending || pending.action !== BASTION_ARCHIVE_FRAMEWORK_ACTION || pending.resource_id !== framework_id) {
-        return {
-          content: [
-            {
-              type: 'text' as const,
-              text: 'Invalid or expired confirm_token for this archive. Re-call bastion_archive_framework without a token to stage a new one.',
-            },
-          ],
-          isError: true as const,
-        };
-      }
-      await confirmTokenStore.delete(confirm_token);
-      const r = await client.archiveFramework(framework_id);
-      return r.ok ? ok(r.data) : err('archiving framework', r.data);
-    },
+    handler: async ({ framework_id, confirm_token }) =>
+      confirmGate(
+        confirmTokenStore,
+        {
+          tool: 'bastion_archive_framework',
+          action: BASTION_CONFIRM_ACTIONS.archive_framework,
+          resource: bastionConfirmResource(framework_id),
+          label: 'archiving framework',
+          what: 'Archiving',
+          noun: 'archive',
+          consequence: 'Archiving retires every control that only this framework needs.',
+        },
+        confirm_token,
+        async () => {
+          const r = await client.archiveFramework(framework_id);
+          return r.ok ? ok(r.data) : err('archiving framework', r.data);
+        },
+      ),
   });
 
   // ── A4. bastion_upsert_control (spec rows 12, 14) ──────────────────────────
@@ -563,22 +640,46 @@ export function registerBastionAdminTools(
   registerTool(server, {
     name: 'bastion_decide_applicability',
     description:
-      'Record Statement of Applicability decisions. framework_id + decisions: decide several requirements by reference code at once, every control link of each code (POST /frameworks/:id/applicability). requirement_link_id + decision: decide one control-requirement link (PATCH /control-requirements/:id). "not_applicable" needs a plain reason. The decision is audited with who made it. Needs bastion.control.write.',
+      'Record Statement of Applicability decisions. framework_id + decisions: decide several requirements by reference code at once, every control link of each code (POST /frameworks/:id/applicability). requirement_link_id + decision: decide one control-requirement link (PATCH /control-requirements/:id). "not_applicable" needs a plain reason. The decision is audited with who made it. "not_applicable" takes the requirement out of scope, so it stops counting against readiness: any call that marks something not applicable is two-step (call once WITHOUT confirm_token to stage a token, then again with the same arguments and the returned confirm_token within 5 minutes). "applicable" decisions run in one call. Needs bastion.control.write.',
     input: {
       framework_id: z.string().uuid().optional(),
       decisions: bastionBulkApplicabilitySchema.shape.decisions.optional(),
       requirement_link_id: z.string().uuid().optional(),
       decision: bastionRequirementApplicabilitySchema.optional(),
+      confirm_token: confirmTokenInput,
     },
     returns: z.record(z.unknown()),
-    handler: async ({ framework_id, decisions, requirement_link_id, decision }) => {
+    handler: async ({ framework_id, decisions, requirement_link_id, decision, confirm_token }) => {
+      // A not-applicable decision is a truth flip (#415): staged and confirmed, bound to exactly
+      // these decisions on this framework or link.
+      const gated = (id: string, payload: unknown, run: () => Promise<ToolResult>) =>
+        confirmGate(
+          confirmTokenStore,
+          {
+            tool: 'bastion_decide_applicability',
+            action: BASTION_CONFIRM_ACTIONS.not_applicable,
+            resource: bastionConfirmResource(id, payload),
+            label: 'deciding applicability',
+            what: 'Marking a requirement not applicable',
+            noun: 'not-applicable decision',
+            consequence: 'Marking a requirement not applicable takes it out of scope: it stops counting against readiness.',
+          },
+          confirm_token,
+          run,
+        );
       if (framework_id && decisions && !requirement_link_id && !decision) {
-        const r = await client.decideApplicability(framework_id, { decisions });
-        return r.ok ? ok(r.data) : err('deciding applicability', r.data);
+        const run = async () => {
+          const r = await client.decideApplicability(framework_id, { decisions });
+          return r.ok ? ok(r.data) : err('deciding applicability', r.data);
+        };
+        return decisions.some((d) => d.applicability === 'not_applicable') ? gated(framework_id, { decisions }, run) : run();
       }
       if (requirement_link_id && decision && !framework_id && !decisions) {
-        const r = await client.updateRequirementLink(requirement_link_id, decision);
-        return r.ok ? ok(r.data) : err('deciding applicability', r.data);
+        const run = async () => {
+          const r = await client.updateRequirementLink(requirement_link_id, decision);
+          return r.ok ? ok(r.data) : err('deciding applicability', r.data);
+        };
+        return decision.applicability === 'not_applicable' ? gated(requirement_link_id, decision, run) : run();
       }
       return err('deciding applicability', {
         code: 'VALIDATION_ERROR',
@@ -709,7 +810,7 @@ const askerUserId = z
   .uuid()
   .describe('The person this answer is for (required). Results are narrowed to what both you and they may see.');
 
-export function registerBastionEvidenceTools(server: McpServer, client: BastionClient): void {
+export function registerBastionEvidenceTools(server: McpServer, client: BastionClient, confirmTokenStore?: ConfirmTokenStore): void {
   // ── E1. bastion_list_manual_evidence (rows 33, 34) ─────────────────────────
   registerTool(server, {
     name: 'bastion_list_manual_evidence',
@@ -751,16 +852,32 @@ export function registerBastionEvidenceTools(server: McpServer, client: BastionC
   registerTool(server, {
     name: 'bastion_unlink_manual_evidence',
     description:
-      'Remove the link between uploaded evidence and a check (DELETE /manual-evidence/:id/links/:assertion_id). If the link had been reviewed, the control is checked again so its status reflects the change. Needs bastion.evidence.link.',
+      'Remove the link between uploaded evidence and a check (DELETE /manual-evidence/:id/links/:assertion_id). If the link had been reviewed, the control is checked again so its status reflects the change. That takes proof away from the check, so this is two-step: call once WITHOUT confirm_token to stage a token, then again with the same manual_evidence_id, assertion_id and the returned confirm_token within 5 minutes. Needs bastion.evidence.link.',
     input: {
       manual_evidence_id: z.string().uuid(),
       assertion_id: z.string().uuid(),
+      confirm_token: confirmTokenInput,
     },
     returns: z.record(z.unknown()),
-    handler: async ({ manual_evidence_id, assertion_id }) => {
-      const r = await client.unlinkManualEvidence(manual_evidence_id, assertion_id);
-      return r.ok ? ok(r.data) : err('unlinking evidence', r.data);
-    },
+    handler: async ({ manual_evidence_id, assertion_id, confirm_token }) =>
+      // Taking reviewed proof off a check is a truth flip (#415).
+      confirmGate(
+        confirmTokenStore,
+        {
+          tool: 'bastion_unlink_manual_evidence',
+          action: BASTION_CONFIRM_ACTIONS.unlink_evidence,
+          resource: bastionConfirmResource(`${manual_evidence_id}/${assertion_id}`),
+          label: 'unlinking evidence',
+          what: 'Unlinking evidence',
+          noun: 'unlink',
+          consequence: 'Unlinking takes this evidence off the check; if the link was reviewed, the control is checked again without it.',
+        },
+        confirm_token,
+        async () => {
+          const r = await client.unlinkManualEvidence(manual_evidence_id, assertion_id);
+          return r.ok ? ok(r.data) : err('unlinking evidence', r.data);
+        },
+      ),
   });
 
   // (Row 39, withdraw: no tool. A destructive human act, spec 2.8, #217.)
@@ -849,7 +966,7 @@ export const BASTION_DECISION_TOOL_NAMES = [
   'bastion_acknowledge_drift',
 ] as const;
 
-export function registerBastionDecisionTools(server: McpServer, client: BastionClient): void {
+export function registerBastionDecisionTools(server: McpServer, client: BastionClient, confirmTokenStore?: ConfirmTokenStore): void {
   // ── D1. bastion_coverage_gaps (row 51) ─────────────────────────────────────
   registerTool(server, {
     name: 'bastion_coverage_gaps',
@@ -883,30 +1000,47 @@ export function registerBastionDecisionTools(server: McpServer, client: BastionC
   registerTool(server, {
     name: 'bastion_dismiss_gap',
     description:
-      'Dismiss a gap with a reason (POST /gaps/:id/dismiss), for example when it does not apply to how the company works. Recorded in the Bastion audit log with who dismissed it; a dismissed gap stays dismissed when gaps are re-ranked. Needs bastion.gap.dismiss (owners and admins).',
+      'Dismiss a gap with a reason (POST /gaps/:id/dismiss), for example when it does not apply to how the company works. Recorded in the Bastion audit log with who dismissed it; a dismissed gap stays dismissed when gaps are re-ranked. That takes it off the list for good, so this is two-step: call once WITHOUT confirm_token to stage a token, then again with the same gap_id, the same reason and the returned confirm_token within 5 minutes. Needs bastion.gap.dismiss (owners and admins).',
     input: {
       gap_id: z.string().uuid(),
       reason: bastionGapDismissSchema.shape.reason,
+      confirm_token: confirmTokenInput,
     },
     returns: z.record(z.unknown()),
-    handler: async ({ gap_id, reason }) => {
-      const r = await client.dismissGap(gap_id, { reason });
-      return r.ok ? ok(r.data) : err('dismissing the gap', r.data);
-    },
+    handler: async ({ gap_id, reason, confirm_token }) =>
+      // Dismissing removes a gap from what Bastion reports for good: a truth flip (#415).
+      confirmGate(
+        confirmTokenStore,
+        {
+          tool: 'bastion_dismiss_gap',
+          action: BASTION_CONFIRM_ACTIONS.dismiss_gap,
+          resource: bastionConfirmResource(gap_id, { reason }),
+          label: 'dismissing the gap',
+          what: 'Dismissing a gap',
+          noun: 'dismissal',
+          consequence: 'Dismissing takes this gap off the list, and it stays dismissed when gaps are re-ranked.',
+        },
+        confirm_token,
+        async () => {
+          const r = await client.dismissGap(gap_id, { reason });
+          return r.ok ? ok(r.data) : err('dismissing the gap', r.data);
+        },
+      ),
   });
 
   // ── D4. bastion_list_fix_drafts (rows 54, 55) ──────────────────────────────
   registerTool(server, {
     name: 'bastion_list_fix_drafts',
     description:
-      'Drafted fixes (the review queue). Without fix_draft_id: newest first, filtered by status (proposed, approved, rejected, expired, applied, decision_rejected), gap or control (GET /fix-drafts). With fix_draft_id: one draft (GET /fix-drafts/:id). Each draft has its title, plain body, template, control, who drafted it, the mirrored proposal and its expiry, and cited items the caller may see (others are counted, not shown). decision_rejected means the proposal was decided outside Bastion and that decision was ignored. Read-only; needs bastion.fix.read.',
+      'Drafted fixes (the review queue). Without fix_draft_id: newest first, filtered by status (proposed, approved, rejected, expired, applied, decision_rejected), gap or control (GET /fix-drafts). With fix_draft_id: one draft (GET /fix-drafts/:id). Each draft has its title, plain body, template, control, who drafted it, the mirrored proposal and its expiry, and the cited items both you and the person you are answering (asker_user_id, required) may see (others are counted in hidden_citation_count, not shown). decision_rejected means the proposal was decided outside Bastion and that decision was ignored. Read-only; both the caller and the asker need bastion.fix.read.',
     input: {
+      asker_user_id: askerUserId,
       fix_draft_id: z.string().uuid().optional(),
       ...bastionFixDraftListQuerySchema.shape,
     },
     returns: z.record(z.unknown()),
-    handler: async ({ fix_draft_id, ...q }) => {
-      const r = fix_draft_id ? await client.getFixDraft(fix_draft_id) : await client.listFixDrafts(q);
+    handler: async ({ fix_draft_id, asker_user_id, ...q }) => {
+      const r = fix_draft_id ? await client.getFixDraft(fix_draft_id, { asker_user_id }) : await client.listFixDrafts({ ...q, asker_user_id });
       return r.ok ? ok(r.data) : err(fix_draft_id ? 'reading the fix' : 'listing fixes', r.data);
     },
   });
@@ -936,14 +1070,15 @@ export function registerBastionDecisionTools(server: McpServer, client: BastionC
   registerTool(server, {
     name: 'bastion_list_exceptions',
     description:
-      'Accepted risks (exceptions). Without exception_id: newest first, filtered by status (proposed, active, expired, rejected) or control (GET /exceptions). With exception_id: one exception (GET /exceptions/:id). Each shows the control and its owner, scope (one item for up to 365 days, or a whole check for up to 90 days covering only the items failing when it was approved), reason, compensating note, who proposed and who approved it ("approved by the proposer (small team)" when a team of fewer than three self-approved), expiry and days left. An active exception makes the control read "Not met, risk accepted"; it still counts under Not met, never as proof. Read-only.',
+      'Accepted risks (exceptions). Without exception_id: newest first, filtered by status (proposed, active, expired, rejected) or control (GET /exceptions). With exception_id: one exception (GET /exceptions/:id). Each shows the control and its owner, scope (one item for up to 365 days, or a whole check for up to 90 days covering only the items failing when it was approved), reason, compensating note, who proposed and who approved it ("approved by the proposer (small team)" when a team of fewer than three self-approved), expiry and days left. An active exception makes the control read "Not met, risk accepted"; it still counts under Not met, never as proof. asker_user_id is required: the covered item (cited_entity_type, cited_entity_id) and each frozen ref are shown only when both you and the person you are answering can open them; the rest are counted in hidden_citation_count. Read-only; both the caller and the asker need bastion.exception.read.',
     input: {
+      asker_user_id: askerUserId,
       exception_id: z.string().uuid().optional(),
       ...bastionExceptionListQuerySchema.shape,
     },
     returns: z.record(z.unknown()),
-    handler: async ({ exception_id, ...q }) => {
-      const r = exception_id ? await client.getException(exception_id) : await client.listExceptions(q);
+    handler: async ({ exception_id, asker_user_id, ...q }) => {
+      const r = exception_id ? await client.getException(exception_id, { asker_user_id }) : await client.listExceptions({ ...q, asker_user_id });
       return r.ok ? ok(r.data) : err(exception_id ? 'reading the exception' : 'listing exceptions', r.data);
     },
   });
@@ -1013,7 +1148,7 @@ export const BASTION_POLICY_TOOL_NAMES = [
   'bastion_request_attestations',
 ] as const;
 
-export function registerBastionPolicyTools(server: McpServer, client: BastionClient): void {
+export function registerBastionPolicyTools(server: McpServer, client: BastionClient, confirmTokenStore?: ConfirmTokenStore): void {
   // ── P1. bastion_attestation_status (rows 64, 68) ───────────────────────────
   registerTool(server, {
     name: 'bastion_attestation_status',
@@ -1077,20 +1212,39 @@ export function registerBastionPolicyTools(server: McpServer, client: BastionCli
   registerTool(server, {
     name: 'bastion_update_policy',
     description:
-      'Change a policy\'s audience, re-read cadence or owner, or retire it (status "retired") (PATCH /policies/:id). Retiring keeps every acknowledgement already recorded (they are immutable). Needs bastion.policy.write (owners and admins).',
+      'Change a policy\'s audience, re-read cadence or owner, or retire it (status "retired") (PATCH /policies/:id). Retiring keeps every acknowledgement already recorded (they are immutable) but stops tracking who has read the policy, so a call with status "retired" is two-step: call once WITHOUT confirm_token to stage a token, then again with the same arguments and the returned confirm_token within 5 minutes. Other edits run in one call. Needs bastion.policy.write (owners and admins).',
     input: {
       policy_id: z.string().uuid(),
       audience: bastionPolicyAudienceSchema.optional(),
       cadence_days: z.number().int().min(1).max(1095).optional(),
       owner_user_id: z.string().uuid().nullable().optional(),
       status: z.enum(['active', 'retired']).optional(),
+      confirm_token: confirmTokenInput,
     },
     returns: z.record(z.unknown()),
-    handler: async ({ policy_id, ...rest }) => {
+    handler: async ({ policy_id, confirm_token, ...rest }) => {
       const parsed = bastionPolicyUpdateSchema.safeParse(Object.fromEntries(Object.entries(rest).filter(([, v]) => v !== undefined)));
       if (!parsed.success) return err('changing the policy', { code: 'VALIDATION_ERROR', message: parsed.error.errors[0]?.message });
-      const r = await client.updatePolicy(policy_id, parsed.data);
-      return r.ok ? ok(r.data) : err('changing the policy', r.data);
+      const run = async () => {
+        const r = await client.updatePolicy(policy_id, parsed.data);
+        return r.ok ? ok(r.data) : err('changing the policy', r.data);
+      };
+      if (parsed.data.status !== 'retired') return run();
+      // Retiring a policy is a truth flip (#415): staged and confirmed, bound to exactly this change.
+      return confirmGate(
+        confirmTokenStore,
+        {
+          tool: 'bastion_update_policy',
+          action: BASTION_CONFIRM_ACTIONS.retire_policy,
+          resource: bastionConfirmResource(policy_id, parsed.data),
+          label: 'changing the policy',
+          what: 'Retiring a policy',
+          noun: 'retirement',
+          consequence: 'Retiring stops tracking who has read this policy; acknowledgements already recorded are kept.',
+        },
+        confirm_token,
+        run,
+      );
     },
   });
 

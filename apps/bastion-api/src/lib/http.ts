@@ -2,6 +2,7 @@ import type { FastifyReply, FastifyRequest } from 'fastify';
 import type { ZodError } from 'zod';
 import type { Viewer } from '../services/types.js';
 import { ConflictError, ForbiddenError, NotFoundError, RateLimitedError, UnavailableError, ValidationFailure } from './errors.js';
+import { askerUserIdOf } from './asker.js';
 import { authMethodOf } from './guards.js';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -22,6 +23,17 @@ export function viewerOf(request: FastifyRequest): Viewer {
     impersonator_id: request.isImpersonating ? (request.impersonator?.id ?? null) : null,
     auth_method: authMethodOf(request) ?? 'api_key',
   };
+}
+
+/**
+ * The caller plus the person an agent reads for (#414). Only for routes whose preHandler runs
+ * requireAskerCan (which refuses a malformed asker_user_id with 400 first). Cited records in the
+ * answer then pass can_access for both.
+ */
+export function askingViewerOf(request: FastifyRequest): Viewer {
+  const asker = askerUserIdOf(request.query);
+  if (asker === 'invalid') throw new Error('askingViewerOf called on a route without requireAskerCan');
+  return { ...viewerOf(request), asker_id: asker };
 }
 
 export function notFound(request: FastifyRequest, reply: FastifyReply, msg = 'Not found') {

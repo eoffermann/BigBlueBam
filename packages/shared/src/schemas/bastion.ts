@@ -2407,6 +2407,12 @@ export const bastionExceptionSchema = z.object({
   cited_entity_type: z.string().nullable(),
   cited_entity_id: z.string().nullable(),
   frozen_refs: z.array(bastionCitedRefSchema).nullable(),
+  /**
+   * Cited items (the one item of an entity exception, frozen refs of an assertion-wide one) this
+   * reader may not see, counted and named nowhere (spec 2.4, #414). With asker_user_id, an item
+   * must be visible to both the caller and the asker.
+   */
+  hidden_citation_count: z.number().int(),
   reason: z.string(),
   compensating_note: z.string().nullable(),
   proposal_id: z.string().uuid().nullable(),

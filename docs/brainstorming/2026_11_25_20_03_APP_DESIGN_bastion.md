@@ -344,6 +344,8 @@ comment "Accepted risk expired on {date}". It also publishes `exception.expired`
 | Sign a policy attestation | **never** | the person, not impersonated |
 | Rooms, settings | no tool | floored humans |
 | Dismiss an audit packet that could not be built (#402; soft hide, audited) | yes, with the floored `export.create` grant | |
+| Change what Bastion reports as compliant: archive a framework, mark a requirement not applicable, dismiss a gap, unlink evidence from a check, retire a policy (2026-11-27, #415) | yes, two-step: the first call stages a confirm token bound to the action, the record and exactly what will change; only a second call with that token within 5 minutes acts | |
+| Read evidence, fix drafts or exceptions that cite records (2026-11-27, #414) | yes, with `asker_user_id` required; each cited record passes `can_access` for the caller and the asker, and evidence detail needs both to qualify | |
 
 **Guardrails.**
 
@@ -1321,6 +1323,17 @@ every role would need to be granted alongside it. For the same reason it is agen
 (section 2.8): `bastion_dismiss_export` exists, unlike `POST /gaps/:id/dismiss` (row 53),
 which is a human-only judgment under its own `bastion.gap.dismiss` because it changes what the
 readiness numbers count.
+
+**Truth-flip tools confirm at the tool, not in this table (2026-11-27, #415).** The `confirm` column
+marks actions whose every use is confirm-gated. Four agent paths change what Bastion reports as
+compliant under actions that also cover ordinary edits: `not_applicable` under
+`bastion.control.write` (row 15 and the bulk setup route), `bastion.gap.dismiss` (row 53),
+unlinking under `bastion.evidence.link` (row 37) and `status: retired` under
+`bastion.policy.write` (row 66). Each is two-step in its MCP tool through the same
+`confirmTokenStore` flow `bastion_archive_framework` uses (`BASTION_CONFIRM_ACTIONS` in
+`apps/mcp-server/src/tools/bastion-tools.ts`), while "applicable", other policy edits and linking
+stay one call. The catalog flags are unchanged, so the permission parity test and the shared
+catalog stay as they are.
 
 ---
 

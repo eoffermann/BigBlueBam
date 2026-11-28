@@ -1,11 +1,11 @@
 {
-  "generated_at": "2026-11-27T17:49:43.664Z",
+  "generated_at": "2026-11-28T04:24:28.717Z",
   "changed": [
     {
-      "app": "bolt",
+      "app": "bastion",
       "reason": "src_hash_changed",
-      "prev_hash": "a1e6b4f4204e92825a6d66b4136a69d4d2acb3ea10deed8ce42465b0f9a0686f",
-      "new_hash": "effe1f095d952270996cd8ed29b60cde49ae337aa8ec5a493bc74c080a84bfea"
+      "prev_hash": "426ed1d4ee0ef769d8bfb9cd33e1a4aa33b2a36662acc3d757cb2526b21f6f49",
+      "new_hash": "075976afd54022187f49203b829dfb3d77b1ed9d6ed4b4b9d3708f0fd59ae354"
     }
   ]
 }

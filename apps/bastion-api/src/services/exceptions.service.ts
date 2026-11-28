@@ -47,10 +47,12 @@ import {
   activeHumanCount,
   anOrgAdmin,
   assertHumanDecider,
+  type CanAccess,
   citationVisible,
   type DecisionDeps,
   fileMirroredProposal,
   isSmallTeam,
+  visibleRefs,
 } from './decisions.service.js';
 import { beginLedgerBatch, mapAppendError } from './ledger-batch.js';
 import type { Viewer } from './types.js';
@@ -86,7 +88,34 @@ function shape(r: Record<string, unknown>, now: Date): BastionException {
   };
 }
 
-export async function listExceptions(engine: EngineDeps, viewer: Viewer, q: BastionExceptionListQuery): Promise<BastionExceptionListResponse> {
+/**
+ * The exception as this reader may see it (spec 2.4: citations pass can_access at read, #414).
+ * The one cited item of an entity exception, and each frozen ref of an assertion-wide one, is
+ * shown only when it passes for the reader (and the asker, when an agent reads for a person);
+ * the rest are counted in hidden_citation_count and named nowhere.
+ */
+async function shapeForReader(canAccess: CanAccess, viewer: Viewer, r: Record<string, unknown>, now: Date): Promise<BastionException> {
+  const base = shape(r, now);
+  let hidden = 0;
+  let citedType = base.cited_entity_type;
+  let citedId = base.cited_entity_id;
+  if (citedType && citedId && !(await citationVisible(canAccess, viewer, { entity_type: citedType, entity_id: citedId }))) {
+    citedType = null;
+    citedId = null;
+    hidden += 1;
+  }
+  const frozenAll = (base.frozen_refs as CitedRef[] | null) ?? null;
+  const frozen = frozenAll === null ? null : await visibleRefs(canAccess, viewer, frozenAll);
+  if (frozenAll && frozen) hidden += frozenAll.length - frozen.length;
+  return { ...base, cited_entity_type: citedType, cited_entity_id: citedId, frozen_refs: frozen, hidden_citation_count: hidden };
+}
+
+export async function listExceptions(
+  engine: EngineDeps,
+  viewer: Viewer,
+  q: BastionExceptionListQuery,
+  canAccess: CanAccess,
+): Promise<BastionExceptionListResponse> {
   const now = engine.now();
   const rows = await orgTx(engine.sql, viewer.org_id, (tx) => tx.unsafe(
     `SELECT ${SELECT} ${FROM}
@@ -94,13 +123,15 @@ export async function listExceptions(engine: EngineDeps, viewer: Viewer, q: Bast
       ORDER BY e.created_at DESC LIMIT $4`,
     [viewer.org_id, q.status ?? null, q.control_id ?? null, q.limit],
   ));
-  return { data: rows.map((r) => shape(r as Record<string, unknown>, now)), next_cursor: null };
+  const data: BastionException[] = [];
+  for (const r of rows) data.push(await shapeForReader(canAccess, viewer, r as Record<string, unknown>, now));
+  return { data, next_cursor: null };
 }
 
-export async function getException(engine: EngineDeps, viewer: Viewer, id: string): Promise<BastionExceptionResponse> {
+export async function getException(engine: EngineDeps, viewer: Viewer, id: string, canAccess: CanAccess): Promise<BastionExceptionResponse> {
   const r = (await orgTx(engine.sql, viewer.org_id, (tx) => tx.unsafe(`SELECT ${SELECT} ${FROM} WHERE e.organization_id = $1 AND e.id = $2`, [viewer.org_id, id])))[0];
   if (!r) throw new NotFoundError('We could not find that exception.');
-  return { data: shape(r as Record<string, unknown>, engine.now()) };
+  return { data: await shapeForReader(canAccess, viewer, r as Record<string, unknown>, engine.now()) };
 }
 
 /** POST /exceptions (row 60). */
@@ -184,7 +215,7 @@ export async function proposeException(d: DecisionDeps, viewer: Viewer, body: Ba
     await auditRaw(tx, viewer, 'exception.propose', { type: 'exception', id: exId }, { control_id: body.control_id, scope: body.scope, proposal_id: proposalId });
     return exId;
   });
-  return getException(d.engine, viewer, id);
+  return getException(d.engine, viewer, id, d.canAccess);
 }
 
 /** The content an approved exception commits to in the ledger (names are personal data). */
@@ -324,7 +355,7 @@ export async function decideException(d: DecisionDeps, viewer: Viewer, id: strin
   } catch (err) {
     throw mapAppendError(err);
   }
-  return getException(engine, viewer, id);
+  return getException(engine, viewer, id, d.canAccess);
 }
 
 // ── Expiry (inside bastion-evidence-expiry, spec 2.6) ───────────────────────────────────

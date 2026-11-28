@@ -9,6 +9,12 @@ export interface Viewer {
   is_superuser: boolean;
   impersonator_id: string | null;
   auth_method: 'session' | 'api_key';
+  /**
+   * The person an agent reads for (`asker_user_id`, #217, #414). Set only on the detail-bearing
+   * reads that honor it (askingViewerOf). Every visibility verdict for a cited record is then the
+   * intersection of this viewer's and the asker's can_access: it narrows, never widens.
+   */
+  asker_id?: string | null;
 }
 
 export function isAdminViewer(viewer: Viewer): boolean {
