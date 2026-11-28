@@ -6375,7 +6375,7 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
   },
   {
     "mcp_tool": "bastion_decide_applicability",
-    "description": "Record Statement of Applicability decisions. framework_id + decisions: decide several requirements by reference code at once, every control link of each code (POST /frameworks/:id/applicability). requirement_link_id + decision: decide one control-requirement link (PATCH /control-requirements/:id). \"not_applicable\" needs a plain reason. The decision is audited with who made it. Needs bastion.control.write.",
+    "description": "Record Statement of Applicability decisions. framework_id + decisions: decide several requirements by reference code at once, every control link of each code (POST /frameworks/:id/applicability). requirement_link_id + decision: decide one control-requirement link (PATCH /control-requirements/:id). \"not_applicable\" needs a plain reason. The decision is audited with who made it. \"not_applicable\" takes the requirement out of scope, so it stops counting against readiness: any call that marks something not applicable is two-step (call once WITHOUT confirm_token to stage a token, then again with the same arguments and the returned confirm_token within 5 minutes). \"applicable\" decisions run in one call. Needs bastion.control.write.",
     "source": "bastion",
     "parameters": [
       {
@@ -6413,7 +6413,7 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
   },
   {
     "mcp_tool": "bastion_dismiss_gap",
-    "description": "Dismiss a gap with a reason (POST /gaps/:id/dismiss), for example when it does not apply to how the company works. Recorded in the Bastion audit log with who dismissed it; a dismissed gap stays dismissed when gaps are re-ranked. Needs bastion.gap.dismiss (owners and admins).",
+    "description": "Dismiss a gap with a reason (POST /gaps/:id/dismiss), for example when it does not apply to how the company works. Recorded in the Bastion audit log with who dismissed it; a dismissed gap stays dismissed when gaps are re-ranked. That takes it off the list for good, so this is two-step: call once WITHOUT confirm_token to stage a token, then again with the same gap_id, the same reason and the returned confirm_token within 5 minutes. Needs bastion.gap.dismiss (owners and admins).",
     "source": "bastion",
     "parameters": [
       {
@@ -6442,7 +6442,7 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
   },
   {
     "mcp_tool": "bastion_evidence_for",
-    "description": "The evidence recorded for one control, newest first (GET /controls/:id/evidence): each snapshot's outcome (pass, fail, unprovable with a reason), the check that produced it, its window, counts, its hash and ledger position, and a plain explanation. Names and cited records are shown only to owners, admins and the control's owner; everyone else gets counts. Every evaluation run stores one snapshot per check, so the full list repeats each check once per run; latest=true returns only the newest snapshot of each confirmed check (one page, what Control detail shows). Optional assertion_id narrows to one check (its history). Pass next_cursor back as cursor while has_more is true. Read-only.",
+    "description": "The evidence recorded for one control, newest first (GET /controls/:id/evidence): each snapshot's outcome (pass, fail, unprovable with a reason), the check that produced it, its window, counts, its hash and ledger position, and a plain explanation. Names and cited records are shown only to owners, admins and the control's owner; everyone else gets counts. Every evaluation run stores one snapshot per check, so the full list repeats each check once per run; latest=true returns only the newest snapshot of each confirmed check (one page, what Control detail shows). Optional assertion_id narrows to one check (its history). Pass next_cursor back as cursor while has_more is true. asker_user_id is required: the person you are answering must hold bastion.evidence.read too, detail is shown only when both of you may see it, and each cited record (cited_refs, cited_items, cited_labels) and repository name appears only when both of you can open it; the rest are counted in hidden_citation_count. Read-only.",
     "source": "bastion",
     "parameters": [
       {
@@ -6487,7 +6487,7 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
   },
   {
     "mcp_tool": "bastion_get_evidence",
-    "description": "One evidence snapshot by id (GET /evidence/:id), with the same counts-only rule as bastion_evidence_for. Read-only.",
+    "description": "One evidence snapshot by id (GET /evidence/:id), with the same counts-only rule as bastion_evidence_for. asker_user_id is required: detail and each cited record are shown only when both you and the person you are answering may see them (the rest are counted in hidden_citation_count). Read-only.",
     "source": "bastion",
     "parameters": [
       {
@@ -6684,7 +6684,7 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
   },
   {
     "mcp_tool": "bastion_list_exceptions",
-    "description": "Accepted risks (exceptions). Without exception_id: newest first, filtered by status (proposed, active, expired, rejected) or control (GET /exceptions). With exception_id: one exception (GET /exceptions/:id). Each shows the control and its owner, scope (one item for up to 365 days, or a whole check for up to 90 days covering only the items failing when it was approved), reason, compensating note, who proposed and who approved it (\"approved by the proposer (small team)\" when a team of fewer than three self-approved), expiry and days left. An active exception makes the control read \"Not met, risk accepted\"; it still counts under Not met, never as proof. Read-only.",
+    "description": "Accepted risks (exceptions). Without exception_id: newest first, filtered by status (proposed, active, expired, rejected) or control (GET /exceptions). With exception_id: one exception (GET /exceptions/:id). Each shows the control and its owner, scope (one item for up to 365 days, or a whole check for up to 90 days covering only the items failing when it was approved), reason, compensating note, who proposed and who approved it (\"approved by the proposer (small team)\" when a team of fewer than three self-approved), expiry and days left. An active exception makes the control read \"Not met, risk accepted\"; it still counts under Not met, never as proof. asker_user_id is required: the covered item (cited_entity_type, cited_entity_id) and each frozen ref are shown only when both you and the person you are answering can open them; the rest are counted in hidden_citation_count. Read-only; both the caller and the asker need bastion.exception.read.",
     "source": "bastion",
     "parameters": [
       {
@@ -6742,7 +6742,7 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
   },
   {
     "mcp_tool": "bastion_list_fix_drafts",
-    "description": "Drafted fixes (the review queue). Without fix_draft_id: newest first, filtered by status (proposed, approved, rejected, expired, applied, decision_rejected), gap or control (GET /fix-drafts). With fix_draft_id: one draft (GET /fix-drafts/:id). Each draft has its title, plain body, template, control, who drafted it, the mirrored proposal and its expiry, and cited items the caller may see (others are counted, not shown). decision_rejected means the proposal was decided outside Bastion and that decision was ignored. Read-only; needs bastion.fix.read.",
+    "description": "Drafted fixes (the review queue). Without fix_draft_id: newest first, filtered by status (proposed, approved, rejected, expired, applied, decision_rejected), gap or control (GET /fix-drafts). With fix_draft_id: one draft (GET /fix-drafts/:id). Each draft has its title, plain body, template, control, who drafted it, the mirrored proposal and its expiry, and the cited items both you and the person you are answering (asker_user_id, required) may see (others are counted in hidden_citation_count, not shown). decision_rejected means the proposal was decided outside Bastion and that decision was ignored. Read-only; both the caller and the asker need bastion.fix.read.",
     "source": "bastion",
     "parameters": [
       {
@@ -7099,7 +7099,7 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
   },
   {
     "mcp_tool": "bastion_unlink_manual_evidence",
-    "description": "Remove the link between uploaded evidence and a check (DELETE /manual-evidence/:id/links/:assertion_id). If the link had been reviewed, the control is checked again so its status reflects the change. Needs bastion.evidence.link.",
+    "description": "Remove the link between uploaded evidence and a check (DELETE /manual-evidence/:id/links/:assertion_id). If the link had been reviewed, the control is checked again so its status reflects the change. That takes proof away from the check, so this is two-step: call once WITHOUT confirm_token to stage a token, then again with the same manual_evidence_id, assertion_id and the returned confirm_token within 5 minutes. Needs bastion.evidence.link.",
     "source": "bastion",
     "parameters": [
       {
@@ -7195,7 +7195,7 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
   },
   {
     "mcp_tool": "bastion_update_policy",
-    "description": "Change a policy's audience, re-read cadence or owner, or retire it (status \"retired\") (PATCH /policies/:id). Retiring keeps every acknowledgement already recorded (they are immutable). Needs bastion.policy.write (owners and admins).",
+    "description": "Change a policy's audience, re-read cadence or owner, or retire it (status \"retired\") (PATCH /policies/:id). Retiring keeps every acknowledgement already recorded (they are immutable) but stops tracking who has read the policy, so a call with status \"retired\" is two-step: call once WITHOUT confirm_token to stage a token, then again with the same arguments and the returned confirm_token within 5 minutes. Other edits run in one call. Needs bastion.policy.write (owners and admins).",
     "source": "bastion",
     "parameters": [
       {

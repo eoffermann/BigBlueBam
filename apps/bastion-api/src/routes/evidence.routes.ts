@@ -8,7 +8,7 @@ import {
   bastionSealListQuerySchema,
 } from '@bigbluebam/shared';
 import { rejectWhenImpersonating, requireAuth, requireSession } from '../plugins/auth.js';
-import { handled, idParam, notFound, validationError, viewerOf } from '../lib/http.js';
+import { askingViewerOf, handled, idParam, notFound, validationError, viewerOf } from '../lib/http.js';
 import { engineDeps } from '../engine/runtime.js';
 import * as evidence from '../services/evidence.service.js';
 import { canAccess } from '../services/evidence-runtime.js';
@@ -50,8 +50,13 @@ export default async function evidenceRoutes(fastify: FastifyInstance) {
     return handled(request, reply, () => evidence.getEvaluation(deps(), viewerOf(request), id));
   });
 
+  // Rows 25 and 26 cite source records (PRs, keys, people): they take `asker_user_id` (#414, as
+  // the manual-evidence reads, #217). The asker must hold evidence.read too, and every cited ref,
+  // population name and the detail view itself pass for both the caller and the asker.
+  const asker = (p: string) => fastify.requireAskerCan(p);
+
   // Row 25.
-  fastify.get('/controls/:id/evidence', { preHandler: [requireAuth, can('bastion.evidence.read')] }, async (request, reply) => {
+  fastify.get('/controls/:id/evidence', { preHandler: [requireAuth, can('bastion.evidence.read'), asker('bastion.evidence.read')] }, async (request, reply) => {
     const id = idParam(request);
     if (!id) return notFound(request, reply);
     const raw = request.query as Record<string, string | undefined>;
@@ -62,14 +67,14 @@ export default async function evidenceRoutes(fastify: FastifyInstance) {
       limit: raw.limit || undefined,
     });
     if (!parsed.success) return validationError(request, reply, parsed.error);
-    return handled(request, reply, () => evidence.listControlEvidence(deps(), viewerOf(request), id, parsed.data, canAccess));
+    return handled(request, reply, () => evidence.listControlEvidence(deps(), askingViewerOf(request), id, parsed.data, canAccess));
   });
 
   // Row 26.
-  fastify.get('/evidence/:id', { preHandler: [requireAuth, can('bastion.evidence.read')] }, async (request, reply) => {
+  fastify.get('/evidence/:id', { preHandler: [requireAuth, can('bastion.evidence.read'), asker('bastion.evidence.read')] }, async (request, reply) => {
     const id = idParam(request);
     if (!id) return notFound(request, reply);
-    return handled(request, reply, () => evidence.getEvidence(deps(), viewerOf(request), id, canAccess));
+    return handled(request, reply, () => evidence.getEvidence(deps(), askingViewerOf(request), id, canAccess));
   });
 
   // Row 27.

@@ -15,6 +15,7 @@ import { BASTION_SMALL_TEAM_HUMANS } from '@bigbluebam/shared';
 import { ForbiddenError } from '../lib/errors.js';
 import { type EngineDeps, orgTx, type Tx } from '../engine/context.js';
 import { lockOrgGapRank } from '../engine/gaps.js';
+import { readersMay } from '../lib/asker.js';
 import { accessTypeOf } from '../lib/ref-labels.js';
 import type { Viewer } from './types.js';
 
@@ -40,11 +41,13 @@ export interface DecisionDeps {
  * and at read). Every ref goes through can_access, including the probe refs to platform rows
  * (`github_pr_event`, `api_key`, `user`), which map onto bam.* visibility types (#227): owning a
  * control does not widen what its owner may see. A ref with no visibility type is refused.
+ * When an agent reads for a person (viewer.asker_id, #414) the ref must pass for both: the
+ * intersection, never wider than either.
  */
 export async function citationVisible(canAccess: CanAccess, viewer: Viewer, ref: { entity_type: string; entity_id: string }): Promise<boolean> {
   const type = accessTypeOf(ref.entity_type);
   if (!type) return false;
-  return canAccess(viewer.id, type, ref.entity_id).catch(() => false);
+  return readersMay(canAccess, viewer, type, ref.entity_id);
 }
 
 /** The refs this person may see, in order (one can_access per distinct ref). */
@@ -98,6 +101,23 @@ export async function anOrgAdmin(tx: Tx, orgId: string, exclude: string | null =
      ORDER BY m.joined_at NULLS LAST, u.created_at
      LIMIT 1`;
   return r[0] ? String(r[0].id) : null;
+}
+
+/**
+ * Is this user an owner or admin of the org (or a SuperUser)? The same org-group rule as
+ * anOrgAdmin. Used where the person is not the caller, e.g. the asker of a read (#414), whose
+ * role is not on the request.
+ */
+export async function userIsOrgAdmin(tx: Tx, orgId: string, userId: string): Promise<boolean> {
+  const r = await tx`
+    SELECT u.is_superuser,
+           EXISTS (SELECT 1 FROM account_group_memberships agm JOIN permission_groups pg ON pg.id = agm.group_id
+                    WHERE agm.user_id = u.id AND agm.scope_type = 'org' AND agm.scope_id = ${orgId}
+                      AND agm.detached_at IS NULL AND pg.deleted_at IS NULL AND pg.legacy_role IN ('owner', 'admin')) AS org_admin
+      FROM users u
+      JOIN organization_memberships m ON m.user_id = u.id AND m.org_id = ${orgId}
+     WHERE u.id = ${userId} AND u.is_active`;
+  return r[0] ? r[0].is_superuser === true || r[0].org_admin === true : false;
 }
 
 export interface MirroredProposal {

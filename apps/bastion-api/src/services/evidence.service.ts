@@ -41,7 +41,7 @@ import type { BastionProbeResult } from '@bigbluebam/shared';
 import { auditRaw } from '../lib/audit-raw.js';
 import { type CitedRef, labelRefs, labelsFor } from '../lib/ref-labels.js';
 import { isAdminViewer, type Viewer } from './types.js';
-import { type CanAccess, visibleRefs } from './decisions.service.js';
+import { type CanAccess, userIsOrgAdmin, visibleRefs } from './decisions.service.js';
 import { type NameVisible, populationNames, populationVisibility } from '../lib/population-visibility.js';
 import type { Served } from '../lib/served.js';
 
@@ -113,10 +113,18 @@ export const SNAPSHOT_SELECT = `s.id, s.evaluation_run_id, s.assertion_id, s.con
   s.summary, s.cited_refs, s.overflow_count, s.manual_evidence_ids, s.exception_ids, s.feed_record_count,
   s.replica_lag_ms, s.content_sha256, s.ledger_seq, s.created_at`;
 
+/**
+ * May this reader see the evidence's detail (owner, admin, or the control's owner)? Reading for a
+ * person (viewer.asker_id, #414) the asker must qualify too: the intersection, so an admin's agent
+ * answering a member gives that member the counts-only view they would get themselves.
+ */
 async function detailAllowed(tx: Tx, viewer: Viewer, controlId: string): Promise<boolean> {
-  if (isAdminViewer(viewer)) return true;
   const c = await tx`SELECT owner_user_id FROM bastion_controls WHERE organization_id = ${viewer.org_id} AND id = ${controlId}`;
-  return c[0]?.owner_user_id === viewer.id;
+  const owner = c[0]?.owner_user_id as string | null | undefined;
+  if (!isAdminViewer(viewer) && owner !== viewer.id) return false;
+  const asker = viewer.asker_id;
+  if (!asker || asker === viewer.id || owner === asker) return true;
+  return userIsOrgAdmin(tx, viewer.org_id, asker);
 }
 
 /**

@@ -11,6 +11,7 @@
 // is shown to detail viewers as before. A failing can_access fails closed.
 
 import type { Viewer } from '../services/types.js';
+import { readersMay } from './asker.js';
 import type { Tx } from '../engine/context.js';
 
 export type CanAccessFn = (askerUserId: string, entityType: string, entityId: string) => Promise<boolean>;
@@ -55,7 +56,8 @@ export async function nameVisibility(
     for (const pid of projects) {
       let ok = projectVerdict.get(pid);
       if (ok === undefined) {
-        ok = await canAccess(viewer.id, 'bam.project', pid).catch(() => false);
+        // The viewer and, reading for a person, the asker too (#414).
+        ok = await readersMay(canAccess, viewer, 'bam.project', pid);
         projectVerdict.set(pid, ok);
       }
       if (ok) {

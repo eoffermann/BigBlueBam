@@ -403,7 +403,9 @@ Agents can do most of the routine work through Bastion's `bastion_*` MCP tools, 
 - Sharing (owners' and admins' permissions): `bastion_list_auditor_rooms`, `bastion_auditor_room_view`, `bastion_list_auditor_requests`, `bastion_respond_auditor_request`, `bastion_create_export`, `bastion_list_exports`.
 - Settings and operations: `bastion_get_settings`, `bastion_update_settings`, `bastion_list_delivery_problems`, `bastion_retry_delivery`, `bastion_audit_log`.
 
-Some acts are deliberately reserved for a signed-in person, never an agent or an API key: confirming or rejecting checks, deciding fixes and accepted risks, accepting uploaded evidence, approving a questionnaire, acknowledging a policy, creating, revoking or unlocking an auditor room, and resolving a gap in the evidence history. When an agent acts for a person, it sees no more than that person could. Anything an agent drafts lands in the Review queue labelled as drafted by an AI agent.
+Some acts are deliberately reserved for a signed-in person, never an agent or an API key: confirming or rejecting checks, deciding fixes and accepted risks, accepting uploaded evidence, approving a questionnaire, acknowledging a policy, creating, revoking or unlocking an auditor room, and resolving a gap in the evidence history. When an agent acts for a person, it sees no more than that person could: the reads that name records (evidence, the Evidence locker, drafted fixes and accepted risks) require the agent to say whom it is answering, and show only the items both of them may open. Anything an agent drafts lands in the Review queue labelled as drafted by an AI agent.
+
+Changes that alter what Bastion reports as compliant take two steps when an agent makes them: archiving a framework, marking a requirement not applicable, dismissing a gap, unlinking evidence from a check, and retiring a policy. The first call only explains what will happen and returns a confirmation token; nothing changes until the agent calls again with that token within five minutes. Marking a requirement applicable and other policy edits happen in one step.
 
 ## User Stories
 

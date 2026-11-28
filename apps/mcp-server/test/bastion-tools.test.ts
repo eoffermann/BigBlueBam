@@ -21,6 +21,8 @@ const SERVER = readFileSync(join(SRC, 'server.ts'), 'utf8');
 const FW = '11111111-1111-4111-8111-111111111111';
 const CTRL = '22222222-2222-4222-8222-222222222222';
 const ASSERTION = '33333333-3333-4333-8333-333333333333';
+/** The person an agent reads for on the citation-bearing reads (#414). */
+const ASKER4 = 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee';
 
 type Call = { url: string; method: string; body: unknown };
 let calls: Call[] = [];
@@ -246,14 +248,14 @@ describe('Bastion M3 tool handlers', () => {
 
   it('M4: evidence, verification, seals and restores are plain reads on the right routes', async () => {
     const tool = await load();
-    await tool('bastion_evidence_for').handler({ control_id: CTRL, assertion_id: ASSERTION, limit: 10 } as never);
-    await tool('bastion_get_evidence').handler({ evidence_id: ASSERTION } as never);
+    await tool('bastion_evidence_for').handler({ asker_user_id: ASKER4, control_id: CTRL, assertion_id: ASSERTION, limit: 10 } as never);
+    await tool('bastion_get_evidence').handler({ asker_user_id: ASKER4, evidence_id: ASSERTION } as never);
     await tool('bastion_verify_evidence').handler({ evidence_id: ASSERTION } as never);
     await tool('bastion_list_seals').handler({} as never);
     await tool('bastion_list_restores').handler({} as never);
     expect(calls.map((c) => `${c.method} ${c.url}`)).toEqual([
-      `GET http://bastion-api:4024/v1/controls/${CTRL}/evidence?assertion_id=${ASSERTION}&limit=10`,
-      `GET http://bastion-api:4024/v1/evidence/${ASSERTION}`,
+      `GET http://bastion-api:4024/v1/controls/${CTRL}/evidence?assertion_id=${ASSERTION}&limit=10&asker_user_id=${ASKER4}`,
+      `GET http://bastion-api:4024/v1/evidence/${ASSERTION}?asker_user_id=${ASKER4}`,
       `GET http://bastion-api:4024/v1/evidence/${ASSERTION}/verify`,
       'GET http://bastion-api:4024/v1/ledger/seals',
       'GET http://bastion-api:4024/v1/ledger/restores',
@@ -263,12 +265,12 @@ describe('Bastion M3 tool handlers', () => {
   it('M4 lists thread cursor and limit to bastion-api (#204)', async () => {
     const tool = await load();
     await tool('bastion_list_evaluations').handler({ status: 'partial', cursor: 'c1', limit: 5 } as never);
-    await tool('bastion_evidence_for').handler({ control_id: CTRL, cursor: 'c2', limit: 10 } as never);
+    await tool('bastion_evidence_for').handler({ asker_user_id: ASKER4, control_id: CTRL, cursor: 'c2', limit: 10 } as never);
     await tool('bastion_list_seals').handler({ cursor: 'c3', limit: 30 } as never);
     await tool('bastion_list_restores').handler({ cursor: 'c4', limit: 20 } as never);
     expect(calls.map((c) => c.url)).toEqual([
       'http://bastion-api:4024/v1/evaluations?status=partial&cursor=c1&limit=5',
-      `http://bastion-api:4024/v1/controls/${CTRL}/evidence?cursor=c2&limit=10`,
+      `http://bastion-api:4024/v1/controls/${CTRL}/evidence?cursor=c2&limit=10&asker_user_id=${ASKER4}`,
       'http://bastion-api:4024/v1/ledger/seals?cursor=c3&limit=30',
       'http://bastion-api:4024/v1/ledger/restores?cursor=c4&limit=20',
     ]);
@@ -378,9 +380,9 @@ describe('Bastion #196 parity tools (setup and admin writes, room reads)', () =>
     expect(calls).toEqual([]);
   });
 
-  it('bastion_decide_applicability decides in bulk or one link', async () => {
+  it('bastion_decide_applicability decides in bulk or one link; "applicable" is one call', async () => {
     const tool = await load();
-    const decisions = [{ ref_code: 'A.7.1', applicability: 'not_applicable', not_applicable_reason: 'No server room' }];
+    const decisions = [{ ref_code: 'A.7.1', applicability: 'applicable' }];
     await tool('bastion_decide_applicability').handler({ framework_id: FW, decisions } as never);
     await tool('bastion_decide_applicability').handler({
       requirement_link_id: LINK,
@@ -393,6 +395,81 @@ describe('Bastion #196 parity tools (setup and admin writes, room reads)', () =>
     expect(calls[0]!.body).toEqual({ decisions });
     const schema = tool('bastion_decide_applicability').input.decision as { safeParse: (v: unknown) => { success: boolean } };
     expect(schema.safeParse({ applicability: 'not_applicable' }).success).toBe(false);
+  });
+
+  it('a not-applicable decision is two-step, bound to exactly those decisions (#415)', async () => {
+    const store = memoryTokenStore();
+    const tool = await load(store);
+    const decisions = [
+      { ref_code: 'A.7.1', applicability: 'not_applicable', not_applicable_reason: 'No server room' },
+      { ref_code: 'A.7.2', applicability: 'applicable' },
+    ];
+    const staged = parse(await tool('bastion_decide_applicability').handler({ framework_id: FW, decisions } as never));
+    expect(staged).toMatchObject({ status: 'pending_confirmation', action: 'bastion_decide_applicability:not_applicable' });
+    expect(calls).toEqual([]);
+    expect(store.entries.get(staged.confirm_token)!.resource_id).toMatch(new RegExp(`^${FW}#[0-9a-f]{32}$`));
+
+    // The same token cannot carry a different set of decisions on the same framework.
+    const swapped = [{ ref_code: 'CC6.1', applicability: 'not_applicable', not_applicable_reason: 'x' }];
+    const wrong = (await tool('bastion_decide_applicability').handler({ framework_id: FW, decisions: swapped, confirm_token: staged.confirm_token } as never)) as {
+      isError?: boolean;
+    };
+    expect(wrong.isError).toBe(true);
+    expect(calls).toEqual([]);
+
+    await tool('bastion_decide_applicability').handler({ framework_id: FW, decisions, confirm_token: staged.confirm_token } as never);
+    expect(calls.map((c) => `${c.method} ${c.url}`)).toEqual([`POST http://bastion-api:4024/v1/frameworks/${FW}/applicability`]);
+    expect(calls[0]!.body).toEqual({ decisions });
+
+    // One link: the same gate.
+    calls = [];
+    const decision = { applicability: 'not_applicable', not_applicable_reason: 'No office' };
+    const one = parse(await tool('bastion_decide_applicability').handler({ requirement_link_id: LINK, decision } as never));
+    expect(one.status).toBe('pending_confirmation');
+    expect(calls).toEqual([]);
+    await tool('bastion_decide_applicability').handler({ requirement_link_id: LINK, decision, confirm_token: one.confirm_token } as never);
+    expect(calls.map((c) => `${c.method} ${c.url}`)).toEqual([`PATCH http://bastion-api:4024/v1/control-requirements/${LINK}`]);
+    // Single use.
+    const again = (await tool('bastion_decide_applicability').handler({ requirement_link_id: LINK, decision, confirm_token: one.confirm_token } as never)) as {
+      isError?: boolean;
+    };
+    expect(again.isError).toBe(true);
+    expect(calls).toHaveLength(1);
+  });
+
+  it('every truth-flip path fails closed without a confirm-token store (#415)', async () => {
+    const tool = await load(null);
+    const POLICY = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+    const results = [
+      await tool('bastion_decide_applicability').handler({ requirement_link_id: LINK, decision: { applicability: 'not_applicable', not_applicable_reason: 'x' } } as never),
+      await tool('bastion_dismiss_gap').handler({ gap_id: LINK, reason: 'We have no laptops' } as never),
+      await tool('bastion_unlink_manual_evidence').handler({ manual_evidence_id: LINK, assertion_id: ASSERTION } as never),
+      await tool('bastion_update_policy').handler({ policy_id: POLICY, status: 'retired' } as never),
+    ] as Array<{ isError?: boolean; content: Array<{ text: string }> }>;
+    for (const r of results) {
+      expect(r.isError).toBe(true);
+      expect(r.content[0]!.text).toContain('CONFIRMATION_UNAVAILABLE');
+    }
+    expect(calls).toEqual([]);
+  });
+
+  it('BASTION_CONFIRM_ACTIONS names every gated tool, and each one advertises confirm_token (#415)', async () => {
+    const tool = await load();
+    const { BASTION_CONFIRM_ACTIONS } = await import('../src/tools/bastion-tools.js');
+    const tools = new Set(Object.values(BASTION_CONFIRM_ACTIONS).map((a) => a.split(':')[0]!));
+    expect([...tools].sort()).toEqual([
+      'bastion_archive_framework',
+      'bastion_decide_applicability',
+      'bastion_dismiss_gap',
+      'bastion_unlink_manual_evidence',
+      'bastion_update_policy',
+    ]);
+    for (const name of tools) {
+      const t = captured.find((c) => c.name === name) as { input: Record<string, unknown>; description?: string } | undefined;
+      expect(t, name).toBeDefined();
+      expect(tool(name).input.confirm_token, name).toBeDefined();
+      expect(String(t!.description), name).toMatch(/two-step/i);
+    }
   });
 
   it('bastion_save_company_profile and bastion_set_compliance_project call the setup routes', async () => {
@@ -419,6 +496,7 @@ describe('Bastion #196 parity tools (setup and admin writes, room reads)', () =>
 });
 
 describe('Bastion M5 tools (manual evidence, feeds, coverage)', () => {
+  const parse = (res: unknown) => JSON.parse((res as { content: Array<{ text: string }> }).content[0]!.text);
   const ME = '88888888-8888-4888-8888-888888888888';
   const FEED = '99999999-9999-4999-8999-999999999999';
   const ASKER = '77777777-7777-4777-8777-777777777777';
@@ -437,9 +515,21 @@ describe('Bastion M5 tools (manual evidence, feeds, coverage)', () => {
   });
 
   it('link and unlink call the link routes; check-again posts to the item', async () => {
-    const tool = await load();
+    const store = memoryTokenStore();
+    const tool = await load(store);
     await tool('bastion_link_manual_evidence').handler({ manual_evidence_id: ME, assertion_id: ASSERTION } as never);
-    await tool('bastion_unlink_manual_evidence').handler({ manual_evidence_id: ME, assertion_id: ASSERTION } as never);
+    // Unlink is two-step (#415): staging calls nothing.
+    const staged = parse(await tool('bastion_unlink_manual_evidence').handler({ manual_evidence_id: ME, assertion_id: ASSERTION } as never));
+    expect(staged).toMatchObject({ status: 'pending_confirmation', action: 'bastion_unlink_manual_evidence', resource_id: `${ME}/${ASSERTION}` });
+    expect(calls).toHaveLength(1);
+    // A token for another check on the same evidence is refused.
+    const other = '12121212-1212-4121-8121-121212121212';
+    const wrong = (await tool('bastion_unlink_manual_evidence').handler({ manual_evidence_id: ME, assertion_id: other, confirm_token: staged.confirm_token } as never)) as {
+      isError?: boolean;
+    };
+    expect(wrong.isError).toBe(true);
+    expect(calls).toHaveLength(1);
+    await tool('bastion_unlink_manual_evidence').handler({ manual_evidence_id: ME, assertion_id: ASSERTION, confirm_token: staged.confirm_token } as never);
     await tool('bastion_check_evidence_scan_again').handler({ manual_evidence_id: ME } as never);
     expect(calls).toEqual([
       { url: `http://bastion-api:4024/v1/manual-evidence/${ME}/links`, method: 'POST', body: { assertion_id: ASSERTION } },
@@ -501,9 +591,17 @@ describe('Bastion M5 tools (manual evidence, feeds, coverage)', () => {
     expect(un.safeParse(false)).toMatchObject({ success: true, data: false });
   });
 
-  it('the detail-bearing reads require asker_user_id (#217)', async () => {
+  it('the detail-bearing reads require asker_user_id (#217), including every read that returns cited records (#414)', async () => {
     const tool = await load();
-    for (const name of ['bastion_list_manual_evidence', 'bastion_list_feed_records', 'bastion_coverage_summary']) {
+    for (const name of [
+      'bastion_list_manual_evidence',
+      'bastion_list_feed_records',
+      'bastion_coverage_summary',
+      'bastion_evidence_for',
+      'bastion_get_evidence',
+      'bastion_list_fix_drafts',
+      'bastion_list_exceptions',
+    ]) {
       const asker = tool(name).input.asker_user_id as { safeParse: (v: unknown) => { success: boolean } } | undefined;
       expect(asker, name).toBeDefined();
       expect(asker!.safeParse(undefined).success, name).toBe(false);
@@ -558,25 +656,39 @@ describe('Bastion M6 tools (gaps, fixes, exceptions, drift)', () => {
   it('reads gaps, fix drafts, exceptions and drift on the right routes', async () => {
     const tool = await load();
     await tool('bastion_coverage_gaps').handler({ sort: 'quick_wins', limit: 5 } as never);
-    await tool('bastion_list_fix_drafts').handler({ status: 'proposed' } as never);
-    await tool('bastion_list_fix_drafts').handler({ fix_draft_id: DRAFT } as never);
-    await tool('bastion_list_exceptions').handler({ control_id: CTRL } as never);
-    await tool('bastion_list_exceptions').handler({ exception_id: EXC } as never);
+    await tool('bastion_list_fix_drafts').handler({ asker_user_id: ASKER4, status: 'proposed' } as never);
+    await tool('bastion_list_fix_drafts').handler({ asker_user_id: ASKER4, fix_draft_id: DRAFT } as never);
+    await tool('bastion_list_exceptions').handler({ asker_user_id: ASKER4, control_id: CTRL } as never);
+    await tool('bastion_list_exceptions').handler({ asker_user_id: ASKER4, exception_id: EXC } as never);
     await tool('bastion_list_drift').handler({ unacknowledged: true } as never);
+    // The citation-bearing reads carry the asker to bastion-api (#414).
     expect(calls.map((c) => `${c.method} ${c.url}`)).toEqual([
       'GET http://bastion-api:4024/v1/gaps?sort=quick_wins&limit=5',
-      'GET http://bastion-api:4024/v1/fix-drafts?status=proposed',
-      `GET http://bastion-api:4024/v1/fix-drafts/${DRAFT}`,
-      `GET http://bastion-api:4024/v1/exceptions?control_id=${CTRL}`,
-      `GET http://bastion-api:4024/v1/exceptions/${EXC}`,
+      `GET http://bastion-api:4024/v1/fix-drafts?status=proposed&asker_user_id=${ASKER4}`,
+      `GET http://bastion-api:4024/v1/fix-drafts/${DRAFT}?asker_user_id=${ASKER4}`,
+      `GET http://bastion-api:4024/v1/exceptions?control_id=${CTRL}&asker_user_id=${ASKER4}`,
+      `GET http://bastion-api:4024/v1/exceptions/${EXC}?asker_user_id=${ASKER4}`,
       'GET http://bastion-api:4024/v1/drift?unacknowledged=true',
     ]);
   });
 
   it('proposes fixes and exceptions, dismisses gaps, marks fixes applied, acknowledges drift', async () => {
-    const tool = await load();
+    const store = memoryTokenStore();
+    const tool = await load(store);
     await tool('bastion_propose_fix').handler({ gap_id: GAP } as never);
-    await tool('bastion_dismiss_gap').handler({ gap_id: GAP, reason: 'We have no laptops' } as never);
+    // Dismissing is two-step (#415): staging calls nothing; the token is bound to the reason too.
+    const staged = JSON.parse(
+      ((await tool('bastion_dismiss_gap').handler({ gap_id: GAP, reason: 'We have no laptops' } as never)) as { content: Array<{ text: string }> }).content[0]!
+        .text,
+    );
+    expect(staged).toMatchObject({ status: 'pending_confirmation', action: 'bastion_dismiss_gap' });
+    expect(calls).toHaveLength(1);
+    const otherReason = (await tool('bastion_dismiss_gap').handler({ gap_id: GAP, reason: 'Something else', confirm_token: staged.confirm_token } as never)) as {
+      isError?: boolean;
+    };
+    expect(otherReason.isError).toBe(true);
+    expect(calls).toHaveLength(1);
+    await tool('bastion_dismiss_gap').handler({ gap_id: GAP, reason: 'We have no laptops', confirm_token: staged.confirm_token } as never);
     await tool('bastion_mark_fix_applied').handler({ fix_draft_id: DRAFT, applied_entity_type: 'bolt.rule', applied_entity_id: KEY } as never);
     await tool('bastion_propose_exception').handler({
       control_id: CTRL,
@@ -641,7 +753,7 @@ describe('Bastion M7 tools (policies and attestation)', () => {
   it('links, edits and nudges with shared-Zod bodies', async () => {
     const tool = await load();
     await tool('bastion_create_policy').handler({ beacon_entry_id: ENTRY } as never);
-    await tool('bastion_update_policy').handler({ policy_id: POLICY, status: 'retired' } as never);
+    await tool('bastion_update_policy').handler({ policy_id: POLICY, cadence_days: 180 } as never);
     await tool('bastion_request_attestations').handler({ policy_id: POLICY, user_ids: [USER] } as never);
     expect(calls.map((c) => `${c.method} ${c.url}`)).toEqual([
       'POST http://bastion-api:4024/v1/policies',
@@ -650,8 +762,30 @@ describe('Bastion M7 tools (policies and attestation)', () => {
     ]);
     // Defaults applied by the shared schema: everyone, re-read yearly.
     expect(calls[0]!.body).toEqual({ beacon_entry_id: ENTRY, audience: { kind: 'all' }, cadence_days: 365 });
-    expect(calls[1]!.body).toEqual({ status: 'retired' });
+    // An edit other than retiring is one call (#415).
+    expect(calls[1]!.body).toEqual({ cadence_days: 180 });
     expect(calls[2]!.body).toEqual({ user_ids: [USER] });
+  });
+
+  it('retiring a policy is two-step, bound to exactly that change (#415)', async () => {
+    const store = memoryTokenStore();
+    const tool = await load(store);
+    const res = (await tool('bastion_update_policy').handler({ policy_id: POLICY, status: 'retired' } as never)) as { content: Array<{ text: string }> };
+    const staged = JSON.parse(res.content[0]!.text);
+    expect(staged).toMatchObject({ status: 'pending_confirmation', action: 'bastion_update_policy:retire' });
+    expect(calls).toEqual([]);
+    // The token cannot retire a different policy, or carry a different change.
+    const other = 'abababab-abab-4bab-8bab-abababababab';
+    for (const args of [
+      { policy_id: other, status: 'retired' },
+      { policy_id: POLICY, status: 'retired', owner_user_id: USER },
+    ]) {
+      const r = (await tool('bastion_update_policy').handler({ ...args, confirm_token: staged.confirm_token } as never)) as { isError?: boolean };
+      expect(r.isError).toBe(true);
+    }
+    expect(calls).toEqual([]);
+    await tool('bastion_update_policy').handler({ policy_id: POLICY, status: 'retired', confirm_token: staged.confirm_token } as never);
+    expect(calls).toEqual([{ url: `http://bastion-api:4024/v1/policies/${POLICY}`, method: 'PATCH', body: { status: 'retired' } }]);
   });
 
   it('refuses an empty policy edit before calling bastion-api', async () => {

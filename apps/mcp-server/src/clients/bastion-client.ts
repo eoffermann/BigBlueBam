@@ -162,12 +162,19 @@ export function createBastionClient(bastionApiUrl: string, api: ApiClient, fetch
     listEvaluations: (q: Partial<BastionEvaluationListQuery>) =>
       request('GET', `/evaluations${qs({ status: q.status, cursor: q.cursor, limit: q.limit !== undefined ? String(q.limit) : undefined })}`),
     getEvaluation: (id: string) => request('GET', `/evaluations/${id}`),
-    listControlEvidence: (controlId: string, q: Partial<BastionEvidenceListQuery>) =>
+    // Evidence cites source records: both reads carry asker_user_id (#414).
+    listControlEvidence: (controlId: string, q: Partial<BastionEvidenceListQuery> & Asker) =>
       request(
         'GET',
-        `/controls/${controlId}/evidence${qs({ assertion_id: q.assertion_id, latest: q.latest, cursor: q.cursor, limit: q.limit !== undefined ? String(q.limit) : undefined })}`,
+        `/controls/${controlId}/evidence${qs({
+          assertion_id: q.assertion_id,
+          latest: q.latest,
+          cursor: q.cursor,
+          limit: q.limit !== undefined ? String(q.limit) : undefined,
+          asker_user_id: q.asker_user_id,
+        })}`,
       ),
-    getEvidence: (id: string) => request('GET', `/evidence/${id}`),
+    getEvidence: (id: string, a: Asker) => request('GET', `/evidence/${id}${qs({ asker_user_id: a.asker_user_id })}`),
     verifyEvidence: (id: string) => request('GET', `/evidence/${id}/verify`),
     listSeals: (q: Partial<BastionSealListQuery> = {}) =>
       request('GET', `/ledger/seals${qs({ cursor: q.cursor, limit: q.limit !== undefined ? String(q.limit) : undefined })}`),
@@ -243,16 +250,31 @@ export function createBastionClient(bastionApiUrl: string, api: ApiClient, fetch
       ),
     proposeFix: (gapId: string, body: BastionProposeFix) => request('POST', `/gaps/${gapId}/propose-fix`, body),
     dismissGap: (gapId: string, body: BastionGapDismiss) => request('POST', `/gaps/${gapId}/dismiss`, body),
-    listFixDrafts: (q: Partial<BastionFixDraftListQuery>) =>
+    // Fix drafts and exceptions cite source records: their reads carry asker_user_id (#414).
+    listFixDrafts: (q: Partial<BastionFixDraftListQuery> & Asker) =>
       request(
         'GET',
-        `/fix-drafts${qs({ status: q.status, gap_id: q.gap_id, control_id: q.control_id, limit: q.limit === undefined ? undefined : String(q.limit) })}`,
+        `/fix-drafts${qs({
+          status: q.status,
+          gap_id: q.gap_id,
+          control_id: q.control_id,
+          limit: q.limit === undefined ? undefined : String(q.limit),
+          asker_user_id: q.asker_user_id,
+        })}`,
       ),
-    getFixDraft: (id: string) => request('GET', `/fix-drafts/${id}`),
+    getFixDraft: (id: string, a: Asker) => request('GET', `/fix-drafts/${id}${qs({ asker_user_id: a.asker_user_id })}`),
     markFixApplied: (id: string, body: BastionFixMarkApplied) => request('POST', `/fix-drafts/${id}/mark-applied`, body),
-    listExceptions: (q: Partial<BastionExceptionListQuery>) =>
-      request('GET', `/exceptions${qs({ status: q.status, control_id: q.control_id, limit: q.limit === undefined ? undefined : String(q.limit) })}`),
-    getException: (id: string) => request('GET', `/exceptions/${id}`),
+    listExceptions: (q: Partial<BastionExceptionListQuery> & Asker) =>
+      request(
+        'GET',
+        `/exceptions${qs({
+          status: q.status,
+          control_id: q.control_id,
+          limit: q.limit === undefined ? undefined : String(q.limit),
+          asker_user_id: q.asker_user_id,
+        })}`,
+      ),
+    getException: (id: string, a: Asker) => request('GET', `/exceptions/${id}${qs({ asker_user_id: a.asker_user_id })}`),
     proposeException: (body: BastionExceptionPropose) => request('POST', '/exceptions', body),
     listDrift: (q: Partial<BastionDriftListQuery>) =>
       request(
