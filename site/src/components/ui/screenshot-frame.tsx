@@ -3,6 +3,17 @@ import { createPortal } from 'react-dom';
 import { Maximize2, X, MoonStar } from 'lucide-react';
 import clsx from 'clsx';
 
+// The dark captures that exist under public/screenshots, listed from disk at build time by
+// vite.config.ts (#418). A hover never requests a dark twin that is not in this list.
+declare const __DARK_CAPTURES__: readonly string[];
+const DARK_CAPTURES: ReadonlySet<string> = new Set(typeof __DARK_CAPTURES__ === 'undefined' ? [] : __DARK_CAPTURES__);
+
+/** The dark twin a light capture crossfades to on hover, or null when none was captured. */
+export function darkTwinOf(src: string): string | null {
+  const darkSrc = src.replace('/light/', '/dark/');
+  return darkSrc !== src && DARK_CAPTURES.has(darkSrc) ? darkSrc : null;
+}
+
 interface ScreenshotFrameProps {
   src: string;
   alt: string;
@@ -17,17 +28,16 @@ interface ScreenshotFrameProps {
  *     the dark counterpart (same path with /light/ → /dark/) whenever the
  *     pointer is over it (or a finger is touching it). The whole point is that
  *     anyone glancing at the site immediately learns BigBlueBam isn't
- *     light-mode-only. Falls back to staying light if no dark capture exists.
+ *     light-mode-only. Stays light when no dark capture exists (darkTwinOf).
  *  2. Click to enlarge. Opens a full-screen lightbox (Escape or click to
  *     dismiss) that carries the same light→dark-on-hover behaviour.
  */
 export function ScreenshotFrame({ src, alt, className }: ScreenshotFrameProps) {
-  const darkSrc = src.replace('/light/', '/dark/');
+  const darkSrc = darkTwinOf(src) ?? src;
   const hasDark = darkSrc !== src;
   const [open, setOpen] = useState(false);
   const [hover, setHover] = useState(false); // inline: pointer/touch over the frame
   const [zoomHover, setZoomHover] = useState(false); // lightbox: pointer/touch over the image
-  const [darkOk, setDarkOk] = useState(true); // dark capture loaded without 404
 
   // Close on Escape + lock body scroll while the lightbox is open.
   useEffect(() => {
@@ -51,7 +61,7 @@ export function ScreenshotFrame({ src, alt, className }: ScreenshotFrameProps) {
     }
   };
 
-  const showDark = hasDark && darkOk;
+  const showDark = hasDark;
   const darkImg = (visible: boolean) =>
     showDark ? (
       <img
@@ -59,7 +69,6 @@ export function ScreenshotFrame({ src, alt, className }: ScreenshotFrameProps) {
         alt=""
         aria-hidden
         loading="lazy"
-        onError={() => setDarkOk(false)}
         className={clsx(
           'absolute inset-0 block h-full w-full object-cover transition-opacity duration-300',
           visible ? 'opacity-100' : 'opacity-0',

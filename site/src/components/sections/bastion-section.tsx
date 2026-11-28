@@ -124,15 +124,15 @@ export function BastionSection() {
         </div>
       </AnimatedReveal>
 
-      {/* Dark-mode Readiness: theme-aware like the rest of the suite. */}
       <AnimatedReveal delay={0.18} withScale>
         <div className="mt-8 mx-auto max-w-3xl">
           <FloatingFrame
-            src="/screenshots/bastion/dark/01-readiness.png"
-            alt="Bastion Readiness in dark mode, on the same shared shell as every other app in the suite"
+            src="/screenshots/bastion/light/12-sharing.png"
+            alt="Bastion Sharing: auditor rooms, auditor questions and audit packets"
           />
           <p className="mt-3 text-center text-sm text-zinc-500">
-            Readiness in dark mode, on the same shared shell as every other app in the suite.
+            Sharing: give an auditor a private, expiring room to read your controls and evidence
+            without a BigBlueBam account, answer their questions, and hand over an audit packet.
           </p>
         </div>
       </AnimatedReveal>
