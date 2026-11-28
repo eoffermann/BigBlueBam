@@ -20,6 +20,41 @@
 // agent, site — although `site` is proxied at `/`, it's listed under
 // `public_paths` on the frontend entry).
 
+// mcp-server's client base URLs: every service URL env var apps/mcp-server/src/env.ts reads,
+// mapped to the catalog service it addresses. The mcp-server entry's `needs` and its URL env
+// names are both derived from this one map (#417), and
+// scripts/deploy/shared/mcp-needs.nodetest.mjs fails when env.ts reads a URL var missing here.
+export const MCP_SERVICE_URL_VARS = {
+  API_INTERNAL_URL: 'api',
+  HELPDESK_API_URL: 'helpdesk-api',
+  BANTER_API_URL: 'banter-api',
+  BEACON_API_URL: 'beacon-api',
+  BRIEF_API_URL: 'brief-api',
+  BOLT_API_URL: 'bolt-api',
+  BEARING_API_URL: 'bearing-api',
+  BOARD_API_URL: 'board-api',
+  BOND_API_URL: 'bond-api',
+  BLAST_API_URL: 'blast-api',
+  BOOK_API_URL: 'book-api',
+  BENCH_API_URL: 'bench-api',
+  BASIS_API_URL: 'basis-api',
+  BRAID_API_URL: 'braid-api',
+  BULWARK_API_URL: 'bulwark-api',
+  BURN_API_URL: 'burn-api',
+  BURSAR_API_URL: 'bursar-api',
+  // Bastion's client base: bastion-tools.ts and the search_everything Bastion arm.
+  BASTION_API_URL: 'bastion-api',
+  BILL_API_URL: 'bill-api',
+  BLANK_API_URL: 'blank-api',
+  BLUEPRINT_API_URL: 'blueprint-api',
+  BIN_API_URL: 'bin-api',
+  BAY_API_URL: 'bay-api',
+  BLIP_API_URL: 'blip-api',
+  BUREAU_API_URL: 'bureau-api',
+};
+
+const MCP_REQUIRED_URL_VARS = ['API_INTERNAL_URL'];
+
 export const APP_SERVICES = [
   {
     name: 'api',
@@ -662,25 +697,13 @@ export const APP_SERVICES = [
     healthcheck: '/health',
     start_command: 'node dist/server.js',
     required: true,
-    needs: [
-      'api', 'helpdesk-api', 'banter-api', 'beacon-api', 'brief-api',
-      'bolt-api', 'bearing-api', 'board-api', 'bond-api', 'blast-api',
-      'bench-api', 'book-api', 'blank-api', 'bill-api', 'blueprint-api',
-      'bin-api', 'bay-api', 'blip-api', 'redis',
-    ],
+    // Derived: every service mcp-server holds a base URL for (MCP_SERVICE_URL_VARS), plus redis.
+    needs: [...new Set(Object.values(MCP_SERVICE_URL_VARS)), 'redis'],
     public_paths: ['/mcp/'],
     env: {
-      required: ['MCP_TRANSPORT', 'API_INTERNAL_URL', 'REDIS_URL'],
+      required: ['MCP_TRANSPORT', ...MCP_REQUIRED_URL_VARS, 'REDIS_URL'],
       optional: [
-        'HELPDESK_API_URL', 'BANTER_API_URL', 'BEACON_API_URL', 'BRIEF_API_URL', 'BOLT_API_URL',
-        'BEARING_API_URL', 'BOARD_API_URL', 'BOND_API_URL', 'BLAST_API_URL',
-        'BOOK_API_URL', 'BENCH_API_URL', 'BILL_API_URL', 'BLANK_API_URL',
-        'BLUEPRINT_API_URL', 'BUREAU_API_URL', 'BIN_API_URL', 'BAY_API_URL', 'BLIP_API_URL',
-        // BASIS_API_URL + BRAID_API_URL are present in docker-compose.yml but were
-        // missing here (pre-existing gap, spec 9.5/IK2); BULWARK_API_URL is the new one.
-        'BASIS_API_URL', 'BRAID_API_URL', 'BULWARK_API_URL', 'BURN_API_URL', 'BURSAR_API_URL',
-        // Bastion's client base: bastion-tools.ts and the search_everything Bastion arm.
-        'BASTION_API_URL',
+        ...Object.keys(MCP_SERVICE_URL_VARS).filter((k) => !MCP_REQUIRED_URL_VARS.includes(k)),
         'MCP_AUTH_REQUIRED', 'LOG_LEVEL', 'INTERNAL_SERVICE_SECRET',
         'MCP_INTERNAL_API_TOKEN',
       ],
