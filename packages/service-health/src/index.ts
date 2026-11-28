@@ -16,6 +16,8 @@ import type { FastifyInstance } from 'fastify';
 // The one guard for server-to-server routes (#252). Lives here because every Fastify service
 // already depends on (and builds) this package.
 export * from './internal-secret.js';
+// The one global rate-limit registration (#411), for the same reason.
+export * from './rate-limit.js';
 
 export interface HealthCheckFn {
   (): Promise<void> | void;

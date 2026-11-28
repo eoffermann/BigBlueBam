@@ -21,18 +21,8 @@ const envSchema = z.object({
   RATE_LIMIT_MAX: z.coerce.number().int().positive().default(100),
   RATE_LIMIT_WINDOW_MS: z.coerce.number().int().positive().default(60000),
 
-  // BAM-RL-E2E: When set to a truthy value (or when NODE_ENV !== 'production'),
-  // the global rate limiter ceiling is multiplied by RATE_LIMIT_E2E_MULTIPLIER
-  // (default 100x). This unblocks parallel Playwright workers without disabling
-  // brute-force protection in production. The flag must be explicitly set on
-  // any container running with NODE_ENV=production for it to take effect, so
-  // production deployments stay strict by default.
-  // envBool (#251): with z.coerce.boolean, BBB_E2E_PERMISSIVE_RATE_LIMIT=false turned it ON.
-  BBB_E2E_PERMISSIVE_RATE_LIMIT: envBool(),
-  RATE_LIMIT_E2E_MULTIPLIER: z.preprocess(
-    (val) => (val === '' || val === undefined ? undefined : val),
-    z.coerce.number().int().positive().default(100),
-  ),
+  // BBB_E2E_PERMISSIVE_RATE_LIMIT / RATE_LIMIT_E2E_MULTIPLIER are read (and refused at boot
+  // when malformed) by registerGlobalRateLimit in @bigbluebam/service-health (#411).
 
   // HB-57: per-email account lockout after repeated failed logins.
   LOGIN_LOCKOUT_MAX_ATTEMPTS: z.coerce.number().int().positive().default(5),

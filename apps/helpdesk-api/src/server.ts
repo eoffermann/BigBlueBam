@@ -2,12 +2,11 @@ import 'dotenv/config';
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import cookie from '@fastify/cookie';
-import rateLimit from '@fastify/rate-limit';
 import websocket from '@fastify/websocket';
 import multipart from '@fastify/multipart';
 import { env } from './env.js';
 import { createErrorHandler, httpSystemErrorRecorder } from '@bigbluebam/logging';
-import { healthCheckPlugin } from '@bigbluebam/service-health';
+import { healthCheckPlugin, registerGlobalRateLimit } from '@bigbluebam/service-health';
 import { db, connection } from './db/index.js';
 import helpdeskAuthPlugin from './plugins/auth.js';
 import redisPlugin from './plugins/redis.js';
@@ -83,37 +82,17 @@ await fastify.register(cookie, {
   secret: env.SESSION_SECRET,
 });
 
-// BAM-RL-E2E: Loosen the global rate limit ceiling for non-production
-// environments and for explicitly opted-in test/dev stacks. Route-level
-// rate limits on sensitive endpoints still apply unchanged because they
-// override the plugin defaults via Fastify's per-route `config.rateLimit`.
-// This only relaxes the global ceiling that was throttling parallel Playwright
-// workers on /auth/login. Production stays strict unless an operator explicitly
-// sets BBB_E2E_PERMISSIVE_RATE_LIMIT=1, which is intentional and logged below.
-const permissiveRateLimit =
-  env.BBB_E2E_PERMISSIVE_RATE_LIMIT === true || env.NODE_ENV !== 'production';
-const effectiveRateLimitMax = permissiveRateLimit
-  ? env.RATE_LIMIT_MAX * env.RATE_LIMIT_E2E_MULTIPLIER
-  : env.RATE_LIMIT_MAX;
-if (permissiveRateLimit) {
-  fastify.log.warn(
-    {
-      base_max: env.RATE_LIMIT_MAX,
-      effective_max: effectiveRateLimitMax,
-      multiplier: env.RATE_LIMIT_E2E_MULTIPLIER,
-      window_ms: env.RATE_LIMIT_WINDOW_MS,
-      node_env: env.NODE_ENV,
-      explicit_flag: env.BBB_E2E_PERMISSIVE_RATE_LIMIT === true,
-    },
-    'permissive rate limit active — global helpdesk auth ceiling raised for tests',
-  );
-}
-await fastify.register(rateLimit, {
-  max: effectiveRateLimitMax,
+// BAM-RL-E2E / #411: the shared registration owns the BBB_E2E_PERMISSIVE_RATE_LIMIT
+// relaxation for every service. Route-level limits still apply unchanged.
+await registerGlobalRateLimit(fastify, {
+  max: env.RATE_LIMIT_MAX,
   timeWindow: env.RATE_LIMIT_WINDOW_MS,
-  // HB-25: prefer authenticated user id so a single customer can't bypass
-  // limits by switching IPs. Falls back to IP for unauthenticated requests.
-  keyGenerator: (req: any) => req.helpdeskUser?.id ?? req.ip,
+  nodeEnv: env.NODE_ENV,
+  extra: {
+    // HB-25: prefer authenticated user id so a single customer can't bypass
+    // limits by switching IPs. Falls back to IP for unauthenticated requests.
+    keyGenerator: (req: any) => req.helpdeskUser?.id ?? req.ip,
+  },
 });
 
 await fastify.register(websocket);
