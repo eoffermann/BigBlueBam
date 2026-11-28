@@ -156,6 +156,10 @@ test.describe.serial('Bastion - auditor room and sharing (M9)', () => {
     const roomRow = page.getByTestId('room-row').filter({ hasText: label });
     await roomRow.getByRole('button', { name: 'Revoke', exact: true }).click();
     await roomRow.getByRole('button', { name: 'Revoke room' }).click();
+    // #402: Sharing lists open rooms by default, so the revoked room leaves the list, and
+    // Show closed rooms brings it back marked Revoked.
+    await expect(roomRow).toHaveCount(0);
+    await page.getByRole('checkbox', { name: 'Show closed rooms' }).check();
     await expect(roomRow).toContainText('Revoked');
 
     const api = await makeApi(request, context);
