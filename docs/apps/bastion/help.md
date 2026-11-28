@@ -488,7 +488,24 @@ Some acts are deliberately reserved for a signed-in person, never an agent or an
 
 **Result:** The fix is approved; for an evidence request, the control's Bam task in the Compliance project gets the request. The gap shows the fix as drafted until the next check proves the control.
 
-**Related:** `bastion_coverage_gaps` and `bastion_propose_fix` let an agent draft the same fix; a person still approves it here.
+**Related:** `bastion_coverage_gaps` and `bastion_propose_fix` let an agent draft the same fix; a person still approves it here. See the next story.
+
+### Story: Have an agent draft the fix for the top gap
+
+**Who:** An AI agent drafts; Skipper decides.
+**Goal:** Let an agent find the riskiest gap and draft its fix, while a person keeps the decision.
+**Before you start:** At least one nightly check has run. An operator has allowed `bastion.*` tools in the agent's policy, and the agent may draft fixes (`bastion.fix.draft`).
+
+**Steps**
+
+1. Ask the agent to draft the fix for Bastion's top gap. It calls `bastion_coverage_gaps`, which returns What to fix first ranked by biggest risk, and picks the first open gap, for example laptop encryption with "Evidence not uploaded yet".
+2. The agent calls `bastion_propose_fix` with that gap and, if it wants, a short note. Bastion chooses the kind of fix from the gap, and the agent has no tool that can approve it.
+3. Open **Review queue** in Bastion. The fix is under **Fixes waiting for a decision**, marked "drafted by" the agent's name followed by "(an AI agent)".
+4. Read the drafted fix and click **Approve**. If it is not right, click **Reject** instead, and the gap goes back to open.
+
+**Result:** The agent did the finding and drafting; the decision is yours and is recorded under your name. An approved fix takes effect exactly as in the previous story. A rejected one leaves the gap open for someone to draft again.
+
+**Related:** "Working with AI agents" above lists which acts only a signed-in person can do.
 
 ### Story: Accept the risk on the Radio Relay key
 
