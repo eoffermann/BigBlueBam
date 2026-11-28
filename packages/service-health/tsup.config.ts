@@ -8,5 +8,5 @@ export default defineConfig({
   clean: true,
   splitting: false,
   sourcemap: true,
-  external: ['fastify'],
+  external: ['fastify', '@fastify/rate-limit', '@bigbluebam/shared'],
 });

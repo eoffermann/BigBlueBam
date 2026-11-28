@@ -69,6 +69,9 @@ services:
       - "127.0.0.1:4002:4002"
     environment:
       NODE_ENV: development
+      # #411: dev stacks always run permissive so Playwright workers
+      # can run in parallel without hitting HTTP 429.
+      BBB_E2E_PERMISSIVE_RATE_LIMIT: "1"
 
   bearing-api:
     build:
@@ -82,6 +85,9 @@ services:
       - "127.0.0.1:4007:4007"
     environment:
       NODE_ENV: development
+      # #411: dev stacks always run permissive so Playwright workers
+      # can run in parallel without hitting HTTP 429.
+      BBB_E2E_PERMISSIVE_RATE_LIMIT: "1"
 
   mcp-server:
     build:
@@ -93,3 +99,69 @@ services:
       - ./apps/mcp-server/src:/app/apps/mcp-server/src
     environment:
       NODE_ENV: development
+
+  # #411: every rate-limited service runs permissive in the dev overlay, not just the ones
+  # with a hot-reload block above, so a parallel Playwright run never trips HTTP 429.
+  basis-api:
+    environment:
+      BBB_E2E_PERMISSIVE_RATE_LIMIT: "1"
+  bastion-api:
+    environment:
+      BBB_E2E_PERMISSIVE_RATE_LIMIT: "1"
+  bay-api:
+    environment:
+      BBB_E2E_PERMISSIVE_RATE_LIMIT: "1"
+  beacon-api:
+    environment:
+      BBB_E2E_PERMISSIVE_RATE_LIMIT: "1"
+  bench-api:
+    environment:
+      BBB_E2E_PERMISSIVE_RATE_LIMIT: "1"
+  bill-api:
+    environment:
+      BBB_E2E_PERMISSIVE_RATE_LIMIT: "1"
+  bin-api:
+    environment:
+      BBB_E2E_PERMISSIVE_RATE_LIMIT: "1"
+  blank-api:
+    environment:
+      BBB_E2E_PERMISSIVE_RATE_LIMIT: "1"
+  blast-api:
+    environment:
+      BBB_E2E_PERMISSIVE_RATE_LIMIT: "1"
+  blip-api:
+    environment:
+      BBB_E2E_PERMISSIVE_RATE_LIMIT: "1"
+  blueprint-api:
+    environment:
+      BBB_E2E_PERMISSIVE_RATE_LIMIT: "1"
+  board-api:
+    environment:
+      BBB_E2E_PERMISSIVE_RATE_LIMIT: "1"
+  bolt-api:
+    environment:
+      BBB_E2E_PERMISSIVE_RATE_LIMIT: "1"
+  bond-api:
+    environment:
+      BBB_E2E_PERMISSIVE_RATE_LIMIT: "1"
+  book-api:
+    environment:
+      BBB_E2E_PERMISSIVE_RATE_LIMIT: "1"
+  braid-api:
+    environment:
+      BBB_E2E_PERMISSIVE_RATE_LIMIT: "1"
+  brief-api:
+    environment:
+      BBB_E2E_PERMISSIVE_RATE_LIMIT: "1"
+  bulwark-api:
+    environment:
+      BBB_E2E_PERMISSIVE_RATE_LIMIT: "1"
+  bureau-api:
+    environment:
+      BBB_E2E_PERMISSIVE_RATE_LIMIT: "1"
+  burn-api:
+    environment:
+      BBB_E2E_PERMISSIVE_RATE_LIMIT: "1"
+  bursar-api:
+    environment:
+      BBB_E2E_PERMISSIVE_RATE_LIMIT: "1"

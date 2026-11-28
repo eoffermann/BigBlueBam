@@ -26,9 +26,17 @@
  * Captures without a `doc:` field are ignored here; they stay in the shared
  * `screenshots/` tree for ad-hoc / marketing use.
  *
+ * It replaces only the shots it has (#413). A committed image the manifest does
+ * not mention (a partial recapture of two shots, say) is kept, and the run lists
+ * those as "kept". Deleting them is an explicit choice: pass --prune to remove
+ * every committed PNG in the bridged apps' light/ and dark/ dirs that this run
+ * neither copied nor expected (an entry whose source is missing protects its
+ * committed image even under --prune).
+ *
  * Usage:
  *   node scripts/docs/bridge.mjs                  # every app present in the manifest
  *   node scripts/docs/bridge.mjs --apps=bam,bond  # subset
+ *   node scripts/docs/bridge.mjs --prune          # also delete committed shots this capture lacks
  *   node scripts/docs/bridge.mjs --dry-run        # report only, no writes
  *   node scripts/docs/bridge.mjs --root=<dir>     # another repo-shaped tree (tests)
  *
@@ -48,6 +56,7 @@ const SHOTS_ROOT = path.join(ROOT, 'screenshots');
 const MANIFEST = path.join(SHOTS_ROOT, 'manifest.json');
 
 const dryRun = args.includes('--dry-run');
+const prune = args.includes('--prune');
 const appsFlag = args.find((a) => a.startsWith('--apps='));
 const appFilter = appsFlag
   ? new Set(
@@ -68,16 +77,19 @@ function slugFor(id, app) {
   return s;
 }
 
-/** Remove the *.png currently in an app's light/ + dark/ dirs (the bridged set
- *  is regenerated from the manifest, so stale renamed slugs must not linger). */
-function clearThemeDirs(app) {
+/** Committed *.png in an app's light/ + dark/ dirs that are not in `expected`
+ *  (a Set of absolute dest paths). These are what --prune removes. */
+function unexpectedShots(app, expected) {
+  const out = [];
   for (const theme of ['light', 'dark']) {
     const dir = path.join(ROOT, 'docs', 'apps', app, 'screenshots', theme);
     if (!fs.existsSync(dir)) continue;
     for (const f of fs.readdirSync(dir)) {
-      if (f.endsWith('.png')) fs.rmSync(path.join(dir, f));
+      const p = path.join(dir, f);
+      if (f.endsWith('.png') && !expected.has(p)) out.push(p);
     }
   }
+  return out.sort();
 }
 
 function main() {
@@ -101,19 +113,22 @@ function main() {
 
   let copied = 0;
   let missing = 0;
+  let pruned = 0;
+  let kept = 0;
   const summary = [];
 
   for (const [app, entries] of [...byApp.entries()].sort()) {
-    if (!dryRun) clearThemeDirs(app);
     entries.sort((a, b) => a.doc.order - b.doc.order || a.theme.localeCompare(b.theme));
 
     let bridged = 0;
+    const expected = new Set();
     for (const e of entries) {
       const slug = slugFor(e.id, app);
       const fname = `${pad2(e.doc.order)}-${slug}.png`;
       const src = path.join(SHOTS_ROOT, ...e.file.split('/'));
       const destDir = path.join(ROOT, 'docs', 'apps', app, 'screenshots', e.theme);
       const dest = path.join(destDir, fname);
+      expected.add(dest);
 
       if (!fs.existsSync(src)) {
         console.warn(`  [skip] ${app}/${e.id}: source image missing (${e.file})`);
@@ -128,10 +143,31 @@ function main() {
       bridged++;
     }
 
-    summary.push(`${app}: ${bridged} image(s)`);
+    // Shots already committed that this capture does not have. Kept unless --prune (#413).
+    const others = unexpectedShots(app, expected);
+    const rel = (p) => path.relative(ROOT, p).split(path.sep).join('/');
+    if (prune) {
+      for (const p of others) {
+        console.log(`  [prune] ${rel(p)}`);
+        if (!dryRun) fs.rmSync(p);
+      }
+      pruned += others.length;
+      summary.push(`${app}: ${bridged} image(s)${others.length ? `, ${others.length} pruned` : ''}`);
+    } else {
+      for (const p of others) console.log(`  [keep] ${rel(p)} (not in this capture; --prune removes it)`);
+      kept += others.length;
+      summary.push(`${app}: ${bridged} image(s)${others.length ? `, ${others.length} committed kept` : ''}`);
+    }
   }
 
-  console.log(`${dryRun ? '[dry-run] ' : ''}Bridged ${copied} doc image(s)${missing ? ` (${missing} source(s) missing)` : ''} across ${summary.length} app(s):`);
+  const tail = [
+    missing ? `${missing} source(s) missing` : '',
+    pruned ? `${pruned} pruned` : '',
+    kept ? `${kept} committed image(s) not in this capture kept` : '',
+  ].filter(Boolean);
+  console.log(
+    `${dryRun ? '[dry-run] ' : ''}Bridged ${copied} doc image(s)${tail.length ? ` (${tail.join('; ')})` : ''} across ${summary.length} app(s):`,
+  );
   for (const s of summary) console.log(`  - ${s}`);
 }
 

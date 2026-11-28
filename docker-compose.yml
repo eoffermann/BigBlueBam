@@ -510,6 +510,10 @@ services:
         condition: service_completed_successfully
     environment:
       NODE_ENV: production
+      # #411: opt-in e2e relaxation of the global rate limit (see @bigbluebam/service-health).
+      # Leave unset on real production deployments.
+      BBB_E2E_PERMISSIVE_RATE_LIMIT: ${BBB_E2E_PERMISSIVE_RATE_LIMIT:-}
+      RATE_LIMIT_E2E_MULTIPLIER: ${RATE_LIMIT_E2E_MULTIPLIER:-}
       PORT: 4002
       DATABASE_URL: postgresql://${POSTGRES_USER:?}:${POSTGRES_PASSWORD:?}@postgres:5432/bigbluebam
       REDIS_URL: redis://:${REDIS_PASSWORD:?REDIS_PASSWORD is required}@redis:6379
@@ -554,6 +558,10 @@ services:
       qdrant: { condition: service_healthy }
     environment:
       NODE_ENV: production
+      # #411: opt-in e2e relaxation of the global rate limit (see @bigbluebam/service-health).
+      # Leave unset on real production deployments.
+      BBB_E2E_PERMISSIVE_RATE_LIMIT: ${BBB_E2E_PERMISSIVE_RATE_LIMIT:-}
+      RATE_LIMIT_E2E_MULTIPLIER: ${RATE_LIMIT_E2E_MULTIPLIER:-}
       PORT: 4004
       DATABASE_URL: postgresql://${POSTGRES_USER:?}:${POSTGRES_PASSWORD:?}@postgres:5432/bigbluebam
       REDIS_URL: redis://:${REDIS_PASSWORD:?REDIS_PASSWORD is required}@redis:6379
@@ -593,6 +601,10 @@ services:
       - SESSION_SECRET=${SESSION_SECRET}
       - BBB_API_INTERNAL_URL=http://api:4000
       - NODE_ENV=production
+      # #411: opt-in e2e relaxation of the global rate limit (see @bigbluebam/service-health).
+      # Leave unset on real production deployments.
+      - BBB_E2E_PERMISSIVE_RATE_LIMIT=${BBB_E2E_PERMISSIVE_RATE_LIMIT:-}
+      - RATE_LIMIT_E2E_MULTIPLIER=${RATE_LIMIT_E2E_MULTIPLIER:-}
       - PORT=4005
       - HOST=0.0.0.0
       - LOG_LEVEL=info
@@ -634,6 +646,10 @@ services:
       - BBB_API_INTERNAL_URL=http://api:4000
       - MCP_INTERNAL_URL=http://mcp-server:3001
       - NODE_ENV=production
+      # #411: opt-in e2e relaxation of the global rate limit (see @bigbluebam/service-health).
+      # Leave unset on real production deployments.
+      - BBB_E2E_PERMISSIVE_RATE_LIMIT=${BBB_E2E_PERMISSIVE_RATE_LIMIT:-}
+      - RATE_LIMIT_E2E_MULTIPLIER=${RATE_LIMIT_E2E_MULTIPLIER:-}
       - PORT=4006
       - HOST=0.0.0.0
       - LOG_LEVEL=info
@@ -685,6 +701,10 @@ services:
       - SESSION_SECRET=${SESSION_SECRET}
       - BBB_API_INTERNAL_URL=http://api:4000
       - NODE_ENV=production
+      # #411: opt-in e2e relaxation of the global rate limit (see @bigbluebam/service-health).
+      # Leave unset on real production deployments.
+      - BBB_E2E_PERMISSIVE_RATE_LIMIT=${BBB_E2E_PERMISSIVE_RATE_LIMIT:-}
+      - RATE_LIMIT_E2E_MULTIPLIER=${RATE_LIMIT_E2E_MULTIPLIER:-}
       - PORT=4007
       - HOST=0.0.0.0
       - LOG_LEVEL=info
@@ -731,6 +751,10 @@ services:
       - LIVEKIT_API_SECRET=${LIVEKIT_API_SECRET:-secret}
       - LIVEKIT_URL=${LIVEKIT_WS_URL:-ws://localhost:7880}
       - NODE_ENV=production
+      # #411: opt-in e2e relaxation of the global rate limit (see @bigbluebam/service-health).
+      # Leave unset on real production deployments.
+      - BBB_E2E_PERMISSIVE_RATE_LIMIT=${BBB_E2E_PERMISSIVE_RATE_LIMIT:-}
+      - RATE_LIMIT_E2E_MULTIPLIER=${RATE_LIMIT_E2E_MULTIPLIER:-}
       - PORT=4008
       - HOST=0.0.0.0
       - LOG_LEVEL=info
@@ -771,6 +795,10 @@ services:
       - SESSION_SECRET=${SESSION_SECRET}
       - BBB_API_INTERNAL_URL=http://api:4000
       - NODE_ENV=production
+      # #411: opt-in e2e relaxation of the global rate limit (see @bigbluebam/service-health).
+      # Leave unset on real production deployments.
+      - BBB_E2E_PERMISSIVE_RATE_LIMIT=${BBB_E2E_PERMISSIVE_RATE_LIMIT:-}
+      - RATE_LIMIT_E2E_MULTIPLIER=${RATE_LIMIT_E2E_MULTIPLIER:-}
       - PORT=4009
       - HOST=0.0.0.0
       - LOG_LEVEL=info
@@ -812,6 +840,10 @@ services:
       - BBB_API_INTERNAL_URL=http://api:4000
       - BOND_API_INTERNAL_URL=http://bond-api:4009
       - NODE_ENV=production
+      # #411: opt-in e2e relaxation of the global rate limit (see @bigbluebam/service-health).
+      # Leave unset on real production deployments.
+      - BBB_E2E_PERMISSIVE_RATE_LIMIT=${BBB_E2E_PERMISSIVE_RATE_LIMIT:-}
+      - RATE_LIMIT_E2E_MULTIPLIER=${RATE_LIMIT_E2E_MULTIPLIER:-}
       - PORT=4010
       - HOST=0.0.0.0
       - LOG_LEVEL=info
@@ -857,6 +889,10 @@ services:
       # bond-api's private base (booking-page Bond contact, #305).
       - BOND_API_INTERNAL_URL=http://bond-api:4009
       - NODE_ENV=production
+      # #411: opt-in e2e relaxation of the global rate limit (see @bigbluebam/service-health).
+      # Leave unset on real production deployments.
+      - BBB_E2E_PERMISSIVE_RATE_LIMIT=${BBB_E2E_PERMISSIVE_RATE_LIMIT:-}
+      - RATE_LIMIT_E2E_MULTIPLIER=${RATE_LIMIT_E2E_MULTIPLIER:-}
       - PORT=4012
       - HOST=0.0.0.0
       - LOG_LEVEL=info
@@ -914,6 +950,10 @@ services:
       - BENCH_API_INTERNAL_URL=http://bench-api:4011
       - BOLT_API_INTERNAL_URL=http://bolt-api:4006
       - NODE_ENV=production
+      # #411: opt-in e2e relaxation of the global rate limit (see @bigbluebam/service-health).
+      # Leave unset on real production deployments.
+      - BBB_E2E_PERMISSIVE_RATE_LIMIT=${BBB_E2E_PERMISSIVE_RATE_LIMIT:-}
+      - RATE_LIMIT_E2E_MULTIPLIER=${RATE_LIMIT_E2E_MULTIPLIER:-}
       - PORT=4019
       - HOST=0.0.0.0
       - LOG_LEVEL=info
@@ -963,6 +1003,10 @@ services:
       - QDRANT_URL=${QDRANT_URL:-http://qdrant:6333}
       - QDRANT_API_KEY=${QDRANT_API_KEY:-}
       - NODE_ENV=production
+      # #411: opt-in e2e relaxation of the global rate limit (see @bigbluebam/service-health).
+      # Leave unset on real production deployments.
+      - BBB_E2E_PERMISSIVE_RATE_LIMIT=${BBB_E2E_PERMISSIVE_RATE_LIMIT:-}
+      - RATE_LIMIT_E2E_MULTIPLIER=${RATE_LIMIT_E2E_MULTIPLIER:-}
       - PORT=4020
       - HOST=0.0.0.0
       - LOG_LEVEL=info
@@ -1009,6 +1053,10 @@ services:
       - BRAID_API_INTERNAL_URL=http://braid-api:4020
       - BLAST_API_INTERNAL_URL=http://blast-api:4010
       - NODE_ENV=production
+      # #411: opt-in e2e relaxation of the global rate limit (see @bigbluebam/service-health).
+      # Leave unset on real production deployments.
+      - BBB_E2E_PERMISSIVE_RATE_LIMIT=${BBB_E2E_PERMISSIVE_RATE_LIMIT:-}
+      - RATE_LIMIT_E2E_MULTIPLIER=${RATE_LIMIT_E2E_MULTIPLIER:-}
       - PORT=4021
       - HOST=0.0.0.0
       - LOG_LEVEL=info
@@ -1056,6 +1104,10 @@ services:
       - BOLT_API_INTERNAL_URL=http://bolt-api:4006
       - BRAID_API_INTERNAL_URL=http://braid-api:4020
       - NODE_ENV=production
+      # #411: opt-in e2e relaxation of the global rate limit (see @bigbluebam/service-health).
+      # Leave unset on real production deployments.
+      - BBB_E2E_PERMISSIVE_RATE_LIMIT=${BBB_E2E_PERMISSIVE_RATE_LIMIT:-}
+      - RATE_LIMIT_E2E_MULTIPLIER=${RATE_LIMIT_E2E_MULTIPLIER:-}
       - PORT=4022
       - HOST=0.0.0.0
       - LOG_LEVEL=info
@@ -1106,6 +1158,10 @@ services:
       - BOLT_API_INTERNAL_URL=http://bolt-api:4006
       - BRAID_API_INTERNAL_URL=http://braid-api:4020
       - NODE_ENV=production
+      # #411: opt-in e2e relaxation of the global rate limit (see @bigbluebam/service-health).
+      # Leave unset on real production deployments.
+      - BBB_E2E_PERMISSIVE_RATE_LIMIT=${BBB_E2E_PERMISSIVE_RATE_LIMIT:-}
+      - RATE_LIMIT_E2E_MULTIPLIER=${RATE_LIMIT_E2E_MULTIPLIER:-}
       - PORT=4023
       - HOST=0.0.0.0
       - LOG_LEVEL=info
@@ -1158,6 +1214,10 @@ services:
       - BBB_API_INTERNAL_URL=http://api:4000
       - BOLT_API_INTERNAL_URL=http://bolt-api:4006
       - NODE_ENV=production
+      # #411: opt-in e2e relaxation of the global rate limit (see @bigbluebam/service-health).
+      # Leave unset on real production deployments.
+      - BBB_E2E_PERMISSIVE_RATE_LIMIT=${BBB_E2E_PERMISSIVE_RATE_LIMIT:-}
+      - RATE_LIMIT_E2E_MULTIPLIER=${RATE_LIMIT_E2E_MULTIPLIER:-}
       - PORT=4024
       - HOST=0.0.0.0
       - LOG_LEVEL=${LOG_LEVEL:-info}
@@ -1242,6 +1302,10 @@ services:
       - SESSION_SECRET=${SESSION_SECRET}
       - BBB_API_INTERNAL_URL=http://api:4000
       - NODE_ENV=production
+      # #411: opt-in e2e relaxation of the global rate limit (see @bigbluebam/service-health).
+      # Leave unset on real production deployments.
+      - BBB_E2E_PERMISSIVE_RATE_LIMIT=${BBB_E2E_PERMISSIVE_RATE_LIMIT:-}
+      - RATE_LIMIT_E2E_MULTIPLIER=${RATE_LIMIT_E2E_MULTIPLIER:-}
       - PORT=4011
       - HOST=0.0.0.0
       - LOG_LEVEL=info
@@ -1283,6 +1347,10 @@ services:
       - SESSION_SECRET=${SESSION_SECRET}
       - BBB_API_INTERNAL_URL=http://api:4000
       - NODE_ENV=production
+      # #411: opt-in e2e relaxation of the global rate limit (see @bigbluebam/service-health).
+      # Leave unset on real production deployments.
+      - BBB_E2E_PERMISSIVE_RATE_LIMIT=${BBB_E2E_PERMISSIVE_RATE_LIMIT:-}
+      - RATE_LIMIT_E2E_MULTIPLIER=${RATE_LIMIT_E2E_MULTIPLIER:-}
       - PORT=4014
       - HOST=0.0.0.0
       - LOG_LEVEL=info
@@ -1347,6 +1415,10 @@ services:
       - BOND_API_INTERNAL_URL=http://bond-api:4009
       - HELPDESK_API_URL=http://helpdesk-api:4001
       - NODE_ENV=production
+      # #411: opt-in e2e relaxation of the global rate limit (see @bigbluebam/service-health).
+      # Leave unset on real production deployments.
+      - BBB_E2E_PERMISSIVE_RATE_LIMIT=${BBB_E2E_PERMISSIVE_RATE_LIMIT:-}
+      - RATE_LIMIT_E2E_MULTIPLIER=${RATE_LIMIT_E2E_MULTIPLIER:-}
       - PORT=4013
       - HOST=0.0.0.0
       - LOG_LEVEL=info
@@ -1403,6 +1475,10 @@ services:
       - SESSION_SECRET=${SESSION_SECRET}
       - BBB_API_INTERNAL_URL=http://api:4000
       - NODE_ENV=production
+      # #411: opt-in e2e relaxation of the global rate limit (see @bigbluebam/service-health).
+      # Leave unset on real production deployments.
+      - BBB_E2E_PERMISSIVE_RATE_LIMIT=${BBB_E2E_PERMISSIVE_RATE_LIMIT:-}
+      - RATE_LIMIT_E2E_MULTIPLIER=${RATE_LIMIT_E2E_MULTIPLIER:-}
       - PORT=4016
       - HOST=0.0.0.0
       - LOG_LEVEL=info
@@ -1458,6 +1534,10 @@ services:
       - BBB_API_INTERNAL_URL=http://api:4000
       - BIN_API_INTERNAL_URL=http://bin-api:4016
       - NODE_ENV=production
+      # #411: opt-in e2e relaxation of the global rate limit (see @bigbluebam/service-health).
+      # Leave unset on real production deployments.
+      - BBB_E2E_PERMISSIVE_RATE_LIMIT=${BBB_E2E_PERMISSIVE_RATE_LIMIT:-}
+      - RATE_LIMIT_E2E_MULTIPLIER=${RATE_LIMIT_E2E_MULTIPLIER:-}
       - PORT=4017
       - HOST=0.0.0.0
       - LOG_LEVEL=info
@@ -1508,6 +1588,10 @@ services:
       - BIN_API_INTERNAL_URL=http://bin-api:4016
       - BOLT_API_INTERNAL_URL=http://bolt-api:4006
       - NODE_ENV=production
+      # #411: opt-in e2e relaxation of the global rate limit (see @bigbluebam/service-health).
+      # Leave unset on real production deployments.
+      - BBB_E2E_PERMISSIVE_RATE_LIMIT=${BBB_E2E_PERMISSIVE_RATE_LIMIT:-}
+      - RATE_LIMIT_E2E_MULTIPLIER=${RATE_LIMIT_E2E_MULTIPLIER:-}
       - PORT=4018
       - HOST=0.0.0.0
       - LOG_LEVEL=info
@@ -1558,6 +1642,10 @@ services:
       - BBB_API_INTERNAL_URL=http://api:4000
       - BOLT_API_INTERNAL_URL=http://bolt-api:4006
       - NODE_ENV=production
+      # #411: opt-in e2e relaxation of the global rate limit (see @bigbluebam/service-health).
+      # Leave unset on real production deployments.
+      - BBB_E2E_PERMISSIVE_RATE_LIMIT=${BBB_E2E_PERMISSIVE_RATE_LIMIT:-}
+      - RATE_LIMIT_E2E_MULTIPLIER=${RATE_LIMIT_E2E_MULTIPLIER:-}
       - PORT=4015
       - HOST=0.0.0.0
       - LOG_LEVEL=info
@@ -1619,6 +1707,10 @@ services:
       # banter-api's private base (leave-a-note DM, #303).
       - BANTER_API_URL=http://banter-api:4002
       - NODE_ENV=production
+      # #411: opt-in e2e relaxation of the global rate limit (see @bigbluebam/service-health).
+      # Leave unset on real production deployments.
+      - BBB_E2E_PERMISSIVE_RATE_LIMIT=${BBB_E2E_PERMISSIVE_RATE_LIMIT:-}
+      - RATE_LIMIT_E2E_MULTIPLIER=${RATE_LIMIT_E2E_MULTIPLIER:-}
       - PORT=4015
       - HOST=0.0.0.0
       - LOG_LEVEL=info

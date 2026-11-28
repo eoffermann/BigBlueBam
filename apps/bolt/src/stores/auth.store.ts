@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { fetchSessionAttempt, loadSession } from '@bigbluebam/ui/session';
 
 export interface BoltUser {
   id: string;
@@ -42,24 +43,15 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     }
 
     const doFetch = async () => {
-      const attempt = async (): Promise<Response> => {
-        const res = await fetch('/b3/api/auth/me', { credentials: 'include' });
-        if (!res.ok) throw new Error('Not authenticated');
-        return res;
-      };
-
       try {
-        let res: Response;
-        try {
-          res = await attempt();
-        } catch {
-          // Retry once after 500ms delay
-          await new Promise((r) => setTimeout(r, 500));
-          res = await attempt();
+        // #412: only a 401 signs the user out. A 429, a 5xx or a dropped connection keeps the
+        // session and retries (honouring Retry-After) behind the shared Reconnecting notice.
+        const session = await loadSession(fetchSessionAttempt('/b3/api/auth/me'));
+        if (session.kind === 'signed_out') {
+          set({ user: null, isAuthenticated: false, isLoading: false });
+          return;
         }
-
-        const json = await res.json();
-        const user = json.data;
+        const user = session.data.data;
         set({
           user: {
             id: user.id,
@@ -73,8 +65,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
           isAuthenticated: true,
           isLoading: false,
         });
-      } catch {
-        set({ user: null, isAuthenticated: false, isLoading: false });
       } finally {
         _fetchMePromise = null;
       }

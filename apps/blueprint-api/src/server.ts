@@ -2,12 +2,11 @@ import 'dotenv/config';
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import cookie from '@fastify/cookie';
-import rateLimit from '@fastify/rate-limit';
 import websocket from '@fastify/websocket';
 import { sql } from 'drizzle-orm';
 import { env } from './env.js';
 import { createErrorHandler, httpSystemErrorRecorder } from '@bigbluebam/logging';
-import { healthCheckPlugin } from '@bigbluebam/service-health';
+import { healthCheckPlugin, registerGlobalRateLimit } from '@bigbluebam/service-health';
 import { db, connection } from './db/index.js';
 import redisPlugin from './plugins/redis.js';
 import authPlugin from './plugins/auth.js';
@@ -62,9 +61,10 @@ await fastify.register(cors, {
 
 await fastify.register(cookie, { secret: env.SESSION_SECRET });
 
-await fastify.register(rateLimit, {
+await registerGlobalRateLimit(fastify, {
   max: env.RATE_LIMIT_MAX,
   timeWindow: env.RATE_LIMIT_WINDOW_MS,
+  nodeEnv: env.NODE_ENV,
 });
 
 fastify.addHook('onSend', async (_req, reply) => {
