@@ -15,11 +15,6 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const SITE = join(ROOT, 'site');
 const SECTIONS = join(SITE, 'src', 'components', 'sections');
 
-// Sections that still pair a light frame with a dark copy of the same surface, because no other
-// captured surface is available for them yet. Tracked in #421; remove an entry once its section
-// shows a distinct surface (the last test fails if an entry is no longer needed).
-const GRANDFATHERED_DUPLICATES = new Set(['basis-section.tsx', 'braid-section.tsx', 'burn-section.tsx', 'bursar-section.tsx']);
-
 /** Every /screenshots/... literal a section file references (JSX src, object src/screenshot). */
 export function screenshotRefs(source) {
   return [...source.matchAll(/["'`](\/screenshots\/[^"'`\s]+\.(?:png|jpe?g|webp|gif))["'`]/g)].map((m) => m[1]);
@@ -64,7 +59,6 @@ test('every hover twin a frame can show exists', () => {
 test('each section shows distinct surfaces', () => {
   const dups = [];
   for (const { file, refs } of sections()) {
-    if (GRANDFATHERED_DUPLICATES.has(file)) continue;
     const seen = new Set();
     for (const r of refs) {
       if (seen.has(surfaceOf(r))) dups.push(`${file}: ${r}`);
@@ -72,11 +66,4 @@ test('each section shows distinct surfaces', () => {
     }
   }
   assert.deepEqual(dups, []);
-});
-
-test('the grandfathered list only names sections that still repeat a surface', () => {
-  for (const file of GRANDFATHERED_DUPLICATES) {
-    const refs = screenshotRefs(readFileSync(join(SECTIONS, file), 'utf8'));
-    assert.ok(new Set(refs.map(surfaceOf)).size < refs.length, `${file} no longer repeats a surface; drop it from the list`);
-  }
 });

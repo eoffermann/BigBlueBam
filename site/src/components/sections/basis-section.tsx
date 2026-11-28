@@ -110,19 +110,6 @@ export function BasisSection() {
         </div>
       </AnimatedReveal>
 
-      {/* Dark-mode builder: the whole suite is theme-aware. */}
-      <AnimatedReveal delay={0.18} withScale>
-        <div className="mt-8 mx-auto max-w-3xl">
-          <FloatingFrame
-            src="/screenshots/basis/dark/02-builder.png"
-            alt="The Basis definition builder in dark mode, with readable field dropdowns"
-          />
-          <p className="mt-3 text-center text-sm text-zinc-500">
-            Light or dark, on the same shared shell as every other app in the suite.
-          </p>
-        </div>
-      </AnimatedReveal>
-
       <AnimatedReveal delay={0.2}>
         <div className="mt-10 grid gap-6 md:grid-cols-2 lg:grid-cols-3">
           {features.map((feature) => (

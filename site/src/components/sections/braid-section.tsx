@@ -121,19 +121,6 @@ export function BraidSection() {
         </div>
       </AnimatedReveal>
 
-      {/* Dark-mode catalog: the whole suite is theme-aware. */}
-      <AnimatedReveal delay={0.18} withScale>
-        <div className="mt-8 mx-auto max-w-3xl">
-          <FloatingFrame
-            src="/screenshots/braid/dark/catalog.png"
-            alt="The Braid profile catalog in dark mode, with readable confidence badges"
-          />
-          <p className="mt-3 text-center text-sm text-zinc-500">
-            Light or dark, on the same shared shell as every other app in the suite.
-          </p>
-        </div>
-      </AnimatedReveal>
-
       <AnimatedReveal delay={0.2}>
         <div className="mt-10 grid gap-6 md:grid-cols-2 lg:grid-cols-3">
           {features.map((feature) => (

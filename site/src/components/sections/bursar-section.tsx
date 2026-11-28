@@ -124,15 +124,17 @@ export function BursarSection() {
         </div>
       </AnimatedReveal>
 
-      {/* Dark-mode leveling matrix: theme-aware like the rest of the suite. */}
+      {/* Mismatch inbox: spend watched against the frozen award after the decision. */}
       <AnimatedReveal delay={0.18} withScale>
         <div className="mt-8 mx-auto max-w-3xl">
           <FloatingFrame
-            src="/screenshots/bursar/dark/04-leveling-matrix.png"
-            alt="The Bursar leveling matrix in dark mode, on the same shared shell as every other app in the suite"
+            src="/screenshots/bursar/light/07-mismatch-inbox.png"
+            alt="The Bursar mismatch inbox listing price drift, renewal cliff, and unbaselined vendor findings ranked by severity, with unvalued amounts shown as not quantified"
           />
           <p className="mt-3 text-center text-sm text-zinc-500">
-            The leveling matrix in dark mode, on the same shared shell as every other app in the suite.
+            The mismatch inbox: drift between what was awarded and what is being billed, ranked by
+            severity - and an amount Bursar cannot value reads "not quantified", never a made-up
+            number.
           </p>
         </div>
       </AnimatedReveal>

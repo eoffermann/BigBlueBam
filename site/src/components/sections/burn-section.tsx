@@ -123,15 +123,17 @@ export function BurnSection() {
         </div>
       </AnimatedReveal>
 
-      {/* Dark-mode portfolio board: a distinct dark view; the whole suite is theme-aware. */}
+      {/* Engagement detail: the full picture of one contract chain. */}
       <AnimatedReveal delay={0.18} withScale>
         <div className="mt-8 mx-auto max-w-3xl">
           <FloatingFrame
-            src="/screenshots/burn/dark/portfolio-board.png"
-            alt="The Burn portfolio board in dark mode, with margin and burn-versus-budget bars on each engagement"
+            src="/screenshots/burn/light/engagement-detail.png"
+            alt="A Burn engagement detail page with contract consumption, a burn-down panel, and the deliverable ledger with envelope, review, and lifecycle badges"
           />
           <p className="mt-3 text-center text-sm text-zinc-500">
-            The portfolio board in dark mode, on the same shared shell as every other app in the suite.
+            Engagement detail: how much of the contract value is consumed, the burn-down of envelope
+            step-ups, and a deliverable ledger showing each envelope's pricing, review, and lifecycle
+            state, alongside the chain's variances and work items.
           </p>
         </div>
       </AnimatedReveal>
