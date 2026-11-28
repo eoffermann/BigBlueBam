@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { clientSessionAttempt, loadSession } from '@bigbluebam/ui/session';
 import { api, ApiError } from '@/lib/api';
 
 export interface HelpdeskUser {
@@ -60,12 +61,16 @@ export const useAuthStore = create<AuthState>((set) => ({
   },
 
   fetchMe: async () => {
-    try {
-      const res = await api.get<{ data: HelpdeskUser }>('/auth/me');
-      set({ user: res.data, isAuthenticated: true, isLoading: false });
-    } catch {
+    // #412: only a 401 signs the user out. A 429, a 5xx or a dropped connection keeps the
+    // session and retries (honouring Retry-After) behind the shared Reconnecting notice.
+    const session = await loadSession(
+      clientSessionAttempt(() => api.get<{ data: HelpdeskUser }>('/auth/me')),
+    );
+    if (session.kind === 'signed_out') {
       set({ user: null, isAuthenticated: false, isLoading: false });
+      return;
     }
+    set({ user: session.data.data, isAuthenticated: true, isLoading: false });
   },
 
   clearError: () => set({ error: null }),

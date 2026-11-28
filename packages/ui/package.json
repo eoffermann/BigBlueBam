@@ -55,6 +55,14 @@
     "./permissions-context": {
       "types": "./permissions-context.tsx",
       "default": "./permissions-context.tsx"
+    },
+    "./session": {
+      "types": "./session.ts",
+      "default": "./session.ts"
+    },
+    "./session-reconnecting": {
+      "types": "./session-reconnecting.tsx",
+      "default": "./session-reconnecting.tsx"
     }
   },
   "dependencies": {

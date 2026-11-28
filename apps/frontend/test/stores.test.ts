@@ -20,6 +20,7 @@ vi.mock('@/lib/api', () => ({
   },
 }));
 
+import { isSessionReconnecting } from '@bigbluebam/ui/session';
 import { api, ApiError } from '@/lib/api';
 import { useAuthStore } from '@/stores/auth.store';
 import { useBoardStore } from '@/stores/board.store';
@@ -68,8 +69,8 @@ describe('useAuthStore', () => {
       expect(state.isLoading).toBe(false);
     });
 
-    it('sets isAuthenticated false and isLoading false on failure', async () => {
-      vi.mocked(api.getQuiet).mockRejectedValue(new Error('Network error'));
+    it('signs out (isAuthenticated false, isLoading false) on a 401', async () => {
+      vi.mocked(api.getQuiet).mockRejectedValue(new ApiError(401, 'UNAUTHORIZED', 'Not authenticated'));
 
       await useAuthStore.getState().fetchMe();
 
@@ -77,6 +78,60 @@ describe('useAuthStore', () => {
       expect(state.user).toBeNull();
       expect(state.isAuthenticated).toBe(false);
       expect(state.isLoading).toBe(false);
+    });
+
+    // #412: a rate limit, a server error or a network error is not a logout.
+    it('keeps the session on a 429, waits out Retry-After, shows Reconnecting, then recovers', async () => {
+      vi.useFakeTimers();
+      try {
+        useAuthStore.setState({ user: mockUser, isAuthenticated: true, isLoading: false });
+        const rateLimited = Object.assign(new ApiError(429, 'RATE_LIMITED', 'Too many requests'), {
+          retryAfter: '2',
+        });
+        vi.mocked(api.getQuiet)
+          .mockRejectedValueOnce(rateLimited)
+          .mockResolvedValueOnce({ data: mockUser });
+
+        const pending = useAuthStore.getState().fetchMe();
+        await vi.advanceTimersByTimeAsync(0);
+        expect(isSessionReconnecting()).toBe(true);
+        expect(useAuthStore.getState().isAuthenticated).toBe(true);
+        expect(useAuthStore.getState().user).toEqual(mockUser);
+
+        await vi.advanceTimersByTimeAsync(1999);
+        expect(api.getQuiet).toHaveBeenCalledTimes(1);
+        await vi.advanceTimersByTimeAsync(1);
+        await pending;
+
+        expect(api.getQuiet).toHaveBeenCalledTimes(2);
+        expect(isSessionReconnecting()).toBe(false);
+        expect(useAuthStore.getState().isAuthenticated).toBe(true);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('retries a 5xx and a network error instead of signing out', async () => {
+      vi.useFakeTimers();
+      try {
+        vi.mocked(api.getQuiet)
+          .mockRejectedValueOnce(new ApiError(503, 'UNAVAILABLE', 'down'))
+          .mockRejectedValueOnce(new TypeError('Failed to fetch'))
+          .mockResolvedValueOnce({ data: mockUser });
+
+        const pending = useAuthStore.getState().fetchMe();
+        await vi.advanceTimersByTimeAsync(0);
+        expect(useAuthStore.getState().isAuthenticated).toBe(false);
+        expect(useAuthStore.getState().isLoading).toBe(true);
+        await vi.advanceTimersByTimeAsync(60_000);
+        await pending;
+
+        expect(api.getQuiet).toHaveBeenCalledTimes(3);
+        expect(useAuthStore.getState().user).toEqual(mockUser);
+        expect(useAuthStore.getState().isAuthenticated).toBe(true);
+      } finally {
+        vi.useRealTimers();
+      }
     });
 
     it('calls api.getQuiet with /auth/me', async () => {

@@ -1,4 +1,5 @@
 import { StrictMode } from 'react';
+import { SessionReconnectingNotice } from '@bigbluebam/ui/session-reconnecting';
 import { createRoot } from 'react-dom/client';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { PermissionsProvider } from '@bigbluebam/ui/permissions-context';
@@ -43,6 +44,7 @@ createRoot(rootElement).render(
       <PermissionsProvider fetcher={fetchAuthMe}>
         <ErrorBoundary>
           <App />
+          <SessionReconnectingNotice />
         </ErrorBoundary>
       </PermissionsProvider>
     </QueryClientProvider>
