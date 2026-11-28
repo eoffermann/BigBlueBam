@@ -12,6 +12,7 @@
  *   node scripts/docs/generate.mjs --dry-run               # plan only, no writes
  *   node scripts/docs/generate.mjs --skip-capture          # skip Stage 2 screenshot capture
  *   node scripts/docs/generate.mjs --init                  # inject README markers on first run
+ *   node scripts/docs/generate.mjs --prune                 # bridge also deletes committed shots the capture lacks
  */
 
 import { execSync } from 'node:child_process';
@@ -152,7 +153,12 @@ function main() {
       console.log('  Skipped: no screenshots/manifest.json (nothing captured on this checkout);');
       console.log('  the committed docs/apps/<app>/screenshots are used as is.');
     } else {
-      runCommand('Stage 2b: Bridge -> docs', `node scripts/docs/bridge.mjs${appsVal ? ` --apps=${appsVal}` : ''}`);
+      // The bridge replaces only the shots it has; --prune (passed through) also removes committed
+      // shots this capture lacks (#413).
+      runCommand(
+        'Stage 2b: Bridge -> docs',
+        `node scripts/docs/bridge.mjs${appsVal ? ` --apps=${appsVal}` : ''}${args.includes('--prune') ? ' --prune' : ''}`,
+      );
     }
 
     // Stage 3: Extract
