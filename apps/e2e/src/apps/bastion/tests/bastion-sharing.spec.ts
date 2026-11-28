@@ -2,6 +2,7 @@ import { test, expect } from '../../../fixtures/base.fixture';
 import { DirectApiClient } from '../../../api/api-client';
 import { readCsrfTokenFromCookies } from '../../../auth/auth.helper';
 import type { APIRequestContext, Browser, BrowserContext, Page, TestInfo } from '@playwright/test';
+import { auditCount, gilliganOrgId, id, outboxEvent, psql, userIdByEmail } from '../bastion-db';
 
 // Bastion M9 user stories 8-11 (spec 11.4), against the GILLIGAN seed (SOC 2 and ISO 27001
 // adopted, ISO physical-security requirements marked not applicable at M3):
@@ -15,8 +16,12 @@ import type { APIRequestContext, Browser, BrowserContext, Page, TestInfo } from 
 // Auth: the default authenticated context as Skipper (a cookie session: room create and revoke are
 // session-only, spec 2.8). Self-cleaning: every room these stories create is revoked (story 10,
 // and again in afterAll for a run that stopped early). The backend read-back is the API as the
-// same user (postgres is not reachable from the Playwright runner, as in the M5/M6 stories).
+// same user, then Postgres (bastion-db.ts, organization-scoped): the room row, its access-log
+// rows, the auditor_room.created / auditor_room.revoked events' outbox rows, and the audit rows.
 
+const SKIPPER = process.env.E2E_ADMIN_EMAIL || 'skipper@gilligantravel.example';
+// The outbox drainer delivers within seconds; allow for a busy stack.
+const DELIVERY = { timeout: 60_000, intervals: [500, 1_000, 2_000] };
 const UUID_RE = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
 const ROOM_GONE = 'This link is no longer available.';
 
@@ -109,6 +114,24 @@ test.describe.serial('Bastion - auditor room and sharing (M9)', () => {
     const previewApi = (await api.getRaw(`/auditor-rooms/${roomId}/preview`)).body as { data: { controls: unknown[]; statement_of_applicability: Array<{ ref_code: string; applicable: string }> } };
     expect(previewApi.data.controls.length).toBeGreaterThan(0);
     expect(previewApi.data.statement_of_applicability.find((r) => r.ref_code === 'A.7.1')?.applicable).toBe('No');
+
+    // Postgres: one open room for ISO 27001 created by Skipper, holding the token's hash only.
+    const orgId = gilliganOrgId();
+    const skipperId = userIdByEmail(SKIPPER);
+    const rid = id(roomId);
+    expect(
+      psql(
+        `SELECT framework_id || '|' || created_by || '|' || (revoked_at IS NULL) || '|' || coalesce(array_length(restricted_evidence_ids, 1), 0) || '|' || (coalesce(array_length(control_ids, 1), 0) > 0)
+           FROM bastion_auditor_rooms WHERE organization_id = '${orgId}' AND id = '${rid}'`,
+      ),
+    ).toBe(`${id(iso!.id)}|${skipperId}|true|${restrictedTitle ? 1 : 0}|true`);
+    // The plaintext token is stored nowhere on the row.
+    expect(/^[A-Za-z0-9_-]+$/.test(token!)).toBe(true);
+    expect(
+      psql(`SELECT count(*) FROM bastion_auditor_rooms WHERE organization_id = '${orgId}' AND id = '${rid}' AND strpos(row_to_json(bastion_auditor_rooms)::text, '${token}') > 0`),
+    ).toBe('0');
+    await expect.poll(() => outboxEvent(orgId, 'auditor_room.created', rid), DELIVERY).toBe(`delivered|auditor_room.created|${skipperId}`);
+    expect(auditCount(orgId, 'auditor_room.create', rid)).toBe(1);
   });
 
   test('9. An anonymous auditor views a control and evidence; the access log grows', async ({ browser, request, context }, testInfo) => {
@@ -148,6 +171,17 @@ test.describe.serial('Bastion - auditor room and sharing (M9)', () => {
     for (const k of ['overview', 'control', 'evidence']) expect(kinds.has(k), k).toBe(true);
     const rooms = (await api.getRaw('/auditor-rooms')).body as { data: RoomRow[] };
     expect(rooms.data.find((r) => r.id === roomId)?.access_count).toBeGreaterThanOrEqual(3);
+
+    // Postgres: the access-log rows for this room, every one with a fingerprint, never a raw address.
+    const orgId = gilliganOrgId();
+    const rid = id(roomId);
+    const where = `organization_id = '${orgId}' AND room_id = '${rid}'`;
+    expect(Number(psql(`SELECT count(*) FROM bastion_auditor_access_log WHERE ${where}`))).toBeGreaterThanOrEqual(Math.max(log.data.length, before + 3));
+    expect(psql(`SELECT string_agg(DISTINCT view_kind, ',' ORDER BY view_kind) FROM bastion_auditor_access_log WHERE ${where} AND view_kind IN ('overview', 'control', 'evidence')`)).toBe(
+      'control,evidence,overview',
+    );
+    expect(psql(`SELECT count(*) FROM bastion_auditor_access_log WHERE ${where} AND (ip_hash IS NULL OR ip_hash ~'^[0-9]{1,3}(\\.[0-9]{1,3}){3}$')`)).toBe('0');
+    expect(Number(psql(`SELECT access_count FROM bastion_auditor_rooms WHERE organization_id = '${orgId}' AND id = '${rid}'`))).toBeGreaterThanOrEqual(3);
   });
 
   test('10. After revoke, "This link is no longer available." and 404', async ({ page, browser, request, context }, testInfo) => {
@@ -175,6 +209,17 @@ test.describe.serial('Bastion - auditor room and sharing (M9)', () => {
     }
     const direct = await request.get('/bastion/api/v1/public/room', { headers: { 'x-bastion-room-token': token! } });
     expect(direct.status()).toBe(404);
+
+    // Postgres: the room is revoked, and the auditor_room.revoked event's outbox row delivers.
+    const orgId = gilliganOrgId();
+    const skipperId = userIdByEmail(SKIPPER);
+    const rid = id(roomId);
+    expect(psql(`SELECT revoked_at IS NOT NULL FROM bastion_auditor_rooms WHERE organization_id = '${orgId}' AND id = '${rid}'`)).toBe('t');
+    await expect.poll(() => outboxEvent(orgId, 'auditor_room.revoked', rid), DELIVERY).toBe(`delivered|auditor_room.revoked|${skipperId}`);
+    expect(
+      psql(`SELECT payload->'payload'->>'reason' FROM bastion_outbox WHERE organization_id = '${orgId}' AND idempotency_key = 'event:auditor_room.revoked:${rid}'`),
+    ).toBe('revoked');
+    expect(auditCount(orgId, 'auditor_room.revoke', rid)).toBe(1);
     roomId = null;
   });
 

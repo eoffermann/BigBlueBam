@@ -4,12 +4,20 @@ import { readCsrfTokenFromCookies } from '../../../auth/auth.helper';
 import type { APIRequestContext, BrowserContext } from '@playwright/test';
 // The ONE source of truth for the seeded rows (spec 10.3).
 import { BASTION_SEED_EXPECTATIONS as EXP } from '../../../../../../scripts/seed-gilligan/bastion.expectations.mjs';
+import { auditCount, gilliganOrgId, id, outboxEvent, psql, userIdByEmail } from '../bastion-db';
+
+const SKIPPER = process.env.E2E_ADMIN_EMAIL || 'skipper@gilligantravel.example';
+// The outbox drainer delivers within seconds; allow for a busy stack.
+const DELIVERY = { timeout: 60_000, intervals: [500, 1_000, 2_000] };
 
 // Bastion M6 user stories 4-6 (spec 11.4), against the GILLIGAN seed (scripts/seed-gilligan/
 // bastion.mjs, M6 rows):
 //   4. The top gap is laptop encryption; "Draft the fix" files a proposal that is decided in the
 //      Review queue. Self-cleaning: Skipper REJECTS it, which reopens the gap (the draft and the
-//      closed platform mirror stay as history), and the backend is read back.
+//      closed platform mirror stay as history), and the backend is read back: the API, then
+//      Postgres (bastion-db.ts, organization-scoped): the draft and gap rows, the agent_proposals
+//      mirror, the gap.fix_proposed event's outbox row, the proposal_close outbox row and the
+//      mirror decided by Skipper, and the audit rows.
 //   5. The code-review control cites PR #42, names the repository on the list that is not
 //      connected, shows the ping note; Coral Reef Booking appears as a population gap.
 //   6. The Radio Relay control reads "Not met, risk accepted" with owner and expiry, and counts
@@ -47,8 +55,25 @@ async function controlId(api: DirectApiClient, key: string): Promise<string> {
   return c!.id;
 }
 
+// The gap story 4 drafts a fix for, until it has rejected that fix. A failed attempt rejects any
+// fix still waiting on it in afterEach, so a retry (and the next run) finds the gap open again
+// instead of "a previous run left a fix waiting".
+let gapLeftProposed: string | null = null;
+
 test.describe('Bastion - gaps, fixes and accepted risks (M6)', () => {
+  test.afterEach(async ({ request, context }) => {
+    if (!gapLeftProposed) return;
+    const api = await makeApi(request, context);
+    const waiting = (await api.getRaw('/fix-drafts', { status: 'proposed', gap_id: gapLeftProposed })).body as { data?: FixDraft[] };
+    for (const d of waiting.data ?? []) {
+      await api.postRaw(`/fix-drafts/${d.id}/decide`, { decision: 'reject', reason: 'e2e cleanup after a failed attempt' });
+    }
+    gapLeftProposed = null;
+  });
+
   test('4. Top gap is laptop encryption; Draft the fix files a proposal decided in the Review queue', async ({ page, request, context }) => {
+    // The AI rewording (up to 60 s) plus two outbox deliveries do not fit the 60 s default.
+    test.setTimeout(180_000);
     const api = await makeApi(request, context);
     const gapsRes = await api.getRaw('/gaps', { limit: '5' });
     expect(gapsRes.status).toBe(200);
@@ -60,8 +85,11 @@ test.describe('Bastion - gaps, fixes and accepted risks (M6)', () => {
     await page.goto('/bastion/gaps');
     const first = page.getByTestId('gap-row').first();
     await expect(first).toContainText(EXP.m6.laptop.title);
+    gapLeftProposed = top!.id;
     await first.getByRole('button', { name: 'Draft the fix' }).click();
-    await expect(page).toHaveURL(/\/bastion\/review$/);
+    // The draft request awaits the optional AI rewording (up to BASTION_LLM_TIMEOUT_MS, 60 s by
+    // default) before the page moves to the Review queue; a 10 s wait raced it.
+    await expect(page).toHaveURL(/\/bastion\/review$/, { timeout: 90_000 });
 
     const drafts = (await api.getRaw('/fix-drafts', { status: 'proposed', gap_id: top!.id })).body as { data: Array<FixDraft & { proposal_id?: string }> };
     expect(drafts.data).toHaveLength(1);
@@ -76,6 +104,26 @@ test.describe('Bastion - gaps, fixes and accepted risks (M6)', () => {
     );
     expect(row).toMatchObject({ owning_app: 'bastion', require_human_decider: true, proposed_action: `bastion.fix.${EXP.m6.laptop.fixTemplate}` });
 
+    // Postgres read-back, scoped to the GILLIGAN organization.
+    const orgId = gilliganOrgId();
+    const skipperId = userIdByEmail(SKIPPER);
+    const draftId = id(draft.id);
+    const [draftStatus, proposalId] = psql(
+      `SELECT status || '|' || coalesce(proposal_id::text, '') FROM bastion_fix_drafts WHERE organization_id = '${orgId}' AND id = '${draftId}' AND gap_id = '${id(top!.id)}'`,
+    ).split('|');
+    expect(draftStatus).toBe('proposed');
+    id(proposalId);
+    expect(psql(`SELECT status FROM bastion_gaps WHERE organization_id = '${orgId}' AND id = '${id(top!.id)}'`)).toBe('proposed');
+    expect(
+      psql(
+        `SELECT status || '|' || owning_app || '|' || require_human_decider || '|' || proposed_action FROM agent_proposals
+          WHERE org_id = '${orgId}' AND id = '${proposalId}' AND subject_type = 'bastion.fix_draft' AND subject_id = '${draftId}'`,
+      ),
+    ).toBe(`pending|bastion|true|bastion.fix.${EXP.m6.laptop.fixTemplate}`);
+    // The gap.fix_proposed Bolt event is an outbox row in the same transaction, and it delivers.
+    await expect.poll(() => outboxEvent(orgId, 'gap.fix_proposed', draftId), DELIVERY).toBe(`delivered|gap.fix_proposed|${skipperId}`);
+    expect(auditCount(orgId, 'fix.propose', draftId)).toBe(1);
+
     // Decided in Bastion's Review queue (self-cleaning: reject reopens the gap).
     const card = page.getByTestId('fix-card').filter({ hasText: EXP.m6.laptop.title });
     await card.getByRole('button', { name: 'Reject' }).click();
@@ -83,8 +131,32 @@ test.describe('Bastion - gaps, fixes and accepted risks (M6)', () => {
     await expect
       .poll(async () => ((await api.getRaw(`/fix-drafts/${draft.id}`)).body as { data: FixDraft }).data.status)
       .toBe('rejected');
+    gapLeftProposed = null;
     const after = ((await api.getRaw('/gaps', { status: 'all', control_id: top!.control_id })).body as { data: Gap[] }).data.find((g) => g.id === top!.id);
     expect(after?.status).toBe('open');
+
+    // Postgres: the draft is rejected by Skipper and the gap is open again.
+    expect(psql(`SELECT status || '|' || decided_by FROM bastion_fix_drafts WHERE organization_id = '${orgId}' AND id = '${draftId}'`)).toBe(`rejected|${skipperId}`);
+    expect(psql(`SELECT status FROM bastion_gaps WHERE organization_id = '${orgId}' AND id = '${id(top!.id)}'`)).toBe('open');
+    // The decision reaches the platform through the proposal_close outbox row, which delivers...
+    await expect
+      .poll(
+        () =>
+          psql(
+            `SELECT status || '|' || (payload->'request'->>'decision') || '|' || (payload->'request'->>'decided_by') FROM bastion_outbox
+              WHERE organization_id = '${orgId}' AND kind = 'proposal_close' AND idempotency_key = 'proposal_close:${proposalId}'`,
+          ),
+        DELIVERY,
+      )
+      .toBe(`delivered|rejected|${skipperId}`);
+    // ...and the mirror is decided as Skipper by session (the api then publishes proposal.decided).
+    expect(
+      psql(
+        `SELECT status || '|' || decided_by || '|' || decided_auth_method || '|' || (decided_at IS NOT NULL) FROM agent_proposals
+          WHERE org_id = '${orgId}' AND id = '${proposalId}'`,
+      ),
+    ).toBe(`rejected|${skipperId}|session|true`);
+    expect(auditCount(orgId, 'fix.reject', draftId)).toBe(1);
   });
 
   test('5. The code-review control cites PR #42, names the repository not connected, shows the ping note; Coral Reef Booking is a population gap', async ({ page, request, context }) => {

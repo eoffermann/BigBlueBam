@@ -1,6 +1,6 @@
 import { execFileSync } from 'node:child_process';
-import path from 'node:path';
 import { test, expect } from '../../../fixtures/base.fixture';
+import { GILLIGAN_ORG_SLUG, REPO_ROOT, id, psql } from '../bastion-db';
 import { DirectApiClient } from '../../../api/api-client';
 import { loginViaUI, readCsrfTokenFromCookies } from '../../../auth/auth.helper';
 import type { APIRequestContext, Browser, BrowserContext, TestInfo } from '@playwright/test';
@@ -27,45 +27,13 @@ import type { APIRequestContext, Browser, BrowserContext, TestInfo } from '@play
 // Backend read-back: the API as the same user, and psql through `docker compose exec postgres`
 // (the same route global-setup uses for the CLI), always filtered by organization_id.
 
-const REPO_ROOT = path.join(__dirname, '..', '..', '..', '..', '..', '..');
-const ORG_SLUG = 'gilligan-travel-ltd';
+const ORG_SLUG = GILLIGAN_ORG_SLUG;
 const SKIPPER = process.env.E2E_ADMIN_EMAIL || 'skipper@gilligantravel.example';
 const GILLIGAN = 'gilligan@gilligantravel.example';
 const GILLIGAN_PASSWORD = process.env.E2E_GILLIGAN_PASSWORD || 'Castaway2026!';
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const IMPERSONATING_ATTEST = 'You are viewing Bastion as another person. Only that person can acknowledge this.';
 const BASTION = '/bastion/api/v1';
 const BEACON = '/beacon/api/v1';
-
-/** One psql query through the compose postgres container; returns the unaligned, tuples-only text. */
-function psql(sql: string): string {
-  return execFileSync(
-    'docker',
-    [
-      'compose',
-      'exec',
-      '-T',
-      'postgres',
-      'psql',
-      '-U',
-      process.env.E2E_PG_USER || 'bigbluebam',
-      '-d',
-      process.env.E2E_PG_DB || 'bigbluebam',
-      '-tA',
-      '-v',
-      'ON_ERROR_STOP=1',
-      '-c',
-      sql,
-    ],
-    { cwd: REPO_ROOT, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] },
-  ).trim();
-}
-
-/** Only ids that look like ids are ever put into SQL. */
-function id(v: string | null | undefined): string {
-  if (!v || !UUID_RE.test(v)) throw new Error(`not an id: ${String(v)}`);
-  return v;
-}
 
 function apiCli(...args: string[]): string {
   return execFileSync('docker', ['compose', 'exec', '-T', 'api', 'node', 'dist/cli.js', ...args], {

@@ -4,6 +4,7 @@ import { readCsrfTokenFromCookies } from '../../../auth/auth.helper';
 import type { APIRequestContext, BrowserContext } from '@playwright/test';
 // The ONE source of truth for the seeded rows (spec 10.3).
 import { BASTION_SEED_EXPECTATIONS as EXP } from '../../../../../../scripts/seed-gilligan/bastion.expectations.mjs';
+import { auditCount, gilliganOrgId, id, outboxEvent, psql, userIdByEmail } from '../bastion-db';
 
 // Bastion M8 user story 7 (spec 11.4), against the GILLIGAN seed (scripts/seed-gilligan/
 // bastion.mjs, M8 rows): the Howell questionnaire's laptop-encryption row is "Needs an expert"
@@ -12,11 +13,14 @@ import { BASTION_SEED_EXPECTATIONS as EXP } from '../../../../../../scripts/seed
 //
 // Self-cleaning: the test reviews one low row (Use this answer) and puts it back (Undo review), so
 // the questionnaire is left exactly as seeded; it never approves (approving is a person's release
-// of answers to a customer, and would change the answer library). The backend is read back.
+// of answers to a customer, and would change the answer library). The backend is read back: the
+// API, then Postgres (bastion-db.ts, organization-scoped): the item row as reviewed by Skipper and
+// as put back, one audit row per review, and no questionnaire.approved event or answer-library row.
 //
 // Auth: the default authenticated context as Skipper, a cookie session.
 
 const M = EXP.m8.questionnaire;
+const SKIPPER = process.env.E2E_ADMIN_EMAIL || 'skipper@gilligantravel.example';
 
 interface Item {
   id: string;
@@ -69,16 +73,37 @@ test.describe('Bastion - questionnaires (M8)', () => {
     await expect(page.getByTestId('approve')).toBeDisabled();
     await expect(page.getByTestId('approve-blocked')).toContainText('Needs an expert');
 
+    // Postgres, organization-scoped: the seeded row as the API served it.
+    const orgId = gilliganOrgId();
+    const skipperId = userIdByEmail(SKIPPER);
+    const itemId = id(enc.id);
+    const itemRow = `FROM bastion_questionnaire_items WHERE organization_id = '${orgId}' AND questionnaire_id = '${id(qid)}' AND id = '${itemId}'`;
+    expect(psql(`SELECT review_status || '|' || confidence_band || '|' || (reviewed_by IS NULL) ${itemRow}`)).toBe(`pending|${M.encryption.band}|true`);
+    const reviewsBefore = auditCount(orgId, 'questionnaire.item_review', itemId);
+    const libraryBefore = psql(`SELECT count(*) FROM bastion_answer_library WHERE organization_id = '${orgId}' AND source_item_id = '${itemId}'`);
+
     // Review one low row in the UI and read it back; then put it back as seeded.
     await encRow.getByRole('button', { name: 'Use this answer' }).click();
     await expect
       .poll(async () => ((await api.getRaw(`/questionnaires/${qid}/items`)).body as { data: Item[] }).data.find((i) => i.id === enc.id)?.review_status)
       .toBe('accepted');
+    // Accepted by Skipper: the drafted answer became the final answer.
+    expect(psql(`SELECT review_status || '|' || reviewed_by || '|' || (reviewed_at IS NOT NULL) || '|' || (final_answer IS NOT DISTINCT FROM draft_answer) ${itemRow}`)).toBe(
+      `accepted|${skipperId}|true|true`,
+    );
+    expect(auditCount(orgId, 'questionnaire.item_review', itemId, { key: 'review_status', value: 'accepted' })).toBeGreaterThanOrEqual(1);
     await encRow.getByRole('button', { name: 'Undo review' }).click();
     await expect
       .poll(async () => ((await api.getRaw(`/questionnaires/${qid}/items`)).body as { data: Item[] }).data.find((i) => i.id === enc.id)?.review_status)
       .toBe('pending');
     const after = (await api.getRaw('/questionnaires')).body as { data: Array<{ id: string; status: string }> };
     expect(after.data.find((x) => x.id === qid)?.status).toBe('in_review');
+
+    // Put back exactly as seeded, with both reviews on the audit trail and nothing released.
+    expect(psql(`SELECT review_status || '|' || (reviewed_by IS NULL) || '|' || (reviewed_at IS NULL) || '|' || (final_answer IS NULL) ${itemRow}`)).toBe('pending|true|true|true');
+    expect(auditCount(orgId, 'questionnaire.item_review', itemId)).toBe(reviewsBefore + 2);
+    expect(psql(`SELECT status FROM bastion_questionnaires WHERE organization_id = '${orgId}' AND id = '${id(qid)}'`)).toBe('in_review');
+    expect(outboxEvent(orgId, 'questionnaire.approved', qid)).toBe('');
+    expect(psql(`SELECT count(*) FROM bastion_answer_library WHERE organization_id = '${orgId}' AND source_item_id = '${itemId}'`)).toBe(libraryBefore);
   });
 });
