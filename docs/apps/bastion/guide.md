@@ -106,3 +106,13 @@ If you are the auditor receiving a room link or a packet: download and keep your
 5. Link your security policy from Beacon in **Policies** so everyone is asked to read it.
 6. Each morning, look at **Readiness** and work down **What to fix first**. Approve or reject drafted fixes in the **Review queue**.
 7. When the audit is near, create an auditor room or build a packet on the **Sharing** page.
+
+## For operators: a slow AI model needs a longer stop grace
+
+Nothing to do with the defaults. `BASTION_LLM_TIMEOUT_MS` (how long one AI call may take, default 60000 ms) can go up to 180000 for a slow reasoning model. When you raise it, the time bastion-api gets to finish after a stop must grow too, or a restart cuts an AI call off mid-answer.
+
+- **The rule:** the stop grace in seconds must be at least `BASTION_LLM_TIMEOUT_MS / 1000 + 10`. The default 75 covers the default 60000; for 180000, use 190.
+- **Docker Compose:** set `BASTION_STOP_GRACE_SECONDS` in `.env` (it sets both the container's `stop_grace_period` and what bastion-api checks), then `docker compose up -d --force-recreate bastion-api`.
+- **Railway:** set `RAILWAY_DEPLOYMENT_DRAINING_SECONDS` on the bastion-api service to the same number.
+- **If you forget:** bastion-api refuses to start, and its log names the setting to raise and the smallest value that works.
+- **The api:** it relays every app's AI calls, so it gets 190 seconds by default under Compose (`API_STOP_GRACE_SECONDS`). On Railway its `RAILWAY_DEPLOYMENT_DRAINING_SECONDS` starts at 75; raise it to 190 if apps use long AI deadlines. A smaller value is safe: a call still running at a restart is stopped and retried by the app that asked.

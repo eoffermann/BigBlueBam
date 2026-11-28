@@ -20,14 +20,9 @@ This file lists only actions a person has to take. Everything else in the Bastio
 - **After promotion, verify on Railway staging** (the spec's M9 Railway smoke test, which needs a Railway deploy this loop does not perform): build and download one Bastion audit packet; confirm the first `bastion-evaluate-tick` log line on the worker and `GET /bastion/api/health` through the ingress; confirm the worker received `BASTION_S3_BUCKET` and `BASTION_API_INTERNAL_URL` via the scoped variable propagation (#126).
 - **Also check on promotion:** banter-api on Railway must have `S3_ACCESS_KEY` and `S3_SECRET_KEY` set (the `minioadmin` fallbacks were removed in #159; without them Banter file routes return 503).
 
-### 2a. Only if you use a slow AI model: raise the AI deadline and the stop grace together (#284)
+- **Also check on promotion:** issue #362 (drop `banter_message_attachments.thumbnail_key`, step 2 of the #162 expand-contract) can run only once every running banter-api, including Railway's, is on a build from this branch. It is deliberately left open until then.
 
-- [ ] Nothing to do with the defaults. `BASTION_LLM_TIMEOUT_MS` (how long one AI call may take, default 60000 ms) can go up to 180000 for a slow reasoning model. When you raise it, the time bastion-api gets to finish after a stop must grow too, or a restart cuts an AI call off mid-answer.
-- **The rule:** stop grace in seconds must be at least `BASTION_LLM_TIMEOUT_MS / 1000 + 10`. The default 75 covers the default 60000. For 180000, use 190.
-- **Docker Compose:** set `BASTION_STOP_GRACE_SECONDS` in `.env` (it sets both the container's `stop_grace_period` and what bastion-api checks), then `docker compose up -d --force-recreate bastion-api`.
-- **Railway:** set `RAILWAY_DEPLOYMENT_DRAINING_SECONDS` on the bastion-api service to the same number.
-- **If you forget:** bastion-api refuses to start, and its log names the setting to raise and the smallest value that works.
-- **The api:** it relays every app's AI calls, so it gets 190 seconds by default under Compose (`API_STOP_GRACE_SECONDS`). On Railway its `RAILWAY_DEPLOYMENT_DRAINING_SECONDS` starts at 75; raise it to 190 if apps use long AI deadlines. A smaller value is safe: a call still running at a restart is stopped and retried by the app that asked.
+(Operator guidance for slow AI models, raising `BASTION_LLM_TIMEOUT_MS` together with the stop grace, moved to `docs/apps/bastion/guide.md` under "For operators"; it is configuration guidance, not a required human action.)
 
 ## External credentials
 
